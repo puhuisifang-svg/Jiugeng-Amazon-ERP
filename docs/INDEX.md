@@ -8,14 +8,15 @@
 | 治理 | [变更日志](00-governance/CHANGE_LOG.md) | PJM | Active |
 | 产品 | [原始项目规划方案](01-product/PROJECT_PLAN.md) | PJM/PM | Superseded |
 | 产品 | [首期范围与实施规划](01-product/PHASE1_SCOPE_PLAN.md) | PJM/PM | Superseded |
-| 产品 | [精简 MVP 范围与实现方案](01-product/MVP_SCOPE_PLAN.md) | PJM/PM | In Review |
-| 产品 | [PRD](01-product/PRD.md) | PM | In Review |
-| 产品 | [产品与辅料编码规则](01-product/PRODUCT_CODE_STANDARD.md) | PM/Backend | In Review |
+| 产品 | [精简 MVP 范围与实现方案](01-product/MVP_SCOPE_PLAN.md) | PJM/PM | Approved |
+| 产品 | [MVP 最终规划](01-product/MVP_FINAL_PLAN.md) | PJM | Approved |
+| 产品 | [PRD](01-product/PRD.md) | PM | Approved |
+| 产品 | [产品与辅料编码规则](01-product/PRODUCT_CODE_STANDARD.md) | PM/Backend | Approved |
 | 产品 | [产品 Backlog](01-product/BACKLOG.md) | PM/PJM | Draft |
 | 产品 | [业务术语表](01-product/GLOSSARY.md) | PM | Draft |
 | 设计 | [UI/UX 设计说明](02-design/UI_UX_SPEC.md) | UI | Draft |
-| 架构 | [总体架构](03-architecture/ARCHITECTURE.md) | Backend/Ops | In Review |
-| 架构 | [产品与 Amazon 多店铺数据模型](03-architecture/PRODUCT_DATA_MODEL.md) | PM/Backend | In Review |
+| 架构 | [总体架构](03-architecture/ARCHITECTURE.md) | Backend/Ops | Approved |
+| 架构 | [产品与 Amazon 多店铺数据模型](03-architecture/PRODUCT_DATA_MODEL.md) | PM/Backend | Approved |
 | 架构 | [ADR 索引](03-architecture/adr/README.md) | Backend/Ops | Active |
 | 架构 | [API 规范](03-architecture/API_GUIDELINES.md) | Backend | Draft |
 | 架构 | [数据字典](03-architecture/DATA_DICTIONARY.md) | PM/Backend | Draft |
@@ -24,9 +25,9 @@
 | 研发 | [本地开发环境审计](04-engineering/LOCAL_ENVIRONMENT_AUDIT.md) | PJM | Completed |
 | 安全 | [密钥管理规范](05-security/SECRETS_MANAGEMENT.md) | Ops/PJM | Approved |
 | 安全 | [密钥登记表](05-security/SECRET_REGISTRY.md) | Ops | Draft |
-| 安全 | [权限矩阵](05-security/ACCESS_MATRIX.md) | PM/PJM | Draft |
+| 安全 | [权限矩阵](05-security/ACCESS_MATRIX.md) | PM/PJM | Approved |
 | 质量 | [测试策略](06-quality/TEST_STRATEGY.md) | QA | Draft |
-| 质量 | [验收标准](06-quality/ACCEPTANCE_CRITERIA.md) | QA/PM/PJM | In Review |
+| 质量 | [验收标准](06-quality/ACCEPTANCE_CRITERIA.md) | QA/PM/PJM | Approved |
 | 运维 | [部署运行手册](07-operations/DEPLOYMENT_RUNBOOK.md) | Ops | Draft |
 | 运维 | [监控与告警](07-operations/OBSERVABILITY.md) | Ops/Backend | Draft |
 | 运维 | [备份与恢复](07-operations/BACKUP_RECOVERY.md) | Ops | Draft |

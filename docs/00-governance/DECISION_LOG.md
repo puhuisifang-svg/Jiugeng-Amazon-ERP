@@ -12,6 +12,7 @@
 | DEC-008 | 2026-09-12 | 产品多规格 | 一个内部产品包含多个 SKU；产品结构按 Amazon 美国站 5 店铺背景设计，内部产品/SKU、Amazon Catalog ASIN、各店铺 Listing 分层 | Approved | 老板 | [产品数据模型](../03-architecture/PRODUCT_DATA_MODEL.md) |
 | DEC-009 | 2026-09-12 | 5 店 Listing 数据方式 | MVP 采用人工维护和 Excel 导入管理 5 个公司店铺的 Listing 映射；SP-API 自动同步后置 | Approved | 老板 | [MVP PRD](../01-product/PRD.md) |
 | DEC-010 | 2026-09-12 | 内部产品编码 | Product/SPU、内部 SKU 和辅料编码均由业务人员手动输入维护，系统不自动生成 | Approved | 老板 | [编码规则](../01-product/PRODUCT_CODE_STANDARD.md) |
+| DEC-011 | 2026-09-12 | MVP 最终规划 | 老板授权 PJM 决定剩余实现细节并形成最终版；MVP v1.0 范围、路线、架构和验收基线获批，Sprint 0 仍需单独启动 | Approved | 老板 | [MVP 最终规划](../01-product/MVP_FINAL_PLAN.md) |
 
 ## 记录规则
 

@@ -7,7 +7,8 @@
 | 治理 | [决策日志](00-governance/DECISION_LOG.md) | PJM | Active |
 | 治理 | [变更日志](00-governance/CHANGE_LOG.md) | PJM | Active |
 | 产品 | [原始项目规划方案](01-product/PROJECT_PLAN.md) | PJM/PM | Superseded |
-| 产品 | [首期范围与实施规划](01-product/PHASE1_SCOPE_PLAN.md) | PJM/PM | In Review |
+| 产品 | [首期范围与实施规划](01-product/PHASE1_SCOPE_PLAN.md) | PJM/PM | Superseded |
+| 产品 | [精简 MVP 范围与实现方案](01-product/MVP_SCOPE_PLAN.md) | PJM/PM | In Review |
 | 产品 | [PRD](01-product/PRD.md) | PM | Draft |
 | 产品 | [产品 Backlog](01-product/BACKLOG.md) | PM/PJM | Draft |
 | 产品 | [业务术语表](01-product/GLOSSARY.md) | PM | Draft |

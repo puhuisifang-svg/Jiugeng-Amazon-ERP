@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:jiugeng:collector:snapshot-manifest:v1",
+  "title": "Collector snapshot manifest",
+  "type": "object",
+  "required": ["schemaVersion", "runId", "storeKey", "marketplaceId", "adapter", "startedAt", "completedAt", "status", "itemCount", "uniqueAsinCount", "pageCount", "pagesComplete", "evidenceRef", "contentSha256"],
+  "properties": {
+    "schemaVersion": {"const": "1.0"},
+    "runId": {"type": "string", "minLength": 1},
+    "storeKey": {"type": "string", "pattern": "^[A-Z0-9_-]+$"},
+    "marketplaceId": {"const": "ATVPDKIKX0DER"},
+    "adapter": {"type": "object", "required": ["name", "version", "sourceClass"], "properties": {"name": {"type": "string"}, "version": {"type": "string"}, "sourceClass": {"enum": ["APPROVED_API", "PUBLIC_EXPORT", "MANUAL_IMPORT"]}}, "additionalProperties": false},
+    "startedAt": {"type": "string", "format": "date-time"},
+    "completedAt": {"type": "string", "format": "date-time"},
+    "status": {"enum": ["SUCCEEDED", "FAILED", "BLOCKED_POLICY", "RATE_LIMITED"]},
+    "itemCount": {"type": "integer", "minimum": 0},
+    "uniqueAsinCount": {"type": "integer", "minimum": 0},
+    "pageCount": {"type": "integer", "minimum": 0},
+    "pagesComplete": {"type": "boolean"},
+    "evidenceRef": {"type": "string", "pattern": "^s3://|^secretref://|^manual://"},
+    "contentSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "warnings": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": false
+}

@@ -9,8 +9,8 @@
 | S0-PM-02 六类 Excel 模板 | PM | P0 | In Review（6/6 已生成） | Backend/Frontend/QA 契约复核；真实样本 |
 | S0-PM-03 业务输入清单 | PM/PJM | P0 | In Review | 老板/业务关键用户输入待到件 |
 | S0-UI-01 低保真 IA 与核心流程 | UI | P0 | Completed（PJM 核验通过） | 真实样本到位后做受控复核 |
-| S0-BE-01 3 店监控 Spike | Backend/PJM | P0 | In Progress | 3 个公开店铺链接 |
-| S0-BE-02 后端工程脚手架 | Backend | P0 | In Progress | Java 21/Maven |
+| S0-BE-01 3 店监控 Spike | Backend/PJM | P0 | Blocked（框架/Runbook 静态通过） | 3 个公开店铺链接与数据源审批；首个有效快照后连续 7 天 |
+| S0-BE-02 后端工程脚手架 | Backend | P0 | Completed（PJM 核验通过） | MySQL 8 联调转 S0-INT-01，等待 Compose |
 | S0-FE-01 前端脚手架与管理端壳 | Frontend | P0 | Completed（PJM 核验通过） | IAM/API Ready 后实现真实会话、路由守卫与按钮权限 |
 | S0-QA-01 测试计划与追踪矩阵 | QA | P0 | Completed（PJM 静态核验通过） | 动态验收转 S0-INT-01 |
 | S0-OPS-01 Docker Hub 与 Compose | Ops | P0 | In Progress | 可用代理出口 |
@@ -40,7 +40,7 @@
 - [ ] PM 字段与模板通过跨角色复核
 - [ ] UI 低保真流程通过 PJM 核验
 - [ ] 监控 Spike 完成 7 天并通过 Stage Gate 决策
-- [ ] 前后端干净构建/测试通过
+- [x] 前后端干净构建/测试通过
 - [ ] Compose、迁移、健康检查通过
 - [ ] 私有远程、CI 和敏感扫描通过
 - [ ] QA 验收包完成

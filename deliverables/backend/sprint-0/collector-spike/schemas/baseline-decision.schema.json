@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:jiugeng:collector:baseline-decision:v1",
+  "type": "object",
+  "required": ["storeKey", "candidateRunId", "integrity", "decision", "decidedAt"],
+  "properties": {
+    "storeKey": {"type": "string"},
+    "candidateRunId": {"type": "string"},
+    "previousBaselineRunId": {"type": ["string", "null"]},
+    "integrity": {"enum": ["COMPLETE", "INCOMPLETE", "FAILED"]},
+    "decision": {"enum": ["PROMOTED", "REJECTED_KEEP_PREVIOUS"]},
+    "reasonCode": {"enum": ["FIRST_COMPLETE_SNAPSHOT", "COMPLETE_SUCCESSOR", "INTEGRITY_NOT_COMPLETE"]},
+    "decidedAt": {"type": "string", "format": "date-time"}
+  },
+  "additionalProperties": false
+}

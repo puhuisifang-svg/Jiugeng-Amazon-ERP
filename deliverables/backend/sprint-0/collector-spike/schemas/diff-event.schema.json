@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:jiugeng:collector:diff-event:v1",
+  "type": "object",
+  "required": ["eventKey", "storeKey", "marketplaceId", "asin", "type", "detectedInRunId", "firstDetectedAt"],
+  "properties": {
+    "eventKey": {"type": "string", "description": "sha256(storeKey|marketplaceId|asin) or equivalent stable unique key"},
+    "storeKey": {"type": "string"},
+    "marketplaceId": {"const": "ATVPDKIKX0DER"},
+    "asin": {"type": "string", "pattern": "^[A-Z0-9]{10}$"},
+    "type": {"const": "NEW_ASIN"},
+    "detectedInRunId": {"type": "string"},
+    "firstDetectedAt": {"type": "string", "format": "date-time"}
+  },
+  "additionalProperties": false
+}

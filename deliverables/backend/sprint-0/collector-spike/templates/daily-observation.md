@@ -1,0 +1,22 @@
+# Collector 每日观察记录
+
+- 日期 / Day N：
+- Store Key：
+- Run ID：
+- Adapter 名称/版本：
+- 计划/开始/结束时间：
+- 状态：SUCCEEDED / FAILED / BLOCKED_POLICY / RATE_LIMITED
+- 完整性：COMPLETE / INCOMPLETE / FAILED
+- 商品总数 / 唯一 ASIN / 页数：
+- 完整性失败项：
+- 原始证据引用 / SHA-256：
+- 前一有效基线 Run ID：
+- 基线决策：PROMOTED / REJECTED_KEEP_PREVIOUS
+- 新 ASIN 数 / 去重后事件数：
+- 已知样本覆盖率：
+- 重试次数与原因：
+- 单次费用 / 人工耗时：
+- 合规异常或访问控制信号：
+- 人工复核结果 / 误报数：
+- 风险与次日动作：
+- 记录人 / 复核人：

@@ -110,7 +110,7 @@
 | --- | --- | --- | --- | --- |
 | QA-STATIC-001 / S0-DOC-01 | P1 | 产品数据模型 §6 仅定义 4 张导入表，遗漏独立的辅料主档和辅料期初库存；与 PRD/Sprint 0 的 6 类导入不一致 | `PRODUCT_DATA_MODEL.md` v1.1 已补齐六类、顺序和验收；QA 独立复核及 PJM 核验通过 | Closed |
 | QA-STATIC-002 / S0-DOC-02 | P1 | 测试策略仍包含订单、财务、采购、FBA、利润等明确后置范围，且未覆盖当前编码、选品/监控和失败基线保护 | `TEST_STRATEGY.md` v0.2 已隔离后置范围并补齐专项；QA 独立复核及 PJM 核验通过 | Closed |
-| QA-STATIC-003 / S0-DOC-03 | P1 | PM 字段字典与 UI 交付曾同时使用 `DEL-013`，且字段字典未单独登记总账 | DEL-013～017 已统一唯一归属并补齐总账；PJM 检索复核无串项 | Closed |
+| QA-STATIC-003 / S0-DOC-03 | P1 | PM 字段字典与 UI 交付曾同时使用 `DEL-013`，且字段字典未单独登记总账 | DEL-013～017 已统一唯一归属并补齐总账；QA/PJM 检索复核无串项；证据见 `S0_DOC_03_CLOSURE_REVIEW.md` | Closed |
 
 当前未发现 P0。PM 字段字典和部分脚手架在本次评审期间进入 `In Review`，但 6 类模板、Compose、CI、跨角色复核及 7 天 Spike 证据仍未齐备；本次只能得出“测试设计完成，动态验收待执行”，不能给出 Sprint 0 Pass。
 

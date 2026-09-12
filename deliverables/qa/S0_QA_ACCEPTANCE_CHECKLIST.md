@@ -115,4 +115,4 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | QA-STATIC-001 / S0-DOC-01 | P1 | FLD-002/003 | 4 张表与 6 类导入基线冲突 | PM/Backend | Closed | `deliverables/qa/S0_DOC_01_02_CLOSURE_REVIEW.md` §2；QA/PJM 复核通过 |
 | QA-STATIC-002 / S0-DOC-02 | P1 | GATE-006 | 项目级测试策略与当前 MVP 范围不一致 | QA/PJM | Closed | `deliverables/qa/S0_DOC_01_02_CLOSURE_REVIEW.md` §3；QA/PJM 复核通过 |
-| QA-STATIC-003 / S0-DOC-03 | P1 | QA-A04 | PM 字段字典与 UI 交付物 ID 重复 | PM/PJM | Closed | DEL-013～017 唯一归属及总账登记检索通过 |
+| QA-STATIC-003 / S0-DOC-03 | P1 | QA-A04 | PM 字段字典与 UI 交付物 ID 重复 | PM/PJM | Closed | `deliverables/qa/S0_DOC_03_CLOSURE_REVIEW.md`；DEL-013～017 唯一归属、总账路径及包归属复核通过 |

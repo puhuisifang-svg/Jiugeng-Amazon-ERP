@@ -12,7 +12,7 @@
 | S0-BE-01 3 店监控 Spike | Backend/PJM | P0 | In Progress | 3 个公开店铺链接 |
 | S0-BE-02 后端工程脚手架 | Backend | P0 | In Progress | Java 21/Maven |
 | S0-FE-01 前端脚手架与管理端壳 | Frontend | P0 | In Progress | UI IA 可增量对齐 |
-| S0-QA-01 测试计划与追踪矩阵 | QA | P0 | In Progress | Sprint 计划/PRD |
+| S0-QA-01 测试计划与追踪矩阵 | QA | P0 | Completed（PJM 静态核验通过） | 动态验收转 S0-INT-01 |
 | S0-OPS-01 Docker Hub 与 Compose | Ops | P0 | In Progress | 可用代理出口 |
 | S0-OPS-02 GitHub 私有远程与 CI | Ops/PJM | P0 | In Progress | GitHub 安全授权 |
 | S0-INT-01 集成验证与验收包 | QA/PJM/全员 | P0 | Pending | 所有前置任务 |

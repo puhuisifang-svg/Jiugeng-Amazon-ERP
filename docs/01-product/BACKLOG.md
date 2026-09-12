@@ -3,6 +3,7 @@
 | ID | Epic | 用户故事/需求 | 优先级 | Owner | 依赖 | 验收标准 | 状态 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | ERP-101 | 项目准备 | 确认产品、辅料字段和真实导入样本 | P0 | PM | 产品关键用户 | 字段字典和导入模板由业务确认 | Proposed |
+| ERP-101A | 项目准备 | 确认并固化产品、SKU、辅料内部编码规则 | P0 | PM/Backend | 老板确认 | 编码格式、生成、唯一性、不可修改和导入规则明确 | Proposed |
 | ERP-102 | 技术验证 | 验证 3 个公开店铺上新数据源 | P0 Spike | Backend/PJM | 样本店铺链接 | 给出覆盖率、稳定性、合规、成本和降级结论 | Proposed |
 | ERP-103 | 登录与权限 | 实现登录、账号、三类角色和审计 | P0 | Backend/Frontend | 用户清单 | 越权拦截和关键审计 100% | Proposed |
 | ERP-104 | 产品 | 维护 Product/SPU、多 SKU、动态变体属性及 5 店 Listing 映射 | P0 | PM/Backend | 产品样本 | 通过界面/Excel 维护；编码唯一，多店铺 Seller SKU/ASIN/FNSKU 互不覆盖 | Proposed |

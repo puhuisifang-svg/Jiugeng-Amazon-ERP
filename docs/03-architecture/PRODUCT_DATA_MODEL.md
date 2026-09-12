@@ -37,7 +37,7 @@
 | 字段 | 说明 |
 | --- | --- |
 | `id` | 内部主键 |
-| `product_code` | 公司产品编码，全局唯一且创建后不可随意修改 |
+| `product_code` | 公司产品编码；提议由系统按 `JG-P-######` 生成，全局唯一且不可修改 |
 | `name_zh` / `name_en` | 中英文产品名称 |
 | `brand` | 品牌 |
 | `internal_category` | 公司内部类目 |
@@ -53,7 +53,7 @@
 | 字段 | 说明 |
 | --- | --- |
 | `id` / `product_id` | 主键及所属产品 |
-| `sku_code` | 内部 SKU 编码，全局唯一 |
+| `sku_code` | 内部 SKU 编码；提议按 `JG-P-######-###` 生成，全局唯一 |
 | `variant_name` | 规格显示名 |
 | `barcode` | UPC/EAN/GTIN 等商品编码，可空但需唯一性校验 |
 | `material` / `specification` | 材质和内部规格 |
@@ -207,3 +207,5 @@ MVP 导入采用幂等 Upsert，并记录 `source`、导入批次和操作人。
 - [Listings Items API](https://developer-docs.amazon.com/sp-api/reference/listings-items-v2021-08-01)：按 Selling Partner、SKU 和 marketplace 查询/维护 Listing。
 - [Catalog Items API](https://developer-docs.amazon.com/sp-api/reference/catalog-items-v2022-04-01)：查询 ASIN 目录数据及 variations。
 - [Product Type Definitions API](https://developer-docs.amazon.com/sp-api/reference/product-type-definitions-v2020-09-01)：按 Product Type 和 marketplace 获取属性及条件要求。
+
+内部编码提案见[产品与辅料编码规则](../01-product/PRODUCT_CODE_STANDARD.md)。

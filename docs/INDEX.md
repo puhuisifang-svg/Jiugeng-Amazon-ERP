@@ -10,6 +10,7 @@
 | 产品 | [首期范围与实施规划](01-product/PHASE1_SCOPE_PLAN.md) | PJM/PM | Superseded |
 | 产品 | [精简 MVP 范围与实现方案](01-product/MVP_SCOPE_PLAN.md) | PJM/PM | In Review |
 | 产品 | [PRD](01-product/PRD.md) | PM | In Review |
+| 产品 | [产品与辅料编码规则](01-product/PRODUCT_CODE_STANDARD.md) | PM/Backend | In Review |
 | 产品 | [产品 Backlog](01-product/BACKLOG.md) | PM/PJM | Draft |
 | 产品 | [业务术语表](01-product/GLOSSARY.md) | PM | Draft |
 | 设计 | [UI/UX 设计说明](02-design/UI_UX_SPEC.md) | UI | Draft |

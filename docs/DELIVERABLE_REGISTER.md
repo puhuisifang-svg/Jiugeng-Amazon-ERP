@@ -11,6 +11,7 @@
 | DEL-007 | 2026-09-12 | PM | 精简 MVP 产品需求文档 | v0.9 | In Review | 老板 | [MVP PRD](01-product/PRD.md) |
 | DEL-008 | 2026-09-12 | Backend/Ops | 精简 MVP 总体架构基线 | v0.3 | In Review | 老板 | [总体架构](03-architecture/ARCHITECTURE.md) |
 | DEL-009 | 2026-09-12 | PM/QA/PJM | 精简 MVP 项目验收标准 | v0.2 | In Review | 老板 | [验收标准](06-quality/ACCEPTANCE_CRITERIA.md) |
+| DEL-010 | 2026-09-12 | PM/Backend | 产品与辅料编码规则提案 | v0.1 | In Review | 老板 | [编码规则](01-product/PRODUCT_CODE_STANDARD.md) |
 
 ## 登记要求
 

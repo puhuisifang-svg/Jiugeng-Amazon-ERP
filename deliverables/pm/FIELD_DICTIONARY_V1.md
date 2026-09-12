@@ -6,8 +6,8 @@
 | 交付物 ID | DEL-013 |
 | Owner | PM（字段口径）/ Backend（技术约束）/ 业务关键用户（业务确认） |
 | 关联 Sprint/任务 | Sprint 0 / S0-PM-01 |
-| 版本 | v1.0 |
-| 状态 | In Review（字段结构已冻结，待真实脱敏样本与跨角色复核） |
+| 版本 | v1.1 |
+| 状态 | In Review（P0 契约整改完成，待 Backend/QA 复核） |
 | 日期 | 2026-09-12 |
 
 ## 1. 目标与冻结口径
@@ -17,7 +17,7 @@
 - `P0` 字段均已给出名称、Owner、必填、唯一、枚举和引用校验；当前无未决 P0 字段。
 - 编码、枚举和引用规则同时适用于界面新增/编辑与 Excel 导入。
 - 系统字段（主键、审计时间、操作人、导入批次、幂等键）由系统生成，不要求业务在 Excel 中填写。
-- 20～50 条真实脱敏样本尚未提供，因此 v1.0 是**结构冻结基线**，不是“真实数据已验收”。样本到位后只允许通过变更记录调整，不直接覆盖本文件。
+- 20～50 条真实脱敏样本尚未提供，因此 v1.1 是**结构冻结基线**，不是“真实数据已验收”。样本到位后只允许通过变更记录调整，不直接覆盖本文件。
 
 ## 2. 通用校验规则
 
@@ -30,7 +30,7 @@
 | COM-005 | P0 | 所有枚举仅接受本字典列出的机器值；Excel 展示值与机器值一致。 |
 | COM-006 | P0 | 日期时间采用 ISO 8601；金额/数量使用十进制定点数，不接受科学计数法。 |
 | COM-007 | P0 | 导入先全量校验并预览，提交后逐行返回工作表、行号、字段和原因；不得静默跳过。 |
-| COM-008 | P0 | 导入采用幂等 Upsert；唯一键冲突只允许更新同一业务记录，不得生成重复记录。 |
+| COM-008 | P0 | 前五类（产品、SKU/属性、Listing、辅料、SKU—辅料）按业务键执行幂等 Upsert；期初库存禁止覆盖式 Upsert，按一次性幂等命令处理：同一“仓库 + 辅料”、相同依据和相同载荷重放时返回既有结果且仅保留一条 `OPENING`；同键不同载荷拒绝，纠错只能追加调整/冲销流水。 |
 | COM-009 | P0 | 图片字段仅存批准对象存储中的 URL/对象引用；不接收内嵌二进制、账号凭据或本机绝对路径。 |
 | COM-010 | P0 | 所有关键新增、修改、停用、库存变动、状态流转记录操作人、时间、来源、导入批次及前后值。 |
 
@@ -162,12 +162,12 @@
 | `transaction_no` | 流水号 | string(64) | 是 | 全局唯一 | Backend | 系统生成，不由 Excel 提供。 |
 | `material_code` | 辅料编码 | string(64) | 是 | 引用辅料 | Inventory Owner | 必须与余额记录一致。 |
 | `transaction_type` | 变动类型 | enum | 是 | 否 | Inventory Owner | `OPENING` / `INBOUND` / `OUTBOUND` / `ADJUST_IN` / `ADJUST_OUT` / `REVERSAL`。 |
-| `quantity` | 变动数量 | decimal(18,4) | 是 | 否 | Inventory Owner | 存正数，方向由类型决定；`>0`。 |
+| `quantity` | 变动数量 | decimal(18,4) | 是 | 否 | Inventory Owner | 存非负数，方向由类型决定；`transaction_type=OPENING` 时允许 `>=0`（含零期初），其他类型必须 `>0`。 |
 | `business_reference` | 业务依据号 | string(100) | 是 | 类型+依据号幂等唯一 | Inventory Owner | 重复请求不得重复记账。 |
 | `reason` | 原因 | string(500) | 条件必填 | 否 | Inventory Owner | 调整/冲销必填。 |
 | `occurred_at` | 发生时间 | datetime | 是 | 否 | Inventory Owner | ISO 8601。 |
 
-**实体约束：** `现存 = 期初 + 入库 - 出库 ± 调整`；默认禁止负库存；流水不可编辑/删除，纠错通过反向流水；余额与流水在同一事务中原子更新。
+**实体约束：** `现存 = 期初 + 入库 - 出库 ± 调整`；默认禁止负库存；零期初仍在同一事务内创建余额/期初记录和一条 `quantity=0` 的不可编辑 `OPENING` 流水；除 `OPENING` 外的库存流水数量必须 `>0`；流水不可编辑/删除，纠错通过调整/冲销流水；余额与流水在同一事务中原子更新。
 
 ## 9. D6 选品候选域
 
@@ -219,9 +219,14 @@
 ## 11. 跨域导入顺序与数据库兜底
 
 ```text
-Product → SKU/Variant → Auxiliary Material → SKU—Material Relation
-        ↘ Store Listing
-Auxiliary Material → Initial Inventory
+Product ─────────────→ SKU/Variant ─────────────┬→ Store Listing Mapping
+系统预置 StoreAccount ──────────────────────────┘
+
+SKU/Variant ────────────────────────────────────┬→ SKU—Auxiliary Material Relation
+Auxiliary Material（独立根）────────────────────┘
+
+Auxiliary Material（独立根）────────────────────┬→ Initial Inventory
+系统唯一启用 Warehouse ─────────────────────────┘
 ```
 
 | 约束 | 应用层 | 数据库 |
@@ -230,15 +235,17 @@ Auxiliary Material → Initial Inventory
 | Listing 同店 Seller SKU 唯一 | 预校验/Upsert | `(store_id, marketplace_id, normalized_seller_sku)` 唯一 |
 | SKU 变体组合唯一 | 规范化属性集合比对 | 组合哈希唯一索引（Product 范围） |
 | SKU—辅料唯一 | 批次内和库内查重 | `(variant_id, auxiliary_material_id)` 唯一 |
-| 期初库存唯一 | 一辅料一条期初 | `(warehouse_id, auxiliary_material_id)` 唯一 |
+| 期初库存唯一/重放 | 同键同依据同载荷返回既有结果；异载荷拒绝覆盖 | `(warehouse_id, auxiliary_material_id)` 唯一；`(warehouse_id, opening_reference)` 辅助防重；持久化载荷摘要 |
+| 库存流水数量 | `OPENING >=0`；其他类型 `>0` | 按 `transaction_type` 的 Check/服务约束；零期初仍只生成一条 `OPENING` |
 | 库存不为负 | 提交前校验 | 事务锁/乐观锁 + Check/业务约束 |
 | 新品事件不重复 | 差异计算去重 | `(watch_store_id, marketplace_id, asin)` 唯一 |
 
 ## 12. 验证过程与结果
 
-- 已逐条对照 PRD v1.0、产品数据模型 v1.0、产品/辅料编码规则 v1.0 和 Sprint 0 计划。
+- 已逐条对照 PRD v1.0、产品数据模型 v1.1、产品/辅料编码规则 v1.0 和 Sprint 0 计划。
 - 六类 Excel 模板字段均可回溯到本字典，生成脚本执行结构化校验。
-- P0 未决字段：0；P1 待业务词表项：内部类目、部分自由文本规格的后续受控词表。
+- P0 契约冲突已按 PJM 决策整改：COM-008 排除期初覆盖式 Upsert；库存流水数量按 `OPENING >=0`、其他类型 `>0` 条件化。
+- P0 未决字段：0（待 Backend/QA 复核关闭）；P1 待业务词表项：内部类目、部分自由文本规格的后续受控词表。
 - 未执行真实样本导入：20～50 条脱敏样本未提供。
 
 ## 13. 已知限制与风险
@@ -253,3 +260,10 @@ Auxiliary Material → Initial Inventory
 | --- | --- | --- | --- |
 | PM 自检 | 通过 | 2026-09-12 | 七域、Owner、必填/唯一/枚举/引用规则已覆盖。 |
 | Backend/Frontend/QA/PJM | 待评审 | - | 待契约与模板复核。 |
+
+## 15. 变更记录
+
+| 版本 | 日期 | 变更 |
+| --- | --- | --- |
+| v1.0 | 2026-09-12 | 七域字段、Owner 与通用校验基线。 |
+| v1.1 | 2026-09-12 | P0 修正：前五类 Upsert/期初一次性幂等分流；冻结 `OPENING quantity >=0`、其他库存流水 `>0`；修正两根依赖链。 |

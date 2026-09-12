@@ -26,7 +26,7 @@
 - [ ] `FLD-002` 六类逻辑导入齐全：产品、SKU、Listing、辅料、SKU—辅料关系、辅料期初库存。
 - [ ] `FLD-003` 字典、模板、样例、UI、API DTO、数据库迁移的字段名/类型/必填/枚举一致。
 - [ ] `FLD-004` 5 店 Listing 独立；Seller SKU、ASIN、FNSKU、履约、状态不互相覆盖。
-- [ ] `FLD-005` Product→SKU→辅料/Listing 引用顺序与唯一键明确，错误样例覆盖所有规则。
+- [ ] `FLD-005` Product 与 AuxiliaryMaterial 为独立根：Product→SKU→Listing，SKU+辅料→关系，辅料+唯一仓库→期初；引用顺序与唯一键明确。
 - [ ] `COD-001` Product/SKU/辅料编码均由用户输入，系统及导入不自动补号。
 - [ ] `COD-002` 空、全空格、长度 65、中文/内部空格/特殊字符被 100% 拦截；长度 1/64 和合法字符通过。
 - [ ] `COD-003` 保存前 trim，展示保留合法原始大小写；仅大小写不同的重复被拦截。
@@ -57,6 +57,10 @@
 - [ ] `IMP-006` 重复确认/网络重试不产生重复记录或重复库存期初，Upsert/幂等结果符合规则。
 - [ ] `IMP-007` 导入任务记录 source、批次、操作人、时间、结果文件和审计事件。
 - [ ] `IMP-008` 1,000 行从确认至结果文件生成 ≤5 分钟，结果与页面/数据库抽样一致。
+- [ ] `IMP-009` 前五类按业务键幂等 Upsert；期初库存禁止覆盖式 Upsert：同键同依据同载荷重放返回既有结果且仅一条 `OPENING`，同键不同载荷拒绝，纠错只能追加调整/冲销流水。
+- [ ] `IMP-010` `opening_quantity=0` 导入成功，并在同一事务生成余额/期初记录及一条 `quantity=0` 的不可编辑 `OPENING`；`INBOUND/OUTBOUND/ADJUST_IN/ADJUST_OUT/REVERSAL` 的 `quantity=0` 均被拒绝。
+- [ ] `IMP-011` Listing 错误样例分别覆盖同店重复 FNSKU、同店同 SKU 多条 ACTIVE、子体跨店引用父体、父子 `variation_theme` 不一致，并逐行定位。
+- [ ] `IMP-012` `attributes_导入模板.display_order` 的 Excel DataValidation 仅接受整数且 `>=1`；服务端同时校验同一 SKU 内唯一。
 
 ## E. 监控快照与新品去重
 

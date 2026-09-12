@@ -6,8 +6,8 @@
 | 交付物 ID | DEL-017 |
 | Owner | PM（模板口径）/ Backend（导入契约）/ QA（错误覆盖） |
 | 关联 Sprint/任务 | Sprint 0 / S0-PM-02、S0-CONTRACT-01/02 |
-| 版本 | v1.1 |
-| 状态 | In Review（模板结构已通过初检，异步导入契约待 Frontend/QA 复核） |
+| 版本 | v1.2 |
+| 状态 | In Review（P0/P1 契约整改完成，暂停 Pass，待 Backend/QA 复核） |
 | 日期 | 2026-09-12 |
 
 ## 1. 交付清单
@@ -155,8 +155,8 @@ QUEUED / VALIDATING ────────────→ FAILED（技术故�
 - 相同上传幂等键与相同文件哈希返回原批次；相同键不同哈希返回 `409 IDEMPOTENCY_KEY_REUSED`。
 - 相同 `batchId + confirm Idempotency-Key + previewVersion` 重试返回第一次确认结果；不得重复创建、更新或记账。
 - 已成功批次使用新确认键再次提交，返回 `409 IMPORT_ALREADY_COMMITTED`。
-- 前五类按 `PRODUCT_DATA_MODEL.md` 中业务键执行幂等 Upsert；同一批内业务键重复是 `ERROR`，不以最后一行覆盖。
-- 期初库存不是覆盖式 Upsert：首次确认在同一整批事务内为每个有效输入行创建余额/期初记录和一条不可编辑的 `InventoryTransaction(OPENING)`；相同业务键、依据和载荷的重试返回既有结果且仅有一条 `OPENING`；同键不同载荷返回 `409 OPENING_INVENTORY_CONFLICT`，纠错只能追加调整/冲销流水。
+- 前五类按 `PRODUCT_DATA_MODEL.md` 中业务键执行幂等 Upsert；同一批内业务键重复是 `ERROR`，不以最后一行覆盖。该通用 Upsert 规则不得用于期初库存。
+- 期初库存不是覆盖式 Upsert：首次确认在同一整批事务内为每个有效输入行创建余额/期初记录和一条不可编辑的 `InventoryTransaction(OPENING)`；`opening_quantity=0` 合法且必须生成 `quantity=0` 的 `OPENING`，其他库存流水的 `quantity` 必须 `>0`；相同业务键、依据和载荷的重试返回既有结果且仅有一条 `OPENING`；同键不同载荷返回 `409 OPENING_INVENTORY_CONFLICT`，纠错只能追加调整/冲销流水。
 
 ## 7. 依赖 DAG
 
@@ -224,7 +224,7 @@ QUEUED / VALIDATING ────────────→ FAILED（技术故�
 | --- | --- | --- | --- | --- |
 | 产品 | 缺产品编码 | 大小写不敏感重复编码 | 非法编码、非法状态 | - |
 | SKU | 缺条件字段 | 重复 SKU/属性编码/顺序 | 条码、重量、单位、状态 | 产品/SKU 不存在；重量与单位联动 |
-| Listing | 子体缺字段 | 同店 Seller SKU 规则 | ASIN、角色、履约、状态 | 店铺/Product/SKU/父体引用；父子/履约/FNSKU 条件 |
+| Listing | 子体缺字段 | 同店 Seller SKU、FNSKU、同店同 SKU 单一 ACTIVE | ASIN、角色、履约、状态 | 店铺/Product/SKU/父体引用；跨店父体、父子主题、履约/FNSKU 条件 |
 | 辅料 | 缺辅料编码 | 大小写不敏感重复编码 | 类型、单位、状态、图片 URL | - |
 | SKU—辅料 | - | 重复关系 | 用量、单位、损耗率、布尔值 | SKU/辅料引用；单位一致 |
 | 期初库存 | 缺日期/依据号 | 重复单仓辅料/依据号 | 非负数量、未来日期 | 固定仓库与辅料引用 |
@@ -233,6 +233,7 @@ QUEUED / VALIDATING ────────────→ FAILED（技术故�
 
 - 所有导入表冻结首行并启用筛选；表头带字段注释（关键字段）。
 - 枚举列配置下拉校验；数值列配置基本范围校验。
+- `attributes_导入模板.display_order` 配置整数且 `>=1` 的 Excel 校验；服务端仍须复核同一 SKU 内唯一。
 - Excel 内校验只用于提前提示，服务端必须重新执行完整校验及数据库约束，不得信任客户端文件。
 - `_预期错误` 仅存在于错误样例工作表，不属于导入字段。
 
@@ -250,7 +251,10 @@ python3 deliverables/pm/scripts/generate_excel_templates.py
 2. 每个文件包含规定工作表且工作表非空；
 3. 模板列、正确样例、错误样例与字段字典一致；
 4. 无真实凭据、Seller ID、客户/供应商隐私数据。
-5. 每个工作簿含 veryHidden `_meta`，其 `importType/templateVersion/maxDataRows` 与 v1.1 契约一致。
+5. 每个工作簿含 veryHidden `_meta`，其 `importType/templateVersion/maxDataRows` 与 v1.2 契约一致；模板交换版本仍为 `templateVersion=1.0`。
+6. 数据校验总数为 17：原 16 组加 `display_order` 整数 `>=1` 校验。
+7. Listing 错误样例新增 4 类：同店重复 FNSKU、同店同 SKU 多条 ACTIVE、跨店父体引用、父子 `variation_theme` 不一致。
+8. 期初正确样例覆盖 `opening_quantity=0`，并明确应生成一条 `quantity=0` 的 `OPENING`。
 
 S0-CONTRACT-01/02 静态自检还包括：六个 `importType`、七个批次状态、四级 issue、preview 计数等式、整批事务/期初特例、DAG 和六个 import capability 均已定义。
 
@@ -266,9 +270,10 @@ S0-CONTRACT-01/02 静态自检还包括：六个 `importType`、七个批次状�
 | 评审人 | 结论 | 日期 | 意见 |
 | --- | --- | --- | --- |
 | PM 自检 | 通过 | 2026-09-12 | 六类模板、正确/错误样例和生成脚本完整。 |
-| PJM 初检 | 通过 | 2026-09-12 | DEL-013/015/017 齐全；6/6 xlsx、16 组数据校验、生成脚本与安全扫描通过。 |
+| PJM 初检（v1.1 历史） | 通过 | 2026-09-12 | DEL-013/015/017 齐全；6/6 xlsx、16 组数据校验、生成脚本与安全扫描通过。 |
 | Frontend DEL-023 | 有条件通过 | 2026-09-12 | 模板结构通过；FE-CONTRACT-01～07 已由 v1.1 产品契约收口，待复核。 |
-| Backend/Frontend/QA | 待复核 | - | 待确认异步状态、事务、capability 和测试覆盖。 |
+| Backend P0/P1 复核 | Fail | 2026-09-12 | v1.1 发现 COM-008/零期初冲突及样例/Excel 校验缺口；v1.2 已整改，暂停 Pass。 |
+| Backend/QA | 待复核 | - | 待确认 v1.2 P0/P1 全部关闭。 |
 
 ## 16. 变更记录
 
@@ -276,3 +281,4 @@ S0-CONTRACT-01/02 静态自检还包括：六个 `importType`、七个批次状�
 | --- | --- | --- | --- |
 | v1.0 | 2026-09-12 | 六类 Excel 模板、正确/错误样例与生成验证。 | S0-PM-02 |
 | v1.1 | 2026-09-12 | 冻结异步导入类型/版本/限制、状态与取消、issue、preview、整批事务/幂等、依赖 DAG、capability；确认 StoreAccount 系统预置且无 `/system/stores`。 | S0-CONTRACT-01/02 |
+| v1.2 | 2026-09-12 | P0/P1 整改：前五类 Upsert 与期初命令分流；`OPENING quantity>=0`/其他流水 `>0`；补四类 Listing 负例和 `display_order>=1` Excel 校验。 | S0-CONTRACT-01/02 |

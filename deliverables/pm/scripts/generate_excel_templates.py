@@ -78,6 +78,19 @@ def add_decimal_validation(ws, header: str, operator: str, formula1: str, formul
     dv.add(f"{col}2:{col}1001")
 
 
+def add_integer_validation(ws, header: str, operator: str, formula1: str) -> None:
+    headers = {cell.value: cell.column for cell in ws[1]}
+    if header not in headers:
+        return
+    dv = DataValidation(type="whole", operator=operator, formula1=formula1, allow_blank=True)
+    dv.error = "请输入符合范围的整数"
+    dv.errorTitle = "整数无效"
+    dv.showErrorMessage = True
+    ws.add_data_validation(dv)
+    col = ws.cell(1, headers[header]).column_letter
+    dv.add(f"{col}2:{col}1001")
+
+
 def add_instructions(wb: Workbook, template_name: str, import_order: str, keys: str, caveats: list[str]) -> None:
     ws = wb.active
     ws.title = "填写说明"
@@ -203,6 +216,7 @@ def sku_workbook() -> None:
     attr_headers = ["sku_code", "attribute_code", "attribute_value", "display_order"]
     attrs = wb.create_sheet("attributes_导入模板")
     sheet_setup(attrs, attr_headers, {"sku_code": "引用本文件 variants 或库内 SKU。", "attribute_code": "同一 SKU 内唯一。", "display_order": ">=1，同一 SKU 内唯一。"})
+    add_integer_validation(attrs, "display_order", "greaterThanOrEqual", "1")
     good = wb.create_sheet("正确样例_variants")
     sheet_setup(good, variant_headers)
     add_rows(good, [
@@ -273,6 +287,10 @@ def listing_workbook() -> None:
         ["TEST-STORE-01", "ATVPDKIKX0DER", "BAD-PARENT", "B0BADP0001", "PARENT", "TEST-P001", "TEST-SKU001", None, "Color", None, "FBA", "ACTIVE", "父体不得关联 SKU/履约"],
         ["TEST-STORE-01", "ATVPDKIKX0DER", "BAD-CHILD", "B0BADC0001", "CHILD", "TEST-P001", None, None, None, None, "FBA", "ACTIVE", "子体缺 SKU/父体/主题/FNSKU"],
         ["TEST-STORE-02", "ATVPDKIKX0DER", "BAD-FBM", "B0BADF0001", "STANDALONE", "TEST-P001", "TEST-SKU001", None, None, "X00BAD0001", "FBM", "ACTIVE", "FBM 不得填写 FNSKU"],
+        ["TEST-STORE-03", "ATVPDKIKX0DER", "BAD-DUP-FNSKU", "B0BADF0002", "STANDALONE", "TEST-P001", "TEST-SKU001", None, None, "X00TEST003", "FBA", "ACTIVE", "同店非空 FNSKU 与正确样例重复"],
+        ["TEST-STORE-02", "ATVPDKIKX0DER", "BAD-DUP-ACTIVE", "B0BADA0001", "STANDALONE", "TEST-P001", "TEST-SKU001", None, None, None, "FBM", "ACTIVE", "同一 SKU 在同店已有 ACTIVE Listing"],
+        ["TEST-STORE-02", "ATVPDKIKX0DER", "BAD-CROSS-PARENT", "B0BADC0002", "CHILD", "TEST-P001", "TEST-SKU002", "TEST-PARENT-01", "ColorSize", "X00BAD0002", "FBA", "ACTIVE", "子体引用其他店铺的父体"],
+        ["TEST-STORE-01", "ATVPDKIKX0DER", "BAD-THEME", "B0BADT0001", "CHILD", "TEST-P001", "TEST-SKU002", "TEST-PARENT-01", "Size", "X00BAD0003", "FBA", "ACTIVE", "父子 variation_theme 不一致"],
     ])
     add_enum_sheet(wb, {"listing_role": ["STANDALONE", "PARENT", "CHILD"], "fulfillment_channel": ["FBA", "FBM"], "listing_status": ["DRAFT", "SYNCING", "ACTIVE", "RESTRICTED", "DELETED"]})
     save_and_check(wb, "03_store_listings_v1.0.xlsx", ["填写说明", "导入模板", "正确样例", "错误样例", "枚举值"])
@@ -351,9 +369,9 @@ def inventory_workbook() -> None:
     add_instructions(
         wb,
         "06 单仓辅料期初库存导入模板",
-        "先导入 04 辅料；期初导入经预览确认后生成不可编辑 OPENING 流水",
-        "warehouse_code + material_code；opening_reference 在仓库内唯一",
-        ["MVP 只允许系统配置的唯一启用仓库。", "余额纠错须新增反向调整，不得编辑/删除流水。"],
+        "先导入 04 辅料；期初导入经预览确认后生成不可编辑 OPENING 流水（零期初也生成）",
+        "warehouse_code + material_code；opening_reference 在仓库内唯一；同键同依据同载荷重放返回既有结果",
+        ["MVP 只允许系统配置的唯一启用仓库。", "opening_quantity 允许 >=0；零期初生成 quantity=0 的 OPENING，其他库存流水必须 >0。", "期初禁止覆盖式 Upsert；同键异载荷拒绝，纠错须新增调整/冲销流水。"],
     )
     add_machine_metadata(wb, "AUXILIARY_MATERIAL_OPENING_INVENTORY")
     headers = ["warehouse_code", "material_code", "opening_quantity", "safety_stock", "as_of_date", "opening_reference", "remark"]
@@ -365,7 +383,7 @@ def inventory_workbook() -> None:
     sheet_setup(good, headers)
     add_rows(good, [
         ["TEST-WH-01", "TEST-MAT001", 100, 20, "2026-09-12", "TEST-OPEN-001", "合成测试数据"],
-        ["TEST-WH-01", "TEST-MAT002", 50, 10, "2026-09-12", "TEST-OPEN-002", "合成测试数据"],
+        ["TEST-WH-01", "TEST-MAT002", 0, 10, "2026-09-12", "TEST-OPEN-002", "零期初合法；应生成 quantity=0 的 OPENING"],
     ])
     bad = wb.create_sheet("错误样例")
     sheet_setup(bad, headers + ["_预期错误"])

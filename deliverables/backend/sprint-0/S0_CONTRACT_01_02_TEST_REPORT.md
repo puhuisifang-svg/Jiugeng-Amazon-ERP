@@ -4,7 +4,7 @@
 | --- | --- |
 | 日期 | 2026-09-12 |
 | Owner | Backend |
-| 版本 | v1.1 |
+| 版本 | v1.1.1 |
 | 结论 | PASS（待 Frontend/QA 独立复核） |
 
 ## 覆盖结果
@@ -25,6 +25,7 @@
 | 错误映射 | PASS，11/11 operation 声明 `x-error-codes`，code/status/response 双向可达并全部覆盖 500 |
 | 幂等/事务/重试码 | PASS，写操作均要求 `Idempotency-Key`；冲突码与 retryable 标记完整 |
 | P0 条件语义 | PASS，普通 Upsert 仅前五类；零期初生成唯一 `quantity=0` OPENING，其他流水 `>0` |
+| 库存流水条件 Schema | PASS，`InventoryTransactionQuantityRule` 以 `if/then/else` 约束 OPENING 非负、其他 5 类严格为正；`PreviewImpact` 在 `inventory_transactions` 资源下强制复用该结构；AJV 接受 8 个正例、拒绝 6 个负例 |
 | Issue 定位 | PASS，BATCH/SHEET/ROW/FIELD 四种 scope 的 sheet/row/field nullability 与必填条件机器化 |
 | Issue Draft 2020-12 实例 | PASS，AJV 8.17.1：有效 scope 4/4 接受，非法定位与 blocking 组合 6/6 拒绝 |
 | Preview 标量/业务键 | PASS，decimal 使用带 `DECIMAL` 标签的非科学计数法 string；7 种实际业务键；impact resource 复用枚举 |
@@ -55,6 +56,7 @@ PASS: workbooks=6 validations=17 zero-opening=present listing-negative-cases=4/4
 PASS: S0-CONTRACT-01/02 machine-readable contracts are consistent
 CHECKS: importTypes=6 statuses=7 phases=8 operations=11 capabilities=21 errors=25
 PASS: ImportIssue Draft 2020-12 instances valid=4 invalid-rejected=6
+PASS: InventoryTransaction quantity condition valid=8 invalid-rejected=6
 Woohoo! Your API description is valid.
 ```
 
@@ -68,6 +70,7 @@ Woohoo! Your API description is valid.
 | QA P1-01 ROW/SHEET 定位条件缺失 | 四种 scope 均增加 if/then 条件并加入静态负向约束断言 |
 | QA 后续门禁：缺 Draft 2020-12 实例测试 | 新增 AJV 实例级夹具：4 个合法对象必须通过，6 个非法定位/blocking 对象必须拒绝 |
 | PJM OpenAPI 收口 4 项 | 新增过期重验 endpoint 与新旧批次关联；对既有分页和 diff JSON schema 增加强断言；冻结 direct/page/problem envelope 与全响应 `X-Request-Id` |
+| PM P0 条件 Schema | 新增 `InventoryTransactionQuantityRule`、非负/正 decimal wire schema 与 AJV 正负实例，直接证明零 OPENING 合法且非 OPENING 零值非法 |
 
 ## 非实现声明
 

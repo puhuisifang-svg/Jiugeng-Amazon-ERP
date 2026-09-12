@@ -3,7 +3,7 @@
 | 字段 | 内容 |
 | --- | --- |
 | Owner | Backend |
-| 版本 | v1.1 |
+| 版本 | v1.1.1 |
 | 状态 | In Review（Backend 自检通过，待 Frontend/QA 复核增量） |
 | 业务基线 | DEL-017 v1.2、PRODUCT_DATA_MODEL v1.1 受控澄清、ACCESS_MATRIX v1.1 |
 | 范围 | Sprint 0 契约冻结；不包含真实接口、IAM 会话或逐接口鉴权实现 |
@@ -16,6 +16,7 @@
 - `import-dependency-dag.json`：六类导入及预置 StoreAccount/唯一 Warehouse 的依赖 DAG。
 - `capabilities.json`：动作级 capability 机器码与 `ADMIN`、`PRODUCT_MATERIAL`、`SELECTION` 初始化映射。
 - `tests/validate_contract.py`：零第三方依赖的结构、引用和跨文件一致性校验。
+- `tests/validate_inventory_transaction_instances.mjs`：AJV / Draft 2020-12 的库存流水条件数量正负实例测试。
 
 ## 冻结决定
 
@@ -24,6 +25,7 @@
    diff 标量使用带 `kind` 的唯一传输编码（decimal 为非科学计数法 string），业务键按实际行类型收窄。
 3. 六类确认均为整批原子事务；MVP 无 `PARTIALLY_SUCCEEDED`。期初库存仍是不可覆盖的一次性幂等 `OPENING` 记账。
    `opening_quantity=0` 合法且仍生成唯一、不可编辑的 `quantity=0` OPENING；其他库存流水数量必须 `>0`。
+   OpenAPI `InventoryTransactionQuantityRule` 使用 `if/then/else` 直接约束 `transactionType=OPENING` 时非负，其他类型严格为正。
 4. StoreAccount 是系统预置 5 店，只作为 Listing 引用依赖；不提供店铺管理 API/UI，也不定义 `stores.write`。
 5. OpenAPI 的 `x-capability` 是后续实现的强制鉴权目标。本轮不声明可运行的认证机制，避免暗示 IAM 已完成。
 6. 每个 operation 以 `x-error-codes` 声明穷尽错误 union；错误码 HTTP 状态必须能在该 operation response 中双向对应。
@@ -38,7 +40,7 @@ npm --prefix deliverables/backend/sprint-0/import-contract/tests ci --ignore-scr
 npm --prefix deliverables/backend/sprint-0/import-contract/tests test
 ```
 
-预期：跨文件一致性 PASS；ImportIssue Draft 2020-12 实例 `valid=4 invalid-rejected=6`。
+预期：跨文件一致性 PASS；ImportIssue Draft 2020-12 实例 `valid=4 invalid-rejected=6`；InventoryTransaction 数量条件实例 `valid=8 invalid-rejected=6`。
 
 ## PJM 独立核验
 
@@ -50,4 +52,4 @@ npm --prefix deliverables/backend/sprint-0/import-contract/tests test
 - P0 条件：前五类 Upsert 与期初一次性命令分流；零期初生成唯一 `quantity=0` OPENING；其他库存流水 `>0`。
 - 高置信敏感信息模式扫描与 `git diff --check`：PASS。
 
-PJM、Frontend 与 QA 已基于 `106a0e2 + 4ebd2be + 21870a8` 完成 v1.0 独立静态复核。本次 v1.1 仅收口重验 endpoint、批次关联、响应头与 envelope 机器约束，仍需 Frontend/QA 对该增量复核。真实 API、IAM、数据库迁移、异步 Worker 与真实样本动态验收仍属于后续门禁。
+PJM、Frontend 与 QA 已基于 `106a0e2 + 4ebd2be + 21870a8` 完成 v1.0 独立静态复核；v1.1 收口重验 endpoint、批次关联、响应头与 envelope。本次 v1.1.1 只把已冻结的库存流水数量规则升级为 OpenAPI 条件 Schema 和 AJV 实例测试，仍需 Frontend/QA 对增量复核。真实 API、IAM、数据库迁移、异步 Worker 与真实样本动态验收仍属于后续门禁。

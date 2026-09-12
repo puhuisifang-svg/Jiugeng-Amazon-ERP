@@ -70,6 +70,12 @@ def main() -> None:
     require(opening["sameKeyDifferentPayload"] == "OPENING_INVENTORY_CONFLICT", "opening payload conflict code differs")
     api_opening = api["x-domain-invariants"]["openingInventory"]
     require(api_opening["ordinaryUpsertForbidden"] and api_opening["zeroQuantityCreatesImmutableOpening"], "OpenAPI opening invariant missing")
+    require(api_opening["transactionQuantitySchema"] == {"$ref": "#/components/schemas/InventoryTransactionQuantityRule"}, "opening invariant must reference its conditional quantity schema")
+    quantity_rule = api["components"]["schemas"]["InventoryTransactionQuantityRule"]
+    require(set(quantity_rule["properties"]["transactionType"]["enum"]) == {"OPENING", "INBOUND", "OUTBOUND", "ADJUST_IN", "ADJUST_OUT", "REVERSAL"}, "inventory transaction types differ")
+    require(quantity_rule["if"]["properties"]["transactionType"]["const"] == "OPENING", "OPENING quantity condition missing")
+    require(quantity_rule["then"]["properties"]["quantity"] == {"$ref": "#/components/schemas/NonNegativeDecimalString"}, "OPENING must allow zero")
+    require(quantity_rule["else"]["properties"]["quantity"] == {"$ref": "#/components/schemas/PositiveDecimalString"}, "non-OPENING quantity must be positive")
 
     statuses = set(api["components"]["schemas"]["BatchStatus"]["enum"])
     require(statuses == set(machine["states"]), "OpenAPI and state-machine statuses differ")
@@ -230,6 +236,10 @@ def main() -> None:
     require(preview_row["before"]["oneOf"][0] == {"$ref": "#/components/schemas/FieldMap"} and preview_row["after"]["oneOf"][0] == {"$ref": "#/components/schemas/FieldMap"}, "before/after schema differs")
     require(preview_row["impacts"]["items"] == {"$ref": "#/components/schemas/PreviewImpact"}, "impacts schema differs")
     require(api["components"]["schemas"]["PreviewImpact"]["properties"]["resource"] == {"$ref": "#/components/schemas/ImpactResource"}, "row impact resource must reuse enum")
+    impact = api["components"]["schemas"]["PreviewImpact"]
+    require("inventoryTransaction" in impact["required"], "preview impact must expose transaction quantity details")
+    require(impact["properties"]["inventoryTransaction"]["oneOf"][0] == {"$ref": "#/components/schemas/InventoryTransactionQuantityRule"}, "inventory transaction impact must reuse quantity rule")
+    require(impact["allOf"][0]["if"]["properties"]["resource"]["const"] == "inventory_transactions", "inventory transaction impact condition missing")
     require(api["components"]["schemas"]["ImpactSummaryItem"]["properties"]["resource"] == {"$ref": "#/components/schemas/ImpactResource"}, "impact summary resource must reuse enum")
 
     print("PASS: S0-CONTRACT-01/02 machine-readable contracts are consistent")

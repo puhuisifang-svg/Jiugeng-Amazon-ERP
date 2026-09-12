@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node validate_issue_instances.mjs"
+    "test": "node validate_issue_instances.mjs && node validate_inventory_transaction_instances.mjs"
   },
   "devDependencies": {
     "ajv": "8.17.1"

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Jiugeng ERP Import Contract",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "description": "Sprint 0 machine-readable contract only. Runtime endpoints, IAM sessions and authorization enforcement are deferred. Upload creates a QUEUED batch and enqueues full validation.",
     "license": {"name": "Proprietary", "identifier": "LicenseRef-Proprietary"}
   },
@@ -24,6 +24,7 @@
       "importType": "AUXILIARY_MATERIAL_OPENING_INVENTORY",
       "writeMode": "CREATE_ONCE_IDEMPOTENT_COMMAND",
       "ordinaryUpsertForbidden": true,
+      "transactionQuantitySchema": {"$ref": "#/components/schemas/InventoryTransactionQuantityRule"},
       "openingQuantityMinimumInclusive": 0,
       "zeroQuantityCreatesImmutableOpening": true,
       "otherInventoryTransactionQuantityExclusiveMinimum": 0
@@ -232,6 +233,19 @@
       "IssueSeverity": {"type": "string", "enum": ["BLOCKER", "ERROR", "WARNING", "INFO"]},
       "IssueScope": {"type": "string", "enum": ["BATCH", "SHEET", "ROW", "FIELD"]},
       "PreviewAction": {"type": ["string", "null"], "enum": ["CREATE", "UPDATE", "UNCHANGED", null]},
+      "NonNegativeDecimalString": {"type": "string", "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$", "description": "Canonical non-negative decimal string; scientific notation is forbidden."},
+      "PositiveDecimalString": {"type": "string", "pattern": "^(0\\.0*[1-9][0-9]*|[1-9][0-9]*(\\.[0-9]+)?)$", "description": "Canonical decimal string strictly greater than zero; scientific notation is forbidden."},
+      "InventoryTransactionQuantityRule": {
+        "type": "object", "additionalProperties": false, "required": ["transactionType", "quantity"],
+        "properties": {
+          "transactionType": {"type": "string", "enum": ["OPENING", "INBOUND", "OUTBOUND", "ADJUST_IN", "ADJUST_OUT", "REVERSAL"]},
+          "quantity": {"$ref": "#/components/schemas/NonNegativeDecimalString"}
+        },
+        "if": {"properties": {"transactionType": {"const": "OPENING"}}, "required": ["transactionType"]},
+        "then": {"properties": {"quantity": {"$ref": "#/components/schemas/NonNegativeDecimalString"}}},
+        "else": {"properties": {"quantity": {"$ref": "#/components/schemas/PositiveDecimalString"}}},
+        "description": "OPENING accepts quantity >= 0 and zero still creates one immutable audit transaction; every other transaction type requires quantity > 0. Opening inventory creates its balance and exactly one OPENING in the same atomic batch transaction."
+      },
       "ImportProgress": {
         "type": "object", "additionalProperties": false,
         "required": ["phase", "processedRows", "totalRows", "percent", "updatedAt"],
@@ -365,13 +379,17 @@
         "properties": {"sheet": {"type": "string"}, "row": {"type": "integer", "minimum": 2}, "businessKey": {"$ref": "#/components/schemas/BusinessKey"}}
       },
       "PreviewImpact": {
-        "type": "object", "additionalProperties": false, "required": ["resource", "businessKey", "effect", "derived"],
+        "type": "object", "additionalProperties": false, "required": ["resource", "businessKey", "effect", "derived", "inventoryTransaction"],
         "properties": {
           "resource": {"$ref": "#/components/schemas/ImpactResource"},
           "businessKey": {"$ref": "#/components/schemas/BusinessKey"},
           "effect": {"type": "string", "enum": ["CREATE", "UPDATE", "UNCHANGED"]},
-          "derived": {"type": "boolean"}
-        }
+          "derived": {"type": "boolean"},
+          "inventoryTransaction": {"oneOf": [{"$ref": "#/components/schemas/InventoryTransactionQuantityRule"}, {"type": "null"}], "description": "Required for inventory_transactions impacts; null for every other resource."}
+        },
+        "allOf": [
+          {"if": {"properties": {"resource": {"const": "inventory_transactions"}}, "required": ["resource"]}, "then": {"properties": {"inventoryTransaction": {"$ref": "#/components/schemas/InventoryTransactionQuantityRule"}}}, "else": {"properties": {"inventoryTransaction": {"type": "null"}}}}
+        ]
       },
       "ImpactResource": {"type": "string", "enum": ["products", "variants", "variant_attributes", "store_listings", "amazon_catalog_items", "auxiliary_materials", "product_auxiliary_materials", "auxiliary_material_inventory", "inventory_transactions"]},
       "PreviewRow": {

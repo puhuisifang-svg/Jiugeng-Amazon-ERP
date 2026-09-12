@@ -4,8 +4,8 @@
 | --- | --- |
 | 项目 | 九更亚马逊 ERP |
 | 交付物 ID | DEL-006 |
-| 版本 | v1.0 |
-| 状态 | Approved |
+| 版本 | v1.1 |
+| 状态 | In Review（S0-DOC-01 补齐六类导入，待 QA 复核） |
 | Owner | PM / Backend |
 | 日期 | 2026-09-12 |
 | 适用范围 | Amazon 美国站、5 个公司店铺 |
@@ -182,14 +182,18 @@ MVP 导入采用幂等 Upsert，并记录 `source`、导入批次和操作人。
 
 ## 6. 导入模板
 
-拆分为四张工作表/文件，避免一张宽表重复产品信息：
+与 Approved PRD、Sprint 0 字段字典及 Excel 模板一致，拆分为六类导入文件，避免一张宽表重复主档信息：
 
-1. `products`：产品/SPU。
-2. `variants`：内部 SKU 与变体属性。
-3. `product_auxiliary_materials`：SKU—辅料关系。
-4. `store_listings`：店铺—Seller SKU—ASIN—内部 SKU 映射。
+1. `products`：产品/SPU；对应 `01_products_v1.0.xlsx`。
+2. `variants`：内部 SKU 与动态变体属性；对应 `02_variants_v1.0.xlsx`，文件内先处理 `variants`，再处理 `variant_attributes`。
+3. `store_listings`：店铺—Seller SKU—ASIN—内部 SKU 映射；对应 `03_store_listings_v1.0.xlsx`。
+4. `auxiliary_materials`：辅料主档；对应 `04_auxiliary_materials_v1.0.xlsx`。
+5. `product_auxiliary_materials`：SKU—辅料关系；对应 `05_sku_auxiliary_materials_v1.0.xlsx`。
+6. `auxiliary_material_opening_inventory`：单仓辅料期初库存；对应 `06_initial_inventory_v1.0.xlsx`。
 
-导入顺序必须为 Product → Variant → Auxiliary Material Relation → Store Listing Mapping。任一行失败均返回行号、字段和原因，不静默跳过。
+推荐串行导入顺序为 `products → variants → store_listings → auxiliary_materials → product_auxiliary_materials → auxiliary_material_opening_inventory`。其中 `store_listings` 仅依赖产品与 SKU，可与辅料链路并行；`product_auxiliary_materials` 必须在 SKU 和辅料主档之后；`auxiliary_material_opening_inventory` 必须在辅料主档及固定单仓配置之后。Listing 同一文件内父体行必须先于引用它的子体行。
+
+六类导入均采用校验、预览、提交三阶段的幂等 Upsert；任一失败行必须返回工作表、行号、字段和原因，不得静默跳过。辅料期初库存提交后生成不可编辑的 `OPENING` 库存流水，并以“固定仓库 + 辅料编码”保证唯一；重复提交不得重复记账。
 
 ## 7. MVP 验收标准
 
@@ -198,7 +202,8 @@ MVP 导入采用幂等 Upsert，并记录 `source`、导入批次和操作人。
 - 同一 ASIN 可被多个店铺 Listing 复用，Seller SKU/FNSKU/状态互不覆盖。
 - Amazon 父体、子体和独立 Listing 关系可表达并通过一致性校验。
 - 每个 SKU 可维护独立辅料清单；“应用到全部 SKU”后关系可分别调整。
-- 四类导入文件能完成真实样本导入，错误逐行返回。
+- 六类导入文件均能完成真实脱敏样本导入：产品、SKU/动态属性、5 店 Listing、辅料主档、SKU—辅料关系和单仓辅料期初库存；必填、唯一、枚举、引用及条件校验失败时逐行返回工作表、行号、字段和原因。
+- 辅料主档可独立导入并按辅料编码全局查重；期初库存按“固定仓库 + 辅料编码”唯一，提交后生成不可编辑且幂等的 `OPENING` 流水，余额与流水重算一致。
 - Amazon 同步失败不覆盖内部主档，所有映射和关键修改可追溯。
 
 ## 8. 官方依据
@@ -209,3 +214,10 @@ MVP 导入采用幂等 Upsert，并记录 `source`、导入批次和操作人。
 - [Product Type Definitions API](https://developer-docs.amazon.com/sp-api/reference/product-type-definitions-v2020-09-01)：按 Product Type 和 marketplace 获取属性及条件要求。
 
 内部编码提案见[产品与辅料编码规则](../01-product/PRODUCT_CODE_STANDARD.md)。
+
+## 9. 变更记录
+
+| 版本 | 日期 | 变更 | 任务 |
+| --- | --- | --- | --- |
+| v1.0 | 2026-09-12 | 首次 Approved 基线。 | - |
+| v1.1 | 2026-09-12 | 将导入范围由 4 类纠正为 6 类，补齐 `auxiliary_materials` 与 `auxiliary_material_opening_inventory`，同步导入顺序及验收标准。 | S0-DOC-01 |

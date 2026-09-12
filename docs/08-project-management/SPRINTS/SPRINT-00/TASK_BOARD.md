@@ -34,6 +34,14 @@
 | S0-DOC-01 | `PRODUCT_DATA_MODEL.md` 导入模板仅列 4 类，与 Approved PRD/Sprint 0 的 6 类要求不一致 | PM/Backend | P1 | Closed | v1.1 已补齐六类、依赖顺序及验收表述；QA/PJM 复核通过 |
 | S0-DOC-02 | `TEST_STRATEGY.md` 沿用订单、财务、采购、FBA、利润等后置范围，缺少当前 MVP 专项 | QA | P1 | Closed | v0.2 已隔离后置范围并补齐人工编码、三角色、选品去重、监控基线失败保护；QA/PJM 复核通过 |
 | S0-DOC-03 | PM 字段字典与 UI 交付物编号冲突，PM 字段字典未单独登记总账 | PJM/PM | P1 | Closed | DEL-013～017 唯一归属及总账登记检索通过 |
+| BUG-S0-OPS-001 | 临时 file-secret 删除后 MySQL/MinIO 容器因 bind source 缺失无法再次启动 | Ops | P1 | Open | 稳定 gitignored/0600 本地 secret 生命周期；stop/start 或重建后健康且命名卷数据保留 |
+| BUG-S0-OPS-002 | pnpm 与 gitleaks Action 固定到 annotated tag object，而非实际 commit SHA | Ops | P1 | Open | 改为官方 tag 对应 peeled commit SHA，YAML/本地门禁与后续在线 Actions 通过 |
+| S0-CONTRACT-01 | DEL-017 缺少可联调的异步导入契约（FE-CONTRACT-01～06） | PM/Backend | P1 | Open | 冻结 OpenAPI、批次状态机、issue DTO、preview diff、事务/幂等语义与依赖 DAG；Frontend/QA 复核通过 |
+| S0-CONTRACT-02 | 三角色已有页面级矩阵但缺动作级 capability 机器码 | PM/Backend | P1 | Open | Sprint 0 冻结 capability 名称与角色映射；真实鉴权实现按计划后移 |
+
+## 受控范围决定
+
+- `StoreAccount` 在 MVP 由系统预置 5 个公司店铺，不新增 `/system/stores` 管理路由；后续如需界面维护，必须走范围与 IA 变更。
 
 ## 验收栏
 

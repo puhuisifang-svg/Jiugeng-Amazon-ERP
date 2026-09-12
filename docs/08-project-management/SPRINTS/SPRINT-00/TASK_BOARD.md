@@ -33,6 +33,7 @@
 | --- | --- | --- | --- | --- | --- |
 | S0-DOC-01 | `PRODUCT_DATA_MODEL.md` 导入模板仅列 4 类，与 Approved PRD/Sprint 0 的 6 类要求不一致 | PM/Backend | P1 | Open | 补齐辅料主档、辅料期初库存及六类导入顺序/验收表述，QA 复核通过 |
 | S0-DOC-02 | `TEST_STRATEGY.md` 沿用订单、财务、采购、FBA、利润等后置范围，缺少当前 MVP 专项 | QA | P1 | In Progress | 删除/标注后置范围，补齐人工编码、三角色、选品去重、监控基线失败保护等策略，PJM/QA 复核通过 |
+| S0-DOC-03 | PM 字段字典与 UI 交付物编号冲突，PM 字段字典未单独登记总账 | PJM/PM | P1 | Resolved，待 QA 复核 | 统一 DEL-013～017 的唯一归属并补齐总账，QA 确认无串项 |
 
 ## 验收栏
 

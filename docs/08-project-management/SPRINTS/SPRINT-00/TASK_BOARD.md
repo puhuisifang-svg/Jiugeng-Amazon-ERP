@@ -36,8 +36,13 @@
 | S0-DOC-03 | PM 字段字典与 UI 交付物编号冲突，PM 字段字典未单独登记总账 | PJM/PM | P1 | Closed | DEL-013～017 唯一归属及总账登记检索通过 |
 | BUG-S0-OPS-001 | 临时 file-secret 删除后 MySQL/MinIO 容器因 bind source 缺失无法再次启动 | Ops | P1 | Open | 稳定 gitignored/0600 本地 secret 生命周期；stop/start 或重建后健康且命名卷数据保留 |
 | BUG-S0-OPS-002 | pnpm 与 gitleaks Action 固定到 annotated tag object，而非实际 commit SHA | Ops | P1 | Open | 改为官方 tag 对应 peeled commit SHA，YAML/本地门禁与后续在线 Actions 通过 |
-| S0-CONTRACT-01 | DEL-017 缺少可联调的异步导入契约（FE-CONTRACT-01～06） | PM/Backend | P1 | Open | 冻结 OpenAPI、批次状态机、issue DTO、preview diff、事务/幂等语义与依赖 DAG；Frontend/QA 复核通过 |
-| S0-CONTRACT-02 | 三角色已有页面级矩阵但缺动作级 capability 机器码 | PM/Backend | P1 | Open | Sprint 0 冻结 capability 名称与角色映射；真实鉴权实现按计划后移 |
+| S0-CONTRACT-01 | DEL-017 缺少可联调的异步导入契约（FE-CONTRACT-01～06） | PM/Backend | P1 | Blocked（Backend P0 待修） | 修复 BE-CONTRACT-P0-01/02；Backend 补机器可读 OpenAPI；QA 复核通过后关闭 |
+| S0-CONTRACT-02 | 三角色已有页面级矩阵但缺动作级 capability 机器码 | PM/Backend | P1 | In Review（Frontend 已通过） | QA 复核 capability 名称与映射；真实鉴权实现按计划后移 |
+| BE-CONTRACT-P0-01 | DEL-013 通用 Upsert 与期初库存不可覆盖的一次性 `OPENING` 语义冲突 | PM/Backend | P0 | Open | COM-008 明确期初特例；同键同载荷重放、异载荷拒绝、流水不可覆盖，并由 Backend/QA 回归 |
+| BE-CONTRACT-P0-02 | `opening_quantity >= 0` 与所有库存流水 `quantity > 0` 冲突 | PM/Backend | P0 | Open | 冻结 `OPENING` 可为 0、其他流水必须 >0 的条件规则；同步字典、模板、模型、OpenAPI/Schema 与用例 |
+| BE-CONTRACT-P1-01 | DEL-013 依赖图误表达辅料主档依赖 SKU | PM | P1 | Open | 改为 Product 与 AuxiliaryMaterial 两条根链并与 DEL-017 DAG 一致 |
+| BE-CONTRACT-P1-02 | Listing 负向样例缺重复 FNSKU、同店同 SKU 双 ACTIVE、跨店父体、variation theme 不一致 | PM/QA | P1 | Open | 生成脚本和 xlsx 补齐 4 类合成错误样例，QA 验证 |
+| BE-CONTRACT-P1-03 | `display_order` 缺 Excel 数值校验 | PM | P1 | Open | 模板增加 `display_order >= 1` DataValidation 并更新校验总数/证据 |
 
 ## 受控范围决定
 

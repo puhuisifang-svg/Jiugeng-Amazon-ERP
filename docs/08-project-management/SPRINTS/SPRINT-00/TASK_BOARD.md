@@ -5,9 +5,9 @@
 | Task | Owner | 优先级 | 状态 | 关键依赖/阻塞 |
 | --- | --- | --- | --- | --- |
 | S0-PJM-01 启动治理、看板与风险跟踪 | PJM | P0 | In Progress | 无 |
-| S0-PM-01 字段字典与校验口径 | PM | P0 | In Progress | 真实脱敏样本 |
-| S0-PM-02 六类 Excel 模板 | PM | P0 | In Progress | S0-PM-01 |
-| S0-PM-03 业务输入清单 | PM/PJM | P0 | In Progress | 老板/业务关键用户 |
+| S0-PM-01 字段字典与校验口径 | PM | P0 | In Review（结构已自检） | 跨角色复核；真实脱敏样本 |
+| S0-PM-02 六类 Excel 模板 | PM | P0 | In Review（6/6 已生成） | Backend/Frontend/QA 契约复核；真实样本 |
+| S0-PM-03 业务输入清单 | PM/PJM | P0 | In Review | 老板/业务关键用户输入待到件 |
 | S0-UI-01 低保真 IA 与核心流程 | UI | P0 | Completed（PJM 核验通过） | 真实样本到位后做受控复核 |
 | S0-BE-01 3 店监控 Spike | Backend/PJM | P0 | In Progress | 3 个公开店铺链接 |
 | S0-BE-02 后端工程脚手架 | Backend | P0 | In Progress | Java 21/Maven |
@@ -15,7 +15,7 @@
 | S0-QA-01 测试计划与追踪矩阵 | QA | P0 | Completed（PJM 静态核验通过） | 动态验收转 S0-INT-01 |
 | S0-OPS-01 Docker Hub 与 Compose | Ops | P0 | In Progress | 可用代理出口 |
 | S0-OPS-02 GitHub 私有远程与 CI | Ops/PJM | P0 | In Progress | GitHub 安全授权 |
-| S0-INT-01 集成验证与验收包 | QA/PJM/全员 | P0 | Pending | 所有前置任务 |
+| S0-INT-01 集成验证与验收包 | QA/PJM/全员 | P0 | In Progress（先做结构契约复核） | 动态验收仍待前置证据 |
 
 ## 输入待办
 

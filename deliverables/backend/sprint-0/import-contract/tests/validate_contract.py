@@ -91,7 +91,7 @@ def main() -> None:
     paths = api["paths"]
     expected_operations = {
         "uploadAndValidateImportBatch", "listImportBatches", "getImportBatch", "listImportIssues",
-        "getImportPreview", "commitImportBatch", "cancelImportBatch", "getImportResult",
+        "getImportPreview", "revalidateImportBatch", "commitImportBatch", "cancelImportBatch", "getImportResult",
         "downloadImportResult", "downloadImportTemplate",
     }
     operations = []
@@ -117,6 +117,9 @@ def main() -> None:
         require(set(declared_errors) <= set(api["x-error-catalog"]), f"unknown operation error on {operation['operationId']}")
         responses = operation["responses"]
         require("500" in responses, f"technical failure response missing on {operation['operationId']}")
+        for status, response in responses.items():
+            resolved_response = resolve_pointer(api, response["$ref"]) if "$ref" in response else response
+            require("X-Request-Id" in resolved_response.get("headers", {}), f"X-Request-Id missing on {operation['operationId']} {status}")
         for code in declared_errors:
             require(str(api["x-error-catalog"][code]["httpStatus"]) in responses, f"{code} status is unreachable on {operation['operationId']}")
         for status in (value for value in responses if not value.startswith("2")):
@@ -135,11 +138,36 @@ def main() -> None:
 
     for path, operation in [
         ("/api/v1/import-batches", paths["/api/v1/import-batches"]["post"]),
+        ("/api/v1/import-batches/{batchId}/revalidate", paths["/api/v1/import-batches/{batchId}/revalidate"]["post"]),
         ("/api/v1/import-batches/{batchId}/commit", paths["/api/v1/import-batches/{batchId}/commit"]["post"]),
         ("/api/v1/import-batches/{batchId}/cancel", paths["/api/v1/import-batches/{batchId}/cancel"]["post"]),
     ]:
         parameters = [resolve_pointer(api, item["$ref"]) if "$ref" in item else item for item in operation["parameters"]]
         require(any(item["name"] == "Idempotency-Key" and item["required"] for item in parameters), f"missing required Idempotency-Key: {path}")
+
+    wire = api["x-wire-conventions"]
+    require(wire["jsonSuccessEnvelope"] == "DIRECT_SCHEMA", "JSON success envelope must be explicit")
+    require(wire["paginationEnvelope"] == {"itemsField": "items", "metadataField": "page", "cursorField": "page.nextCursor"}, "pagination envelope differs")
+    require(wire["errorMediaType"] == "application/problem+json" and wire["errorEnvelopeSchema"] == "#/components/schemas/ApiError", "error envelope differs")
+    require(wire["requiredResponseHeaders"] == ["X-Request-Id"], "required response headers differ")
+    for page_name in ("ImportBatchPage", "ImportIssuePage", "ImportPreviewPage"):
+        page_schema = api["components"]["schemas"][page_name]
+        require("items" in page_schema["properties"] and page_schema["properties"]["page"] == {"$ref": "#/components/schemas/PageMeta"}, f"page envelope differs: {page_name}")
+    page_meta = api["components"]["schemas"]["PageMeta"]
+    require(set(page_meta["required"]) == {"limit", "nextCursor", "hasMore"}, "cursor page metadata differs")
+
+    revalidation_path = "/api/v1/import-batches/{batchId}/revalidate"
+    revalidation_operation = paths[revalidation_path]["post"]
+    require(revalidation_operation["responses"]["202"]["content"]["application/json"]["schema"] == {"$ref": "#/components/schemas/RevalidationReceipt"}, "revalidation response differs")
+    receipt = api["components"]["schemas"]["RevalidationReceipt"]
+    require(receipt["properties"]["sourceStatus"].get("const") == "VALIDATED" and receipt["properties"]["sourcePreviewExpired"].get("const") is True, "expired source semantics differ")
+    require(receipt["properties"]["newBatch"] == {"$ref": "#/components/schemas/QueuedImportBatch", "description": "A distinct batch whose revalidationOfBatchId equals sourceBatchId."}, "revalidation must create a queued successor")
+    revalidation = commit_semantics["revalidation"]
+    require(revalidation["endpoint"] == f"POST {revalidation_path}", "revalidation endpoint differs")
+    require(revalidation["sourceStatusAfterRequest"] == "VALIDATED" and revalidation["successorStatus"] == "QUEUED", "revalidation must not rewind source status")
+    require(revalidation["newBatchIdRequired"] and revalidation["businessWrites"] == "NONE", "revalidation successor isolation differs")
+    require(revalidation["maximumDirectSuccessorsPerSource"] == 1 and revalidation["sameRequestReplay"] == "RETURN_EXISTING_SUCCESSOR", "revalidation idempotency differs")
+    require(set(commit_semantics["idempotency"]["requiredOperations"]) == {"UPLOAD_AND_VALIDATE", "REVALIDATE", "COMMIT", "CANCEL"}, "idempotent write operations differ")
 
     nodes = {node["importType"]: node for node in dag["importNodes"]}
     require(set(nodes) == import_types, "DAG and OpenAPI import types differ")
@@ -197,6 +225,10 @@ def main() -> None:
     require(scalar_by_kind["DECIMAL"]["type"] == "string" and "pattern" in scalar_by_kind["DECIMAL"], "decimal wire value must be a non-scientific string")
     require(scalar_by_kind["INTEGER"]["type"] == "integer" and scalar_by_kind["BOOLEAN"]["type"] == "boolean", "native scalar encoding differs")
     require(len(api["components"]["schemas"]["BusinessKey"]["oneOf"]) == 7, "business keys must cover six imports plus variant attributes")
+    require(api["components"]["schemas"]["FieldMap"]["additionalProperties"] == {"$ref": "#/components/schemas/TransportFieldValue"}, "before/after field map differs")
+    preview_row = api["components"]["schemas"]["PreviewRow"]["properties"]
+    require(preview_row["before"]["oneOf"][0] == {"$ref": "#/components/schemas/FieldMap"} and preview_row["after"]["oneOf"][0] == {"$ref": "#/components/schemas/FieldMap"}, "before/after schema differs")
+    require(preview_row["impacts"]["items"] == {"$ref": "#/components/schemas/PreviewImpact"}, "impacts schema differs")
     require(api["components"]["schemas"]["PreviewImpact"]["properties"]["resource"] == {"$ref": "#/components/schemas/ImpactResource"}, "row impact resource must reuse enum")
     require(api["components"]["schemas"]["ImpactSummaryItem"]["properties"]["resource"] == {"$ref": "#/components/schemas/ImpactResource"}, "impact summary resource must reuse enum")
 

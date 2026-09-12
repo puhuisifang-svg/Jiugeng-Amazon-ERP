@@ -4,7 +4,7 @@
 | --- | --- |
 | 日期 | 2026-09-12 |
 | Owner | Backend |
-| 版本 | v1.0 |
+| 版本 | v1.1 |
 | 结论 | PASS（待 Frontend/QA 独立复核） |
 
 ## 覆盖结果
@@ -17,9 +17,12 @@
 | 六类 `importType` 与 DAG | PASS，6/6 且无环 |
 | 批次状态/阶段 | PASS，7 状态、8 阶段，终态无出边，无 `PARTIALLY_SUCCEEDED` |
 | ImportIssue DTO | PASS，10 个字段、4 级 severity、blocking 条件已冻结 |
-| API 面 | PASS，10 个 operation 覆盖模板、上传校验、查询、issues、preview、提交、取消、结果 |
+| API 面 | PASS，11 个 operation 覆盖模板、上传校验、查询、issues、preview、过期重验、提交、取消、结果 |
+| Preview 过期重验 | PASS，固定 `POST .../{batchId}/revalidate`；旧批次保持 `VALIDATED`，新批次使用新 ID 从 `QUEUED` 开始，双向关联且每个源批次最多一个直接后继 |
+| 分页/响应 envelope | PASS，列表、issues、preview 均为 `items + page(limit/nextCursor/hasMore)`；JSON 成功为 direct schema、错误为 `application/problem+json` / `ApiError` |
+| Header | PASS，上传、重验、确认、取消均要求 `Idempotency-Key`；11/11 operation 的全部响应声明 `X-Request-Id` |
 | 上传响应 | PASS，202 专用 schema 固定 `status=QUEUED`、`phase=WAITING` |
-| 错误映射 | PASS，10/10 operation 声明 `x-error-codes`，code/status/response 双向可达并全部覆盖 500 |
+| 错误映射 | PASS，11/11 operation 声明 `x-error-codes`，code/status/response 双向可达并全部覆盖 500 |
 | 幂等/事务/重试码 | PASS，写操作均要求 `Idempotency-Key`；冲突码与 retryable 标记完整 |
 | P0 条件语义 | PASS，普通 Upsert 仅前五类；零期初生成唯一 `quantity=0` OPENING，其他流水 `>0` |
 | Issue 定位 | PASS，BATCH/SHEET/ROW/FIELD 四种 scope 的 sheet/row/field nullability 与必填条件机器化 |
@@ -50,7 +53,7 @@ PASS: workbooks=6 validations=17 zero-opening=present listing-negative-cases=4/4
 
 ```text
 PASS: S0-CONTRACT-01/02 machine-readable contracts are consistent
-CHECKS: importTypes=6 statuses=7 phases=8 operations=10 capabilities=21 errors=24
+CHECKS: importTypes=6 statuses=7 phases=8 operations=11 capabilities=21 errors=25
 PASS: ImportIssue Draft 2020-12 instances valid=4 invalid-rejected=6
 Woohoo! Your API description is valid.
 ```
@@ -64,6 +67,7 @@ Woohoo! Your API description is valid.
 | FE P1-03 decimal 双编码、业务键过宽 | 新增 `TransportFieldValue` tagged union；decimal 仅 string；业务键按实际七种行形状收窄；impact resource 统一枚举 |
 | QA P1-01 ROW/SHEET 定位条件缺失 | 四种 scope 均增加 if/then 条件并加入静态负向约束断言 |
 | QA 后续门禁：缺 Draft 2020-12 实例测试 | 新增 AJV 实例级夹具：4 个合法对象必须通过，6 个非法定位/blocking 对象必须拒绝 |
+| PJM OpenAPI 收口 4 项 | 新增过期重验 endpoint 与新旧批次关联；对既有分页和 diff JSON schema 增加强断言；冻结 direct/page/problem envelope 与全响应 `X-Request-Id` |
 
 ## 非实现声明
 

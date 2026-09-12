@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Jiugeng ERP Import Contract",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Sprint 0 machine-readable contract only. Runtime endpoints, IAM sessions and authorization enforcement are deferred. Upload creates a QUEUED batch and enqueues full validation.",
     "license": {"name": "Proprietary", "identifier": "LicenseRef-Proprietary"}
   },
@@ -10,6 +10,14 @@
   "security": [],
   "x-contract-scope": "S0-CONTRACT-01/02",
   "x-auth-implementation": "DEFERRED_TO_LATER_SPRINT",
+  "x-wire-conventions": {
+    "jsonSuccessEnvelope": "DIRECT_SCHEMA",
+    "paginationEnvelope": {"itemsField": "items", "metadataField": "page", "cursorField": "page.nextCursor"},
+    "errorMediaType": "application/problem+json",
+    "errorEnvelopeSchema": "#/components/schemas/ApiError",
+    "binarySuccessEnvelope": "DIRECT_BINARY",
+    "requiredResponseHeaders": ["X-Request-Id"]
+  },
   "x-domain-invariants": {
     "ordinaryUpsertImportTypes": ["PRODUCTS", "VARIANTS", "STORE_LISTINGS", "AUXILIARY_MATERIALS", "PRODUCT_AUXILIARY_MATERIALS"],
     "openingInventory": {
@@ -38,6 +46,7 @@
     "IMPORT_BATCH_NOT_READY": {"httpStatus": 409, "retryable": true},
     "IMPORT_COMMIT_NOT_ALLOWED": {"httpStatus": 409, "retryable": false},
     "IMPORT_PREVIEW_EXPIRED": {"httpStatus": 409, "retryable": false},
+    "IMPORT_REVALIDATION_NOT_ALLOWED": {"httpStatus": 409, "retryable": false},
     "IMPORT_PREVIEW_MISMATCH": {"httpStatus": 409, "retryable": false},
     "IMPORT_WARNINGS_NOT_ACCEPTED": {"httpStatus": 409, "retryable": false},
     "IMPORT_NOT_CANCELLABLE": {"httpStatus": 409, "retryable": false},
@@ -56,7 +65,7 @@
         "x-error-codes": ["IMPORT_TEMPLATE_NOT_FOUND", "IMPORT_TECHNICAL_FAILURE"],
         "parameters": [{"$ref": "#/components/parameters/ImportTypePath"}],
         "responses": {
-          "200": {"description": "XLSX template", "headers": {"Content-Disposition": {"schema": {"type": "string"}}}, "content": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {"schema": {"type": "string", "format": "binary"}}}},
+          "200": {"description": "XLSX template", "headers": {"X-Request-Id": {"$ref": "#/components/headers/XRequestId"}, "Content-Disposition": {"schema": {"type": "string"}}}, "content": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {"schema": {"type": "string", "format": "binary"}}}},
           "404": {"$ref": "#/components/responses/NotFound"},
           "500": {"$ref": "#/components/responses/InternalServerError"}
         }
@@ -87,7 +96,7 @@
           }
         },
         "responses": {
-          "202": {"description": "Batch queued or idempotent replay", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/QueuedImportBatch"}}}},
+          "202": {"description": "Batch queued or idempotent replay", "headers": {"X-Request-Id": {"$ref": "#/components/headers/XRequestId"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/QueuedImportBatch"}}}},
           "400": {"$ref": "#/components/responses/BadRequest"},
           "409": {"$ref": "#/components/responses/Conflict"},
           "413": {"$ref": "#/components/responses/PayloadTooLarge"},
@@ -107,7 +116,7 @@
           {"name": "importType", "in": "query", "schema": {"$ref": "#/components/schemas/ImportType"}},
           {"name": "status", "in": "query", "schema": {"$ref": "#/components/schemas/BatchStatus"}}
         ],
-        "responses": {"200": {"description": "Stable newest-first batch page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImportBatchPage"}}}}, "400": {"$ref": "#/components/responses/BadRequest"}, "500": {"$ref": "#/components/responses/InternalServerError"}}
+        "responses": {"200": {"description": "Stable newest-first batch page", "headers": {"X-Request-Id": {"$ref": "#/components/headers/XRequestId"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImportBatchPage"}}}}, "400": {"$ref": "#/components/responses/BadRequest"}, "500": {"$ref": "#/components/responses/InternalServerError"}}
       }
     },
     "/api/v1/import-batches/{batchId}": {
@@ -117,7 +126,7 @@
         "x-capability": "imports.read",
         "x-error-codes": ["IMPORT_BATCH_NOT_FOUND", "IMPORT_TECHNICAL_FAILURE"],
         "parameters": [{"$ref": "#/components/parameters/BatchId"}],
-        "responses": {"200": {"description": "Batch", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImportBatch"}}}}, "404": {"$ref": "#/components/responses/NotFound"}, "500": {"$ref": "#/components/responses/InternalServerError"}}
+        "responses": {"200": {"description": "Batch", "headers": {"X-Request-Id": {"$ref": "#/components/headers/XRequestId"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImportBatch"}}}}, "404": {"$ref": "#/components/responses/NotFound"}, "500": {"$ref": "#/components/responses/InternalServerError"}}
       }
     },
     "/api/v1/import-batches/{batchId}/issues": {
@@ -128,7 +137,7 @@
         "x-capability": "imports.read",
         "x-error-codes": ["IMPORT_CURSOR_INVALID", "IMPORT_BATCH_NOT_FOUND", "IMPORT_BATCH_NOT_READY", "IMPORT_TECHNICAL_FAILURE"],
         "parameters": [{"$ref": "#/components/parameters/BatchId"}, {"$ref": "#/components/parameters/Limit"}, {"$ref": "#/components/parameters/Cursor"}],
-        "responses": {"200": {"description": "Issue page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImportIssuePage"}}}}, "400": {"$ref": "#/components/responses/BadRequest"}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}, "500": {"$ref": "#/components/responses/InternalServerError"}}
+        "responses": {"200": {"description": "Issue page", "headers": {"X-Request-Id": {"$ref": "#/components/headers/XRequestId"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImportIssuePage"}}}}, "400": {"$ref": "#/components/responses/BadRequest"}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}, "500": {"$ref": "#/components/responses/InternalServerError"}}
       }
     },
     "/api/v1/import-batches/{batchId}/preview": {
@@ -139,7 +148,18 @@
         "x-capability": "imports.read",
         "x-error-codes": ["IMPORT_CURSOR_INVALID", "IMPORT_BATCH_NOT_FOUND", "IMPORT_BATCH_NOT_READY", "IMPORT_PREVIEW_EXPIRED", "IMPORT_TECHNICAL_FAILURE"],
         "parameters": [{"$ref": "#/components/parameters/BatchId"}, {"$ref": "#/components/parameters/Limit"}, {"$ref": "#/components/parameters/Cursor"}],
-        "responses": {"200": {"description": "Preview page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImportPreviewPage"}}}}, "400": {"$ref": "#/components/responses/BadRequest"}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}, "500": {"$ref": "#/components/responses/InternalServerError"}}
+        "responses": {"200": {"description": "Preview page", "headers": {"X-Request-Id": {"$ref": "#/components/headers/XRequestId"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImportPreviewPage"}}}}, "400": {"$ref": "#/components/responses/BadRequest"}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}, "500": {"$ref": "#/components/responses/InternalServerError"}}
+      }
+    },
+    "/api/v1/import-batches/{batchId}/revalidate": {
+      "post": {
+        "operationId": "revalidateImportBatch",
+        "summary": "Create a new validation batch from an expired preview",
+        "description": "Allowed only when the source batch is VALIDATED and its preview has expired. The source batch remains VALIDATED, queryable and uncommittable; it never transitions back to QUEUED. The server reuses the retained immutable staged file and creates exactly one successor with a new batchId, status QUEUED and revalidationOfBatchId=source batchId. Replays return that successor without duplicate validation or business writes. The successor may itself be revalidated after its own preview expires.",
+        "x-capability": "imports.validate",
+        "x-error-codes": ["IMPORT_BATCH_NOT_FOUND", "IMPORT_REVALIDATION_NOT_ALLOWED", "IDEMPOTENCY_KEY_REUSED", "IMPORT_TECHNICAL_FAILURE"],
+        "parameters": [{"$ref": "#/components/parameters/BatchId"}, {"$ref": "#/components/parameters/IdempotencyKey"}],
+        "responses": {"202": {"description": "New validation batch queued or existing successor replayed", "headers": {"X-Request-Id": {"$ref": "#/components/headers/XRequestId"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RevalidationReceipt"}}}}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}, "500": {"$ref": "#/components/responses/InternalServerError"}}
       }
     },
     "/api/v1/import-batches/{batchId}/commit": {
@@ -151,7 +171,7 @@
         "x-error-codes": ["IMPORT_BATCH_NOT_FOUND", "IMPORT_BATCH_NOT_READY", "IMPORT_COMMIT_NOT_ALLOWED", "IMPORT_PREVIEW_EXPIRED", "IMPORT_PREVIEW_MISMATCH", "IMPORT_WARNINGS_NOT_ACCEPTED", "IMPORT_ALREADY_COMMITTED", "IMPORT_CONCURRENT_CHANGE", "IDEMPOTENCY_KEY_REUSED", "OPENING_INVENTORY_CONFLICT", "IMPORT_TECHNICAL_FAILURE"],
         "parameters": [{"$ref": "#/components/parameters/BatchId"}, {"$ref": "#/components/parameters/IdempotencyKey"}],
         "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CommitRequest"}}}},
-        "responses": {"202": {"description": "Commit accepted or idempotent replay", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImportBatch"}}}}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}, "500": {"$ref": "#/components/responses/InternalServerError"}}
+        "responses": {"202": {"description": "Commit accepted or idempotent replay", "headers": {"X-Request-Id": {"$ref": "#/components/headers/XRequestId"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImportBatch"}}}}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}, "500": {"$ref": "#/components/responses/InternalServerError"}}
       }
     },
     "/api/v1/import-batches/{batchId}/cancel": {
@@ -161,7 +181,7 @@
         "x-capability": "imports.cancel",
         "x-error-codes": ["IMPORT_BATCH_NOT_FOUND", "IMPORT_NOT_CANCELLABLE", "IDEMPOTENCY_KEY_REUSED", "IMPORT_TECHNICAL_FAILURE"],
         "parameters": [{"$ref": "#/components/parameters/BatchId"}, {"$ref": "#/components/parameters/IdempotencyKey"}],
-        "responses": {"200": {"description": "Current or final cancellation state; repeated cancellation is successful", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImportBatch"}}}}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}, "500": {"$ref": "#/components/responses/InternalServerError"}}
+        "responses": {"200": {"description": "Current or final cancellation state; repeated cancellation is successful", "headers": {"X-Request-Id": {"$ref": "#/components/headers/XRequestId"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImportBatch"}}}}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}, "500": {"$ref": "#/components/responses/InternalServerError"}}
       }
     },
     "/api/v1/import-batches/{batchId}/result": {
@@ -171,7 +191,7 @@
         "x-capability": "imports.read",
         "x-error-codes": ["IMPORT_BATCH_NOT_FOUND", "IMPORT_BATCH_NOT_READY", "IMPORT_TECHNICAL_FAILURE"],
         "parameters": [{"$ref": "#/components/parameters/BatchId"}],
-        "responses": {"200": {"description": "Terminal result", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImportResult"}}}}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}, "500": {"$ref": "#/components/responses/InternalServerError"}}
+        "responses": {"200": {"description": "Terminal result", "headers": {"X-Request-Id": {"$ref": "#/components/headers/XRequestId"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImportResult"}}}}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}, "500": {"$ref": "#/components/responses/InternalServerError"}}
       }
     },
     "/api/v1/import-batches/{batchId}/result-file": {
@@ -181,11 +201,14 @@
         "x-capability": "imports.result.download",
         "x-error-codes": ["IMPORT_BATCH_NOT_FOUND", "IMPORT_BATCH_NOT_READY", "IMPORT_TECHNICAL_FAILURE"],
         "parameters": [{"$ref": "#/components/parameters/BatchId"}],
-        "responses": {"200": {"description": "Result XLSX", "content": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {"schema": {"type": "string", "format": "binary"}}}}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}, "500": {"$ref": "#/components/responses/InternalServerError"}}
+        "responses": {"200": {"description": "Result XLSX", "headers": {"X-Request-Id": {"$ref": "#/components/headers/XRequestId"}}, "content": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {"schema": {"type": "string", "format": "binary"}}}}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}, "500": {"$ref": "#/components/responses/InternalServerError"}}
       }
     }
   },
   "components": {
+    "headers": {
+      "XRequestId": {"description": "Opaque request correlation identifier; never contains credentials or business payload.", "schema": {"type": "string", "minLength": 1}}
+    },
     "parameters": {
       "BatchId": {"name": "batchId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}},
       "ImportTypePath": {"name": "importType", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/ImportType"}},
@@ -194,13 +217,13 @@
       "Cursor": {"name": "cursor", "in": "query", "description": "Opaque stable cursor bound to filters and previewVersion where applicable.", "schema": {"type": ["string", "null"]}}
     },
     "responses": {
-      "BadRequest": {"description": "Malformed request", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiError"}}}},
-      "NotFound": {"description": "Resource not found", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiError"}}}},
-      "Conflict": {"description": "State, idempotency, preview or concurrent-data conflict", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiError"}}}},
-      "PayloadTooLarge": {"description": "File exceeds 10 MiB", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiError"}}}},
-      "UnsupportedMediaType": {"description": "Unsupported extension or MIME", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiError"}}}},
-      "UnprocessableEntity": {"description": "Unsafe or incompatible workbook", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiError"}}}},
-      "InternalServerError": {"description": "Sanitized technical failure; requestId supports support correlation", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiError"}}}}
+      "BadRequest": {"description": "Malformed request", "headers": {"X-Request-Id": {"$ref": "#/components/headers/XRequestId"}}, "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiError"}}}},
+      "NotFound": {"description": "Resource not found", "headers": {"X-Request-Id": {"$ref": "#/components/headers/XRequestId"}}, "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiError"}}}},
+      "Conflict": {"description": "State, idempotency, preview or concurrent-data conflict", "headers": {"X-Request-Id": {"$ref": "#/components/headers/XRequestId"}}, "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiError"}}}},
+      "PayloadTooLarge": {"description": "File exceeds 10 MiB", "headers": {"X-Request-Id": {"$ref": "#/components/headers/XRequestId"}}, "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiError"}}}},
+      "UnsupportedMediaType": {"description": "Unsupported extension or MIME", "headers": {"X-Request-Id": {"$ref": "#/components/headers/XRequestId"}}, "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiError"}}}},
+      "UnprocessableEntity": {"description": "Unsafe or incompatible workbook", "headers": {"X-Request-Id": {"$ref": "#/components/headers/XRequestId"}}, "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiError"}}}},
+      "InternalServerError": {"description": "Sanitized technical failure; requestId supports support correlation", "headers": {"X-Request-Id": {"$ref": "#/components/headers/XRequestId"}}, "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiError"}}}}
     },
     "schemas": {
       "ImportType": {"type": "string", "enum": ["PRODUCTS", "VARIANTS", "STORE_LISTINGS", "AUXILIARY_MATERIALS", "PRODUCT_AUXILIARY_MATERIALS", "AUXILIARY_MATERIAL_OPENING_INVENTORY"]},
@@ -240,7 +263,7 @@
       },
       "ImportBatch": {
         "type": "object", "additionalProperties": false,
-        "required": ["batchId", "importType", "templateVersion", "fileHash", "status", "progress", "commitAllowed", "issueSummary", "limits", "createdAt", "updatedAt"],
+        "required": ["batchId", "importType", "templateVersion", "fileHash", "status", "progress", "commitAllowed", "issueSummary", "revalidationOfBatchId", "supersededByBatchId", "limits", "createdAt", "updatedAt"],
         "properties": {
           "batchId": {"type": "string", "format": "uuid"},
           "importType": {"$ref": "#/components/schemas/ImportType"},
@@ -253,6 +276,8 @@
           "previewSummary": {"oneOf": [{"$ref": "#/components/schemas/PreviewSummary"}, {"type": "null"}]},
           "previewVersion": {"type": ["string", "null"], "minLength": 1},
           "previewExpiresAt": {"type": ["string", "null"], "format": "date-time"},
+          "revalidationOfBatchId": {"type": ["string", "null"], "format": "uuid", "description": "For a successor batch, the expired source batchId; otherwise null."},
+          "supersededByBatchId": {"type": ["string", "null"], "format": "uuid", "description": "For an expired source batch, its single revalidation successor batchId; status remains unchanged."},
           "limits": {"$ref": "#/components/schemas/LimitSnapshot"},
           "createdAt": {"type": "string", "format": "date-time"},
           "updatedAt": {"type": "string", "format": "date-time"}
@@ -263,6 +288,16 @@
           {"$ref": "#/components/schemas/ImportBatch"},
           {"type": "object", "properties": {"status": {"type": "string", "const": "QUEUED"}, "progress": {"allOf": [{"$ref": "#/components/schemas/ImportProgress"}, {"type": "object", "properties": {"phase": {"type": "string", "const": "WAITING"}}}]}}}
         ]
+      },
+      "RevalidationReceipt": {
+        "type": "object", "additionalProperties": false,
+        "required": ["sourceBatchId", "sourceStatus", "sourcePreviewExpired", "newBatch"],
+        "properties": {
+          "sourceBatchId": {"type": "string", "format": "uuid"},
+          "sourceStatus": {"type": "string", "const": "VALIDATED"},
+          "sourcePreviewExpired": {"type": "boolean", "const": true},
+          "newBatch": {"$ref": "#/components/schemas/QueuedImportBatch", "description": "A distinct batch whose revalidationOfBatchId equals sourceBatchId."}
+        }
       },
       "ImportIssue": {
         "type": "object", "additionalProperties": false,

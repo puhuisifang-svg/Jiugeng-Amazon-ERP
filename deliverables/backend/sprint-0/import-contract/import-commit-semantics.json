@@ -25,7 +25,7 @@
     }
   },
   "idempotency": {
-    "requiredOperations": ["UPLOAD_AND_VALIDATE", "COMMIT", "CANCEL"],
+    "requiredOperations": ["UPLOAD_AND_VALIDATE", "REVALIDATE", "COMMIT", "CANCEL"],
     "header": "Idempotency-Key",
     "minLength": 1,
     "maxLength": 128,
@@ -33,6 +33,21 @@
     "sameKeyDifferentRequest": "IDEMPOTENCY_KEY_REUSED",
     "sameCommitReplay": "RETURN_FIRST_CONFIRM_RESULT",
     "newKeyAfterSuccess": "IMPORT_ALREADY_COMMITTED"
+  },
+  "revalidation": {
+    "endpoint": "POST /api/v1/import-batches/{batchId}/revalidate",
+    "allowedSourceStatus": "VALIDATED",
+    "requiresExpiredPreview": true,
+    "sourceStatusAfterRequest": "VALIDATED",
+    "sourceCommitAllowedAfterExpiry": false,
+    "successorStatus": "QUEUED",
+    "newBatchIdRequired": true,
+    "fileReuse": "RETAINED_IMMUTABLE_STAGED_FILE",
+    "businessWrites": "NONE",
+    "maximumDirectSuccessorsPerSource": 1,
+    "sameRequestReplay": "RETURN_EXISTING_SUCCESSOR",
+    "successorLinkField": "revalidationOfBatchId",
+    "sourceLinkField": "supersededByBatchId"
   },
   "retryPolicy": {
     "IMPORT_CONCURRENT_CHANGE": "CALLER_MAY_REVALIDATE_AND_RETRY",

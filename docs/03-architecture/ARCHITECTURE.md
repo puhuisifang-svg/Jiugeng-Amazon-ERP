@@ -14,6 +14,17 @@
 - 财务和库存计算采用可版本化规则。
 - 达到明确容量、隔离或团队协作阈值后再拆分服务。
 
+## 首期领域模块
+
+1. IAM：登录、组织、角色、数据范围与审计。
+2. Product：SPU/SKU、变体、版本、附件与 Amazon 映射。
+3. Material：原料、辅料、包材、单位、替代料与库存流水。
+4. BOM/Routing：BOM 版本、工艺路线、工序与质检标准。
+5. Production：需求、计划、工单、领退补料、报工、质检与入库。
+6. Market Intelligence：观察清单、快照、变化事件、需求主题与机会卡片。
+7. Amazon Adapter：5 店授权、Catalog、Listings、Pricing、Notifications、Customer Feedback 与 Brand Analytics 报告。
+8. Task/Alert：采集任务、失败重试、告警、分派和处置闭环。
+
 ## 初步技术栈
 
 - 前端：Vue 3 + TypeScript

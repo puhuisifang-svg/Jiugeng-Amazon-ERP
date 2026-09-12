@@ -1,8 +1,10 @@
 spring:
+  config:
+    import: "configtree:${ERP_MYSQL_SECRET_DIR}"
   datasource:
     url: ${DATABASE_URL}
     username: ${DATABASE_USERNAME}
-    password: ${DATABASE_PASSWORD}
+    password: ${mysql_app_password}
     driver-class-name: com.mysql.cj.jdbc.Driver
   flyway:
     enabled: true

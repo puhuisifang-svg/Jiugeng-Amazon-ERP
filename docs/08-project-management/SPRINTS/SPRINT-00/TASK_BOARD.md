@@ -11,7 +11,7 @@
 | S0-UI-01 低保真 IA 与核心流程 | UI | P0 | Completed（PJM 核验通过） | 真实样本到位后做受控复核 |
 | S0-BE-01 3 店监控 Spike | Backend/PJM | P0 | In Progress | 3 个公开店铺链接 |
 | S0-BE-02 后端工程脚手架 | Backend | P0 | In Progress | Java 21/Maven |
-| S0-FE-01 前端脚手架与管理端壳 | Frontend | P0 | In Progress | UI IA 可增量对齐 |
+| S0-FE-01 前端脚手架与管理端壳 | Frontend | P0 | Completed（PJM 核验通过） | IAM/API Ready 后实现真实会话、路由守卫与按钮权限 |
 | S0-QA-01 测试计划与追踪矩阵 | QA | P0 | Completed（PJM 静态核验通过） | 动态验收转 S0-INT-01 |
 | S0-OPS-01 Docker Hub 与 Compose | Ops | P0 | In Progress | 可用代理出口 |
 | S0-OPS-02 GitHub 私有远程与 CI | Ops/PJM | P0 | In Progress | GitHub 安全授权 |
@@ -31,9 +31,9 @@
 
 | ID | 问题 | Owner | 严重级别 | 状态 | 关闭条件 |
 | --- | --- | --- | --- | --- | --- |
-| S0-DOC-01 | `PRODUCT_DATA_MODEL.md` 导入模板仅列 4 类，与 Approved PRD/Sprint 0 的 6 类要求不一致 | PM/Backend | P1 | Open | 补齐辅料主档、辅料期初库存及六类导入顺序/验收表述，QA 复核通过 |
-| S0-DOC-02 | `TEST_STRATEGY.md` 沿用订单、财务、采购、FBA、利润等后置范围，缺少当前 MVP 专项 | QA | P1 | In Progress | 删除/标注后置范围，补齐人工编码、三角色、选品去重、监控基线失败保护等策略，PJM/QA 复核通过 |
-| S0-DOC-03 | PM 字段字典与 UI 交付物编号冲突，PM 字段字典未单独登记总账 | PJM/PM | P1 | Resolved，待 QA 复核 | 统一 DEL-013～017 的唯一归属并补齐总账，QA 确认无串项 |
+| S0-DOC-01 | `PRODUCT_DATA_MODEL.md` 导入模板仅列 4 类，与 Approved PRD/Sprint 0 的 6 类要求不一致 | PM/Backend | P1 | Closed | v1.1 已补齐六类、依赖顺序及验收表述；QA/PJM 复核通过 |
+| S0-DOC-02 | `TEST_STRATEGY.md` 沿用订单、财务、采购、FBA、利润等后置范围，缺少当前 MVP 专项 | QA | P1 | Closed | v0.2 已隔离后置范围并补齐人工编码、三角色、选品去重、监控基线失败保护；QA/PJM 复核通过 |
+| S0-DOC-03 | PM 字段字典与 UI 交付物编号冲突，PM 字段字典未单独登记总账 | PJM/PM | P1 | Closed | DEL-013～017 唯一归属及总账登记检索通过 |
 
 ## 验收栏
 

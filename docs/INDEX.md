@@ -26,7 +26,7 @@
 | 安全 | [密钥管理规范](05-security/SECRETS_MANAGEMENT.md) | Ops/PJM | Approved |
 | 安全 | [密钥登记表](05-security/SECRET_REGISTRY.md) | Ops | Draft |
 | 安全 | [权限矩阵](05-security/ACCESS_MATRIX.md) | PM/PJM | Approved |
-| 质量 | [测试策略](06-quality/TEST_STRATEGY.md) | QA | Draft |
+| 质量 | [测试策略](06-quality/TEST_STRATEGY.md) | QA | Approved |
 | 质量 | [验收标准](06-quality/ACCEPTANCE_CRITERIA.md) | QA/PM/PJM | Approved |
 | 运维 | [部署运行手册](07-operations/DEPLOYMENT_RUNBOOK.md) | Ops | Draft |
 | 运维 | [监控与告警](07-operations/OBSERVABILITY.md) | Ops/Backend | Draft |

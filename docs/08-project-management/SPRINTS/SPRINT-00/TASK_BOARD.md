@@ -1,0 +1,39 @@
+# Sprint 0 任务看板
+
+> 更新时间：2026-09-12；状态以 PJM 核验结果为准。
+
+| Task | Owner | 优先级 | 状态 | 关键依赖/阻塞 |
+| --- | --- | --- | --- | --- |
+| S0-PJM-01 启动治理、看板与风险跟踪 | PJM | P0 | In Progress | 无 |
+| S0-PM-01 字段字典与校验口径 | PM | P0 | In Progress | 真实脱敏样本 |
+| S0-PM-02 六类 Excel 模板 | PM | P0 | In Progress | S0-PM-01 |
+| S0-PM-03 业务输入清单 | PM/PJM | P0 | In Progress | 老板/业务关键用户 |
+| S0-UI-01 低保真 IA 与核心流程 | UI | P0 | In Progress | PRD v1.0 |
+| S0-BE-01 3 店监控 Spike | Backend/PJM | P0 | In Progress | 3 个公开店铺链接 |
+| S0-BE-02 后端工程脚手架 | Backend | P0 | In Progress | Java 21/Maven |
+| S0-FE-01 前端脚手架与管理端壳 | Frontend | P0 | In Progress | UI IA 可增量对齐 |
+| S0-QA-01 测试计划与追踪矩阵 | QA | P0 | In Progress | Sprint 计划/PRD |
+| S0-OPS-01 Docker Hub 与 Compose | Ops | P0 | In Progress | 可用代理出口 |
+| S0-OPS-02 GitHub 私有远程与 CI | Ops/PJM | P0 | In Progress | GitHub 安全授权 |
+| S0-INT-01 集成验证与验收包 | QA/PJM/全员 | P0 | Pending | 所有前置任务 |
+
+## 输入待办
+
+| 输入 | 提供方 | 状态 | 影响 |
+| --- | --- | --- | --- |
+| 20～50 条脱敏产品/SKU/辅料/期初库存样本 | 老板/业务关键用户 | Waiting | 字段与模板退出 |
+| 3 个 Amazon 美国站公开对标店铺链接 | 老板/选品关键用户 | Waiting | 监控 Spike 7 天计时 |
+| 首期用户和试点人员清单 | 老板/业务关键用户 | Waiting | IAM 与 UAT 准备 |
+| GitHub 安全授权 | 老板/管理员 | Waiting | 私有远程与 CI |
+| Docker Hub 可用代理出口 | 老板/Ops | Investigating | Compose 镜像拉取 |
+
+## 验收栏
+
+- [ ] PM 字段与模板通过跨角色复核
+- [ ] UI 低保真流程通过 PJM 核验
+- [ ] 监控 Spike 完成 7 天并通过 Stage Gate 决策
+- [ ] 前后端干净构建/测试通过
+- [ ] Compose、迁移、健康检查通过
+- [ ] 私有远程、CI 和敏感扫描通过
+- [ ] QA 验收包完成
+- [ ] 老板验收 Sprint 0

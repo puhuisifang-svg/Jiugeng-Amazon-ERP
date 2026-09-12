@@ -25,5 +25,7 @@ SPRINT-00/
 └── RETROSPECTIVE.md
 ```
 
-当前 Sprint：**尚未启动**。
-建议下一步：规划评审通过后创建 `SPRINT-00`。
+当前 Sprint：**Sprint 0 / In Progress**，启动日期为 2026-09-12。
+
+- [Sprint 0 执行计划](SPRINT-00/SPRINT_PLAN.md)
+- [Sprint 0 任务看板](SPRINT-00/TASK_BOARD.md)

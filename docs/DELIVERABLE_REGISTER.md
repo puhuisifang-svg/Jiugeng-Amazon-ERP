@@ -13,6 +13,7 @@
 | DEL-009 | 2026-09-12 | PM/QA/PJM | 精简 MVP 项目验收标准 | v1.0 | Approved | 老板 | [验收标准](06-quality/ACCEPTANCE_CRITERIA.md) |
 | DEL-010 | 2026-09-12 | PM/Backend | 产品与辅料编码维护规则 | v1.0 | Approved | 老板 | [编码规则](01-product/PRODUCT_CODE_STANDARD.md) |
 | DEL-011 | 2026-09-12 | PJM | 九更亚马逊 ERP MVP 最终规划 | v1.0 | Approved | 老板 | [最终规划](01-product/MVP_FINAL_PLAN.md) |
+| DEL-012 | 2026-09-12 | PJM | Sprint 0 执行计划与任务看板 | v1.0 | Approved | 老板 | [Sprint 0 计划](08-project-management/SPRINTS/SPRINT-00/SPRINT_PLAN.md) / [任务看板](08-project-management/SPRINTS/SPRINT-00/TASK_BOARD.md) |
 
 ## 登记要求
 

@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-- 阶段：项目准备 / 立项评审
-- 项目规划：v0.1 评审稿
-- Sprint：尚未启动
+- 阶段：Sprint 0 执行
+- 项目规划：MVP 最终规划 v1.0（Approved）
+- Sprint：Sprint 0 / In Progress
 - 项目经理：Jiugeng_PJM
 - 成员：PM、UI、Frontend、Backend、QA、Ops
 - Agent 模型：项目成员统一使用 `openai/gpt-5.6-sol`；`main` 不属于本项目

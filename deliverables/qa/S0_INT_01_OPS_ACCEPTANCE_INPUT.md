@@ -6,17 +6,17 @@
 | Reviewer | QA |
 | 关联任务 | S0-INT-01、S0-OPS-01、S0-OPS-02 |
 | 输入交付物 | DEL-018、DEL-019 |
-| 状态 | P1 Remediation Pending / Retest Blocked |
+| 状态 | OPS-001 Dynamic Pass / OPS-002 Local Static Pass, Online CI Blocked |
 | 日期 | 2026-09-12 |
 
 ## 1. PJM 发现与分级
 
 | ID | 发现 | 等级 | 当前结论 |
 | --- | --- | --- | --- |
-| BUG-S0-OPS-001 | 临时 Docker Compose file-secret 被删除后，MySQL/MinIO 既有容器因 bind source 缺失无法再次启动 | P1 | Fail，退回 Ops 整改 |
-| BUG-S0-OPS-002 | CI 的 `pnpm/action-setup`、`gitleaks/gitleaks-action` 使用 annotated tag object SHA，而非 peeled commit SHA | P1 | Fail，退回 Ops 整改 |
+| BUG-S0-OPS-001 | 临时 Docker Compose file-secret 被删除后，MySQL/MinIO 既有容器因 bind source 缺失无法再次启动 | P1 | **Pass / Closed** |
+| BUG-S0-OPS-002 | CI 的 `pnpm/action-setup`、`gitleaks/gitleaks-action` 使用 annotated tag object SHA，而非 peeled commit SHA | P1 | **Local Static Pass / GitHub Online Blocked** |
 
-Ops 本轮 P0：**0**。两项 P1 未复验关闭前，DEL-018/019 与 S0-INT-01 的 Compose/CI 门禁不得 Pass。
+仅限 Ops 本轮验收：P0=0。OPS-001 的 Compose 生命周期门禁已通过；OPS-002 仍需 GitHub 在线 Actions 证据，不得将本地 SHA 通过外推为 CI 整体 Pass。
 
 ## 2. BUG-S0-OPS-001：稳定 file-secret 生命周期与持久化复验
 
@@ -51,10 +51,26 @@ Ops 本轮 P0：**0**。两项 P1 未复验关闭前，DEL-018/019 与 S0-INT-01
 
 通过证据至少包含：完整 `uses:` 清单、官方仓库 `git ls-remote`/GitHub API 的 tag 与 peeled SHA 映射、逐项比对输出、Workflow 校验结果、CI run URL/commit、各 job 结论及失败门禁演示。
 
-## 4. 当前可见整改候选与门禁
+## 4. QA 最终复验结果
 
-当前工作树可见 stable `.local/secrets/` 方案、初始化/轮换脚本以及 Workflow SHA 调整，但这些文件尚需 Ops 完整改提交与动态复验；仅凭文档声明或静态 diff 不关闭 P1。
+### 4.1 BUG-S0-OPS-001
 
-- BUG-S0-OPS-001：**Blocked，等待可复验环境与完整生命周期证据**。
-- BUG-S0-OPS-002：**Blocked，等待提交后逐 Action peeled SHA 与 CI 运行证据**。
-- S0-INT-01：继续 In Progress。
+- stable secret 初始化两次退出码均为 0；目录 `0700`、四文件 `0600` 且非空，第二次初始化前后四个 SHA-256 摘要逐项不变；`.local/` 命中 Git ignore。
+- MySQL、Redis、MinIO 启动后均 healthy；三类非敏感探针为 MySQL 卷标记、Redis AOF 键与 MinIO 卷对象。MinIO 对象固定 SHA-256 为 `46ffc9e69dda34417e5a94a5bb47928b2c697ef647fd399f834e3274089178c0`。
+- 容器 `restart` 后三服务恢复 healthy；Compose `stop/start` 后再次恢复 healthy；三类探针与 MinIO 对象哈希均保持。
+- Compose `down`（未带 `-v`）后，三类命名卷均保留；`up -d --pull never` 重建后服务 healthy，三类探针与对象哈希保持。
+- `init-local-secrets.sh --rotate` 成功执行，四个 secret 摘要均变化、权限保持 `0600`，服务强制重建后 healthy，三类探针保持。QA 使用受保护临时认证文件验证：新应用凭据认证成功、旧凭据认证明确失败；凭据未进入参数、环境变量或日志。
+- 轮换临时目录与 QA 认证临时目录残留均为 0。最终 `stop -> start` 恢复后三服务 healthy、三类探针及对象哈希保持；再次安全停止后三个 ERP 容器均 `exited/0`。
+- 三类命名卷、stable secrets 保留；`chewy-mysql`、`chewy-redis` 继续 healthy；高置信敏感扫描及 `git diff --check` 通过。
+
+结论：**BUG-S0-OPS-001 Dynamic Pass / Closed。**
+
+### 4.2 BUG-S0-OPS-002
+
+- 枚举唯一 Workflow 的全部远程 `uses:`；checkout、setup-java、setup-node、pnpm/action-setup、gitleaks-action 均固定 40 位 SHA。
+- QA 通过各官方仓库 `git ls-remote` 对比 major tag：checkout/setup-java/setup-node 的 lightweight tag 3/3 匹配；pnpm v4 与 gitleaks v2 的 annotated tag 均匹配 peeled commit，5/5 Pass。
+- GitHub 私有远程/Actions 尚无授权，无法提供在线 run URL、同提交 job 结果和失败门禁演示。
+
+结论：**BUG-S0-OPS-002 Local Static Pass；GitHub Online Actions Blocked。** 本地缺陷修订已通过，但在在线 CI 证据到位前不关闭整体 CI 门禁。
+
+S0-INT-01：继续 In Progress。

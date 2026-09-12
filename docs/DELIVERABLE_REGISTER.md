@@ -21,7 +21,7 @@
 | DEL-015 | 2026-09-12 | PM/PJM | Sprint 0 业务输入清单 | v1.0 | In Review | PJM | [业务输入清单](../deliverables/pm/BUSINESS_INPUT_CHECKLIST_V1.md) |
 | DEL-016 | 2026-09-12 | UI | S0-UI-01 桌面端低保真信息架构与核心流程 | v0.1 | Completed | PJM | [低保真 IA 与核心流程](../deliverables/ui/S0-UI-01_LOW_FIDELITY_IA_AND_FLOWS.md) / [验收证据](../deliverables/ui/S0-UI-01_ACCEPTANCE_EVIDENCE.md) |
 | DEL-022 | 2026-09-12 | Frontend | S0-FE-01 前端脚手架与管理端壳 | v0.1 | Completed | PJM | [工程目录](../frontend/) / [交付与验证报告](../deliverables/frontend/S0-FE-01_SCAFFOLD_AND_ADMIN_SHELL_REPORT.md) |
-| DEL-017 | 2026-09-12 | PM/Backend/QA | Sprint 0 六类 Excel 导入模板规范 | v1.0 | In Review | PJM | [Excel 导入模板](../deliverables/pm/EXCEL_IMPORT_TEMPLATES_V1.md) |
+| DEL-017 | 2026-09-12 | PM/Backend/Frontend/QA | 六类 Excel 模板与异步导入契约 | v1.1 | In Review | PJM | [模板与契约](../deliverables/pm/EXCEL_IMPORT_TEMPLATES_V1.md) |
 | DEL-020 | 2026-09-12 | Backend | S0-BE-01 CollectorAdapter 合规 Spike 框架与观察模板 | v0.1 | In Review | PJM | [Spike 框架](../deliverables/backend/sprint-0/collector-spike/README.md) / [自测报告](../deliverables/backend/sprint-0/TEST_REPORT.md) |
 | DEL-021 | 2026-09-12 | Backend | S0-BE-02 Java 21 / Spring Boot 3 模块化单体脚手架 | v0.1 | Completed | PJM | [后端工程](../deliverables/backend/sprint-0/jiugeng-erp-backend/README.md) / [自测报告](../deliverables/backend/sprint-0/TEST_REPORT.md) |
 | DEL-023 | 2026-09-12 | Frontend | Sprint 0 PM 字段与六类导入模板前端契约复核 | v0.1 | In Review | PJM | [复核报告](../deliverables/frontend/S0-PM-FRONTEND_CONTRACT_REVIEW.md) |

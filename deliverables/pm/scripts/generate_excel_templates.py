@@ -113,11 +113,29 @@ def add_enum_sheet(wb: Workbook, groups: dict[str, list[str]]) -> None:
         ws.append([groups[h][row_idx] if row_idx < len(groups[h]) else None for h in headers])
 
 
+def add_machine_metadata(wb: Workbook, import_type: str, max_data_rows: int = 1000) -> None:
+    """Add machine-readable identity used by upload compatibility checks."""
+    ws = wb.create_sheet("_meta")
+    rows = [
+        ["schemaIdentifier", "jiugeng.amazon.erp.import"],
+        ["importType", import_type],
+        ["templateVersion", "1.0"],
+        ["maxDataRows", max_data_rows],
+    ]
+    add_rows(ws, rows)
+    ws.sheet_state = "veryHidden"
+
+
 def save_and_check(wb: Workbook, filename: str, required_sheets: list[str]) -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     path = OUTPUT_DIR / filename
     wb.save(path)
     checked = load_workbook(path, data_only=False)
+    if "_meta" not in checked.sheetnames or checked["_meta"].sheet_state != "veryHidden":
+        raise RuntimeError(f"{filename} missing veryHidden _meta sheet")
+    metadata = {row[0].value: row[1].value for row in checked["_meta"].iter_rows(min_row=1, max_col=2)}
+    if metadata.get("schemaIdentifier") != "jiugeng.amazon.erp.import" or metadata.get("templateVersion") != "1.0":
+        raise RuntimeError(f"{filename} has invalid machine metadata: {metadata}")
     missing = [name for name in required_sheets if name not in checked.sheetnames]
     if missing:
         raise RuntimeError(f"{filename} missing sheets: {missing}")
@@ -135,6 +153,7 @@ def product_workbook() -> None:
         "product_code（大小写不敏感全局唯一）",
         ["product_code 由业务手工提供，系统不得自动生成。", "internal_category 的受控词表待真实样本复核。"],
     )
+    add_machine_metadata(wb, "PRODUCTS")
     headers = ["product_code", "name_zh", "name_en", "brand", "internal_category", "product_type", "description", "status"]
     comments = {
         "product_code": "必填；1-64 位；^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$；全局唯一。",
@@ -168,6 +187,7 @@ def sku_workbook() -> None:
         "sku_code 全局唯一；variant_attributes: sku_code + attribute_code；同 Product 属性组合唯一",
         ["barcode 非空时全局唯一。", "动态属性使用规范化明细表，不限制属性轴数量。"],
     )
+    add_machine_metadata(wb, "VARIANTS")
     variant_headers = ["sku_code", "product_code", "variant_name", "barcode", "material", "specification", "item_dimensions", "package_dimensions", "package_weight", "package_weight_unit", "status"]
     comments = {
         "sku_code": "必填；业务手工提供；编码规则同产品编码。",
@@ -223,6 +243,7 @@ def listing_workbook() -> None:
         "store_code + marketplace_id + seller_sku；同 SKU 同店最多一个 ACTIVE Listing",
         ["首期 store_code 必须引用系统中预先配置的 5 个启用店铺。", "测试样例中的 TEST-STORE-* 仅为结构测试，不代表真实店铺。"],
     )
+    add_machine_metadata(wb, "STORE_LISTINGS")
     headers = ["store_code", "marketplace_id", "seller_sku", "asin", "listing_role", "product_code", "sku_code", "parent_seller_sku", "variation_theme", "fnsku", "fulfillment_channel", "listing_status"]
     comments = {
         "marketplace_id": "美国站固定 ATVPDKIKX0DER。",
@@ -266,6 +287,7 @@ def material_workbook() -> None:
         "material_code（大小写不敏感全局唯一）",
         ["material_code 由业务手工提供，系统不得自动生成。", "图片只能填写批准对象存储 URL/引用。"],
     )
+    add_machine_metadata(wb, "AUXILIARY_MATERIALS")
     headers = ["material_code", "material_name", "material_type", "specification", "base_unit", "image_url", "status", "remark"]
     ws = wb.create_sheet("导入模板")
     sheet_setup(ws, headers)
@@ -298,6 +320,7 @@ def relation_workbook() -> None:
         "sku_code + material_code",
         ["关系必须挂内部 SKU，不得填写 ASIN/Seller SKU。", "unit 必须与辅料 base_unit 一致；MVP 不做单位换算。"],
     )
+    add_machine_metadata(wb, "PRODUCT_AUXILIARY_MATERIALS")
     headers = ["sku_code", "material_code", "standard_quantity", "unit", "loss_rate", "enabled", "remark"]
     ws = wb.create_sheet("导入模板")
     sheet_setup(ws, headers)
@@ -332,6 +355,7 @@ def inventory_workbook() -> None:
         "warehouse_code + material_code；opening_reference 在仓库内唯一",
         ["MVP 只允许系统配置的唯一启用仓库。", "余额纠错须新增反向调整，不得编辑/删除流水。"],
     )
+    add_machine_metadata(wb, "AUXILIARY_MATERIAL_OPENING_INVENTORY")
     headers = ["warehouse_code", "material_code", "opening_quantity", "safety_stock", "as_of_date", "opening_reference", "remark"]
     ws = wb.create_sheet("导入模板")
     sheet_setup(ws, headers)

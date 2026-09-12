@@ -13,6 +13,9 @@
 | Product / SKU | 待定义 | 内部/Amazon | Product Owner | 长期 | 内部 | Draft |
 | Auxiliary Material | 待定义 | 内部 | Product Owner | 长期 | 内部 | Draft |
 | Product Auxiliary Material | 待定义 | 内部 | Product Owner | 长期 | 内部 | Draft |
+| Warehouse | 仓库编码 | 内部 | Inventory Owner | 长期 | 内部 | Draft |
+| Auxiliary Material Inventory | 仓库 + 辅料编码 | 系统计算 | Inventory Owner | 长期 | 内部 | Draft |
+| Inventory Transaction | 流水号 | 内部 | Inventory Owner | 长期 | 内部 | Draft |
 | Selection Candidate | ASIN + 来源 | 内部/Amazon | Selection Owner | 待定 | 内部 | Draft |
 | Watch Store | Amazon 店铺标识 | 内部配置 | Selection Owner | 长期 | 内部 | Draft |
 | Store Snapshot / Item | 店铺 + 采集时间 + ASIN | 批准数据源 | Selection Owner | 待定 | 内部 | Draft |

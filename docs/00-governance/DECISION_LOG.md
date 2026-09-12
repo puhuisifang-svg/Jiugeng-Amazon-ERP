@@ -6,6 +6,7 @@
 | DEC-002 | 2026-09-12 | 项目成员模型 | PM、UI、Frontend、Backend、QA、Ops 与 PJM 统一使用 `openai/gpt-5.6-sol`；main 不属于项目成员 | Approved | 老板 | [项目 README](../../README.md) |
 | DEC-003 | 2026-09-12 | 首期业务基线 | 美国站、5 个内部店铺；产品、辅料/物料、生产为第一优先级，选品与监控为第二优先级，登录/RBAC 技术先行 | Approved | 老板 | [首期规划](../01-product/PHASE1_SCOPE_PLAN.md) |
 | DEC-004 | 2026-09-12 | MVP 范围收缩 | 首期只做登录、产品数据、产品对应辅料、选品和任意一个店铺上新监控；生产等能力后置，DEC-003 的首期范围被本决策替代 | Approved | 老板 | [精简 MVP](../01-product/MVP_SCOPE_PLAN.md) |
+| DEC-005 | 2026-09-12 | 辅料库存范围 | 精简 MVP 增加辅料库存维护；包含基础仓库、期初、入出库、调整、余额、流水和安全库存提示，采购/生产/批次/成本后置 | Approved | 老板 | [精简 MVP](../01-product/MVP_SCOPE_PLAN.md) |
 
 ## 记录规则
 

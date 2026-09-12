@@ -8,9 +8,10 @@
 | ERP-104 | 产品 | 维护产品主档、SKU 和可选 Amazon 标识 | P0 | PM/Backend | 产品样本 | 编码唯一，可增改查、导入导出和追溯 | Proposed |
 | ERP-105 | 辅料 | 维护辅料主档 | P0 | PM/Backend | 辅料样本 | 编码唯一，分类和单位无歧义 | Proposed |
 | ERP-106 | 产品辅料 | 维护单层产品—辅料关系、用量和损耗率 | P0 | Backend/Frontend | 产品与辅料 | 真实样本关系和用量准确 | Proposed |
-| ERP-107 | 选品 | 建立选品候选池和评估状态流转 | P0 | PM/Frontend/Backend | 选品字段 | 手工/监控候选统一查重与追溯 | Proposed |
-| ERP-108 | 店铺监控 | 配置公开店铺并生成可审计快照 | P0 | Backend | 已批准数据源 | 基线完整，失败不污染有效快照 | Proposed |
-| ERP-109 | 上新识别 | 对比快照并生成新品事件 | P0 | Backend | ERP-108 | 新增 ASIN 24 小时内发现且不重复 | Proposed |
-| ERP-110 | 试点 | 完成权限、数据、监控回归和用户试用 | P0 | QA/PJM | ERP-103～109 | P0 缺陷清零，老板验收 | Proposed |
+| ERP-107 | 辅料库存 | 维护仓库、期初、入库、出库、调整、余额和流水 | P0 | Backend/Frontend | 辅料主档 | 余额与流水一致，负库存拦截 | Proposed |
+| ERP-108 | 选品 | 建立选品候选池和评估状态流转 | P0 | PM/Frontend/Backend | 选品字段 | 手工/监控候选统一查重与追溯 | Proposed |
+| ERP-109 | 店铺监控 | 配置公开店铺并生成可审计快照 | P0 | Backend | 已批准数据源 | 基线完整，失败不污染有效快照 | Proposed |
+| ERP-110 | 上新识别 | 对比快照并生成新品事件 | P0 | Backend | ERP-109 | 新增 ASIN 24 小时内发现且不重复 | Proposed |
+| ERP-111 | 试点 | 完成权限、数据、库存、监控回归和用户试用 | P0 | QA/PJM | ERP-103～110 | P0 缺陷清零，老板验收 | Proposed |
 
 状态：`Proposed` → `Ready` → `In Progress` → `In Review` → `Done`。

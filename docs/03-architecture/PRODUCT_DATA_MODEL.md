@@ -4,7 +4,7 @@
 | --- | --- |
 | 项目 | 九更亚马逊 ERP |
 | 交付物 ID | DEL-006 |
-| 版本 | v0.2 |
+| 版本 | v0.3 |
 | 状态 | In Review |
 | Owner | PM / Backend |
 | 日期 | 2026-09-12 |
@@ -37,7 +37,7 @@
 | 字段 | 说明 |
 | --- | --- |
 | `id` | 内部主键 |
-| `product_code` | 公司产品编码；提议由系统按 `JG-P-######` 生成，全局唯一且不可修改 |
+| `product_code` | 公司产品编码，由业务人员手动输入，全局唯一 |
 | `name_zh` / `name_en` | 中英文产品名称 |
 | `brand` | 品牌 |
 | `internal_category` | 公司内部类目 |
@@ -53,7 +53,7 @@
 | 字段 | 说明 |
 | --- | --- |
 | `id` / `product_id` | 主键及所属产品 |
-| `sku_code` | 内部 SKU 编码；提议按 `JG-P-######-###` 生成，全局唯一 |
+| `sku_code` | 内部 SKU 编码，由业务人员手动输入，全局唯一 |
 | `variant_name` | 规格显示名 |
 | `barcode` | UPC/EAN/GTIN 等商品编码，可空但需唯一性校验 |
 | `material` / `specification` | 材质和内部规格 |

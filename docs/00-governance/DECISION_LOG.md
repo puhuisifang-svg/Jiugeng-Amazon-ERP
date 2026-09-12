@@ -11,7 +11,7 @@
 | DEC-007 | 2026-09-12 | 登录角色 | 首期只设系统管理员、产品/辅料人员、选品人员三类角色，不设只读角色 | Approved | 老板 | [权限矩阵](../05-security/ACCESS_MATRIX.md) |
 | DEC-008 | 2026-09-12 | 产品多规格 | 一个内部产品包含多个 SKU；产品结构按 Amazon 美国站 5 店铺背景设计，内部产品/SKU、Amazon Catalog ASIN、各店铺 Listing 分层 | Approved | 老板 | [产品数据模型](../03-architecture/PRODUCT_DATA_MODEL.md) |
 | DEC-009 | 2026-09-12 | 5 店 Listing 数据方式 | MVP 采用人工维护和 Excel 导入管理 5 个公司店铺的 Listing 映射；SP-API 自动同步后置 | Approved | 老板 | [MVP PRD](../01-product/PRD.md) |
-| DEC-010 | 2026-09-12 | 内部产品编码 | 提议采用系统生成、无业务语义且永久不变的编码：Product `JG-P-######`、SKU `JG-P-######-###`、辅料 `JG-M-######` | Proposed | 待老板确认 | [编码规则](../01-product/PRODUCT_CODE_STANDARD.md) |
+| DEC-010 | 2026-09-12 | 内部产品编码 | Product/SPU、内部 SKU 和辅料编码均由业务人员手动输入维护，系统不自动生成 | Approved | 老板 | [编码规则](../01-product/PRODUCT_CODE_STANDARD.md) |
 
 ## 记录规则
 

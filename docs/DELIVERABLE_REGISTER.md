@@ -7,11 +7,11 @@
 | DEL-003 | 2026-09-12 | PJM | 本地开发环境审计报告 | v1.5 | Completed | 老板 | [环境审计](04-engineering/LOCAL_ENVIRONMENT_AUDIT.md) |
 | DEL-004 | 2026-09-12 | PJM/PM | 美国站 5 店首期范围与实施规划 | v0.2 | Superseded | 老板 | [首期规划](01-product/PHASE1_SCOPE_PLAN.md) |
 | DEL-005 | 2026-09-12 | PJM/PM | 精简 MVP 范围与店铺上新监控方案 | v0.8 | In Review | 老板 | [精简 MVP](01-product/MVP_SCOPE_PLAN.md) |
-| DEL-006 | 2026-09-12 | PM/Backend | 产品与 Amazon 多店铺数据模型 | v0.2 | In Review | 老板 | [产品数据模型](03-architecture/PRODUCT_DATA_MODEL.md) |
-| DEL-007 | 2026-09-12 | PM | 精简 MVP 产品需求文档 | v0.9 | In Review | 老板 | [MVP PRD](01-product/PRD.md) |
+| DEL-006 | 2026-09-12 | PM/Backend | 产品与 Amazon 多店铺数据模型 | v0.3 | In Review | 老板 | [产品数据模型](03-architecture/PRODUCT_DATA_MODEL.md) |
+| DEL-007 | 2026-09-12 | PM | 精简 MVP 产品需求文档 | v0.10 | In Review | 老板 | [MVP PRD](01-product/PRD.md) |
 | DEL-008 | 2026-09-12 | Backend/Ops | 精简 MVP 总体架构基线 | v0.3 | In Review | 老板 | [总体架构](03-architecture/ARCHITECTURE.md) |
 | DEL-009 | 2026-09-12 | PM/QA/PJM | 精简 MVP 项目验收标准 | v0.2 | In Review | 老板 | [验收标准](06-quality/ACCEPTANCE_CRITERIA.md) |
-| DEL-010 | 2026-09-12 | PM/Backend | 产品与辅料编码规则提案 | v0.1 | In Review | 老板 | [编码规则](01-product/PRODUCT_CODE_STANDARD.md) |
+| DEL-010 | 2026-09-12 | PM/Backend | 产品与辅料编码维护规则 | v0.2 | In Review | 老板 | [编码规则](01-product/PRODUCT_CODE_STANDARD.md) |
 
 ## 登记要求
 

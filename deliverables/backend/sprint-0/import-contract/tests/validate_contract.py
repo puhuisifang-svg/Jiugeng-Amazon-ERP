@@ -68,8 +68,16 @@ def main() -> None:
     require(opening["openingQuantity"] == {"minimum": 0, "exclusiveMinimum": False, "zeroCreatesOpeningTransaction": True}, "OPENING must allow zero and still create a transaction")
     require(opening["otherInventoryTransactionQuantity"] == {"exclusiveMinimum": 0}, "non-OPENING transaction quantity must be positive")
     require(opening["sameKeyDifferentPayload"] == "OPENING_INVENTORY_CONFLICT", "opening payload conflict code differs")
+    require(opening["sameKeyEvidenceAndPayloadReplay"] == "RETURN_EXISTING_RESULT_WITH_ONE_OPENING", "opening replay must return the existing single transaction")
+    require(opening["openingTransactionImmutable"] and opening["correctionMode"] == "APPEND_ADJUSTMENT_OR_REVERSAL", "OPENING must be immutable and corrected only by appended ledger entries")
+    require(opening["atomicWritesPerInputRow"] == ["AuxiliaryMaterialInventory", "InventoryTransaction(OPENING)"], "balance and OPENING must be created atomically")
+    consistency = opening["balanceAndLedgerConsistency"]
+    require(consistency["sameTransaction"] and consistency["openingTransactionsPerBusinessKey"] == 1, "balance/ledger transaction invariant differs")
+    require(consistency["postCommitInvariant"] == "BALANCE_EQUALS_LEDGER_RECOMPUTATION", "balance must equal ledger recomputation")
+    require(set(consistency["rollbackScope"]) == {"AuxiliaryMaterialInventory", "InventoryTransaction(OPENING)", "audit"}, "rollback scope differs")
     api_opening = api["x-domain-invariants"]["openingInventory"]
     require(api_opening["ordinaryUpsertForbidden"] and api_opening["zeroQuantityCreatesImmutableOpening"], "OpenAPI opening invariant missing")
+    require(api_opening["openingTransactionImmutable"] and api_opening["balanceAndOpeningSameTransaction"] and api_opening["openingTransactionsPerBusinessKey"] == 1, "OpenAPI balance/OPENING invariant missing")
     require(api_opening["transactionQuantitySchema"] == {"$ref": "#/components/schemas/InventoryTransactionQuantityRule"}, "opening invariant must reference its conditional quantity schema")
     quantity_rule = api["components"]["schemas"]["InventoryTransactionQuantityRule"]
     require(set(quantity_rule["properties"]["transactionType"]["enum"]) == {"OPENING", "INBOUND", "OUTBOUND", "ADJUST_IN", "ADJUST_OUT", "REVERSAL"}, "inventory transaction types differ")

@@ -3,8 +3,8 @@
 | 字段 | 内容 |
 | --- | --- |
 | Owner | Backend |
-| 版本 | v1.1.1 |
-| 状态 | In Review（Backend 自检通过，待 Frontend/QA 复核增量） |
+| 版本 | v1.1.2 |
+| 状态 | In Review（Backend/PJM 自检通过，待 Frontend/QA 复核增量） |
 | 业务基线 | DEL-017 v1.2、PRODUCT_DATA_MODEL v1.1 受控澄清、ACCESS_MATRIX v1.1 |
 | 范围 | Sprint 0 契约冻结；不包含真实接口、IAM 会话或逐接口鉴权实现 |
 
@@ -46,10 +46,10 @@ npm --prefix deliverables/backend/sprint-0/import-contract/tests test
 
 2026-09-12，PJM 独立复跑：
 
-- 跨文件校验：PASS（6 importTypes、7 statuses、8 phases、10 operations、21 capabilities、24 errors）。
+- 跨文件校验：PASS（6 importTypes、7 statuses、8 phases、11 operations、21 capabilities、25 errors）。
 - 5 个 JSON 文件均可由 Python 标准库解析。
 - Redocly CLI 1.34.5：OpenAPI valid，0 error / 0 warning。
 - P0 条件：前五类 Upsert 与期初一次性命令分流；零期初生成唯一 `quantity=0` OPENING；其他库存流水 `>0`。
 - 高置信敏感信息模式扫描与 `git diff --check`：PASS。
 
-PJM、Frontend 与 QA 已基于 `106a0e2 + 4ebd2be + 21870a8` 完成 v1.0 独立静态复核；v1.1 收口重验 endpoint、批次关联、响应头与 envelope。本次 v1.1.1 只把已冻结的库存流水数量规则升级为 OpenAPI 条件 Schema 和 AJV 实例测试，仍需 Frontend/QA 对增量复核。真实 API、IAM、数据库迁移、异步 Worker 与真实样本动态验收仍属于后续门禁。
+PJM、Frontend 与 QA 已基于 `106a0e2 + 4ebd2be + 21870a8` 完成 v1.0 独立静态复核；v1.1 收口重验 endpoint、批次关联、响应头与 envelope；v1.1.1 将库存流水数量规则升级为 OpenAPI 条件 Schema 和 AJV 实例测试，Backend/PJM 已通过。本次 v1.1.2 进一步显式冻结 OPENING 不可编辑、余额/流水同事务、每业务键唯一 OPENING、余额等于流水重算及余额/流水/审计整批回滚范围，仍需 Frontend/QA 对增量复核。真实 API、IAM、数据库迁移、异步 Worker 与真实样本动态验收仍属于后续门禁。

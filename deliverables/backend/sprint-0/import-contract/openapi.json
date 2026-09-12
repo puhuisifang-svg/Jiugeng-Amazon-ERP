@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Jiugeng ERP Import Contract",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "description": "Sprint 0 machine-readable contract only. Runtime endpoints, IAM sessions and authorization enforcement are deferred. Upload creates a QUEUED batch and enqueues full validation.",
     "license": {"name": "Proprietary", "identifier": "LicenseRef-Proprietary"}
   },
@@ -25,6 +25,9 @@
       "writeMode": "CREATE_ONCE_IDEMPOTENT_COMMAND",
       "ordinaryUpsertForbidden": true,
       "transactionQuantitySchema": {"$ref": "#/components/schemas/InventoryTransactionQuantityRule"},
+      "openingTransactionImmutable": true,
+      "balanceAndOpeningSameTransaction": true,
+      "openingTransactionsPerBusinessKey": 1,
       "openingQuantityMinimumInclusive": 0,
       "zeroQuantityCreatesImmutableOpening": true,
       "otherInventoryTransactionQuantityExclusiveMinimum": 0

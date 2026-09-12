@@ -17,11 +17,19 @@
       "businessKey": ["warehouse_code", "material_code"],
       "deduplicationEvidence": ["opening_reference", "payload_hash"],
       "atomicWritesPerInputRow": ["AuxiliaryMaterialInventory", "InventoryTransaction(OPENING)"],
+      "openingTransactionImmutable": true,
       "openingQuantity": {"minimum": 0, "exclusiveMinimum": false, "zeroCreatesOpeningTransaction": true},
       "otherInventoryTransactionQuantity": {"exclusiveMinimum": 0},
       "sameKeyEvidenceAndPayloadReplay": "RETURN_EXISTING_RESULT_WITH_ONE_OPENING",
       "sameKeyDifferentPayload": "OPENING_INVENTORY_CONFLICT",
-      "correctionMode": "APPEND_ADJUSTMENT_OR_REVERSAL"
+      "correctionMode": "APPEND_ADJUSTMENT_OR_REVERSAL",
+      "balanceAndLedgerConsistency": {
+        "sameTransaction": true,
+        "openingTransactionsPerBusinessKey": 1,
+        "balanceDeltaSource": "opening_quantity",
+        "postCommitInvariant": "BALANCE_EQUALS_LEDGER_RECOMPUTATION",
+        "rollbackScope": ["AuxiliaryMaterialInventory", "InventoryTransaction(OPENING)", "audit"]
+      }
     }
   },
   "idempotency": {

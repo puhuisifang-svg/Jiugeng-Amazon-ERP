@@ -4,7 +4,7 @@
 | --- | --- |
 | Owner | Backend |
 | 版本 | v1.1.2 |
-| 状态 | In Review（Backend/PJM 自检通过，待 Frontend/QA 复核增量） |
+| 状态 | Completed（Backend/Frontend/PJM/QA 均基于 `6a0989a` 增量复核通过） |
 | 业务基线 | DEL-017 v1.2、PRODUCT_DATA_MODEL v1.1 受控澄清、ACCESS_MATRIX v1.1 |
 | 范围 | Sprint 0 契约冻结；不包含真实接口、IAM 会话或逐接口鉴权实现 |
 
@@ -52,4 +52,4 @@ npm --prefix deliverables/backend/sprint-0/import-contract/tests test
 - P0 条件：前五类 Upsert 与期初一次性命令分流；零期初生成唯一 `quantity=0` OPENING；其他库存流水 `>0`。
 - 高置信敏感信息模式扫描与 `git diff --check`：PASS。
 
-PJM、Frontend 与 QA 已基于 `106a0e2 + 4ebd2be + 21870a8` 完成 v1.0 独立静态复核；v1.1 收口重验 endpoint、批次关联、响应头与 envelope；v1.1.1 将库存流水数量规则升级为 OpenAPI 条件 Schema 和 AJV 实例测试，Backend/PJM 已通过。本次 v1.1.2 进一步显式冻结 OPENING 不可编辑、余额/流水同事务、每业务键唯一 OPENING、余额等于流水重算及余额/流水/审计整批回滚范围，仍需 Frontend/QA 对增量复核。真实 API、IAM、数据库迁移、异步 Worker 与真实样本动态验收仍属于后续门禁。
+PJM、Frontend 与 QA 已基于 `106a0e2 + 4ebd2be + 21870a8` 完成 v1.0 独立静态复核；v1.1 收口重验 endpoint、批次关联、响应头与 envelope；v1.1.1 将库存流水数量规则升级为 OpenAPI 条件 Schema 和 AJV 实例测试，且已完成跨角色复核。v1.1.2 进一步显式冻结 OPENING 不可编辑、余额/流水同事务、每业务键唯一 OPENING、余额等于流水重算及余额/流水/审计整批回滚范围；Backend、Frontend、PJM 与 QA 已对精确提交 `6a0989a` 完成增量复核，静态契约 P0=0/P1=0。真实 API、IAM、数据库迁移、异步 Worker 与真实样本动态验收仍属于后续门禁。

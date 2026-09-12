@@ -14,7 +14,7 @@
 | DEL-010 | 2026-09-12 | PM/Backend | 产品与辅料编码维护规则 | v1.0 | Approved | 老板 | [编码规则](01-product/PRODUCT_CODE_STANDARD.md) |
 | DEL-011 | 2026-09-12 | PJM | 九更亚马逊 ERP MVP 最终规划 | v1.0 | Approved | 老板 | [最终规划](01-product/MVP_FINAL_PLAN.md) |
 | DEL-012 | 2026-09-12 | PJM | Sprint 0 执行计划与任务看板 | v1.0 | Approved | 老板 | [Sprint 0 计划](08-project-management/SPRINTS/SPRINT-00/SPRINT_PLAN.md) / [任务看板](08-project-management/SPRINTS/SPRINT-00/TASK_BOARD.md) |
-| DEL-018 | 2026-09-12 | Ops | Docker Hub TLS 诊断与 ERP Compose | v1.0 | In Review | PJM | [S0-OPS-01](../deliverables/ops/S0-OPS-01_DOCKER_COMPOSE.md) |
+| DEL-018 | 2026-09-12 | Ops | Docker Hub TLS 诊断与 ERP Compose | v1.0 | In Review（Compose/secret 生命周期 PASS；Docker Hub TLS 外部门禁未解） | PJM | [S0-OPS-01](../deliverables/ops/S0-OPS-01_DOCKER_COMPOSE.md) / [QA 动态复验](../deliverables/qa/S0_INT_01_OPS_ACCEPTANCE_INPUT.md) |
 | DEL-019 | 2026-09-12 | Ops/PJM | GitHub 授权门禁与 CI 基线 | v1.0 | In Review | PJM | [S0-OPS-02](../deliverables/ops/S0-OPS-02_GITHUB_CI.md) |
 | DEL-013 | 2026-09-12 | PM/Backend | MVP 七域字段字典与业务校验基线 | v1.1 | In Review | PJM | [字段字典](../deliverables/pm/FIELD_DICTIONARY_V1.md) |
 | DEL-014 | 2026-09-12 | QA | Sprint 0 测试计划、需求追踪矩阵与验收清单 | v0.1 | Completed | PJM | [测试计划](../deliverables/qa/S0_QA_TEST_PLAN.md) / [追踪矩阵](../deliverables/qa/S0_QA_REQUIREMENTS_TRACEABILITY_MATRIX.md) / [验收清单](../deliverables/qa/S0_QA_ACCEPTANCE_CHECKLIST.md) / [S0-DOC-01/02 关闭复核](../deliverables/qa/S0_DOC_01_02_CLOSURE_REVIEW.md) / [S0-DOC-03 关闭复核](../deliverables/qa/S0_DOC_03_CLOSURE_REVIEW.md) |
@@ -26,9 +26,12 @@
 | DEL-021 | 2026-09-12 | Backend | S0-BE-02 Java 21 / Spring Boot 3 模块化单体脚手架 | v0.1 | Completed | PJM | [后端工程](../deliverables/backend/sprint-0/jiugeng-erp-backend/README.md) / [自测报告](../deliverables/backend/sprint-0/TEST_REPORT.md) |
 | DEL-023 | 2026-09-12 | Frontend | Sprint 0 PM 字段与六类导入模板前端契约复核 | v0.1 | Completed | PJM | [复核报告](../deliverables/frontend/S0-PM-FRONTEND_CONTRACT_REVIEW.md) |
 | DEL-024 | 2026-09-12 | Frontend | S0-CONTRACT-01/02 前端关闭复核 | v0.1 | Completed | PJM | [关闭复核](../deliverables/frontend/S0-CONTRACT-01-02_FRONTEND_CLOSURE_REVIEW.md) |
-| DEL-025 | 2026-09-12 | Backend | S0-CONTRACT-01/02 导入 OpenAPI、状态机、事务语义、DAG 与 capability 机器契约 | v1.0 | Completed | Frontend/QA/PJM | [机器契约](../deliverables/backend/sprint-0/import-contract/README.md) / [测试报告](../deliverables/backend/sprint-0/S0_CONTRACT_01_02_TEST_REPORT.md) / [QA 终验](../deliverables/qa/S0_INT_01_MACHINE_CONTRACT_REVIEW.md) |
+| DEL-025 | 2026-09-12 | Backend | S0-CONTRACT-01/02 导入 OpenAPI、状态机、事务语义、DAG 与 capability 机器契约 | v1.1.2 | Completed（Backend/Frontend/PJM/QA 均基于 `6a0989a` PASS） | PJM | [机器契约](../deliverables/backend/sprint-0/import-contract/README.md) / [测试报告](../deliverables/backend/sprint-0/S0_CONTRACT_01_02_TEST_REPORT.md) / [QA v1.0 终验](../deliverables/qa/S0_INT_01_MACHINE_CONTRACT_REVIEW.md) / [QA v1.1.2 增量复核](../deliverables/qa/S0_CONTRACT_DEL025_V1_1_2_INCREMENTAL_REVIEW.md) |
 | DEL-026 | 2026-09-12 | Frontend | DEL-025 导入 OpenAPI 前端机器契约复核 | v0.1 | Completed | PJM | [复核报告](../deliverables/frontend/DEL-025_IMPORT_OPENAPI_FRONTEND_REVIEW.md) |
 | DEL-027 | 2026-09-12 | Frontend | DEL-025 修订版前端机器契约复验 | v0.1 | Completed | PJM | [复验报告](../deliverables/frontend/DEL-025_REVISION_FRONTEND_REVIEW.md) |
+| DEL-028 | 2026-09-12 | Frontend | DEL-025 v1.1 OpenAPI 前端增量复核 | v0.1 | Completed | PJM | [增量复核](../deliverables/frontend/DEL-025_V1_1_INCREMENTAL_FRONTEND_REVIEW.md) |
+| DEL-029 | 2026-09-12 | Frontend | DEL-025 v1.1.1 库存流水数量契约前端增量复核 | v0.1 | Completed | PJM | [增量复核](../deliverables/frontend/DEL-025_V1_1_1_INVENTORY_QUANTITY_FRONTEND_REVIEW.md) |
+| DEL-030 | 2026-09-12 | Frontend | DEL-025 v1.1.2 期初库存语义前端增量复核 | v0.1 | Completed | PJM | [增量复核](../deliverables/frontend/DEL-025_V1_1_2_OPENING_SEMANTICS_FRONTEND_REVIEW.md) |
 
 ## 登记要求
 

@@ -62,6 +62,34 @@
 - PJM 从 commit object 隔离导出，在 Node 26.8.2 / npm 11.19.1 下执行标准 `npm ci` 与 `npm test`：AJV 8.17.1 正例 4/4 接受、非法定位/blocking 组合 6/6 拒绝。
 - 当前完整静态契约基线：PM `106a0e2` + Backend `4ebd2be` + 实例测试 `21870a8`；QA 终验通过，`QA-CONTRACT-P1-01` 已 Closed。
 
+### DEL-025 v1.1 OpenAPI 增量 `49bef4a`
+
+- 当前结论：**PASS / Completed（随后由 v1.1.1 增量继承）**；Frontend DEL-028 与 QA 隔离复核均为 P0=0/P1=0。
+- 增量范围：新增 preview 过期重验 endpoint 与新旧批次双向关联；冻结 direct JSON、`items + page`、`application/problem+json`、direct binary envelope；11/11 operation 全响应声明 `X-Request-Id`。
+- PJM 从 `49bef4a` 隔离导出复跑：机器契约校验 6/7/8/11/21/25 PASS，AJV 正例 4/4、负例 6/6，Redocly 1.34.5 为 0 error / 0 warning；另行 revalidate/wire 语义断言 22/22 PASS，定向 diff 与高置信敏感模式检查通过。
+- Frontend DEL-028 对同一提交隔离复验：revalidate、双向关联、幂等唯一后继、分页/preview DTO、三类 envelope 与 11/11 operation 全响应 `X-Request-Id` 均通过，语义断言 28/28 PASS；DEL-028 已 Completed。
+- 边界：真实 endpoint、持久化事务、IAM 与逐接口鉴权仍属后续实现；S0-CONTRACT-01/02 的 v1.0 静态关闭状态不回退，本项按受控增量独立验收。
+- 证据：[机器契约](../../../../deliverables/backend/sprint-0/import-contract/README.md) / [测试报告](../../../../deliverables/backend/sprint-0/S0_CONTRACT_01_02_TEST_REPORT.md) / [DEL-028 前端增量复核](../../../../deliverables/frontend/DEL-025_V1_1_INCREMENTAL_FRONTEND_REVIEW.md) / [QA v1.1 增量复核](../../../../deliverables/qa/S0_CONTRACT_DEL025_V1_1_INCREMENTAL_REVIEW.md)。
+
+### DEL-025 v1.1.1 库存流水条件 Schema 增量 `c364a37`
+
+- 当前结论：**PASS / Completed（v1.1.1 历史版本）**；Frontend DEL-029 与 QA 均基于 `c364a37` 隔离复核为 P0=0/P1=0。当前交付物已升至 v1.1.2，其状态单独判定。
+- 增量范围：`InventoryTransactionQuantityRule` 以条件 Schema 固定 OPENING `>=0`、其余五类流水 `>0`；`PreviewImpact.resource=inventory_transactions` 时强制复用该结构，其他资源必须为 `null`。
+- PJM 从 `c364a37` 隔离导出复跑：机器契约 6/7/8/11/21/25、ImportIssue AJV 4+6、库存流水 AJV 8+6、Redocly 0/0 全部通过；数量 Schema/PreviewImpact 专项断言 13/13 PASS，定向 diff 与高置信敏感模式检查通过。
+- Frontend DEL-029 对同一提交隔离复验：六类 quantity 分支、inventory/non-inventory PreviewImpact 互斥条件与 `49bef4a` revalidate/wire 回归均通过；Backend AJV 全通过，Frontend 独立 AJV 为 quantity 8+14、PreviewImpact 4+4；DEL-029 已 Completed。
+- 产品语义仍以 `106a0e2` / DEL-017 v1.2 为准；真实 IMP-010/014～018、API、数据库事务与 IAM 继续 Blocked。
+- 证据：[DEL-029 前端增量复核](../../../../deliverables/frontend/DEL-025_V1_1_1_INVENTORY_QUANTITY_FRONTEND_REVIEW.md) / [QA v1.1.1 增量复核](../../../../deliverables/qa/S0_CONTRACT_DEL025_V1_1_1_INCREMENTAL_REVIEW.md)。
+
+### DEL-025 v1.1.2 OPENING 一致性增量 `6a0989a`
+
+- 当前结论：**PASS / Completed**；Backend、Frontend、PJM 与 QA 均基于精确提交 `6a0989a` 完成隔离复核，P0=0/P1=0。v1.1.1 的 DEL-029 只绑定 `c364a37`，不自动覆盖本提交。
+- 增量范围：移除 P0-02 的活跃二选一建议并固定唯一口径；机器化 OPENING 不可编辑、余额/流水同事务、每业务键唯一 OPENING、余额等于流水重算，以及余额/OPENING/审计整批回滚范围。
+- PJM 从 `6a0989a` 隔离导出复跑：validator 6/7/8/11/21/25、ImportIssue AJV 4+6、库存流水 AJV 8+6、Redocly 0/0 全部通过；OPENING 不变量断言 15/15 PASS，七类负向变异 7/7 被 validator 拒绝，定向 diff 与高置信敏感模式检查通过。
+- Frontend DEL-030 对同一提交隔离复验：新增期初 immutable、同事务唯一流水、余额重算、rollback scope 字段完整，v1.1.1 DTO/wire/revalidate/capability 基线无回归，22/22 专项与回归断言 PASS；DEL-030 已 Completed。
+- QA 对同一提交隔离终验：validator 6/7/8/11/21/25、ImportIssue AJV 4+6、InventoryTransaction AJV 8+6、Redocly 0/0 全部 PASS；七类负向变异 7/7 被拒绝。
+- 静态差异报告结论为 PASS / 运行 Deferred；IMP-010/014～018、领域迁移、真实 DTO/controller/worker、数据库约束及 IAM 继续 Blocked。
+- 证据：[DEL-030 前端增量复核](../../../../deliverables/frontend/DEL-025_V1_1_2_OPENING_SEMANTICS_FRONTEND_REVIEW.md) / [QA v1.1.2 增量复核](../../../../deliverables/qa/S0_CONTRACT_DEL025_V1_1_2_INCREMENTAL_REVIEW.md)。
+
 ## S0-INT-01 后续动态验收输入
 
 | 输入 | 版本/状态 | 静态证据 | 动态验收状态 |
@@ -80,10 +108,10 @@ DEL-016 已纳入 S0-INT-01，后续只验证低保真契约落地与运行时�
 
 ### S0-INT-01 / DEL-018、DEL-019 Ops P1 验收输入
 
-- 当前结论：**In Review / 2 P1 整改已交付，待复验；Ops P0=0**。
-- `BUG-S0-OPS-001`：临时 file-secret 删除后 MySQL/MinIO 既有容器因 bind source 缺失无法再次启动。复验必须覆盖 stable gitignored secret 的初始化幂等、权限、保留、受控轮换，以及 restart、stop/start、down/up 与轮换重建后的三类持久化探针。
-- `BUG-S0-OPS-002`：CI 的 pnpm/gitleaks 引用了 annotated tag object SHA。复验必须枚举所有远程 `uses:`，逐项与官方仓库 tag 的 peeled commit SHA 比对，不限于已发现的两个 Action。
-- stable file-secret 生命周期与 Action SHA 整改已到工作树，PJM 静态复核通过；仍需 QA 动态复验、Ops 独立提交及可追溯在线 CI run 后才能关闭。
+- 当前结论：**BUG-S0-OPS-001 Dynamic Pass / Closed；BUG-S0-OPS-002 Local Static Pass / GitHub Online Blocked；Ops P0=0**。
+- `BUG-S0-OPS-001`：**Closed**。QA 已完成 stable gitignored secret 初始化幂等、权限/保留、restart、stop/start、down/up、受控轮换、三类持久化探针及最终安全收尾复验；PJM 复核通过。
+- `BUG-S0-OPS-002`：**Local Static Pass / Online Blocked**。5/5 远程 Action SHA 与官方 major tag 的 direct/peeled commit 精确匹配；GitHub 在线 run、job 结论与失败门禁仍待安全授权。
+- Ops 的 Compose 生命周期门禁已通过；DEL-018 仍因 Docker Hub TLS 外部门禁保持 In Review。CI 整体仍不能 Pass，直至可追溯 GitHub Actions 在线证据到位。
 - 证据：[QA Ops 验收输入](../../../../deliverables/qa/S0_INT_01_OPS_ACCEPTANCE_INPUT.md) / [Compose 交付](../../../../deliverables/ops/S0-OPS-01_DOCKER_COMPOSE.md) / [CI 交付](../../../../deliverables/ops/S0-OPS-02_GITHUB_CI.md)。
 
 ### S0-INT-01 / DEL-020、DEL-021 后端验收输入

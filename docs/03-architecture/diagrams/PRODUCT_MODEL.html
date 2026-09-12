@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>九更亚马逊 ERP 产品数据模型</title>
+<style>
+  :root { color-scheme: light dark; --bg:#f8fafc; --fg:#172033; --muted:#5b6475; --line:#64748b; --neutral:#e2e8f0; --input:#bfdbfe; --process:#c7d2fe; --storage:#99f6e4; --external:#fde68a; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0f172a; --fg:#e5e7eb; --muted:#a3adbd; --line:#94a3b8; --neutral:#334155; --input:#1d4ed8; --process:#4338ca; --storage:#0f766e; --external:#92400e; } }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.4 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+  main { max-width:1180px; margin:32px auto; padding:0 20px; }
+  svg { width:100%; height:auto; display:block; }
+  .title { font-size:24px; font-weight:700; fill:var(--fg); }
+  .subtitle { font-size:14px; fill:var(--muted); }
+  .label { font-size:15px; font-weight:650; fill:var(--fg); }
+  .small { font-size:12px; fill:var(--muted); }
+  .node { stroke:var(--line); stroke-width:1.2; rx:10; }
+  .neutral { fill:var(--neutral); } .input { fill:var(--input); } .process { fill:var(--process); } .storage { fill:var(--storage); } .external { fill:var(--external); }
+  .edge { stroke:var(--line); stroke-width:1.6; fill:none; marker-end:url(#arrow); }
+  .zone { fill:none; stroke:var(--line); stroke-width:1; stroke-dasharray:7 5; opacity:.8; rx:14; }
+  .zone-title { font-size:13px; font-weight:650; fill:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+<svg viewBox="0 0 1160 720" role="img" aria-labelledby="title desc">
+  <title id="title">九更亚马逊 ERP 产品与多店铺数据模型</title>
+  <desc id="desc">内部产品包含多个 SKU，SKU 关联辅料并映射五个 Amazon 店铺的独立 Listing；Listing 再关联 Amazon Catalog ASIN。</desc>
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--line)" /></marker></defs>
+
+  <text x="40" y="42" class="title">产品与 Amazon 多店铺数据模型</text>
+  <text x="40" y="67" class="subtitle">内部主数据、店铺 Listing、Amazon Catalog 三层分离</text>
+
+  <rect x="35" y="95" width="1090" height="265" class="zone" />
+  <text x="55" y="120" class="zone-title">九更 ERP · 内部权威数据</text>
+  <rect x="35" y="390" width="1090" height="245" class="zone" />
+  <text x="55" y="415" class="zone-title">Amazon 渠道数据 · 按店铺与站点隔离</text>
+
+  <path d="M 280 205 L 350 205" class="edge" />
+  <path d="M 580 185 C 650 150, 665 145, 720 145" class="edge" />
+  <path d="M 940 145 L 985 145" class="edge" />
+  <path d="M 1045 185 L 1045 285 L 940 285" class="edge" />
+  <path d="M 465 270 L 465 485" class="edge" />
+  <path d="M 280 520 L 355 520" class="edge" />
+  <path d="M 640 520 L 760 520" class="edge" />
+  <path d="M 875 485 L 875 455" class="edge" />
+
+  <rect x="65" y="155" width="215" height="100" class="node input" />
+  <text x="90" y="187" class="label">内部产品 Product</text>
+  <text x="90" y="212" class="small">产品款式 / SPU</text>
+  <text x="90" y="232" class="small">产品编码、品牌、类目</text>
+  <text x="238" y="278" class="small">1</text>
+
+  <rect x="350" y="140" width="230" height="130" class="node process" />
+  <text x="375" y="172" class="label">内部 SKU / Variant</text>
+  <text x="375" y="197" class="small">颜色、尺寸、规格组合</text>
+  <text x="375" y="217" class="small">尺寸、重量、条码</text>
+  <text x="375" y="237" class="small">可售最小单元</text>
+  <text x="325" y="195" class="small">1 : N</text>
+
+  <rect x="720" y="105" width="220" height="80" class="node storage" />
+  <text x="745" y="137" class="label">SKU—辅料关系</text>
+  <text x="745" y="162" class="small">用量、单位、损耗率</text>
+
+  <rect x="985" y="105" width="120" height="80" class="node storage" />
+  <text x="1008" y="137" class="label">辅料</text>
+  <text x="1008" y="162" class="small">主档</text>
+
+  <rect x="720" y="245" width="220" height="80" class="node storage" />
+  <text x="745" y="277" class="label">单仓辅料库存</text>
+  <text x="745" y="302" class="small">余额、流水、安全库存</text>
+
+  <rect x="65" y="470" width="215" height="100" class="node external" />
+  <text x="90" y="502" class="label">Store Account</text>
+  <text x="90" y="527" class="small">美国站 5 个 Seller</text>
+  <text x="90" y="547" class="small">店铺授权分别隔离</text>
+
+  <rect x="355" y="455" width="285" height="130" class="node external" />
+  <text x="380" y="487" class="label">Store Listing</text>
+  <text x="380" y="512" class="small">Seller SKU / MSKU、FNSKU</text>
+  <text x="380" y="532" class="small">FBA/FBM、Listing 状态</text>
+  <text x="380" y="552" class="small">PARENT / CHILD / STANDALONE</text>
+  <text x="315" y="510" class="small">1 : N</text>
+
+  <rect x="760" y="455" width="230" height="130" class="node external" />
+  <text x="785" y="487" class="label">Amazon Catalog Item</text>
+  <text x="785" y="512" class="small">Marketplace + ASIN 唯一</text>
+  <text x="785" y="532" class="small">父 ASIN → 子 ASIN</text>
+  <text x="785" y="552" class="small">目录属性与变体主题</text>
+  <text x="680" y="510" class="small">N : 1</text>
+
+  <rect x="760" y="650" width="22" height="14" class="node input" /><text x="792" y="662" class="small">内部主数据</text>
+  <rect x="900" y="650" width="22" height="14" class="node external" /><text x="932" y="662" class="small">Amazon 外部数据</text>
+</svg>
+</main>
+</body>
+</html>

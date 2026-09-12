@@ -10,7 +10,12 @@
 | 实体 | 业务主键 | 来源 | Owner | 保留期 | 敏感级别 | 状态 |
 | --- | --- | --- | --- | --- | --- | --- |
 | User / Role | 待定义 | 内部 | System Owner | 长期 | 内部 | Draft |
-| Product / SKU | 待定义 | 内部/Amazon | Product Owner | 长期 | 内部 | Draft |
+| Product | 产品编码 | 内部 | Product Owner | 长期 | 内部 | Draft |
+| Product Variant | 内部 SKU 编码 | 内部 | Product Owner | 长期 | 内部 | Draft |
+| Variant Attribute | SKU + 属性编码 | 内部 | Product Owner | 长期 | 内部 | Draft |
+| Store Account | 店铺编码 | 内部/Amazon | System Owner | 长期 | 机密 | Draft |
+| Amazon Catalog Item | Marketplace + ASIN | Amazon | Product Owner | 长期 | 内部 | Draft |
+| Store Listing | 店铺 + Marketplace + Seller SKU | Amazon/内部映射 | Product Owner | 长期 | 内部 | Draft |
 | Auxiliary Material | 待定义 | 内部 | Product Owner | 长期 | 内部 | Draft |
 | Product Auxiliary Material | 待定义 | 内部 | Product Owner | 长期 | 内部 | Draft |
 | Auxiliary Material Inventory | 辅料编码 | 系统计算 | Inventory Owner | 长期 | 内部 | Draft |

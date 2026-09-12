@@ -14,6 +14,7 @@
 | 产品 | [业务术语表](01-product/GLOSSARY.md) | PM | Draft |
 | 设计 | [UI/UX 设计说明](02-design/UI_UX_SPEC.md) | UI | Draft |
 | 架构 | [总体架构](03-architecture/ARCHITECTURE.md) | Backend/Ops | Draft |
+| 架构 | [产品与 Amazon 多店铺数据模型](03-architecture/PRODUCT_DATA_MODEL.md) | PM/Backend | In Review |
 | 架构 | [ADR 索引](03-architecture/adr/README.md) | Backend/Ops | Active |
 | 架构 | [API 规范](03-architecture/API_GUIDELINES.md) | Backend | Draft |
 | 架构 | [数据字典](03-architecture/DATA_DICTIONARY.md) | PM/Backend | Draft |

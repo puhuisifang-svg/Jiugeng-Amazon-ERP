@@ -9,6 +9,7 @@
 | DEC-005 | 2026-09-12 | 辅料库存范围 | 精简 MVP 增加辅料库存维护；包含基础仓库、期初、入出库、调整、余额、流水和安全库存提示，采购/生产/批次/成本后置 | Approved | 老板 | [精简 MVP](../01-product/MVP_SCOPE_PLAN.md) |
 | DEC-006 | 2026-09-12 | 辅料仓库数量 | 首期只管理一个辅料仓库，不做仓库主档、多仓切换、库位或仓库调拨 | Approved | 老板 | [精简 MVP](../01-product/MVP_SCOPE_PLAN.md) |
 | DEC-007 | 2026-09-12 | 登录角色 | 首期只设系统管理员、产品/辅料人员、选品人员三类角色，不设只读角色 | Approved | 老板 | [权限矩阵](../05-security/ACCESS_MATRIX.md) |
+| DEC-008 | 2026-09-12 | 产品多规格 | 一个内部产品包含多个 SKU；产品结构按 Amazon 美国站 5 店铺背景设计，内部产品/SKU、Amazon Catalog ASIN、各店铺 Listing 分层 | Approved | 老板 | [产品数据模型](../03-architecture/PRODUCT_DATA_MODEL.md) |
 
 ## 记录规则
 

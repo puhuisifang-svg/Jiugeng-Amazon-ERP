@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Scan Git history and working tree
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  backend:
+    name: Backend build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        if: ${{ hashFiles('deliverables/backend/sprint-0/jiugeng-erp-backend/mvnw') != '' }}
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Maven verify
+        if: ${{ hashFiles('deliverables/backend/sprint-0/jiugeng-erp-backend/mvnw') != '' }}
+        working-directory: deliverables/backend/sprint-0/jiugeng-erp-backend
+        run: ./mvnw --batch-mode --no-transfer-progress verify
+      - name: Record deferred backend scaffold
+        if: ${{ hashFiles('deliverables/backend/sprint-0/jiugeng-erp-backend/mvnw') == '' }}
+        run: echo "Backend scaffold is not present yet; Maven verify activates when its Wrapper is committed."
+
+  frontend:
+    name: Frontend build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        if: ${{ hashFiles('frontend/pnpm-lock.yaml') != '' }}
+        with:
+          version: 12.4.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: ${{ hashFiles('frontend/pnpm-lock.yaml') != '' }}
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install, test, and build
+        if: ${{ hashFiles('frontend/pnpm-lock.yaml') != '' }}
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm test
+          pnpm build
+      - name: Record deferred frontend scaffold
+        if: ${{ hashFiles('frontend/pnpm-lock.yaml') == '' }}
+        run: echo "Frontend scaffold is not present yet; pnpm test/build activate when its lockfile is committed."
+
+  compose-validate:
+    name: Compose configuration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Validate Compose model
+        run: |
+          mkdir -p /tmp/erp-ci-secrets
+          touch /tmp/erp-ci-secrets/mysql_root_password /tmp/erp-ci-secrets/mysql_app_password /tmp/erp-ci-secrets/minio_root_user /tmp/erp-ci-secrets/minio_root_password
+          ERP_LOCAL_SECRET_DIR=/tmp/erp-ci-secrets docker compose config --quiet

@@ -16,7 +16,7 @@
 | DEL-021 | Java 21 / Spring Boot 3 模块化单体脚手架 | **PASS / 纳入 S0-INT-01 动态证据** | H2 MySQL 模式通过不等于 MySQL 8 Compose 联调通过 |
 | DEL-020 | CollectorAdapter 合规 Spike 框架、Schema、Runbook、模板和框架内安全测试 | **STATIC PASS** | 3 店连续 7 天仍 **BLOCKED**，DEL-020 不得整体 Pass |
 
-本轮 P0=0；未发现新增 P1/P2。
+仅限 DEL-020/021 本轮验收：P0=0，未发现新增 P1/P2；不得外推为项目全局缺陷状态。
 
 ## 2. DEL-021 动态证据
 
@@ -25,8 +25,8 @@
 | 干净构建 | `./mvnw clean verify`：BUILD SUCCESS | Pass |
 | 自动化测试 | 7 tests / 0 failure / 0 error / 0 skipped | Pass；QA 汇总 4 个 Surefire XML 与报告一致 |
 | 模块边界 | Spring Modulith `ApplicationModules.verify()` 通过 | Pass |
-| 数据库迁移 | Flyway `V1__baseline.sql` 在 H2 MySQL 模式执行到 Schema v1 | Pass（脚手架基线）；MySQL 8 联调另验 |
-| 可运行 Jar | Jar 启动成功，`GET /actuator/health` 返回 `{"status":"UP"}`，随后优雅停止 | Pass；PJM 实测记录纳入 |
+| 数据库迁移 | Flyway `V1__baseline.sql` 先在 H2 MySQL 模式执行；随后在 S0-OPS-01 MySQL 8.0 实例校验并应用 V1 到 Schema v1 | Pass；真实 MySQL 8 证据提交 `4e4aacb` |
+| 可运行 Jar | Jar 使用 `mysql` profile 与 Ops configtree 无回显注入启动，`GET /actuator/health` 返回 HTTP 200 / `{"status":"UP"}` | Pass；Backend/PJM 实测记录纳入，证据提交 `4e4aacb` |
 | 构建产物 | `target/jiugeng-erp-backend-0.0.1-SNAPSHOT.jar` 存在且非空 | Pass |
 | 自测报告 | `deliverables/backend/sprint-0/TEST_REPORT.md` 已跟踪并记录环境、命令和结果 | Pass |
 
@@ -49,11 +49,18 @@
 
 ## 5. 保留阻塞与下一步
 
-1. S0-OPS-01 Compose Ready 后，在真实 MySQL 8 执行 Flyway、应用启动及健康检查；H2 结果不得替代该项。
+1. 真实 MySQL 8 Flyway、Jar 启动及健康检查已由 Backend/PJM 完成并在 `4e4aacb` 固化；H2 证据仍仅作为独立脚手架基线，不替代 MySQL 8 结果。
 2. 收到并批准 3 个公开店铺链接/数据源后，从首个完整有效快照起连续观察 7 个自然日。
 3. 完成 7 天成功率、覆盖、完整性、合规、成本、误报和人工降级结论前，DEL-020 维持 Blocked，不给整体 Pass。
 
-## 6. 证据路径
+## 6. MySQL 8 证据追加（`4e4aacb`）
+
+- Compose/MySQL 前置已 Ready；Backend 报告记录 MySQL 8.0 对 V1 baseline 的真实校验与迁移成功。
+- 可执行 Jar 使用 `mysql` profile 与 Ops configtree 无回显注入启动，Tomcat 监听 18081；健康检查 HTTP 200 / `UP`。
+- QA 静态确认 `application-mysql.yml` 不含明文凭据，仍以占位属性解析运行时配置；仓库高置信敏感模式未命中。
+- 本次追加采纳 Backend/PJM 的实测证据。QA 当前只读检查时未观察到持续运行的 `jiugeng-erp-mysql` 容器，因此不将“此刻容器持续在线”作为结论；该点不影响已记录的受控时点集成结果。
+
+## 7. 证据路径
 
 - Backend 自测：`deliverables/backend/sprint-0/TEST_REPORT.md`
 - 后端工程：`deliverables/backend/sprint-0/jiugeng-erp-backend/`

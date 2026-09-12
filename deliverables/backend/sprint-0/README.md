@@ -3,6 +3,7 @@
 - `collector-spike/`：S0-BE-01 合规采集适配器 Spike、证据结构和 7 天观察模板。
 - `jiugeng-erp-backend/`：S0-BE-02 Java 21 / Spring Boot 3 模块化单体脚手架。
 - `TEST_REPORT.md`：构建、自动化测试与敏感信息扫描证据。
+- `S0_CONTRACT_REVIEW_DEL013_DEL017.md`：PM 字段字典与六类模板的 Backend 结构契约复核。
 - `import-contract/`：S0-CONTRACT-01/02 的 OpenAPI 3.1、批次状态机、提交语义、依赖 DAG 与 capability 机器映射。
 - `S0_CONTRACT_01_02_TEST_REPORT.md`：机器契约 schema/一致性测试证据。
 

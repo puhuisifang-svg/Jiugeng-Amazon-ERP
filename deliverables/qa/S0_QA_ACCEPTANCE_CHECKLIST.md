@@ -61,6 +61,12 @@
 - [ ] `IMP-010` `opening_quantity=0` 导入成功，并在同一事务生成余额/期初记录及一条 `quantity=0` 的不可编辑 `OPENING`；`INBOUND/OUTBOUND/ADJUST_IN/ADJUST_OUT/REVERSAL` 的 `quantity=0` 均被拒绝。
 - [ ] `IMP-011` Listing 错误样例分别覆盖同店重复 FNSKU、同店同 SKU 多条 ACTIVE、子体跨店引用父体、父子 `variation_theme` 不一致，并逐行定位。
 - [ ] `IMP-012` `attributes_导入模板.display_order` 的 Excel DataValidation 仅接受整数且 `>=1`；服务端同时校验同一 SKU 内唯一。
+- [ ] `IMP-013` Issue DTO 按 scope 强制定位：SHEET 必有工作表，ROW 必有工作表+物理行号，FIELD 必有工作表+物理行号+字段；BATCH 才允许三者为空，Schema 负例必须被拒绝。
+- [ ] `IMP-014` 首次期初确认在一个事务内创建唯一余额/期初记录及恰好一条不可编辑 `OPENING`，并记录 source、批次、操作人、依据与载荷摘要。
+- [ ] `IMP-015` 同仓库+辅料、同依据、同载荷串行/并发重放（含更换请求幂等键）均返回既有结果；余额、期初记录和 `OPENING` 数量不增加。
+- [ ] `IMP-016` 同仓库+辅料但依据或载荷不同返回 `OPENING_INVENTORY_CONFLICT`；既有余额、流水及审计前后 hash 不变。
+- [ ] `IMP-017` `OPENING` 不可直接更新/删除；纠错只能追加正数量的调整或冲销流水，保留原流水及完整审计链。
+- [ ] `IMP-018` 对零/非零期初叠加入库、出库、调整、冲销后，余额等于流水重算；在整批首/中/末行故障时余额、OPENING、派生记录和审计全部回滚且可安全重试。
 
 ## E. 监控快照与新品去重
 
@@ -88,6 +94,9 @@
 - [ ] `CMP-003` 空数据库可执行迁移且重复启动安全；服务故障有清晰状态和不含敏感值的日志。
 - [ ] `CMP-004` 写入 MySQL 行和对象后，容器 restart 及 down/up（保留命名卷）后数据和对象 hash 均保持。
 - [ ] `CMP-005` 配置样例仅含非敏感默认值/变量名/SecretRef；仓库、展开配置、日志和镜像层无真实凭据。
+- [ ] `CMP-006` file-secret 使用稳定且 Git ignored 的目录：初始化生成 `0700` 目录/`0600` 非空文件，重复初始化不改值；stop/start、down/up 与验收清理均不删除稳定文件。
+- [ ] `CMP-007` 受控 secret 轮换先同步已有服务账号再原子替换并强制重建；轮换后新认证、健康检查和持久化探针通过，旧认证失效，临时文件清理且全程不回显值。
+- [ ] `CMP-008` MySQL、Redis、MinIO 三类探针依次通过 restart、stop/start、down/up（禁止 `-v`）及轮换重建；命名卷、数据/键/对象 hash 均保持。
 
 ## H. CI 与敏感扫描
 
@@ -97,6 +106,7 @@
 - [ ] `CI-004` 在隔离分支引入安全的失败样例后，相应任务确实失败并阻断合并；清理样例后恢复。
 - [ ] `CI-005` Workflow 权限最小化；第三方 Action 固定到批准版本/提交；不向不可信步骤暴露 Secret。
 - [ ] `CI-006` CI 控制台、测试报告、缓存和构建产物均不回显凭据或会话数据。
+- [ ] `CI-007` 每个远程 `uses:` 固定到 40 位实际 commit SHA；annotated tag 必须比对官方仓库 `refs/tags/<tag>^{}` 的 peeled SHA，且覆盖 pnpm/gitleaks 及所有其他 Actions。
 
 ## I. Sprint 退出门禁
 

@@ -10,7 +10,7 @@
 | S0-PM-03 业务输入清单 | PM/PJM | P0 | In Review | 老板/业务关键用户输入待到件 |
 | S0-UI-01 低保真 IA 与核心流程 | UI | P0 | Completed（PJM 核验通过） | 真实样本到位后做受控复核 |
 | S0-BE-01 3 店监控 Spike | Backend/PJM | P0 | Blocked（框架/Runbook 静态通过） | 3 个公开店铺链接与数据源审批；首个有效快照后连续 7 天 |
-| S0-BE-02 后端工程脚手架 | Backend | P0 | Completed（PJM 核验通过） | MySQL 8 联调转 S0-INT-01，等待 Compose |
+| S0-BE-02 后端工程脚手架 | Backend | P0 | Completed（PJM 核验通过） | `4e4aacb` 已完成真实 MySQL 8 Flyway V1、Jar 启动与 health=UP；后续业务实现转 S0-INT-01 |
 | S0-FE-01 前端脚手架与管理端壳 | Frontend | P0 | Completed（PJM 核验通过） | IAM/API Ready 后实现真实会话、路由守卫与按钮权限 |
 | S0-QA-01 测试计划与追踪矩阵 | QA | P0 | Completed（PJM 静态核验通过） | 动态验收转 S0-INT-01 |
 | S0-OPS-01 Docker Hub 与 Compose | Ops | P0 | In Progress | 可用代理出口 |
@@ -34,15 +34,19 @@
 | S0-DOC-01 | `PRODUCT_DATA_MODEL.md` 导入模板仅列 4 类，与 Approved PRD/Sprint 0 的 6 类要求不一致 | PM/Backend | P1 | Closed | v1.1 已补齐六类、依赖顺序及验收表述；QA/PJM 复核通过 |
 | S0-DOC-02 | `TEST_STRATEGY.md` 沿用订单、财务、采购、FBA、利润等后置范围，缺少当前 MVP 专项 | QA | P1 | Closed | v0.2 已隔离后置范围并补齐人工编码、三角色、选品去重、监控基线失败保护；QA/PJM 复核通过 |
 | S0-DOC-03 | PM 字段字典与 UI 交付物编号冲突，PM 字段字典未单独登记总账 | PJM/PM | P1 | Closed | DEL-013～017 唯一归属及总账登记检索通过 |
-| BUG-S0-OPS-001 | 临时 file-secret 删除后 MySQL/MinIO 容器因 bind source 缺失无法再次启动 | Ops | P1 | Open | 稳定 gitignored/0600 本地 secret 生命周期；stop/start 或重建后健康且命名卷数据保留 |
-| BUG-S0-OPS-002 | pnpm 与 gitleaks Action 固定到 annotated tag object，而非实际 commit SHA | Ops | P1 | Open | 改为官方 tag 对应 peeled commit SHA，YAML/本地门禁与后续在线 Actions 通过 |
-| S0-CONTRACT-01 | DEL-017 缺少可联调的异步导入契约（FE-CONTRACT-01～06） | PM/Backend | P1 | Blocked（Backend P0 待修） | 修复 BE-CONTRACT-P0-01/02；Backend 补机器可读 OpenAPI；QA 复核通过后关闭 |
-| S0-CONTRACT-02 | 三角色已有页面级矩阵但缺动作级 capability 机器码 | PM/Backend | P1 | In Review（Frontend 已通过） | QA 复核 capability 名称与映射；真实鉴权实现按计划后移 |
-| BE-CONTRACT-P0-01 | DEL-013 通用 Upsert 与期初库存不可覆盖的一次性 `OPENING` 语义冲突 | PM/Backend | P0 | Open | COM-008 明确期初特例；同键同载荷重放、异载荷拒绝、流水不可覆盖，并由 Backend/QA 回归 |
-| BE-CONTRACT-P0-02 | `opening_quantity >= 0` 与所有库存流水 `quantity > 0` 冲突 | PM/Backend | P0 | Open | 冻结 `OPENING` 可为 0、其他流水必须 >0 的条件规则；同步字典、模板、模型、OpenAPI/Schema 与用例 |
-| BE-CONTRACT-P1-01 | DEL-013 依赖图误表达辅料主档依赖 SKU | PM | P1 | Open | 改为 Product 与 AuxiliaryMaterial 两条根链并与 DEL-017 DAG 一致 |
-| BE-CONTRACT-P1-02 | Listing 负向样例缺重复 FNSKU、同店同 SKU 双 ACTIVE、跨店父体、variation theme 不一致 | PM/QA | P1 | Open | 生成脚本和 xlsx 补齐 4 类合成错误样例，QA 验证 |
-| BE-CONTRACT-P1-03 | `display_order` 缺 Excel 数值校验 | PM | P1 | Open | 模板增加 `display_order >= 1` DataValidation 并更新校验总数/证据 |
+| BUG-S0-OPS-001 | 临时 file-secret 删除后 MySQL/MinIO 容器因 bind source 缺失无法再次启动 | Ops | P1 | In Review（Ops 整改已交付） | 稳定 gitignored/0600 本地 secret 生命周期及 restart、stop/start、down/up、轮换重建证据已到；待 QA/PJM 复验关闭 |
+| BUG-S0-OPS-002 | pnpm 与 gitleaks Action 固定到 annotated tag object，而非实际 commit SHA | Ops | P1 | In Review（Ops 整改已交付） | pnpm/gitleaks 已改为官方 peeled commit SHA，其他 Actions 为官方 lightweight v4 commit；待 QA 与在线 CI 证据关闭 |
+| S0-CONTRACT-01 | DEL-017 缺少可联调的异步导入契约（FE-CONTRACT-01～06） | PM/Backend | P1 | Closed | `106a0e2 + 4ebd2be + 21870a8` 经 Backend/Frontend/PJM/QA 复核通过；运行实现转 S0-INT-01 |
+| S0-CONTRACT-02 | 三角色已有页面级矩阵但缺动作级 capability 机器码 | PM/Backend | P1 | Closed | 21 个 capability 与三角色机器映射经 Frontend/PJM/QA 复核通过；真实鉴权实现后移 |
+| BE-CONTRACT-P0-01 | DEL-013 通用 Upsert 与期初库存不可覆盖的一次性 `OPENING` 语义冲突 | PM/Backend | P0 | Closed | `106a0e2` 已明确前五类 Upsert/期初一次性幂等命令；Backend/PJM/QA 回归通过 |
+| BE-CONTRACT-P0-02 | `opening_quantity >= 0` 与所有库存流水 `quantity > 0` 冲突 | PM/Backend | P0 | Closed | `106a0e2` 已冻结 `OPENING >=0`、其他流水 `>0`；Backend/PJM/QA 回归通过 |
+| BE-CONTRACT-P1-01 | DEL-013 依赖图误表达辅料主档依赖 SKU | PM | P1 | Closed | Product 与 AuxiliaryMaterial 两条根链已对齐 DEL-017 DAG；PJM/QA 回归通过 |
+| BE-CONTRACT-P1-02 | Listing 负向样例缺重复 FNSKU、同店同 SKU 双 ACTIVE、跨店父体、variation theme 不一致 | PM/QA | P1 | Closed | 4 类合成错误样例已写入脚本与实际 xlsx；PJM/QA 验证 4/4 |
+| BE-CONTRACT-P1-03 | `display_order` 缺 Excel 数值校验 | PM | P1 | Closed | `display_order >= 1` whole DataValidation 已落入实际 xlsx；总数 17，PJM/QA 验证通过 |
+| QA-CONTRACT-P1-01 | `ImportIssue` 的 SHEET/ROW/FIELD scope 定位字段约束不完整 | Backend/QA | P1 | Closed | `21870a8` Draft 2020-12 合法 4/4、非法 6/6 实例测试经 PJM/QA 独立复验通过 |
+| FE-OPENAPI-P1-01 | 上传 202 响应未在机器 schema 固定 `status=QUEUED` | Backend | P1 | Closed | `4ebd2be` 使用专用 QUEUED/WAITING const schema；Frontend/PJM 隔离复验通过 |
+| FE-OPENAPI-P1-02 | operation 未绑定可达错误码，缺 500、模板 404 与通用 400 机器映射 | Backend | P1 | Closed | 10/10 operation code/status/response 双向可达且含技术 500；Frontend/PJM 隔离复验通过 |
+| FE-OPENAPI-P1-03 | diff 动态字段允许 decimal number/string 双编码，业务键过宽 | Backend | P1 | Closed | tagged canonical scalar、7 类业务键及共享 resource 枚举已收窄；Frontend/PJM 隔离复验通过 |
 
 ## 受控范围决定
 

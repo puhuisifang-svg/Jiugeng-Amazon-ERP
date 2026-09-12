@@ -35,6 +35,24 @@ const ajv = new Ajv2020({allErrors: true, strict: true});
 const validate = ajv.compile(issueSchema);
 const fixtureDir = path.join(testDir, "fixtures");
 const fixtures = fs.readdirSync(fixtureDir).filter((name) => name.endsWith(".json")).sort();
+const requiredLocatorCoverage = [
+  "import-issue-invalid-batch-locator.json",
+  "import-issue-invalid-field-missing.json",
+  "import-issue-invalid-field.json",
+  "import-issue-invalid-row-before-data.json",
+  "import-issue-invalid-row-empty-sheet.json",
+  "import-issue-invalid-row-missing-sheet.json",
+  "import-issue-invalid-row.json",
+  "import-issue-invalid-sheet-empty.json",
+  "import-issue-invalid-sheet-missing.json",
+  "import-issue-invalid-sheet.json"
+];
+
+for (const requiredFixture of requiredLocatorCoverage) {
+  if (!fixtures.includes(requiredFixture)) {
+    throw new Error(`required locator coverage missing: ${requiredFixture}`);
+  }
+}
 
 let validAccepted = 0;
 let invalidRejected = 0;
@@ -56,7 +74,7 @@ for (const name of fixtures) {
   }
 }
 
-if (validAccepted !== 4 || invalidRejected !== 6) {
+if (validAccepted !== 4 || invalidRejected !== 12) {
   throw new Error(`unexpected fixture coverage: valid=${validAccepted} invalid=${invalidRejected}`);
 }
 

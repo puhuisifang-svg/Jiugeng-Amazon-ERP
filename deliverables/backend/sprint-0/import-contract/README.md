@@ -40,7 +40,7 @@ npm --prefix deliverables/backend/sprint-0/import-contract/tests ci --ignore-scr
 npm --prefix deliverables/backend/sprint-0/import-contract/tests test
 ```
 
-预期：跨文件一致性 PASS；ImportIssue Draft 2020-12 实例 `valid=4 invalid-rejected=6`；InventoryTransaction 数量条件实例 `valid=8 invalid-rejected=6`。
+预期：跨文件一致性 PASS；ImportIssue Draft 2020-12 实例 `valid=4 invalid-rejected=12`（逐项覆盖 SHEET 缺失/空值、ROW 缺失/空 sheet 与 null/越界行号、FIELD 缺失/null、BATCH 非空定位字段，以及 severity/blocking 冲突）；InventoryTransaction 数量条件实例 `valid=8 invalid-rejected=6`。
 
 ## PJM 独立核验
 

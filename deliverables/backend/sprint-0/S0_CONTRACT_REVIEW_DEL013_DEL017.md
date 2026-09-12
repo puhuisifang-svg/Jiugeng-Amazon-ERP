@@ -169,7 +169,7 @@ IMPORT_TYPES=6
 BATCH_STATUSES=7
 ROW_ERROR_DTO=ImportIssue
 INVENTORY_QUANTITY_DTO=InventoryTransactionQuantityRule
-AJV_IMPORT_ISSUE=valid:4 invalid-rejected:6
+AJV_IMPORT_ISSUE=valid:4 invalid-rejected:12
 AJV_INVENTORY_QUANTITY=valid:8 invalid-rejected:6
 ```
 

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jiugeng.example/schemas/import-batch-state-machine-v1.json",
+  "contractVersion": "1.0",
+  "initialState": "QUEUED",
+  "previewTtlSeconds": 86400,
+  "states": {
+    "QUEUED": {"terminal": false, "cancellable": true, "businessWrite": "NONE"},
+    "VALIDATING": {"terminal": false, "cancellable": true, "businessWrite": "NONE"},
+    "VALIDATED": {"terminal": false, "cancellable": true, "businessWrite": "NONE"},
+    "COMMITTING": {"terminal": false, "cancellable": false, "businessWrite": "ATOMIC_TRANSACTION"},
+    "SUCCEEDED": {"terminal": true, "cancellable": false, "businessWrite": "COMMITTED"},
+    "FAILED": {"terminal": true, "cancellable": false, "businessWrite": "NONE_OR_ROLLED_BACK"},
+    "CANCELLED": {"terminal": true, "cancellable": false, "businessWrite": "NONE"}
+  },
+  "phases": [
+    "WAITING",
+    "PARSING",
+    "VALIDATING_ROWS",
+    "BUILDING_PREVIEW",
+    "WAITING_CONFIRMATION",
+    "COMMITTING_ROWS",
+    "FINALIZING",
+    "DONE"
+  ],
+  "transitions": [
+    {"from": "QUEUED", "to": "VALIDATING", "event": "VALIDATION_STARTED"},
+    {"from": "QUEUED", "to": "FAILED", "event": "TECHNICAL_FAILURE"},
+    {"from": "QUEUED", "to": "CANCELLED", "event": "CANCEL_COMPLETED"},
+    {"from": "VALIDATING", "to": "VALIDATED", "event": "VALIDATION_COMPLETED"},
+    {"from": "VALIDATING", "to": "FAILED", "event": "TECHNICAL_FAILURE"},
+    {"from": "VALIDATING", "to": "CANCELLED", "event": "CANCEL_COMPLETED_AT_SAFE_POINT"},
+    {"from": "VALIDATED", "to": "COMMITTING", "event": "COMMIT_ACCEPTED"},
+    {"from": "VALIDATED", "to": "CANCELLED", "event": "CANCEL_COMPLETED"},
+    {"from": "COMMITTING", "to": "SUCCEEDED", "event": "TRANSACTION_COMMITTED"},
+    {"from": "COMMITTING", "to": "FAILED", "event": "TRANSACTION_ROLLED_BACK"}
+  ],
+  "invariants": [
+    "terminal states never transition",
+    "business tables are unchanged before COMMITTING",
+    "a failed commit rolls back the whole batch",
+    "PARTIALLY_SUCCEEDED is not a valid state",
+    "VALIDATING cancellation is cooperative and completes only at a safe point"
+  ]
+}

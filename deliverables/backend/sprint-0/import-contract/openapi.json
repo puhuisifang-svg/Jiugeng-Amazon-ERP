@@ -1,0 +1,423 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Jiugeng ERP Import Contract",
+    "version": "1.0.0",
+    "description": "Sprint 0 machine-readable contract only. Runtime endpoints, IAM sessions and authorization enforcement are deferred. Upload creates a QUEUED batch and enqueues full validation.",
+    "license": {"name": "Proprietary", "identifier": "LicenseRef-Proprietary"}
+  },
+  "servers": [{"url": "/", "description": "Relative contract server"}],
+  "security": [],
+  "x-contract-scope": "S0-CONTRACT-01/02",
+  "x-auth-implementation": "DEFERRED_TO_LATER_SPRINT",
+  "x-domain-invariants": {
+    "ordinaryUpsertImportTypes": ["PRODUCTS", "VARIANTS", "STORE_LISTINGS", "AUXILIARY_MATERIALS", "PRODUCT_AUXILIARY_MATERIALS"],
+    "openingInventory": {
+      "importType": "AUXILIARY_MATERIAL_OPENING_INVENTORY",
+      "writeMode": "CREATE_ONCE_IDEMPOTENT_COMMAND",
+      "ordinaryUpsertForbidden": true,
+      "openingQuantityMinimumInclusive": 0,
+      "zeroQuantityCreatesImmutableOpening": true,
+      "otherInventoryTransactionQuantityExclusiveMinimum": 0
+    }
+  },
+  "x-error-catalog": {
+    "IMPORT_REQUEST_INVALID": {"httpStatus": 400, "retryable": false},
+    "IMPORT_CURSOR_INVALID": {"httpStatus": 400, "retryable": false},
+    "IMPORT_FILE_EMPTY": {"httpStatus": 400, "retryable": false},
+    "IMPORT_FILE_TOO_LARGE": {"httpStatus": 413, "retryable": false},
+    "IMPORT_FILE_TYPE_UNSUPPORTED": {"httpStatus": 415, "retryable": false},
+    "IMPORT_MIME_UNSUPPORTED": {"httpStatus": 415, "retryable": false},
+    "IMPORT_UNSAFE_CONTENT": {"httpStatus": 422, "retryable": false},
+    "IMPORT_TEMPLATE_VERSION_MISMATCH": {"httpStatus": 422, "retryable": false},
+    "IMPORT_SHEET_MISSING": {"httpStatus": 422, "retryable": false},
+    "IMPORT_HEADER_MISMATCH": {"httpStatus": 422, "retryable": false},
+    "IMPORT_ROW_LIMIT_EXCEEDED": {"httpStatus": 422, "retryable": false},
+    "IMPORT_TEMPLATE_NOT_FOUND": {"httpStatus": 404, "retryable": false},
+    "IMPORT_BATCH_NOT_FOUND": {"httpStatus": 404, "retryable": false},
+    "IMPORT_BATCH_NOT_READY": {"httpStatus": 409, "retryable": true},
+    "IMPORT_COMMIT_NOT_ALLOWED": {"httpStatus": 409, "retryable": false},
+    "IMPORT_PREVIEW_EXPIRED": {"httpStatus": 409, "retryable": false},
+    "IMPORT_PREVIEW_MISMATCH": {"httpStatus": 409, "retryable": false},
+    "IMPORT_WARNINGS_NOT_ACCEPTED": {"httpStatus": 409, "retryable": false},
+    "IMPORT_NOT_CANCELLABLE": {"httpStatus": 409, "retryable": false},
+    "IMPORT_ALREADY_COMMITTED": {"httpStatus": 409, "retryable": false},
+    "IMPORT_CONCURRENT_CHANGE": {"httpStatus": 409, "retryable": true},
+    "IDEMPOTENCY_KEY_REUSED": {"httpStatus": 409, "retryable": false},
+    "OPENING_INVENTORY_CONFLICT": {"httpStatus": 409, "retryable": false},
+    "IMPORT_TECHNICAL_FAILURE": {"httpStatus": 500, "retryable": true}
+  },
+  "paths": {
+    "/api/v1/import-templates/{importType}": {
+      "get": {
+        "operationId": "downloadImportTemplate",
+        "summary": "Download the frozen XLSX template",
+        "x-capability": "imports.template.download",
+        "x-error-codes": ["IMPORT_TEMPLATE_NOT_FOUND", "IMPORT_TECHNICAL_FAILURE"],
+        "parameters": [{"$ref": "#/components/parameters/ImportTypePath"}],
+        "responses": {
+          "200": {"description": "XLSX template", "headers": {"Content-Disposition": {"schema": {"type": "string"}}}, "content": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {"schema": {"type": "string", "format": "binary"}}}},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "500": {"$ref": "#/components/responses/InternalServerError"}
+        }
+      }
+    },
+    "/api/v1/import-batches": {
+      "post": {
+        "operationId": "uploadAndValidateImportBatch",
+        "summary": "Upload XLSX and enqueue full validation",
+        "description": "The server verifies extension, declared and detected MIME, OOXML structure, unsafe content, metadata, SHA-256, headers and row limits. A successful request returns QUEUED; there is no DRAFT state.",
+        "x-capability": "imports.validate",
+        "x-error-codes": ["IMPORT_REQUEST_INVALID", "IMPORT_FILE_EMPTY", "IMPORT_FILE_TOO_LARGE", "IMPORT_FILE_TYPE_UNSUPPORTED", "IMPORT_MIME_UNSUPPORTED", "IMPORT_UNSAFE_CONTENT", "IMPORT_TEMPLATE_VERSION_MISMATCH", "IMPORT_SHEET_MISSING", "IMPORT_HEADER_MISMATCH", "IMPORT_ROW_LIMIT_EXCEEDED", "IDEMPOTENCY_KEY_REUSED", "IMPORT_TECHNICAL_FAILURE"],
+        "parameters": [{"$ref": "#/components/parameters/IdempotencyKey"}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["importType", "templateVersion", "file"],
+                "properties": {
+                  "importType": {"$ref": "#/components/schemas/ImportType"},
+                  "templateVersion": {"type": "string", "const": "1.0"},
+                  "file": {"type": "string", "format": "binary", "x-minBytes": 1, "x-maxBytes": 10485760, "x-allowedExtension": ".xlsx", "x-detectedMime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {"description": "Batch queued or idempotent replay", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/QueuedImportBatch"}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "413": {"$ref": "#/components/responses/PayloadTooLarge"},
+          "415": {"$ref": "#/components/responses/UnsupportedMediaType"},
+          "422": {"$ref": "#/components/responses/UnprocessableEntity"},
+          "500": {"$ref": "#/components/responses/InternalServerError"}
+        }
+      },
+      "get": {
+        "operationId": "listImportBatches",
+        "summary": "List import batches",
+        "x-capability": "imports.read",
+        "x-error-codes": ["IMPORT_CURSOR_INVALID", "IMPORT_TECHNICAL_FAILURE"],
+        "parameters": [
+          {"$ref": "#/components/parameters/Limit"},
+          {"$ref": "#/components/parameters/Cursor"},
+          {"name": "importType", "in": "query", "schema": {"$ref": "#/components/schemas/ImportType"}},
+          {"name": "status", "in": "query", "schema": {"$ref": "#/components/schemas/BatchStatus"}}
+        ],
+        "responses": {"200": {"description": "Stable newest-first batch page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImportBatchPage"}}}}, "400": {"$ref": "#/components/responses/BadRequest"}, "500": {"$ref": "#/components/responses/InternalServerError"}}
+      }
+    },
+    "/api/v1/import-batches/{batchId}": {
+      "get": {
+        "operationId": "getImportBatch",
+        "summary": "Query status, progress and summaries",
+        "x-capability": "imports.read",
+        "x-error-codes": ["IMPORT_BATCH_NOT_FOUND", "IMPORT_TECHNICAL_FAILURE"],
+        "parameters": [{"$ref": "#/components/parameters/BatchId"}],
+        "responses": {"200": {"description": "Batch", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImportBatch"}}}}, "404": {"$ref": "#/components/responses/NotFound"}, "500": {"$ref": "#/components/responses/InternalServerError"}}
+      }
+    },
+    "/api/v1/import-batches/{batchId}/issues": {
+      "get": {
+        "operationId": "listImportIssues",
+        "summary": "List validation or commit issues",
+        "description": "Stable order: severity, sheetOrder, row, field, code.",
+        "x-capability": "imports.read",
+        "x-error-codes": ["IMPORT_CURSOR_INVALID", "IMPORT_BATCH_NOT_FOUND", "IMPORT_BATCH_NOT_READY", "IMPORT_TECHNICAL_FAILURE"],
+        "parameters": [{"$ref": "#/components/parameters/BatchId"}, {"$ref": "#/components/parameters/Limit"}, {"$ref": "#/components/parameters/Cursor"}],
+        "responses": {"200": {"description": "Issue page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImportIssuePage"}}}}, "400": {"$ref": "#/components/responses/BadRequest"}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}, "500": {"$ref": "#/components/responses/InternalServerError"}}
+      }
+    },
+    "/api/v1/import-batches/{batchId}/preview": {
+      "get": {
+        "operationId": "getImportPreview",
+        "summary": "Get diff, impact and independently paged rows",
+        "description": "Stable row order: template sheet order, physical row, normalized business key. Refreshing the same previewVersion and cursor cannot duplicate or omit rows.",
+        "x-capability": "imports.read",
+        "x-error-codes": ["IMPORT_CURSOR_INVALID", "IMPORT_BATCH_NOT_FOUND", "IMPORT_BATCH_NOT_READY", "IMPORT_PREVIEW_EXPIRED", "IMPORT_TECHNICAL_FAILURE"],
+        "parameters": [{"$ref": "#/components/parameters/BatchId"}, {"$ref": "#/components/parameters/Limit"}, {"$ref": "#/components/parameters/Cursor"}],
+        "responses": {"200": {"description": "Preview page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImportPreviewPage"}}}}, "400": {"$ref": "#/components/responses/BadRequest"}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}, "500": {"$ref": "#/components/responses/InternalServerError"}}
+      }
+    },
+    "/api/v1/import-batches/{batchId}/commit": {
+      "post": {
+        "operationId": "commitImportBatch",
+        "summary": "Confirm one atomic batch transaction",
+        "description": "Rechecks batchId, fileHash, importType, templateVersion and previewVersion before the transaction. Any row failure rolls back the whole batch.",
+        "x-capability": "imports.commit",
+        "x-error-codes": ["IMPORT_BATCH_NOT_FOUND", "IMPORT_BATCH_NOT_READY", "IMPORT_COMMIT_NOT_ALLOWED", "IMPORT_PREVIEW_EXPIRED", "IMPORT_PREVIEW_MISMATCH", "IMPORT_WARNINGS_NOT_ACCEPTED", "IMPORT_ALREADY_COMMITTED", "IMPORT_CONCURRENT_CHANGE", "IDEMPOTENCY_KEY_REUSED", "OPENING_INVENTORY_CONFLICT", "IMPORT_TECHNICAL_FAILURE"],
+        "parameters": [{"$ref": "#/components/parameters/BatchId"}, {"$ref": "#/components/parameters/IdempotencyKey"}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CommitRequest"}}}},
+        "responses": {"202": {"description": "Commit accepted or idempotent replay", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImportBatch"}}}}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}, "500": {"$ref": "#/components/responses/InternalServerError"}}
+      }
+    },
+    "/api/v1/import-batches/{batchId}/cancel": {
+      "post": {
+        "operationId": "cancelImportBatch",
+        "summary": "Cancel at an allowed state or request cooperative cancellation",
+        "x-capability": "imports.cancel",
+        "x-error-codes": ["IMPORT_BATCH_NOT_FOUND", "IMPORT_NOT_CANCELLABLE", "IDEMPOTENCY_KEY_REUSED", "IMPORT_TECHNICAL_FAILURE"],
+        "parameters": [{"$ref": "#/components/parameters/BatchId"}, {"$ref": "#/components/parameters/IdempotencyKey"}],
+        "responses": {"200": {"description": "Current or final cancellation state; repeated cancellation is successful", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImportBatch"}}}}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}, "500": {"$ref": "#/components/responses/InternalServerError"}}
+      }
+    },
+    "/api/v1/import-batches/{batchId}/result": {
+      "get": {
+        "operationId": "getImportResult",
+        "summary": "Get terminal result and reconciliation counts",
+        "x-capability": "imports.read",
+        "x-error-codes": ["IMPORT_BATCH_NOT_FOUND", "IMPORT_BATCH_NOT_READY", "IMPORT_TECHNICAL_FAILURE"],
+        "parameters": [{"$ref": "#/components/parameters/BatchId"}],
+        "responses": {"200": {"description": "Terminal result", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImportResult"}}}}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}, "500": {"$ref": "#/components/responses/InternalServerError"}}
+      }
+    },
+    "/api/v1/import-batches/{batchId}/result-file": {
+      "get": {
+        "operationId": "downloadImportResult",
+        "summary": "Download the sanitized XLSX result report",
+        "x-capability": "imports.result.download",
+        "x-error-codes": ["IMPORT_BATCH_NOT_FOUND", "IMPORT_BATCH_NOT_READY", "IMPORT_TECHNICAL_FAILURE"],
+        "parameters": [{"$ref": "#/components/parameters/BatchId"}],
+        "responses": {"200": {"description": "Result XLSX", "content": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {"schema": {"type": "string", "format": "binary"}}}}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}, "500": {"$ref": "#/components/responses/InternalServerError"}}
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "BatchId": {"name": "batchId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}},
+      "ImportTypePath": {"name": "importType", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/ImportType"}},
+      "IdempotencyKey": {"name": "Idempotency-Key", "in": "header", "required": true, "description": "Opaque 1..128 character value; scope is current user + operation + business object.", "schema": {"type": "string", "minLength": 1, "maxLength": 128}},
+      "Limit": {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}},
+      "Cursor": {"name": "cursor", "in": "query", "description": "Opaque stable cursor bound to filters and previewVersion where applicable.", "schema": {"type": ["string", "null"]}}
+    },
+    "responses": {
+      "BadRequest": {"description": "Malformed request", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiError"}}}},
+      "NotFound": {"description": "Resource not found", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiError"}}}},
+      "Conflict": {"description": "State, idempotency, preview or concurrent-data conflict", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiError"}}}},
+      "PayloadTooLarge": {"description": "File exceeds 10 MiB", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiError"}}}},
+      "UnsupportedMediaType": {"description": "Unsupported extension or MIME", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiError"}}}},
+      "UnprocessableEntity": {"description": "Unsafe or incompatible workbook", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiError"}}}},
+      "InternalServerError": {"description": "Sanitized technical failure; requestId supports support correlation", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ApiError"}}}}
+    },
+    "schemas": {
+      "ImportType": {"type": "string", "enum": ["PRODUCTS", "VARIANTS", "STORE_LISTINGS", "AUXILIARY_MATERIALS", "PRODUCT_AUXILIARY_MATERIALS", "AUXILIARY_MATERIAL_OPENING_INVENTORY"]},
+      "BatchStatus": {"type": "string", "enum": ["QUEUED", "VALIDATING", "VALIDATED", "COMMITTING", "SUCCEEDED", "FAILED", "CANCELLED"]},
+      "BatchPhase": {"type": "string", "enum": ["WAITING", "PARSING", "VALIDATING_ROWS", "BUILDING_PREVIEW", "WAITING_CONFIRMATION", "COMMITTING_ROWS", "FINALIZING", "DONE"]},
+      "IssueSeverity": {"type": "string", "enum": ["BLOCKER", "ERROR", "WARNING", "INFO"]},
+      "IssueScope": {"type": "string", "enum": ["BATCH", "SHEET", "ROW", "FIELD"]},
+      "PreviewAction": {"type": ["string", "null"], "enum": ["CREATE", "UPDATE", "UNCHANGED", null]},
+      "ImportProgress": {
+        "type": "object", "additionalProperties": false,
+        "required": ["phase", "processedRows", "totalRows", "percent", "updatedAt"],
+        "properties": {
+          "phase": {"$ref": "#/components/schemas/BatchPhase"},
+          "processedRows": {"type": "integer", "minimum": 0},
+          "totalRows": {"type": "integer", "minimum": 0, "maximum": 1000},
+          "percent": {"type": "number", "minimum": 0, "maximum": 100},
+          "updatedAt": {"type": "string", "format": "date-time"}
+        }
+      },
+      "LimitSnapshot": {
+        "type": "object", "additionalProperties": false,
+        "required": ["maxBytes", "maxDataRows", "allowedExtension", "allowedMime"],
+        "properties": {
+          "maxBytes": {"type": "integer", "const": 10485760},
+          "maxDataRows": {"type": "integer", "const": 1000},
+          "allowedExtension": {"type": "string", "const": ".xlsx"},
+          "allowedMime": {"type": "string", "const": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
+        }
+      },
+      "IssueSummary": {
+        "type": "object", "additionalProperties": false,
+        "required": ["blocker", "error", "warning", "info"],
+        "properties": {
+          "blocker": {"type": "integer", "minimum": 0}, "error": {"type": "integer", "minimum": 0},
+          "warning": {"type": "integer", "minimum": 0}, "info": {"type": "integer", "minimum": 0}
+        }
+      },
+      "ImportBatch": {
+        "type": "object", "additionalProperties": false,
+        "required": ["batchId", "importType", "templateVersion", "fileHash", "status", "progress", "commitAllowed", "issueSummary", "limits", "createdAt", "updatedAt"],
+        "properties": {
+          "batchId": {"type": "string", "format": "uuid"},
+          "importType": {"$ref": "#/components/schemas/ImportType"},
+          "templateVersion": {"type": "string", "const": "1.0"},
+          "fileHash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "status": {"$ref": "#/components/schemas/BatchStatus"},
+          "progress": {"$ref": "#/components/schemas/ImportProgress"},
+          "commitAllowed": {"type": "boolean"},
+          "issueSummary": {"$ref": "#/components/schemas/IssueSummary"},
+          "previewSummary": {"oneOf": [{"$ref": "#/components/schemas/PreviewSummary"}, {"type": "null"}]},
+          "previewVersion": {"type": ["string", "null"], "minLength": 1},
+          "previewExpiresAt": {"type": ["string", "null"], "format": "date-time"},
+          "limits": {"$ref": "#/components/schemas/LimitSnapshot"},
+          "createdAt": {"type": "string", "format": "date-time"},
+          "updatedAt": {"type": "string", "format": "date-time"}
+        }
+      },
+      "QueuedImportBatch": {
+        "allOf": [
+          {"$ref": "#/components/schemas/ImportBatch"},
+          {"type": "object", "properties": {"status": {"type": "string", "const": "QUEUED"}, "progress": {"allOf": [{"$ref": "#/components/schemas/ImportProgress"}, {"type": "object", "properties": {"phase": {"type": "string", "const": "WAITING"}}}]}}}
+        ]
+      },
+      "ImportIssue": {
+        "type": "object", "additionalProperties": false,
+        "required": ["code", "severity", "blocking", "scope", "sheet", "row", "field", "reason", "rawValue", "suggestion"],
+        "properties": {
+          "code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,127}$"},
+          "severity": {"$ref": "#/components/schemas/IssueSeverity"},
+          "blocking": {"type": "boolean", "description": "Must be true for BLOCKER/ERROR and false for WARNING/INFO."},
+          "scope": {"$ref": "#/components/schemas/IssueScope"},
+          "sheet": {"type": ["string", "null"]},
+          "row": {"type": ["integer", "null"], "minimum": 2},
+          "field": {"type": ["string", "null"]},
+          "reason": {"type": "string", "minLength": 1},
+          "rawValue": {"type": ["string", "null"], "description": "Sanitized; never contains secrets or formula content."},
+          "suggestion": {"type": ["string", "null"]}
+        },
+        "allOf": [
+          {"if": {"properties": {"scope": {"const": "BATCH"}}, "required": ["scope"]}, "then": {"properties": {"sheet": {"type": "null"}, "row": {"type": "null"}, "field": {"type": "null"}}}},
+          {"if": {"properties": {"scope": {"const": "SHEET"}}, "required": ["scope"]}, "then": {"properties": {"sheet": {"type": "string", "minLength": 1}, "row": {"type": "null"}, "field": {"type": "null"}}}},
+          {"if": {"properties": {"scope": {"const": "ROW"}}, "required": ["scope"]}, "then": {"properties": {"sheet": {"type": "string", "minLength": 1}, "row": {"type": "integer", "minimum": 2}, "field": {"type": "null"}}}},
+          {"if": {"properties": {"scope": {"const": "FIELD"}}, "required": ["scope"]}, "then": {"properties": {"sheet": {"type": "string", "minLength": 1}, "row": {"type": "integer", "minimum": 2}, "field": {"type": "string", "minLength": 1}}}},
+          {"if": {"properties": {"severity": {"enum": ["BLOCKER", "ERROR"]}}}, "then": {"properties": {"blocking": {"const": true}}}},
+          {"if": {"properties": {"severity": {"enum": ["WARNING", "INFO"]}}}, "then": {"properties": {"blocking": {"const": false}}}}
+        ]
+      },
+      "PageMeta": {
+        "type": "object", "additionalProperties": false,
+        "required": ["limit", "nextCursor", "hasMore"],
+        "properties": {"limit": {"type": "integer", "minimum": 1, "maximum": 200}, "nextCursor": {"type": ["string", "null"]}, "hasMore": {"type": "boolean"}}
+      },
+      "ImportBatchPage": {
+        "type": "object", "additionalProperties": false, "required": ["items", "page"],
+        "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/ImportBatch"}}, "page": {"$ref": "#/components/schemas/PageMeta"}}
+      },
+      "ImportIssuePage": {
+        "type": "object", "additionalProperties": false, "required": ["items", "page"],
+        "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/ImportIssue"}}, "page": {"$ref": "#/components/schemas/PageMeta"}}
+      },
+      "BusinessKey": {
+        "oneOf": [
+          {"type": "object", "additionalProperties": false, "required": ["product_code"], "properties": {"product_code": {"type": "string"}}},
+          {"type": "object", "additionalProperties": false, "required": ["sku_code"], "properties": {"sku_code": {"type": "string"}}},
+          {"type": "object", "additionalProperties": false, "required": ["sku_code", "attribute_code"], "properties": {"sku_code": {"type": "string"}, "attribute_code": {"type": "string"}}},
+          {"type": "object", "additionalProperties": false, "required": ["store_code", "seller_sku"], "properties": {"store_code": {"type": "string"}, "seller_sku": {"type": "string"}}},
+          {"type": "object", "additionalProperties": false, "required": ["material_code"], "properties": {"material_code": {"type": "string"}}},
+          {"type": "object", "additionalProperties": false, "required": ["sku_code", "material_code"], "properties": {"sku_code": {"type": "string"}, "material_code": {"type": "string"}}},
+          {"type": "object", "additionalProperties": false, "required": ["warehouse_code", "material_code"], "properties": {"warehouse_code": {"type": "string"}, "material_code": {"type": "string"}}}
+        ]
+      },
+      "TransportFieldValue": {
+        "description": "Tagged scalar guarantees one canonical wire encoding. DECIMAL is a non-scientific decimal string; DATE/DATETIME are ISO strings.",
+        "oneOf": [
+          {"type": "object", "additionalProperties": false, "required": ["kind", "value"], "properties": {"kind": {"const": "STRING"}, "value": {"type": "string"}}},
+          {"type": "object", "additionalProperties": false, "required": ["kind", "value"], "properties": {"kind": {"const": "DECIMAL"}, "value": {"type": "string", "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"}}},
+          {"type": "object", "additionalProperties": false, "required": ["kind", "value"], "properties": {"kind": {"const": "INTEGER"}, "value": {"type": "integer"}}},
+          {"type": "object", "additionalProperties": false, "required": ["kind", "value"], "properties": {"kind": {"const": "BOOLEAN"}, "value": {"type": "boolean"}}},
+          {"type": "object", "additionalProperties": false, "required": ["kind", "value"], "properties": {"kind": {"const": "DATE"}, "value": {"type": "string", "format": "date"}}},
+          {"type": "object", "additionalProperties": false, "required": ["kind", "value"], "properties": {"kind": {"const": "DATETIME"}, "value": {"type": "string", "format": "date-time"}}},
+          {"type": "object", "additionalProperties": false, "required": ["kind", "value"], "properties": {"kind": {"const": "NULL"}, "value": {"type": "null"}}}
+        ]
+      },
+      "FieldMap": {"type": "object", "description": "Template-whitelisted fields only; every value uses a tagged canonical wire scalar.", "additionalProperties": {"$ref": "#/components/schemas/TransportFieldValue"}},
+      "RowIdentity": {
+        "type": "object", "additionalProperties": false, "required": ["sheet", "row", "businessKey"],
+        "properties": {"sheet": {"type": "string"}, "row": {"type": "integer", "minimum": 2}, "businessKey": {"$ref": "#/components/schemas/BusinessKey"}}
+      },
+      "PreviewImpact": {
+        "type": "object", "additionalProperties": false, "required": ["resource", "businessKey", "effect", "derived"],
+        "properties": {
+          "resource": {"$ref": "#/components/schemas/ImpactResource"},
+          "businessKey": {"$ref": "#/components/schemas/BusinessKey"},
+          "effect": {"type": "string", "enum": ["CREATE", "UPDATE", "UNCHANGED"]},
+          "derived": {"type": "boolean"}
+        }
+      },
+      "ImpactResource": {"type": "string", "enum": ["products", "variants", "variant_attributes", "store_listings", "amazon_catalog_items", "auxiliary_materials", "product_auxiliary_materials", "auxiliary_material_inventory", "inventory_transactions"]},
+      "PreviewRow": {
+        "type": "object", "additionalProperties": false, "required": ["rowIdentity", "action", "before", "after", "issueCodes", "impacts"],
+        "properties": {
+          "rowIdentity": {"$ref": "#/components/schemas/RowIdentity"},
+          "action": {"$ref": "#/components/schemas/PreviewAction"},
+          "before": {"oneOf": [{"$ref": "#/components/schemas/FieldMap"}, {"type": "null"}]},
+          "after": {"oneOf": [{"$ref": "#/components/schemas/FieldMap"}, {"type": "null"}]},
+          "issueCodes": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+          "impacts": {"type": "array", "items": {"$ref": "#/components/schemas/PreviewImpact"}}
+        }
+      },
+      "PreviewSummary": {
+        "type": "object", "additionalProperties": false,
+        "required": ["inputRows", "validRows", "invalidRows", "createRows", "updateRows", "unchangedRows", "warningRows"],
+        "properties": {
+          "inputRows": {"type": "integer", "minimum": 0, "maximum": 1000},
+          "validRows": {"type": "integer", "minimum": 0}, "invalidRows": {"type": "integer", "minimum": 0},
+          "createRows": {"type": "integer", "minimum": 0}, "updateRows": {"type": "integer", "minimum": 0},
+          "unchangedRows": {"type": "integer", "minimum": 0}, "warningRows": {"type": "integer", "minimum": 0}
+        },
+        "description": "inputRows = validRows + invalidRows = createRows + updateRows + unchangedRows + invalidRows; warningRows may overlap."
+      },
+      "ImpactSummaryItem": {
+        "type": "object", "additionalProperties": false, "required": ["resource", "effect", "count"],
+        "properties": {"resource": {"$ref": "#/components/schemas/ImpactResource"}, "effect": {"type": "string", "enum": ["CREATE", "UPDATE", "UNCHANGED"]}, "count": {"type": "integer", "minimum": 0}}
+      },
+      "ImportPreviewPage": {
+        "type": "object", "additionalProperties": false,
+        "required": ["batchId", "previewVersion", "previewExpiresAt", "commitAllowed", "summary", "impactSummary", "items", "page"],
+        "properties": {
+          "batchId": {"type": "string", "format": "uuid"}, "previewVersion": {"type": "string", "minLength": 1},
+          "previewExpiresAt": {"type": "string", "format": "date-time"}, "commitAllowed": {"type": "boolean"},
+          "summary": {"$ref": "#/components/schemas/PreviewSummary"},
+          "impactSummary": {"type": "array", "items": {"$ref": "#/components/schemas/ImpactSummaryItem"}},
+          "items": {"type": "array", "items": {"$ref": "#/components/schemas/PreviewRow"}}, "page": {"$ref": "#/components/schemas/PageMeta"}
+        }
+      },
+      "CommitRequest": {
+        "type": "object", "additionalProperties": false,
+        "required": ["previewVersion", "fileHash", "importType", "templateVersion", "warningsAccepted"],
+        "properties": {
+          "previewVersion": {"type": "string", "minLength": 1}, "fileHash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "importType": {"$ref": "#/components/schemas/ImportType"}, "templateVersion": {"type": "string", "const": "1.0"},
+          "warningsAccepted": {"type": "boolean"}
+        }
+      },
+      "ResultCounts": {
+        "type": "object", "additionalProperties": false,
+        "required": ["inputRows", "createRows", "updateRows", "unchangedRows", "writtenRows", "failedRows"],
+        "properties": {
+          "inputRows": {"type": "integer", "minimum": 0}, "createRows": {"type": "integer", "minimum": 0},
+          "updateRows": {"type": "integer", "minimum": 0}, "unchangedRows": {"type": "integer", "minimum": 0},
+          "writtenRows": {"type": "integer", "minimum": 0, "description": "On SUCCEEDED equals createRows + updateRows."},
+          "failedRows": {"type": "integer", "minimum": 0, "description": "Zero on SUCCEEDED; inputRows on a rolled-back commit failure."}
+        }
+      },
+      "ImportResult": {
+        "type": "object", "additionalProperties": false,
+        "required": ["batchId", "status", "counts", "issueSummary", "completedAt", "resultFileAvailable"],
+        "properties": {
+          "batchId": {"type": "string", "format": "uuid"},
+          "status": {"type": "string", "enum": ["SUCCEEDED", "FAILED", "CANCELLED"]},
+          "counts": {"$ref": "#/components/schemas/ResultCounts"}, "issueSummary": {"$ref": "#/components/schemas/IssueSummary"},
+          "completedAt": {"type": "string", "format": "date-time"}, "resultFileAvailable": {"type": "boolean"}
+        }
+      },
+      "ApiErrorDetail": {
+        "type": "object", "additionalProperties": false,
+        "required": ["field", "reason"], "properties": {"field": {"type": ["string", "null"]}, "reason": {"type": "string"}}
+      },
+      "ApiError": {
+        "type": "object", "additionalProperties": false,
+        "required": ["code", "message", "requestId", "retryable", "details"],
+        "properties": {
+          "code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,127}$"}, "message": {"type": "string", "minLength": 1},
+          "requestId": {"type": "string", "minLength": 1}, "retryable": {"type": "boolean"},
+          "details": {"type": "array", "items": {"$ref": "#/components/schemas/ApiErrorDetail"}}
+        }
+      }
+    }
+  }
+}

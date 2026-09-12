@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jiugeng.example/schemas/import-commit-semantics-v1.json",
+  "contractVersion": "1.0",
+  "transactionMode": "ATOMIC_BATCH",
+  "partialSuccessAllowed": false,
+  "confirmationBinding": ["batchId", "fileHash", "importType", "templateVersion", "previewVersion"],
+  "importSemantics": {
+    "PRODUCTS": {"writeMode": "IDEMPOTENT_UPSERT"},
+    "VARIANTS": {"writeMode": "IDEMPOTENT_UPSERT"},
+    "STORE_LISTINGS": {"writeMode": "IDEMPOTENT_UPSERT"},
+    "AUXILIARY_MATERIALS": {"writeMode": "IDEMPOTENT_UPSERT"},
+    "PRODUCT_AUXILIARY_MATERIALS": {"writeMode": "IDEMPOTENT_UPSERT"},
+    "AUXILIARY_MATERIAL_OPENING_INVENTORY": {
+      "writeMode": "CREATE_ONCE_IDEMPOTENT_COMMAND",
+      "ordinaryUpsertForbidden": true,
+      "businessKey": ["warehouse_code", "material_code"],
+      "deduplicationEvidence": ["opening_reference", "payload_hash"],
+      "atomicWritesPerInputRow": ["AuxiliaryMaterialInventory", "InventoryTransaction(OPENING)"],
+      "openingQuantity": {"minimum": 0, "exclusiveMinimum": false, "zeroCreatesOpeningTransaction": true},
+      "otherInventoryTransactionQuantity": {"exclusiveMinimum": 0},
+      "sameKeyEvidenceAndPayloadReplay": "RETURN_EXISTING_RESULT_WITH_ONE_OPENING",
+      "sameKeyDifferentPayload": "OPENING_INVENTORY_CONFLICT",
+      "correctionMode": "APPEND_ADJUSTMENT_OR_REVERSAL"
+    }
+  },
+  "idempotency": {
+    "requiredOperations": ["UPLOAD_AND_VALIDATE", "COMMIT", "CANCEL"],
+    "header": "Idempotency-Key",
+    "minLength": 1,
+    "maxLength": 128,
+    "scope": ["currentUser", "operation", "businessObject"],
+    "sameKeyDifferentRequest": "IDEMPOTENCY_KEY_REUSED",
+    "sameCommitReplay": "RETURN_FIRST_CONFIRM_RESULT",
+    "newKeyAfterSuccess": "IMPORT_ALREADY_COMMITTED"
+  },
+  "retryPolicy": {
+    "IMPORT_CONCURRENT_CHANGE": "CALLER_MAY_REVALIDATE_AND_RETRY",
+    "IMPORT_TECHNICAL_FAILURE": "CALLER_MAY_RETRY_WITH_SAME_IDEMPOTENCY_KEY",
+    "IMPORT_PREVIEW_EXPIRED": "CREATE_A_NEW_VALIDATION_BATCH",
+    "OPENING_INVENTORY_CONFLICT": "DO_NOT_AUTO_RETRY"
+  }
+}

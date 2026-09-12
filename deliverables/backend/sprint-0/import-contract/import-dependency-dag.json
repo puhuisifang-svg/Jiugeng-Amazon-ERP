@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jiugeng.example/schemas/import-dependency-dag-v1.json",
+  "contractVersion": "1.0",
+  "systemNodes": [
+    {"id": "STORE_ACCOUNTS", "kind": "SYSTEM_PRESET", "cardinality": 5, "managedByBusinessApi": false},
+    {"id": "WAREHOUSE", "kind": "SYSTEM_PRESET", "cardinality": 1, "enabledRequired": true, "managedByBusinessApi": false}
+  ],
+  "importNodes": [
+    {"importType": "PRODUCTS", "logicalResource": "products", "dependsOn": [], "intraFileOrder": ["products"]},
+    {"importType": "VARIANTS", "logicalResource": "variants", "dependsOn": ["PRODUCTS"], "intraFileOrder": ["variants", "variant_attributes"]},
+    {"importType": "STORE_LISTINGS", "logicalResource": "store_listings", "dependsOn": ["PRODUCTS", "VARIANTS", "STORE_ACCOUNTS"], "intraFileOrder": ["parent_listing", "child_listing"]},
+    {"importType": "AUXILIARY_MATERIALS", "logicalResource": "auxiliary_materials", "dependsOn": [], "intraFileOrder": ["auxiliary_materials"]},
+    {"importType": "PRODUCT_AUXILIARY_MATERIALS", "logicalResource": "product_auxiliary_materials", "dependsOn": ["VARIANTS", "AUXILIARY_MATERIALS"], "intraFileOrder": ["product_auxiliary_materials"]},
+    {"importType": "AUXILIARY_MATERIAL_OPENING_INVENTORY", "logicalResource": "auxiliary_material_opening_inventory", "dependsOn": ["AUXILIARY_MATERIALS", "WAREHOUSE"], "intraFileOrder": ["inventory_balance", "inventory_transaction_opening"]}
+  ],
+  "invariants": [
+    "PRODUCTS and AUXILIARY_MATERIALS may run in parallel",
+    "STORE_LISTINGS does not depend on auxiliary materials",
+    "a child listing references a same-store parent listing",
+    "StoreAccount is preset for five stores and has no management API",
+    "opening inventory posts balance and immutable OPENING transaction atomically"
+  ]
+}

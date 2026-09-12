@@ -26,6 +26,7 @@
 | DEL-021 | 2026-09-12 | Backend | S0-BE-02 Java 21 / Spring Boot 3 模块化单体脚手架 | v0.1 | Completed | PJM | [后端工程](../deliverables/backend/sprint-0/jiugeng-erp-backend/README.md) / [自测报告](../deliverables/backend/sprint-0/TEST_REPORT.md) |
 | DEL-023 | 2026-09-12 | Frontend | Sprint 0 PM 字段与六类导入模板前端契约复核 | v0.1 | Completed | PJM | [复核报告](../deliverables/frontend/S0-PM-FRONTEND_CONTRACT_REVIEW.md) |
 | DEL-024 | 2026-09-12 | Frontend | S0-CONTRACT-01/02 前端关闭复核 | v0.1 | In Review | PJM | [关闭复核](../deliverables/frontend/S0-CONTRACT-01-02_FRONTEND_CLOSURE_REVIEW.md) |
+| DEL-025 | 2026-09-12 | Backend | S0-CONTRACT-01/02 导入 OpenAPI、状态机、事务语义、DAG 与 capability 机器契约 | v1.0 | In Review | Frontend/QA/PJM | [机器契约](../deliverables/backend/sprint-0/import-contract/README.md) / [测试报告](../deliverables/backend/sprint-0/S0_CONTRACT_01_02_TEST_REPORT.md) |
 
 ## 登记要求
 

@@ -35,29 +35,62 @@ const ajv = new Ajv2020({allErrors: true, strict: true});
 const validate = ajv.compile(issueSchema);
 const fixtureDir = path.join(testDir, "fixtures");
 const fixtures = fs.readdirSync(fixtureDir).filter((name) => name.endsWith(".json")).sort();
-const requiredLocatorCoverage = [
-  "import-issue-invalid-batch-locator.json",
-  "import-issue-invalid-field-missing.json",
-  "import-issue-invalid-field.json",
-  "import-issue-invalid-row-before-data.json",
-  "import-issue-invalid-row-empty-sheet.json",
-  "import-issue-invalid-row-missing-sheet.json",
-  "import-issue-invalid-row.json",
-  "import-issue-invalid-sheet-empty.json",
-  "import-issue-invalid-sheet-missing.json",
-  "import-issue-invalid-sheet.json"
-];
+const fixtureData = new Map(fixtures.map((name) => [
+  name,
+  JSON.parse(fs.readFileSync(path.join(fixtureDir, name), "utf8"))
+]));
+const hasOwn = (value, property) => Object.prototype.hasOwnProperty.call(value, property);
+const requiredInvalidScenarios = new Map([
+  ["import-issue-invalid-batch-locator.json", (data) => data.scope === "BATCH" && data.sheet !== null],
+  ["import-issue-invalid-field-missing.json", (data) => data.scope === "FIELD" && !hasOwn(data, "field")],
+  ["import-issue-invalid-field.json", (data) => data.scope === "FIELD" && hasOwn(data, "field") && data.field === null],
+  ["import-issue-invalid-row-before-data.json", (data) => data.scope === "ROW" && data.sheet.length > 0 && data.row === 1],
+  ["import-issue-invalid-row-empty-sheet.json", (data) => data.scope === "ROW" && data.sheet === "" && data.row === 2],
+  ["import-issue-invalid-row-missing-sheet.json", (data) => data.scope === "ROW" && !hasOwn(data, "sheet") && data.row === 2],
+  ["import-issue-invalid-row.json", (data) => data.scope === "ROW" && data.sheet.length > 0 && data.row === null],
+  ["import-issue-invalid-sheet-empty.json", (data) => data.scope === "SHEET" && data.sheet === ""],
+  ["import-issue-invalid-sheet-missing.json", (data) => data.scope === "SHEET" && !hasOwn(data, "sheet")],
+  ["import-issue-invalid-sheet.json", (data) => data.scope === "SHEET" && hasOwn(data, "sheet") && data.sheet === null],
+  ["import-issue-invalid-error-blocking.json", (data) => data.severity === "ERROR" && data.blocking === false],
+  ["import-issue-invalid-warning-blocking.json", (data) => data.severity === "WARNING" && data.blocking === true]
+]);
 
-for (const requiredFixture of requiredLocatorCoverage) {
-  if (!fixtures.includes(requiredFixture)) {
-    throw new Error(`required locator coverage missing: ${requiredFixture}`);
+function requiredCoverageFailures(names, dataByName) {
+  const failures = [];
+  for (const [name, matchesScenario] of requiredInvalidScenarios) {
+    if (!names.includes(name)) {
+      failures.push(`missing:${name}`);
+    } else if (!matchesScenario(dataByName.get(name))) {
+      failures.push(`semantic-drift:${name}`);
+    }
+  }
+  return failures;
+}
+
+const coverageFailures = requiredCoverageFailures(fixtures, fixtureData);
+if (coverageFailures.length > 0) {
+  throw new Error(`required invalid scenario coverage failed: ${coverageFailures.join(",")}`);
+}
+
+const requiredNames = [...requiredInvalidScenarios.keys()];
+for (const [index, name] of requiredNames.entries()) {
+  const withoutTarget = fixtures.filter((fixture) => fixture !== name);
+  if (requiredCoverageFailures(withoutTarget, fixtureData).length === 0) {
+    throw new Error(`deletion mutation was not detected: ${name}`);
+  }
+
+  const replacementName = requiredNames[(index + 1) % requiredNames.length];
+  const replacedData = new Map(fixtureData);
+  replacedData.set(name, fixtureData.get(replacementName));
+  if (requiredCoverageFailures(fixtures, replacedData).length === 0) {
+    throw new Error(`semantic replacement mutation was not detected: ${name} <- ${replacementName}`);
   }
 }
 
 let validAccepted = 0;
 let invalidRejected = 0;
 for (const name of fixtures) {
-  const data = JSON.parse(fs.readFileSync(path.join(fixtureDir, name), "utf8"));
+  const data = fixtureData.get(name);
   const accepted = validate(data);
   if (name.includes("-valid-")) {
     if (!accepted) {
@@ -78,4 +111,4 @@ if (validAccepted !== 4 || invalidRejected !== 12) {
   throw new Error(`unexpected fixture coverage: valid=${validAccepted} invalid=${invalidRejected}`);
 }
 
-console.log(`PASS: ImportIssue Draft 2020-12 instances valid=${validAccepted} invalid-rejected=${invalidRejected}`);
+console.log(`PASS: ImportIssue Draft 2020-12 instances valid=${validAccepted} invalid-rejected=${invalidRejected} required-scenarios=${requiredInvalidScenarios.size} deletion-mutations=${requiredInvalidScenarios.size} replacement-mutations=${requiredInvalidScenarios.size}`);

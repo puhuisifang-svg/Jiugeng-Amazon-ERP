@@ -28,7 +28,7 @@
 | 库存流水条件 Schema | PASS，`InventoryTransactionQuantityRule` 以 `if/then/else` 约束 OPENING 非负、其他 5 类严格为正；`PreviewImpact` 在 `inventory_transactions` 资源下强制复用该结构；AJV 接受 8 个正例、拒绝 6 个负例 |
 | 期初余额/流水不变量 | PASS，同事务创建余额与唯一 OPENING；OPENING 不可编辑；同载荷重放保持单流水；异载荷 409；余额等于流水重算；余额/流水/审计纳入整批回滚范围 |
 | Issue 定位 | PASS，BATCH/SHEET/ROW/FIELD 四种 scope 的 sheet/row/field nullability 与必填条件机器化 |
-| Issue Draft 2020-12 实例 | PASS，AJV 8.17.1：有效 scope 4/4 接受，非法定位与 blocking 组合 12/12 拒绝 |
+| Issue Draft 2020-12 实例 | PASS，AJV 8.17.1：有效 scope 4/4 接受，非法定位与 blocking 组合 12/12 拒绝；12/12 删除变异与 12/12 语义替换变异均被防退化门禁检出 |
 | Preview 标量/业务键 | PASS，decimal 使用带 `DECIMAL` 标签的非科学计数法 string；7 种实际业务键；impact resource 复用枚举 |
 | DEL-017 v1.2 工作簿回归 | PASS，6/6、17 个 DataValidation、零期初正例、Listing 新增负例 4/4 |
 | Capability | PASS，21 个全域机器码；6 个 import capability 的三角色映射一致 |
@@ -56,7 +56,7 @@ PASS: workbooks=6 validations=17 zero-opening=present listing-negative-cases=4/4
 ```text
 PASS: S0-CONTRACT-01/02 machine-readable contracts are consistent
 CHECKS: importTypes=6 statuses=7 phases=8 operations=11 capabilities=21 errors=25
-PASS: ImportIssue Draft 2020-12 instances valid=4 invalid-rejected=12
+PASS: ImportIssue Draft 2020-12 instances valid=4 invalid-rejected=12 required-scenarios=12 deletion-mutations=12 replacement-mutations=12
 PASS: InventoryTransaction quantity condition valid=8 invalid-rejected=6
 Woohoo! Your API description is valid.
 ```
@@ -69,7 +69,7 @@ Woohoo! Your API description is valid.
 | FE P1-02 错误码未绑定 operation | 10/10 operation 添加 `x-error-codes`；补模板 404、游标/请求 400 与统一 500；测试双向校验可达性 |
 | FE P1-03 decimal 双编码、业务键过宽 | 新增 `TransportFieldValue` tagged union；decimal 仅 string；业务键按实际七种行形状收窄；impact resource 统一枚举 |
 | QA P1-01 ROW/SHEET 定位条件缺失 | 四种 scope 均增加 if/then 条件并加入静态负向约束断言 |
-| QA 后续门禁：缺 Draft 2020-12 实例测试 | AJV 实例级夹具：4 个合法对象必须通过，12 个非法对象必须拒绝；逐项覆盖 SHEET 缺失/空值、ROW 缺失/空 sheet 与 null/越界行号、FIELD 缺失/null、BATCH 非空定位字段，以及 severity/blocking 冲突 |
+| QA-CONTRACT-P1-02：关键非法场景可被等量夹具替换 | 固定全部 12 个非法场景的文件名与语义；对逐项删除、逐项替换执行 12+12 负向变异自测，任何目标覆盖丢失均使门禁失败 |
 | PJM OpenAPI 收口 4 项 | 新增过期重验 endpoint 与新旧批次关联；对既有分页和 diff JSON schema 增加强断言；冻结 direct/page/problem envelope 与全响应 `X-Request-Id` |
 | PM P0 条件 Schema | 新增 `InventoryTransactionQuantityRule`、非负/正 decimal wire schema 与 AJV 正负实例，直接证明零 OPENING 合法且非 OPENING 零值非法 |
 | PJM P0 完整关闭口径 | 提交语义新增不可编辑、唯一流水、余额重算和 rollback scope 机器字段与 validator 强断言；差异报告移除 P0-02 二选一旧建议并改为最终条件规则 |

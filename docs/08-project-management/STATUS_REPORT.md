@@ -26,3 +26,4 @@
 - 本地环境 P0：Java 21、Maven、Node.js 26.8.2 与 Docker daemon 已完成配置；既有 MySQL/Redis 容器健康。仍待修复云梯/上游代理至 Docker Hub 的 TLS 链路，并在后端脚手架内生成 Maven Wrapper。
 - 待办（老板回到电脑后）：将云梯切换为全局加速，或把 Docker Hub 相关域名强制走可用代理；随后由 PJM 复测 `docker pull`，通过后配置 ERP Compose 数据服务。
 - 前端包管理器已确定为 pnpm 12.4.1；项目级官方 npm Registry 配置完成。前端脚手架创建后再固定 Node engine、packageManager 和锁文件。
+- 项目目录已初始化为独立 Git 仓库，默认分支 `main`，首次提交已完成；目标 GitHub 私有仓库 `puhuisifang-svg/jiugeng-amazon-erp` 名称可用。远程创建与推送待 PJM Agent 完成 GitHub 授权后执行。

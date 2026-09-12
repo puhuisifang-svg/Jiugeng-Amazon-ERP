@@ -24,7 +24,8 @@
 | DEL-017 | 2026-09-12 | PM/Backend/Frontend/QA | 六类 Excel 模板与异步导入契约 | v1.1 | In Review | PJM | [模板与契约](../deliverables/pm/EXCEL_IMPORT_TEMPLATES_V1.md) |
 | DEL-020 | 2026-09-12 | Backend | S0-BE-01 CollectorAdapter 合规 Spike 框架与观察模板 | v0.1 | In Review | PJM | [Spike 框架](../deliverables/backend/sprint-0/collector-spike/README.md) / [自测报告](../deliverables/backend/sprint-0/TEST_REPORT.md) |
 | DEL-021 | 2026-09-12 | Backend | S0-BE-02 Java 21 / Spring Boot 3 模块化单体脚手架 | v0.1 | Completed | PJM | [后端工程](../deliverables/backend/sprint-0/jiugeng-erp-backend/README.md) / [自测报告](../deliverables/backend/sprint-0/TEST_REPORT.md) |
-| DEL-023 | 2026-09-12 | Frontend | Sprint 0 PM 字段与六类导入模板前端契约复核 | v0.1 | In Review | PJM | [复核报告](../deliverables/frontend/S0-PM-FRONTEND_CONTRACT_REVIEW.md) |
+| DEL-023 | 2026-09-12 | Frontend | Sprint 0 PM 字段与六类导入模板前端契约复核 | v0.1 | Completed | PJM | [复核报告](../deliverables/frontend/S0-PM-FRONTEND_CONTRACT_REVIEW.md) |
+| DEL-024 | 2026-09-12 | Frontend | S0-CONTRACT-01/02 前端关闭复核 | v0.1 | In Review | PJM | [关闭复核](../deliverables/frontend/S0-CONTRACT-01-02_FRONTEND_CLOSURE_REVIEW.md) |
 
 ## 登记要求
 

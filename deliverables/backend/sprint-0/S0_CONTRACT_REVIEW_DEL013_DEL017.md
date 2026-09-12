@@ -5,7 +5,7 @@
 | 复核角色 | Backend |
 | 日期 | 2026-09-12 |
 | 对象 | DEL-013 字段字典、DEL-017 v1.2 六类 Excel、产品数据模型 v1.1、DEL-025 OpenAPI/机器契约 |
-| 结论 | **Backend superseding PASS（静态）；DEL-025 v1.1.2 Completed；QA-CONTRACT-P1-02 测试防退化门禁 In Review；真实 API/数据库行为 Deferred** |
+| 结论 | **Backend superseding PASS（静态）；DEL-025 v1.1.2 Completed；QA-CONTRACT-P1-02 Closed；真实 API/数据库行为 Deferred** |
 | 样本依赖 | 无；本结论仅针对结构契约 |
 | 修订前 FAIL 基线 | `8b35389`，2026-09-12 19:53:58 +08:00；P0/P1 识别保留有效 |
 | Superseding 基线 | PM `106a0e2`；Backend `4ebd2be + 21870a8 + 49bef4a + c364a37 + 6a0989a` |
@@ -19,8 +19,11 @@
 | 20:09:58～20:34:49 | `4ebd2be + 21870a8 + 49bef4a` | OpenAPI/状态/Issue/preview/事务/DAG/capability 及实例测试完成；Frontend/QA 已对该阶段静态 PASS。 |
 | 20:43:29 | `c364a37` | OpenAPI v1.1.1 条件数量 Schema 与 AJV 8+6 完成；Frontend PASS，QA 增量仍需独立记录。 |
 | 20:49:54 | `6a0989a` | **本 Backend superseding 结论**：OpenAPI v1.1.2 与差异报告补齐不可编辑、余额/流水一致和整批回滚；Frontend PASS，QA 增量待回传。 |
+| 21:02:42 | `0e2ad43` | QA/PJM 完成 DEL-025 v1.1.2 隔离终验并固化为 Completed；S0-CONTRACT-01/02 既有 Closed 状态不回退。 |
+| 21:16:05 | `ef991ea` | 仅增强 ImportIssue 4+12 实例测试与报告，不形成新契约版本；QA 发现防退化门禁未固定两个 blocking 冲突场景，登记 QA-CONTRACT-P1-02。 |
+| 21:33:26 | `f8a6b45` | 固定全部 12 个目标场景的文件名与语义，并加入 12/12 删除、12/12 替换变异门禁；QA 隔离复验 P0=0/P1=0，PJM 关闭 QA-CONTRACT-P1-02。 |
 
-因此，DEL-013/017 的 Backend 静态复核以 `6a0989a` supersede `8b35389` 的旧 FAIL 状态；S0-CONTRACT-01/02 与 DEL-025 v1.1.2 的既有关闭/完成状态不回退，仅 QA-CONTRACT-P1-02 测试防退化门禁在 Backend/QA 增量复核前保持 In Review。真实领域迁移、应用服务与动态事务用例继续 Deferred/Blocked。
+因此，DEL-013/017 的 Backend 静态复核以 `6a0989a` supersede `8b35389` 的旧 FAIL 状态；S0-CONTRACT-01/02 保持 Closed，DEL-025 v1.1.2 保持 Completed，QA-CONTRACT-P1-02 已由 `f8a6b45` 的 Backend/QA/PJM 增量复核关闭。真实领域迁移、应用服务与动态事务用例继续 Deferred/Blocked。
 
 ## 1. 结论矩阵
 

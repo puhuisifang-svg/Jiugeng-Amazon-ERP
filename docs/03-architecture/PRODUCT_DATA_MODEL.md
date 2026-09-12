@@ -4,7 +4,7 @@
 | --- | --- |
 | 项目 | 九更亚马逊 ERP |
 | 交付物 ID | DEL-006 |
-| 版本 | v0.1 |
+| 版本 | v0.2 |
 | 状态 | In Review |
 | Owner | PM / Backend |
 | 日期 | 2026-09-12 |
@@ -24,7 +24,7 @@
 - 内部 SKU 表示真实可生产、包装和销售的最小规格，例如颜色、尺寸组合。
 - Amazon 父子体是渠道结构，不等同于内部 SPU/SKU，必须独立建模。
 - ASIN 属于 Amazon 目录；Seller SKU/Listing 属于具体店铺。不同店铺可销售同一 ASIN，但各自拥有独立 Seller SKU、FNSKU、价格、履约和 Listing 状态。
-- Amazon 同步数据不得直接覆盖内部产品主档；先保存来源、时间和原始快照，再按明确映射更新渠道字段。
+- MVP 通过界面和 Excel 导入维护 Amazon 映射，不接入 SP-API 自动同步。后续引入同步时，Amazon 数据不得直接覆盖内部产品主档；应先保存来源、时间和原始快照，再按明确映射更新渠道字段。
 
 关系图：[打开产品数据模型图](diagrams/PRODUCT_MODEL.html)。
 
@@ -173,12 +173,12 @@ Catalog 数据作为 Amazon 外部事实保存，不作为公司内部产品编�
 | 数据 | 权威来源 | 同步规则 |
 | --- | --- | --- |
 | 产品编码、内部名称、规格、辅料 | 九更 ERP | 人工维护/导入，Amazon 不得覆盖 |
-| ASIN、父子关系、目录标题与类目 | Amazon Catalog | SP-API 拉取并保留快照 |
-| Seller SKU、Listing 状态、问题、履约 | 店铺 Listing | 按店铺通过 SP-API 同步 |
+| ASIN、父子关系、目录标题与类目 | Amazon Catalog / 人工导入 | MVP 人工维护或导入；后续可用 SP-API 拉取并留快照 |
+| Seller SKU、Listing 状态、问题、履约 | 店铺 Listing / 人工导入 | MVP 按店铺人工维护或导入；自动同步后置 |
 | FNSKU | Amazon FBA/内部确认 | 按店铺 Listing 保存 |
 | 价格、Amazon 库存 | Amazon 店铺 | 本期仅预留字段，不纳入产品主档维护 |
 
-同步采用幂等 Upsert，并记录 `source`、`source_updated_at`、`synced_at` 和请求追踪 ID。单个店铺失败不得影响其他店铺，也不得删除内部产品。
+MVP 导入采用幂等 Upsert，并记录 `source`、导入批次和操作人。后续自动同步应补充 `source_updated_at`、`synced_at` 和请求追踪 ID；单个店铺失败不得影响其他店铺，也不得删除内部产品。
 
 ## 6. 导入模板
 

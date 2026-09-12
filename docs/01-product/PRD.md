@@ -4,7 +4,7 @@
 | --- | --- |
 | 交付物 ID | DEL-007 |
 | Owner | PM |
-| 版本 | v0.8 |
+| 版本 | v0.9 |
 | 状态 | In Review |
 | 最后更新 | 2026-09-12 |
 | 适用范围 | Amazon 美国站、5 个公司店铺、内部员工 |
@@ -39,7 +39,7 @@
 
 内部 SKU 可分别维护 5 个公司店铺的 Seller SKU、ASIN、FNSKU、父子体、FBA/FBM 和 Listing 状态。Amazon Catalog Item 与店铺 Listing 分层保存；ASIN 不是内部 SKU。不同店铺的 Seller SKU、FNSKU、履约和状态不得互相覆盖。Amazon 父体 Listing 只关联 Product，子体或独立 Listing 必须关联内部 SKU。
 
-首期必须支持人工维护与 Excel 导入；是否在 MVP 自动接入 5 店 SP-API，列为业务决策 `DEC-PENDING-001`。
+首期采用人工维护与 Excel 导入，不接入 5 店 SP-API 自动同步。导入模板按店铺编码、Seller SKU、ASIN、FNSKU、父子体、履约方式和 Listing 状态建立映射；SP-API 自动同步作为后续独立阶段，不影响当前数据模型。
 
 ### FR-MAT-001 辅料与产品对应关系
 
@@ -97,7 +97,6 @@
 
 | ID | 事项 | 影响 | 建议 |
 | --- | --- | --- | --- |
-| DEC-PENDING-001 | 5 个公司店铺是否在 MVP 自动接入 SP-API | 决定授权、同步任务和排期 | 建议先支持人工/Excel 映射，SP-API 接入单独评估 |
 | DATA-001 | 20～50 条真实产品、SKU、辅料与期初库存样本 | 字段、模板和测试数据 | Sprint 0 前提供脱敏样本 |
 | WATCH-001 | 3 个公开对标店铺链接 | 决定上新监控技术路线 | 连续验证 7 天后再承诺自动化范围 |
 | IAM-001 | 首期用户数量和账号清单 | 初始化与容量 | Sprint 1 前确认 |

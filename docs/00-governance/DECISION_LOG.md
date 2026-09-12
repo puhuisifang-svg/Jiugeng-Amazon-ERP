@@ -10,6 +10,7 @@
 | DEC-006 | 2026-09-12 | 辅料仓库数量 | 首期只管理一个辅料仓库，不做仓库主档、多仓切换、库位或仓库调拨 | Approved | 老板 | [精简 MVP](../01-product/MVP_SCOPE_PLAN.md) |
 | DEC-007 | 2026-09-12 | 登录角色 | 首期只设系统管理员、产品/辅料人员、选品人员三类角色，不设只读角色 | Approved | 老板 | [权限矩阵](../05-security/ACCESS_MATRIX.md) |
 | DEC-008 | 2026-09-12 | 产品多规格 | 一个内部产品包含多个 SKU；产品结构按 Amazon 美国站 5 店铺背景设计，内部产品/SKU、Amazon Catalog ASIN、各店铺 Listing 分层 | Approved | 老板 | [产品数据模型](../03-architecture/PRODUCT_DATA_MODEL.md) |
+| DEC-009 | 2026-09-12 | 5 店 Listing 数据方式 | MVP 采用人工维护和 Excel 导入管理 5 个公司店铺的 Listing 映射；SP-API 自动同步后置 | Approved | 老板 | [MVP PRD](../01-product/PRD.md) |
 
 ## 记录规则
 

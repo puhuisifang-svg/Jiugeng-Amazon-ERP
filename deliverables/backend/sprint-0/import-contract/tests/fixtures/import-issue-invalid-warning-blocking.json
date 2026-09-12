@@ -1,0 +1,1 @@
+{"code":"FIELD_NORMALIZED","severity":"WARNING","blocking":true,"scope":"FIELD","sheet":"导入模板","row":2,"field":"product_name","reason":"WARNING 不得阻断","rawValue":" test ","suggestion":null}

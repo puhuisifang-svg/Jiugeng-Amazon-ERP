@@ -1,0 +1,1 @@
+{"code":"FIELD_REQUIRED","severity":"ERROR","blocking":false,"scope":"FIELD","sheet":"导入模板","row":2,"field":"product_code","reason":"ERROR 必须阻断","rawValue":null,"suggestion":null}

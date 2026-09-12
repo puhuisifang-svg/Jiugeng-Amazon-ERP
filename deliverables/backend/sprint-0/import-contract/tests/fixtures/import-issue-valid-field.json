@@ -1,0 +1,1 @@
+{"code":"FIELD_REQUIRED","severity":"ERROR","blocking":true,"scope":"FIELD","sheet":"导入模板","row":2,"field":"product_code","reason":"字段必填","rawValue":null,"suggestion":"填写产品编码"}

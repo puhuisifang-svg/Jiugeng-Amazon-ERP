@@ -1,0 +1,12 @@
+{
+  "name": "jiugeng-import-contract-tests",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node validate_issue_instances.mjs"
+  },
+  "devDependencies": {
+    "ajv": "8.17.1"
+  }
+}

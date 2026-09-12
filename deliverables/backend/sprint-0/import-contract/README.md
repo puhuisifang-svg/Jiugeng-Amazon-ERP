@@ -32,9 +32,11 @@
 
 ```bash
 python3 deliverables/backend/sprint-0/import-contract/tests/validate_contract.py
+npm --prefix deliverables/backend/sprint-0/import-contract/tests ci --ignore-scripts
+npm --prefix deliverables/backend/sprint-0/import-contract/tests test
 ```
 
-预期：`PASS: S0-CONTRACT-01/02 machine-readable contracts are consistent`。
+预期：跨文件一致性 PASS；ImportIssue Draft 2020-12 实例 `valid=4 invalid-rejected=6`。
 
 ## PJM 独立核验
 

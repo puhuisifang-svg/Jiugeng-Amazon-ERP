@@ -27,6 +27,13 @@
 | GitHub 安全授权 | 老板/管理员 | Waiting | 私有远程与 CI |
 | Docker Hub 可用代理出口 | 老板/Ops | Investigating | Compose 镜像拉取 |
 
+## 静态评审整改
+
+| ID | 问题 | Owner | 严重级别 | 状态 | 关闭条件 |
+| --- | --- | --- | --- | --- | --- |
+| S0-DOC-01 | `PRODUCT_DATA_MODEL.md` 导入模板仅列 4 类，与 Approved PRD/Sprint 0 的 6 类要求不一致 | PM/Backend | P1 | Open | 补齐辅料主档、辅料期初库存及六类导入顺序/验收表述，QA 复核通过 |
+| S0-DOC-02 | `TEST_STRATEGY.md` 沿用订单、财务、采购、FBA、利润等后置范围，缺少当前 MVP 专项 | QA | P1 | In Progress | 删除/标注后置范围，补齐人工编码、三角色、选品去重、监控基线失败保护等策略，PJM/QA 复核通过 |
+
 ## 验收栏
 
 - [ ] PM 字段与模板通过跨角色复核

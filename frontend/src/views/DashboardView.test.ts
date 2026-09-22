@@ -5,10 +5,12 @@ import DashboardView from './DashboardView.vue'
 
 describe('DashboardView', () => {
   afterEach(() => {
+    window.localStorage.clear()
     vi.unstubAllGlobals()
   })
 
   it('renders clearly marked mock summary data from the backend', async () => {
+    window.localStorage.setItem('jiugeng.mock.session.token', 'mock-session-admin')
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -30,6 +32,10 @@ describe('DashboardView', () => {
     expect(wrapper.text()).toContain('SYNTHETIC')
     expect(wrapper.text()).toContain('待处理导入')
     expect(wrapper.text()).toContain('3')
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      expect.stringContaining('/dashboard/summary'),
+      expect.objectContaining({ headers: expect.any(Headers) }),
+    )
   })
 
   it('shows a useful error when the mock backend is unavailable', async () => {

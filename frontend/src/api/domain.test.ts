@@ -1,0 +1,55 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { domainApi } from './domain'
+
+describe('domainApi synthetic write safety', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('fails closed when a write response is not explicitly synthetic', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        mockData: false,
+        source: 'UNKNOWN',
+        item: { id: 'p1' },
+      }),
+    }))
+
+    await expect(domainApi.createProduct({ productCode: 'P-1', name: 'Product', skuCodes: ['S-1'] }))
+      .rejects.toThrow('not explicitly synthetic')
+  })
+
+  it('sends an immutable inventory request identifier with the transaction', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        mockData: true,
+        source: 'SYNTHETIC',
+        item: { id: 'l1', requestId: 'req-1', materialCode: 'M-1', type: 'INBOUND', quantity: 2, reason: 'test', occurredAt: 'now' },
+        balance: { warehouseCode: 'US-WH-01', materialCode: 'M-1', materialName: 'Box', quantity: 2, unit: 'PCS' },
+        replayed: false,
+      }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await domainApi.transact({ requestId: 'req-1', materialCode: 'M-1', type: 'INBOUND', quantity: 2, reason: 'test' })
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/inventory/transactions'), expect.objectContaining({
+      body: JSON.stringify({ requestId: 'req-1', materialCode: 'M-1', type: 'INBOUND', quantity: 2, reason: 'test' }),
+    }))
+  })
+
+  it('only sends rejectionReason for a rejected candidate transition', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ mockData: true, source: 'SYNTHETIC', item: { id: 'c1', asin: 'B0001', title: 'Item', status: 'REJECTED', score: 10, rejectionReason: 'low score' } }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await domainApi.transitionCandidate('c1', { status: 'REJECTED', rejectionReason: 'low score' })
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/selection/candidates/c1/transition'), expect.objectContaining({
+      body: JSON.stringify({ status: 'REJECTED', rejectionReason: 'low score' }),
+    }))
+  })
+})

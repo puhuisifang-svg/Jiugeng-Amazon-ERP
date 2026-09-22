@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { RouterLink, RouterView, useRoute } from 'vue-router'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 
 import { appRoutes } from '@/router'
+import { session } from '@/state/session'
 
 const route = useRoute()
+const router = useRouter()
 const collapsed = ref(false)
 
 const menuGroups = computed(() => {
@@ -12,7 +14,7 @@ const menuGroups = computed(() => {
   const groups = new Map<string, NonNullable<typeof shell>['children']>()
 
   for (const item of shell?.children ?? []) {
-    if (item.meta?.hidden) continue
+    if (item.meta?.hidden || !session.canAccess(item.meta?.roles)) continue
     const group = item.meta?.group ?? '其他'
     const entries = groups.get(group) ?? []
     entries.push(item)
@@ -21,6 +23,11 @@ const menuGroups = computed(() => {
 
   return [...groups.entries()]
 })
+
+async function logout() {
+  session.logout()
+  await router.replace('/login')
+}
 </script>
 
 <template>
@@ -109,11 +116,18 @@ const menuGroups = computed(() => {
           </button>
           <div
             class="account-placeholder"
-            aria-label="当前账号占位"
+            aria-label="当前模拟账号"
           >
             <span class="status-dot" />
-            <span>管理员占位</span>
+            <span>{{ session.user.value?.displayName }} · {{ session.user.value?.role }}</span>
           </div>
+          <button
+            class="logout-button"
+            type="button"
+            @click="logout"
+          >
+            退出
+          </button>
         </div>
       </header>
 

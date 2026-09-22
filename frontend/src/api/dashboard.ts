@@ -1,4 +1,4 @@
-import { runtimeConfig } from '@/config/runtime'
+import { apiRequest, assertSyntheticEnvelope } from './client'
 
 export interface DashboardSummaryItem {
   label: string
@@ -14,11 +14,7 @@ export interface DashboardSummary {
 }
 
 export async function loadDashboardSummary(): Promise<DashboardSummary> {
-  const response = await fetch(`${runtimeConfig.apiBaseUrl}/dashboard/summary`)
-
-  if (!response.ok) {
-    throw new Error(`Dashboard summary request failed with status ${response.status}`)
-  }
-
-  return response.json() as Promise<DashboardSummary>
+  const summary = await apiRequest<DashboardSummary>('/dashboard/summary')
+  assertSyntheticEnvelope(summary)
+  return summary
 }

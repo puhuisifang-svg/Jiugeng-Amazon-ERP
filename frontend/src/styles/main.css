@@ -45,6 +45,8 @@ a { color: inherit; }
 .content { padding: 28px; }
 .page-stack { display: grid; gap: 20px; }
 .notice { display: flex; gap: 12px; padding: 14px 16px; color: #8b4a1f; background: var(--accent-soft); border: 1px solid #ffd8bb; border-radius: 10px; font-size: 14px; }
+.data-state { margin: 0; padding: 14px 16px; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.data-state--error { color: #9f2f2f; background: #fff1f1; border-color: #f2c8c8; }
 .summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
 .summary-card, .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 4px 18px rgba(28, 35, 51, .04); }
 .summary-card { display: grid; gap: 8px; padding: 20px; }

@@ -23,7 +23,7 @@
 ## 验证证据
 
 - Backend：24 tests，0 failure / 0 error。
-- Frontend：5 files / 15 tests；lint、typecheck、production build 通过。
+- Frontend：6 files / 16 tests；lint、typecheck、production build 通过；包含候选新增页面交互测试。
 - 动态 HTTP：标准 Amazon URL 新增返回 200；等价 ASIN 重复返回 409；前端根页面返回 200。
 
 ## 边界

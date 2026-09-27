@@ -49,6 +49,7 @@ onMounted(load)
         placeholder="B0… 或 https://www.amazon.com/dp/B0…"
       ></label><label>候选标题<input
         v-model="title"
+        placeholder="候选标题"
         required
       ></label><label>初始评分<input
         v-model.number="score"

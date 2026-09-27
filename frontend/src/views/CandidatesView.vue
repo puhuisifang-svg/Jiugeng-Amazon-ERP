@@ -162,23 +162,38 @@ onMounted(load)
           class="operation-form evaluation-form"
           @submit.prevent="updateEvaluation(item)"
         >
-          <h2>评估资料</h2><label>类目<input v-model="draftFor(item.id).category"></label><label>价格<input
+          <h2>评估资料</h2><label>类目<input
+            v-model="draftFor(item.id).category"
+            name="category"
+          ></label><label>价格<input
             v-model="draftFor(item.id).price"
             min="0"
+            name="price"
             step="0.01"
             type="number"
           ></label><label>星级<input
             v-model="draftFor(item.id).rating"
             max="5"
             min="0"
+            name="rating"
             step="0.1"
             type="number"
           ></label><label>评论数<input
             v-model="draftFor(item.id).reviewCount"
             min="0"
+            name="reviewCount"
             step="1"
             type="number"
-          ></label><label>负责人<input v-model="draftFor(item.id).owner"></label><label>标签（逗号分隔）<input v-model="draftFor(item.id).tags"></label><label class="form-wide">选品理由<input v-model="draftFor(item.id).selectionReason"></label><button
+          ></label><label>负责人<input
+            v-model="draftFor(item.id).owner"
+            name="owner"
+          ></label><label>标签（逗号分隔）<input
+            v-model="draftFor(item.id).tags"
+            name="tags"
+          ></label><label class="form-wide">选品理由<input
+            v-model="draftFor(item.id).selectionReason"
+            name="selectionReason"
+          ></label><button
             :disabled="busyId === item.id"
             type="submit"
           >

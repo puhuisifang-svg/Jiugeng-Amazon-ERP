@@ -26,7 +26,7 @@
 ## 验证证据
 
 - Backend：25 tests，0 failure / 0 error。
-- Frontend：6 files / 17 tests；lint、typecheck、production build 通过；包含候选新增页面交互和评估 API 测试。
+- Frontend：6 files / 18 tests；lint、typecheck、production build 通过；包含候选新增、搜索筛选和评估保存交互测试。
 - 动态 HTTP：候选评估更新返回 200；产品/辅料角色越权返回 403；Product API 已无 Listing 字段；前端根页面返回 200。
 
 ## 边界

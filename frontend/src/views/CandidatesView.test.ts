@@ -56,4 +56,36 @@ describe('CandidatesView', () => {
     expect(wrapper.text()).toContain('候选 B0TEST12345 已创建并归一化')
     expect(wrapper.get('a').attributes('href')).toBe('https://www.amazon.com/dp/B0TEST12345')
   })
+
+  it('filters candidates and saves evaluation details', async () => {
+    const candidate = { id: 'candidate-1', asin: 'B0CAMP12345', title: '露营灯', status: 'REVIEWING', score: 80, category: '户外', owner: '旧负责人', tags: ['露营'], source: 'MANUAL' }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ token: 'mock-session-selection', user: { id: 'mock-selection', displayName: '模拟选品专员', role: 'SELECTION' }, mockData: true, source: 'SYNTHETIC' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ items: [candidate, { ...candidate, id: 'candidate-2', asin: 'B0PET123456', title: '宠物碗', category: '宠物' }], mockData: true, source: 'SYNTHETIC' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ item: { ...candidate, owner: '新负责人', selectionReason: '需求稳定' }, mockData: true, source: 'SYNTHETIC' }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+    await session.login('SELECTION')
+
+    const wrapper = mount(CandidatesView)
+    await flushPromises()
+    await wrapper.get('input[placeholder^="ASIN"]').setValue('B0CAMP')
+    expect(wrapper.findAll('.compact-panel')).toHaveLength(1)
+
+    await wrapper.get('.evaluation-form input[name="owner"]').setValue('新负责人')
+    await wrapper.get('.evaluation-form input[name="selectionReason"]').setValue('需求稳定')
+    await wrapper.get('.evaluation-form').trigger('submit')
+    await flushPromises()
+
+    expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining('/selection/candidates/candidate-1/evaluation'), expect.objectContaining({ method: 'PUT' }))
+    expect(wrapper.text()).toContain('候选 B0CAMP12345 的评估资料已保存')
+  })
 })

@@ -74,7 +74,7 @@ class MockErpControllerTest {
     }
 
     @Test
-    void exposesProductSkuAndFiveStoreListingSummary() throws Exception {
+    void exposesProductAndSkuReadModelWithoutListingMapping() throws Exception {
         mockMvc.perform(get("/api/products").header(AUTHORIZATION, bearer("mock-session-selection")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.mockData").value(true))
@@ -82,7 +82,7 @@ class MockErpControllerTest {
                 .andExpect(jsonPath("$.items[0].productCode").value("PROD-MOCK-001"))
                 .andExpect(jsonPath("$.items[0].skuCount").value(2))
                 .andExpect(jsonPath("$.items[0].skus.length()").value(2))
-                .andExpect(jsonPath("$.items[0].skus[0].listings.length()").value(5));
+                .andExpect(jsonPath("$.items[0].skus[0].listings").doesNotExist());
     }
 
     @Test
@@ -150,7 +150,7 @@ class MockErpControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.mockData").value(true))
                 .andExpect(jsonPath("$.item.skuCount").value(2))
-                .andExpect(jsonPath("$.item.skus[0].listings.length()").value(5));
+                .andExpect(jsonPath("$.item.skus[0].listings").doesNotExist());
 
         mockMvc.perform(post("/api/products")
                         .header(AUTHORIZATION, productRole)

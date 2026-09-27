@@ -1,8 +1,7 @@
 import { apiRequest, assertSyntheticEnvelope } from './client'
 import type { InventoryBalanceDto, MaterialDto, ProductDto, SelectionCandidateDto, SyntheticList, WatchEventDto } from './resources'
 
-export interface ListingDto { storeCode: string; storeName: string; sellerSku: string; status: string }
-export interface SkuDto { skuCode: string; listings: ListingDto[] }
+export interface SkuDto { skuCode: string }
 export interface ProductDetailDto extends ProductDto { skus: SkuDto[] }
 export interface LedgerEntryDto { id: string; requestId: string; materialCode: string; type: InventoryTransactionType; quantity: number; reason: string; occurredAt: string }
 export type InventoryTransactionType = 'OPENING' | 'INBOUND' | 'OUTBOUND' | 'ADJUSTMENT'

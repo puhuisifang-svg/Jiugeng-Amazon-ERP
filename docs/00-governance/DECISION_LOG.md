@@ -13,6 +13,7 @@
 | DEC-009 | 2026-09-12 | 5 店 Listing 数据方式 | MVP 采用人工维护和 Excel 导入管理 5 个公司店铺的 Listing 映射；SP-API 自动同步后置 | Approved | 老板 | [MVP PRD](../01-product/PRD.md) |
 | DEC-010 | 2026-09-12 | 内部产品编码 | Product/SPU、内部 SKU 和辅料编码均由业务人员手动输入维护，系统不自动生成 | Approved | 老板 | [编码规则](../01-product/PRODUCT_CODE_STANDARD.md) |
 | DEC-011 | 2026-09-12 | MVP 最终规划 | 老板授权 PJM 决定剩余实现细节并形成最终版；MVP v1.0 范围、路线、架构和验收基线获批，Sprint 0 仍需单独启动 | Approved | 老板 | [MVP 最终规划](../01-product/MVP_FINAL_PLAN.md) |
+| DEC-012 | 2026-09-27 | 当前 MVP 范围与优先级调整 | 当前 MVP 删除店铺 Listing 映射功能，保留历史契约作为审计记录；开发优先级调整为选品管理，Git 使用独立功能分支和原子提交维护 | Approved | 老板 | [ERP-002 增强批次](../../deliverables/pjm/ERP-002_LOCAL_MOCK_ENHANCEMENTS.md) |
 
 ## 记录规则
 

@@ -27,27 +27,20 @@ final class MockErpData {
     private static final Pattern AMAZON_PATH_PATTERN = Pattern.compile(
             "/(?:dp|gp/product)/([A-Z0-9]{10,16})(?:[/?]|$)", Pattern.CASE_INSENSITIVE);
 
-    private static final List<Store> STORES = List.of(
-            new Store("STORE-MOCK-US-01", "模拟美国店铺 1"),
-            new Store("STORE-MOCK-US-02", "模拟美国店铺 2"),
-            new Store("STORE-MOCK-US-03", "模拟美国店铺 3"),
-            new Store("STORE-MOCK-US-04", "模拟美国店铺 4"),
-            new Store("STORE-MOCK-US-05", "模拟美国店铺 5"));
-
     private static final Map<DemoRole, Set<String>> CAPABILITIES = Map.of(
             DemoRole.ADMIN, Set.of(
-                    "system.users.manage", "products.read", "products.write", "listings.read", "listings.write",
+                    "system.users.manage", "products.read", "products.write",
                     "materials.read", "materials.write", "inventory.read", "inventory.write", "selection.read",
                     "selection.write", "watch.read", "watch.write", "imports.read", "imports.template.download",
                     "imports.validate", "imports.commit", "imports.cancel", "imports.result.download",
                     "audit.read.all", "audit.read.self"),
             DemoRole.PRODUCT_MATERIAL, Set.of(
-                    "products.read", "products.write", "listings.read", "listings.write", "materials.read",
+                    "products.read", "products.write", "materials.read",
                     "materials.write", "inventory.read", "inventory.write", "selection.read", "watch.read",
                     "imports.read", "imports.template.download", "imports.validate", "imports.commit",
                     "imports.cancel", "imports.result.download", "audit.read.self"),
             DemoRole.SELECTION, Set.of(
-                    "products.read", "listings.read", "materials.read", "selection.read", "selection.write",
+                    "products.read", "materials.read", "selection.read", "selection.write",
                     "watch.read", "watch.write", "audit.read.self"));
 
     private static final Map<DemoRole, DemoUser> USERS = Map.of(
@@ -272,13 +265,8 @@ final class MockErpData {
     }
 
     private Product product(String code, String name, List<String> skuCodes) {
-        List<Sku> skus = skuCodes.stream().map(skuCode -> new Sku(skuCode.trim(), listings(skuCode.trim()))).toList();
+        List<Sku> skus = skuCodes.stream().map(skuCode -> new Sku(skuCode.trim())).toList();
         return new Product(id("product"), code, name, "ACTIVE", skus.size(), skus);
-    }
-
-    private static List<ListingSummary> listings(String skuCode) {
-        return STORES.stream().map(store -> new ListingSummary(store.code(), store.name(),
-                skuCode + "-" + store.code().substring(store.code().length() - 2), "ACTIVE")).toList();
     }
 
     private void seedMaterial(String code, String name, String unit, BigDecimal quantity) {
@@ -398,9 +386,7 @@ final class MockErpData {
 
     record DemoUser(String id, String displayName, DemoRole role) {}
     record DemoSession(String sessionId, DemoUser currentUser, List<String> capabilities) {}
-    record Store(String code, String name) {}
-    record ListingSummary(String storeCode, String storeName, String sellerSku, String status) {}
-    record Sku(String skuCode, List<ListingSummary> listings) {}
+    record Sku(String skuCode) {}
     record Product(String id, String productCode, String name, String status, int skuCount, List<Sku> skus) {}
     record Material(String id, String materialCode, String name, String unit, String status) {}
     record InventoryBalance(String warehouseCode, String materialCode, String materialName, BigDecimal quantity,

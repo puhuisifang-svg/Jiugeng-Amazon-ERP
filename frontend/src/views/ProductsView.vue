@@ -101,19 +101,13 @@ onMounted(load)
         <div class="card-heading">
           <div><strong>{{ product.productCode }}</strong><h2>{{ product.name }}</h2></div><span class="placeholder-badge">{{ product.status }}</span>
         </div>
-        <p>{{ product.skuCount }} 个 SKU · 每个 SKU 展示 5 个固定店铺 Listing</p>
+        <p>{{ product.skuCount }} 个内部 SKU</p>
         <div
           v-for="sku in product.skus"
           :key="sku.skuCode"
           class="sku-block"
         >
           <strong>{{ sku.skuCode }}</strong>
-          <div class="listing-grid">
-            <span
-              v-for="listing in sku.listings"
-              :key="listing.storeCode"
-            >{{ listing.storeName }}<small>{{ listing.sellerSku }} · {{ listing.status }}</small></span>
-          </div>
         </div>
       </article>
     </div>

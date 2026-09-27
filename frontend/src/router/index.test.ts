@@ -31,11 +31,12 @@ describe('application routes', () => {
     const shell = appRoutes.find((route) => route.path === '/')
     const paths = new Set(shell?.children?.map((route) => `/${route.path}`))
     const expectedPaths = [
-      '/home', '/products', '/listing-mappings', '/materials', '/inventory/balances',
+      '/home', '/products', '/materials', '/inventory/balances',
       '/inventory/ledger', '/imports', '/selection/candidates', '/watch/stores',
       '/watch/events', '/system/users', '/system/audit',
     ]
 
     expect(expectedPaths.every((path) => paths.has(path))).toBe(true)
+    expect(paths.has('/listing-mappings')).toBe(false)
   })
 })

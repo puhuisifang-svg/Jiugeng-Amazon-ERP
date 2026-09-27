@@ -80,9 +80,6 @@ a { color: inherit; }
 .compact-panel p { color: var(--muted); }
 .card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
 .sku-block { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
-.listing-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
-.listing-grid span { padding: 9px; background: #f8f9fb; border-radius: 7px; font-size: 12px; }
-.listing-grid small { display: block; margin-top: 4px; color: var(--muted); }
 .inline-actions { display: flex; gap: 8px; align-items: center; }
 .inline-actions input { flex: 1; }
 .login-shell { display: grid; min-height: 100vh; place-items: center; padding: 24px; background: linear-gradient(145deg, #121827, #26304a); }

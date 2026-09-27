@@ -1,6 +1,7 @@
 package com.jiugeng.erp.mockdata;
 
 import java.math.BigDecimal;
+import java.net.URI;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -8,6 +9,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
@@ -20,6 +23,9 @@ final class MockErpData {
     static final String SOURCE = "SYNTHETIC";
     static final String AUTHORIZATION_HEADER = "Authorization";
     private static final String WAREHOUSE_CODE = "WH-MOCK-001";
+    private static final Pattern ASIN_PATTERN = Pattern.compile("^[A-Z0-9]{10,16}$");
+    private static final Pattern AMAZON_PATH_PATTERN = Pattern.compile(
+            "/(?:dp|gp/product)/([A-Z0-9]{10,16})(?:[/?]|$)", Pattern.CASE_INSENSITIVE);
 
     private static final List<Store> STORES = List.of(
             new Store("STORE-MOCK-US-01", "模拟美国店铺 1"),
@@ -67,11 +73,11 @@ final class MockErpData {
         seedMaterial("MAT-MOCK-003", "透明自封袋", "piece", new BigDecimal("96"));
 
         putCandidate(new SelectionCandidate("candidate-mock-001", "B0MOCKASIN1", "可折叠露营灯",
-                CandidateStatus.REVIEWING, 86, null));
+                CandidateStatus.REVIEWING, 86, null, canonicalAmazonUrl("B0MOCKASIN1")));
         putCandidate(new SelectionCandidate("candidate-mock-002", "B0MOCKASIN2", "宠物慢食碗",
-                CandidateStatus.NEW, 74, null));
+                CandidateStatus.NEW, 74, null, canonicalAmazonUrl("B0MOCKASIN2")));
         putCandidate(new SelectionCandidate("candidate-mock-003", "B0MOCKASIN3", "车载纸巾盒",
-                CandidateStatus.REJECTED, 41, "模拟毛利不足"));
+                CandidateStatus.REJECTED, 41, "模拟毛利不足", canonicalAmazonUrl("B0MOCKASIN3")));
 
         putWatchEvent(new WatchEvent("event-mock-001", "模拟美国店铺 1", "B0MOCKASIN4", "可折叠露营灯升级款",
                 Instant.parse("2026-09-22T08:30:00Z"), WatchStatus.PENDING_REVIEW, null));
@@ -199,6 +205,18 @@ final class MockErpData {
         return List.copyOf(candidates.values());
     }
 
+    synchronized SelectionCandidate createCandidate(String asinOrUrl, String title, Integer score) {
+        String asin = extractAsin(asinOrUrl);
+        boolean duplicate = candidates.values().stream().anyMatch(item -> item.asin().equalsIgnoreCase(asin));
+        if (duplicate) {
+            throw conflict("CANDIDATE_ASIN_EXISTS", "A candidate already exists for ASIN: " + asin);
+        }
+        SelectionCandidate candidate = new SelectionCandidate(id("candidate"), asin, title.trim(),
+                CandidateStatus.NEW, score == null ? 50 : score, null, canonicalAmazonUrl(asin));
+        putCandidate(candidate);
+        return candidate;
+    }
+
     synchronized SelectionCandidate transitionCandidate(String candidateId, CandidateStatus status,
                                                          String rejectionReason) {
         SelectionCandidate current = candidates.get(candidateId);
@@ -217,7 +235,7 @@ final class MockErpData {
             throw badRequest("REJECTION_REASON_NOT_ALLOWED", "rejectionReason is only allowed for REJECTED status");
         }
         SelectionCandidate updated = new SelectionCandidate(current.id(), current.asin(), current.title(), status,
-                current.score(), status == CandidateStatus.REJECTED ? normalizedReason : null);
+                current.score(), status == CandidateStatus.REJECTED ? normalizedReason : null, current.sourceUrl());
         candidates.put(updated.id(), updated);
         return updated;
     }
@@ -239,7 +257,7 @@ final class MockErpData {
                 .findFirst()
                 .orElseGet(() -> {
                     SelectionCandidate created = new SelectionCandidate(id("candidate"), event.asin(), event.title(),
-                            CandidateStatus.NEW, 70, null);
+                            CandidateStatus.NEW, 70, null, canonicalAmazonUrl(event.asin()));
                     putCandidate(created);
                     return created;
                 });
@@ -322,6 +340,33 @@ final class MockErpData {
         return value.trim().toUpperCase(Locale.ROOT);
     }
 
+    private static String extractAsin(String asinOrUrl) {
+        String value = asinOrUrl.trim();
+        String normalizedValue = normalized(value);
+        if (ASIN_PATTERN.matcher(normalizedValue).matches()) {
+            return normalizedValue;
+        }
+        try {
+            URI uri = URI.create(value);
+            String host = uri.getHost();
+            if (host == null || !(host.equalsIgnoreCase("amazon.com")
+                    || host.toLowerCase(Locale.ROOT).endsWith(".amazon.com"))) {
+                throw new IllegalArgumentException("Unsupported host");
+            }
+            Matcher matcher = AMAZON_PATH_PATTERN.matcher(uri.getPath().toUpperCase(Locale.ROOT) + "/");
+            if (matcher.find()) {
+                return matcher.group(1);
+            }
+        } catch (IllegalArgumentException ignored) {
+            // Converted to a stable business validation error below.
+        }
+        throw badRequest("INVALID_ASIN_OR_URL", "Enter an ASIN or a standard amazon.com /dp/ URL");
+    }
+
+    private static String canonicalAmazonUrl(String asin) {
+        return "https://www.amazon.com/dp/" + asin.toUpperCase(Locale.ROOT);
+    }
+
     private static String id(String prefix) {
         return prefix + "-" + UUID.randomUUID().toString().substring(0, 8);
     }
@@ -366,7 +411,7 @@ final class MockErpData {
     record StoredTransaction(TransactionCommand command, LedgerEntry entry, InventoryBalance balance) {}
     record TransactionResult(LedgerEntry item, InventoryBalance balance, boolean replayed) {}
     record SelectionCandidate(String id, String asin, String title, CandidateStatus status, int score,
-                              String rejectionReason) {}
+                              String rejectionReason, String sourceUrl) {}
     record WatchEvent(String id, String storeName, String asin, String title, Instant detectedAt, WatchStatus status,
                       String candidateId) {}
     record WatchConfirmation(WatchEvent item, SelectionCandidate candidate, boolean replayed) {}

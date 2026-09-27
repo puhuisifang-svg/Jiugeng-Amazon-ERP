@@ -271,6 +271,42 @@ class MockErpControllerTest {
     }
 
     @Test
+    void createsCandidateFromAmazonUrlAndRejectsDuplicateAsin() throws Exception {
+        String selectionRole = bearer("mock-session-selection");
+
+        mockMvc.perform(post("/api/selection/candidates")
+                        .header(AUTHORIZATION, selectionRole)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"asinOrUrl":"https://www.amazon.com/dp/B0TEST12345?tag=synthetic","title":"模拟手工候选","score":68}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mockData").value(true))
+                .andExpect(jsonPath("$.item.asin").value("B0TEST12345"))
+                .andExpect(jsonPath("$.item.sourceUrl").value("https://www.amazon.com/dp/B0TEST12345"))
+                .andExpect(jsonPath("$.item.status").value("NEW"))
+                .andExpect(jsonPath("$.item.score").value(68));
+
+        mockMvc.perform(post("/api/selection/candidates")
+                        .header(AUTHORIZATION, selectionRole)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"asinOrUrl":"b0test12345","title":"重复候选"}
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CANDIDATE_ASIN_EXISTS"));
+
+        mockMvc.perform(post("/api/selection/candidates")
+                        .header(AUTHORIZATION, selectionRole)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"asinOrUrl":"https://example.com/dp/B0TEST99999","title":"错误来源"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_ASIN_OR_URL"));
+    }
+
+    @Test
     void confirmsWatchEventIdempotentlyAndLinksOneCandidate() throws Exception {
         String selectionRole = bearer("mock-session-selection");
 
@@ -309,6 +345,14 @@ class MockErpControllerTest {
                         .header(AUTHORIZATION, productRole)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"APPROVED\"}"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/selection/candidates")
+                        .header(AUTHORIZATION, productRole)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"asinOrUrl":"B0DENIED1234","title":"无权新增"}
+                                """))
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(post("/api/watch/events/event-mock-001/confirm")

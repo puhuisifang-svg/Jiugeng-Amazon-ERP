@@ -33,6 +33,8 @@ export const domainApi = {
   transact: async (input: { requestId: string; materialCode: string; type: InventoryTransactionType; quantity: number; reason: string }) =>
     assertSynthetic(await apiRequest<SyntheticWrite<LedgerEntryDto> & { balance: InventoryBalanceDto }>('/inventory/transactions', { method: 'POST', body: JSON.stringify(input) })),
   candidates: () => syntheticList<SelectionCandidateDto & { rejectionReason?: string }>('/selection/candidates'),
+  createCandidate: async (input: { asinOrUrl: string; title: string; score?: number }) =>
+    assertSynthetic(await apiRequest<SyntheticWrite<SelectionCandidateDto & { rejectionReason?: string }>>('/selection/candidates', { method: 'POST', body: JSON.stringify(input) })),
   transitionCandidate: async (id: string, input: { status: CandidateStatus; rejectionReason?: string }) =>
     assertSynthetic(await apiRequest<SyntheticWrite<SelectionCandidateDto & { rejectionReason?: string }>>(`/selection/candidates/${id}/transition`, { method: 'POST', body: JSON.stringify(input) })),
   events: () => syntheticList<WatchEventDto & { candidateId?: string }>('/watch/events'),

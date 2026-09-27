@@ -52,4 +52,19 @@ describe('domainApi synthetic write safety', () => {
       body: JSON.stringify({ status: 'REJECTED', rejectionReason: 'low score' }),
     }))
   })
+
+  it('creates a candidate from an ASIN or Amazon URL input', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ mockData: true, source: 'SYNTHETIC', item: { id: 'c2', asin: 'B0TEST12345', title: 'Item', status: 'NEW', score: 68, sourceUrl: 'https://www.amazon.com/dp/B0TEST12345' } }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await domainApi.createCandidate({ asinOrUrl: 'https://www.amazon.com/dp/B0TEST12345', title: 'Item', score: 68 })
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/selection/candidates'), expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ asinOrUrl: 'https://www.amazon.com/dp/B0TEST12345', title: 'Item', score: 68 }),
+    }))
+  })
 })

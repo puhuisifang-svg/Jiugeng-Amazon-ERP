@@ -20,6 +20,8 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 
 import org.springframework.context.annotation.Profile;
@@ -119,6 +121,15 @@ class MockErpController {
         return SyntheticList.of(data.candidates());
     }
 
+    @PostMapping("/selection/candidates")
+    SyntheticItem<SelectionCandidate> createCandidate(
+            @RequestHeader(MockErpData.AUTHORIZATION_HEADER) String authorization,
+            @Valid @RequestBody CreateCandidateRequest request) {
+        DemoSession session = data.session(authorization);
+        data.require(session, "selection.write");
+        return SyntheticItem.of(data.createCandidate(request.asinOrUrl(), request.title(), request.score()));
+    }
+
     @PostMapping("/selection/candidates/{candidateId}/transition")
     SyntheticItem<SelectionCandidate> transitionCandidate(
             @RequestHeader(MockErpData.AUTHORIZATION_HEADER) String authorization,
@@ -171,6 +182,12 @@ class MockErpController {
     }
 
     record CandidateTransitionRequest(@NotNull CandidateStatus status, @Size(max = 500) String rejectionReason) {
+    }
+
+    record CreateCandidateRequest(
+            @NotBlank @Size(max = 500) String asinOrUrl,
+            @NotBlank @Size(max = 300) String title,
+            @Min(0) @Max(100) Integer score) {
     }
 
     record LoginResponse(String token, MockErpData.DemoUser user, boolean mockData, String source) {

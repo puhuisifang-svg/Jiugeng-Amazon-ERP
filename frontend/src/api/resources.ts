@@ -9,7 +9,24 @@ export interface SyntheticList<T> {
 export interface ProductDto { id: string; productCode: string; name: string; status: string; skuCount?: number }
 export interface MaterialDto { id: string; materialCode: string; name: string; unit: string; status: string }
 export interface InventoryBalanceDto { warehouseCode: string; materialCode: string; materialName: string; quantity: number; unit: string }
-export interface SelectionCandidateDto { id: string; asin: string; title: string; status: string; score?: number; sourceUrl?: string }
+export interface SelectionCandidateDto {
+  id: string
+  asin: string
+  title: string
+  status: string
+  score?: number
+  sourceUrl?: string
+  category?: string
+  price?: number
+  rating?: number
+  reviewCount?: number
+  owner?: string
+  tags?: string[]
+  selectionReason?: string
+  source?: 'MANUAL' | 'WATCH'
+  sourceStore?: string
+  discoveredAt?: string
+}
 export interface WatchEventDto { id: string; storeName: string; asin: string; title?: string; detectedAt: string; status: string }
 
 export type ResourceDto = ProductDto | MaterialDto | InventoryBalanceDto | SelectionCandidateDto | WatchEventDto

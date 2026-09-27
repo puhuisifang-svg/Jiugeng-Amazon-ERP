@@ -82,6 +82,7 @@ a { color: inherit; }
 .sku-block { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
 .inline-actions { display: flex; gap: 8px; align-items: center; }
 .inline-actions input { flex: 1; }
+.evaluation-form { margin: 16px 0; padding: 16px; background: #f8f9fb; border-radius: 10px; }
 .login-shell { display: grid; min-height: 100vh; place-items: center; padding: 24px; background: linear-gradient(145deg, #121827, #26304a); }
 .login-card { width: min(420px, 100%); padding: 38px; background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0, 0, 0, .28); }
 .login-card h1 { margin: 12px 0 8px; }

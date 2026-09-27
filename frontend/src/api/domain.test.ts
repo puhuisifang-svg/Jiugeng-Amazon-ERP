@@ -67,4 +67,19 @@ describe('domainApi synthetic write safety', () => {
       body: JSON.stringify({ asinOrUrl: 'https://www.amazon.com/dp/B0TEST12345', title: 'Item', score: 68 }),
     }))
   })
+
+  it('updates traceable candidate evaluation fields', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ mockData: true, source: 'SYNTHETIC', item: { id: 'c1', asin: 'B0TEST12345', title: 'Item', status: 'REVIEWING', owner: 'Owner', tags: ['tag'] } }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await domainApi.updateCandidateEvaluation('c1', { category: 'Home', price: 19.9, rating: 4.5, reviewCount: 120, owner: 'Owner', tags: ['tag'], selectionReason: 'Reason' })
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/selection/candidates/c1/evaluation'), expect.objectContaining({
+      method: 'PUT',
+      body: JSON.stringify({ category: 'Home', price: 19.9, rating: 4.5, reviewCount: 120, owner: 'Owner', tags: ['tag'], selectionReason: 'Reason' }),
+    }))
+  })
 })

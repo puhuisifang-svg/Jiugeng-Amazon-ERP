@@ -3,6 +3,7 @@ package com.jiugeng.erp.mockdata;
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -304,6 +305,39 @@ class MockErpControllerTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_ASIN_OR_URL"));
+    }
+
+    @Test
+    void updatesCandidateEvaluationAndValidatesRatingAndRole() throws Exception {
+        String selectionRole = bearer("mock-session-selection");
+
+        mockMvc.perform(put("/api/selection/candidates/candidate-mock-001/evaluation")
+                        .header(AUTHORIZATION, selectionRole)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"category":"户外用品","price":31.50,"rating":4.7,"reviewCount":1450,"owner":"模拟负责人","tags":["便携","露营"],"selectionReason":"需求稳定且评价增长"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.item.category").value("户外用品"))
+                .andExpect(jsonPath("$.item.price").value(31.5))
+                .andExpect(jsonPath("$.item.rating").value(4.7))
+                .andExpect(jsonPath("$.item.reviewCount").value(1450))
+                .andExpect(jsonPath("$.item.owner").value("模拟负责人"))
+                .andExpect(jsonPath("$.item.tags.length()").value(2))
+                .andExpect(jsonPath("$.item.selectionReason").value("需求稳定且评价增长"));
+
+        mockMvc.perform(put("/api/selection/candidates/candidate-mock-001/evaluation")
+                        .header(AUTHORIZATION, selectionRole)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"rating\":5.1}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+        mockMvc.perform(put("/api/selection/candidates/candidate-mock-001/evaluation")
+                        .header(AUTHORIZATION, bearer("mock-session-product-material"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"owner\":\"无权修改\"}"))
+                .andExpect(status().isForbidden());
     }
 
     @Test

@@ -11,7 +11,7 @@
 3. 候选搜索、状态/负责人筛选和详情追溯。
 4. 监控来源候选关系及模拟基线/失败保护。
 
-## 当前完成：候选手工新增
+## 当前完成：候选管理核心闭环
 
 - `ADMIN`、`SELECTION` 可用 ASIN 或标准 `amazon.com/dp/` URL 新增候选。
 - URL 统一归一化为大写 ASIN 和标准链接。
@@ -19,15 +19,18 @@
 - 非 Amazon URL 或无法识别的输入返回稳定业务错误。
 - `PRODUCT_MATERIAL` 写请求仍由后端 capability 返回 HTTP 403。
 - 前端新增操作表单、初始评分和标准链接展示，响应继续执行 `SYNTHETIC` fail-closed 校验。
+- 可维护类目、价格、星级、评论数、负责人、标签和选品理由。
+- 支持按 ASIN/标题/类目/负责人/标签搜索，并按状态和负责人筛选。
+- 手工与监控来源、来源店铺和发现时间保留在候选记录中；状态流转与淘汰原因继续可追溯。
 
 ## 验证证据
 
-- Backend：24 tests，0 failure / 0 error。
-- Frontend：6 files / 16 tests；lint、typecheck、production build 通过；包含候选新增页面交互测试。
-- 动态 HTTP：标准 Amazon URL 新增返回 200；等价 ASIN 重复返回 409；前端根页面返回 200。
+- Backend：25 tests，0 failure / 0 error。
+- Frontend：6 files / 17 tests；lint、typecheck、production build 通过；包含候选新增页面交互和评估 API 测试。
+- 动态 HTTP：候选评估更新返回 200；产品/辅料角色越权返回 403；Product API 已无 Listing 字段；前端根页面返回 200。
 
 ## 边界
 
 - 当前仍为内存合成数据，后端重启后恢复种子状态。
 - 不访问 Amazon、不抓取页面，也不把标准链接解析解释为真实数据源验收。
-- 下一项按顺序推进候选评估资料、筛选与追溯。
+- 下一项只推进选品相关的监控来源关系、模拟基线与失败快照保护。

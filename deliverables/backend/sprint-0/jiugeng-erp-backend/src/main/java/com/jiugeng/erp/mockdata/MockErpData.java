@@ -66,11 +66,19 @@ final class MockErpData {
         seedMaterial("MAT-MOCK-003", "透明自封袋", "piece", new BigDecimal("96"));
 
         putCandidate(new SelectionCandidate("candidate-mock-001", "B0MOCKASIN1", "可折叠露营灯",
-                CandidateStatus.REVIEWING, 86, null, canonicalAmazonUrl("B0MOCKASIN1")));
+                CandidateStatus.REVIEWING, 86, null, canonicalAmazonUrl("B0MOCKASIN1"), "户外照明",
+                new BigDecimal("29.99"), new BigDecimal("4.6"), 1280, "模拟选品员", List.of("户外", "便携"),
+                "模拟需求稳定且便于差异化", CandidateSource.MANUAL, null,
+                Instant.parse("2026-09-21T08:00:00Z")));
         putCandidate(new SelectionCandidate("candidate-mock-002", "B0MOCKASIN2", "宠物慢食碗",
-                CandidateStatus.NEW, 74, null, canonicalAmazonUrl("B0MOCKASIN2")));
+                CandidateStatus.NEW, 74, null, canonicalAmazonUrl("B0MOCKASIN2"), "宠物用品",
+                new BigDecimal("18.50"), new BigDecimal("4.4"), 630, null, List.of("宠物"), null,
+                CandidateSource.WATCH, "模拟美国店铺 3", Instant.parse("2026-09-22T10:15:00Z")));
         putCandidate(new SelectionCandidate("candidate-mock-003", "B0MOCKASIN3", "车载纸巾盒",
-                CandidateStatus.REJECTED, 41, "模拟毛利不足", canonicalAmazonUrl("B0MOCKASIN3")));
+                CandidateStatus.REJECTED, 41, "模拟毛利不足", canonicalAmazonUrl("B0MOCKASIN3"), "汽车用品",
+                new BigDecimal("12.99"), new BigDecimal("4.1"), 215, "模拟选品员", List.of("车载"),
+                "模拟竞争过于集中", CandidateSource.MANUAL, null,
+                Instant.parse("2026-09-20T06:00:00Z")));
 
         putWatchEvent(new WatchEvent("event-mock-001", "模拟美国店铺 1", "B0MOCKASIN4", "可折叠露营灯升级款",
                 Instant.parse("2026-09-22T08:30:00Z"), WatchStatus.PENDING_REVIEW, null));
@@ -205,9 +213,27 @@ final class MockErpData {
             throw conflict("CANDIDATE_ASIN_EXISTS", "A candidate already exists for ASIN: " + asin);
         }
         SelectionCandidate candidate = new SelectionCandidate(id("candidate"), asin, title.trim(),
-                CandidateStatus.NEW, score == null ? 50 : score, null, canonicalAmazonUrl(asin));
+                CandidateStatus.NEW, score == null ? 50 : score, null, canonicalAmazonUrl(asin), null, null, null,
+                null, null, List.of(), null, CandidateSource.MANUAL, null, Instant.now());
         putCandidate(candidate);
         return candidate;
+    }
+
+    synchronized SelectionCandidate updateCandidateEvaluation(String candidateId, String category, BigDecimal price,
+                                                               BigDecimal rating, Integer reviewCount, String owner,
+                                                               List<String> tags, String selectionReason) {
+        SelectionCandidate current = candidates.get(candidateId);
+        if (current == null) {
+            throw notFound("CANDIDATE_NOT_FOUND", "Unknown candidate: " + candidateId);
+        }
+        List<String> normalizedTags = tags == null ? List.of() : tags.stream()
+                .map(String::trim).filter(tag -> !tag.isBlank()).distinct().toList();
+        SelectionCandidate updated = new SelectionCandidate(current.id(), current.asin(), current.title(),
+                current.status(), current.score(), current.rejectionReason(), current.sourceUrl(), optional(category),
+                price, rating, reviewCount, optional(owner), normalizedTags, optional(selectionReason),
+                current.source(), current.sourceStore(), current.discoveredAt());
+        candidates.put(updated.id(), updated);
+        return updated;
     }
 
     synchronized SelectionCandidate transitionCandidate(String candidateId, CandidateStatus status,
@@ -228,7 +254,10 @@ final class MockErpData {
             throw badRequest("REJECTION_REASON_NOT_ALLOWED", "rejectionReason is only allowed for REJECTED status");
         }
         SelectionCandidate updated = new SelectionCandidate(current.id(), current.asin(), current.title(), status,
-                current.score(), status == CandidateStatus.REJECTED ? normalizedReason : null, current.sourceUrl());
+                current.score(), status == CandidateStatus.REJECTED ? normalizedReason : null, current.sourceUrl(),
+                current.category(), current.price(), current.rating(), current.reviewCount(), current.owner(),
+                current.tags(), current.selectionReason(), current.source(), current.sourceStore(),
+                current.discoveredAt());
         candidates.put(updated.id(), updated);
         return updated;
     }
@@ -250,7 +279,8 @@ final class MockErpData {
                 .findFirst()
                 .orElseGet(() -> {
                     SelectionCandidate created = new SelectionCandidate(id("candidate"), event.asin(), event.title(),
-                            CandidateStatus.NEW, 70, null, canonicalAmazonUrl(event.asin()));
+                            CandidateStatus.NEW, 70, null, canonicalAmazonUrl(event.asin()), null, null, null, null,
+                            null, List.of(), null, CandidateSource.WATCH, event.storeName(), event.detectedAt());
                     putCandidate(created);
                     return created;
                 });
@@ -328,6 +358,13 @@ final class MockErpData {
         return value.trim().toUpperCase(Locale.ROOT);
     }
 
+    private static String optional(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
+    }
+
     private static String extractAsin(String asinOrUrl) {
         String value = asinOrUrl.trim();
         String normalizedValue = normalized(value);
@@ -382,6 +419,7 @@ final class MockErpData {
     enum DemoRole { ADMIN, PRODUCT_MATERIAL, SELECTION }
     enum TransactionType { OPENING, INBOUND, OUTBOUND, ADJUSTMENT }
     enum CandidateStatus { NEW, REVIEWING, APPROVED, REJECTED }
+    enum CandidateSource { MANUAL, WATCH }
     enum WatchStatus { PENDING_REVIEW, CONFIRMED }
 
     record DemoUser(String id, String displayName, DemoRole role) {}
@@ -397,7 +435,10 @@ final class MockErpData {
     record StoredTransaction(TransactionCommand command, LedgerEntry entry, InventoryBalance balance) {}
     record TransactionResult(LedgerEntry item, InventoryBalance balance, boolean replayed) {}
     record SelectionCandidate(String id, String asin, String title, CandidateStatus status, int score,
-                              String rejectionReason, String sourceUrl) {}
+                              String rejectionReason, String sourceUrl, String category, BigDecimal price,
+                              BigDecimal rating, Integer reviewCount, String owner, List<String> tags,
+                              String selectionReason, CandidateSource source, String sourceStore,
+                              Instant discoveredAt) {}
     record WatchEvent(String id, String storeName, String asin, String title, Instant detectedAt, WatchStatus status,
                       String candidateId) {}
     record WatchConfirmation(WatchEvent item, SelectionCandidate candidate, boolean replayed) {}

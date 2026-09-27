@@ -22,12 +22,16 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -140,6 +144,17 @@ class MockErpController {
         return SyntheticItem.of(data.transitionCandidate(candidateId, request.status(), request.rejectionReason()));
     }
 
+    @PutMapping("/selection/candidates/{candidateId}/evaluation")
+    SyntheticItem<SelectionCandidate> updateCandidateEvaluation(
+            @RequestHeader(MockErpData.AUTHORIZATION_HEADER) String authorization,
+            @org.springframework.web.bind.annotation.PathVariable String candidateId,
+            @Valid @RequestBody CandidateEvaluationRequest request) {
+        DemoSession session = data.session(authorization);
+        data.require(session, "selection.write");
+        return SyntheticItem.of(data.updateCandidateEvaluation(candidateId, request.category(), request.price(),
+                request.rating(), request.reviewCount(), request.owner(), request.tags(), request.selectionReason()));
+    }
+
     @GetMapping("/watch/events")
     SyntheticList<WatchEvent> watchEvents(@RequestHeader(MockErpData.AUTHORIZATION_HEADER) String authorization) {
         DemoSession session = data.session(authorization);
@@ -188,6 +203,16 @@ class MockErpController {
             @NotBlank @Size(max = 500) String asinOrUrl,
             @NotBlank @Size(max = 300) String title,
             @Min(0) @Max(100) Integer score) {
+    }
+
+    record CandidateEvaluationRequest(
+            @Size(max = 100) String category,
+            @DecimalMin("0.0") BigDecimal price,
+            @DecimalMin("0.0") @DecimalMax("5.0") BigDecimal rating,
+            @PositiveOrZero Integer reviewCount,
+            @Size(max = 100) String owner,
+            @Size(max = 10) List<@NotBlank @Size(max = 30) String> tags,
+            @Size(max = 500) String selectionReason) {
     }
 
     record LoginResponse(String token, MockErpData.DemoUser user, boolean mockData, String source) {

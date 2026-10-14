@@ -10,7 +10,6 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -142,15 +141,6 @@ class IamRepository {
 
     void unlock(String userId) {
         clearFailedLogins(userId);
-    }
-
-    void event(String userId, String loginName, String type, boolean success, String detail) {
-        jdbc.sql("""
-                INSERT INTO iam_security_event (id, user_id, login_name, event_type, success, detail)
-                VALUES (:id, :userId, :loginName, :type, :success, :detail)
-                """).param("id", UUID.randomUUID().toString()).param("userId", userId)
-                .param("loginName", loginName).param("type", type).param("success", success)
-                .param("detail", detail).update();
     }
 
     private User mapUser(ResultSet rs, int rowNum) throws SQLException {

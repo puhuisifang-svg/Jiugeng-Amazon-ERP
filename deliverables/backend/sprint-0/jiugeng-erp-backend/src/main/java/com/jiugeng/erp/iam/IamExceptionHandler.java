@@ -9,7 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@RestControllerAdvice(assignableTypes = IamController.class)
+@RestControllerAdvice(assignableTypes = { IamController.class, AuditController.class })
 @Profile("!mock")
 class IamExceptionHandler {
     @ExceptionHandler(IamException.class)

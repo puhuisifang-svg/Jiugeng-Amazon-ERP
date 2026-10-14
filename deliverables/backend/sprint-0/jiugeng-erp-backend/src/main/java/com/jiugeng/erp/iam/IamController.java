@@ -64,39 +64,42 @@ class IamController {
 
     @PostMapping("/users")
     @PreAuthorize("hasAuthority('system.users.manage')")
-    UserView createUser(@Valid @RequestBody CreateUserRequest request) {
-        return service.createUser(request.loginName(), request.displayName(), request.initialPassword(), request.role());
+    UserView createUser(@Valid @RequestBody CreateUserRequest request,
+            @AuthenticationPrincipal SessionPrincipal principal) {
+        return service.createUser(request.loginName(), request.displayName(), request.initialPassword(), request.role(),
+                principal);
     }
 
     @PostMapping("/users/{userId}/disable")
     @PreAuthorize("hasAuthority('system.users.manage')")
     UserView disable(@PathVariable String userId, @AuthenticationPrincipal SessionPrincipal principal) {
-        return service.setStatus(userId, Status.DISABLED, principal.userId());
+        return service.setStatus(userId, Status.DISABLED, principal);
     }
 
     @PostMapping("/users/{userId}/enable")
     @PreAuthorize("hasAuthority('system.users.manage')")
     UserView enable(@PathVariable String userId, @AuthenticationPrincipal SessionPrincipal principal) {
-        return service.setStatus(userId, Status.ENABLED, principal.userId());
+        return service.setStatus(userId, Status.ENABLED, principal);
     }
 
     @PostMapping("/users/{userId}/role")
     @PreAuthorize("hasAuthority('system.users.manage')")
     UserView setRole(@PathVariable String userId, @AuthenticationPrincipal SessionPrincipal principal,
             @Valid @RequestBody ChangeRoleRequest request) {
-        return service.setRole(userId, request.role(), principal.userId());
+        return service.setRole(userId, request.role(), principal);
     }
 
     @PostMapping("/users/{userId}/unlock")
     @PreAuthorize("hasAuthority('system.users.manage')")
-    UserView unlock(@PathVariable String userId) {
-        return service.unlock(userId);
+    UserView unlock(@PathVariable String userId, @AuthenticationPrincipal SessionPrincipal principal) {
+        return service.unlock(userId, principal);
     }
 
     @PostMapping("/users/{userId}/reset-password")
     @PreAuthorize("hasAuthority('system.users.manage')")
-    UserView resetPassword(@PathVariable String userId, @Valid @RequestBody ResetPasswordRequest request) {
-        return service.resetPassword(userId, request.newPassword());
+    UserView resetPassword(@PathVariable String userId, @AuthenticationPrincipal SessionPrincipal principal,
+            @Valid @RequestBody ResetPasswordRequest request) {
+        return service.resetPassword(userId, request.newPassword(), principal);
     }
 
     record LoginRequest(

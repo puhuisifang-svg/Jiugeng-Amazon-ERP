@@ -75,6 +75,21 @@ a { color: inherit; }
 .operation-form .form-wide { grid-column: span 2; }
 .operation-form button, .inline-actions button, .data-table button { min-height: 40px; padding: 0 16px; align-self: end; color: white; background: var(--accent); border: 0; border-radius: 7px; cursor: pointer; }
 .operation-form .secondary-button { color: var(--muted); background: #eef0f4; }
+.audit-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; min-height: 0; padding: 20px; }
+.audit-filters h2 { grid-column: 1 / -1; margin: 0 0 4px; font-size: 18px; }
+.audit-filters label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.audit-filters input, .audit-filters select { min-height: 40px; padding: 0 11px; color: var(--ink); background: white; border: 1px solid var(--line); border-radius: 7px; }
+.audit-filter-actions { display: flex; gap: 8px; align-items: end; }
+.audit-filter-actions button, .pagination button { min-height: 40px; padding: 0 16px; color: white; background: var(--accent); border: 0; border-radius: 7px; cursor: pointer; }
+.audit-filter-actions .secondary-button, .pagination button:disabled { color: var(--muted); background: #eef0f4; }
+.audit-table td small { display: block; max-width: 180px; margin-top: 4px; overflow: hidden; color: var(--muted); text-overflow: ellipsis; }
+.audit-category { display: block; color: var(--muted); font-size: 11px; }
+.audit-table details { min-width: 100px; }
+.audit-table summary { color: var(--accent); cursor: pointer; }
+.audit-table pre { max-width: 420px; max-height: 220px; padding: 10px; overflow: auto; background: #f7f8fb; border-radius: 6px; white-space: pre-wrap; }
+.status-success { color: #18714d; }
+.status-failure { color: #9f2f2f; }
+.pagination { display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 16px; border-top: 1px solid var(--line); }
 .operation-form button:disabled, .inline-actions button:disabled, .data-table button:disabled { cursor: wait; opacity: .6; }
 .card-list { display: grid; gap: 16px; }
 .compact-panel { min-height: 0; padding: 20px; }

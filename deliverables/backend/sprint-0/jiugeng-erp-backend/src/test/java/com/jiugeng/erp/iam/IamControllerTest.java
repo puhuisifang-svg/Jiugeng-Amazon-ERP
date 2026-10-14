@@ -35,7 +35,7 @@ class IamControllerTest {
 
     @BeforeEach
     void resetUsers() {
-        jdbc.update("DELETE FROM iam_security_event");
+        jdbc.update("DELETE FROM audit_event");
         jdbc.update("DELETE FROM iam_session");
         jdbc.update("DELETE FROM iam_user");
         service.createUser("admin", "测试管理员", INITIAL_PASSWORD, Role.ADMIN);
@@ -114,10 +114,10 @@ class IamControllerTest {
         mvc.perform(loginRequest("locked-user", INITIAL_PASSWORD))
                 .andExpect(status().isLocked());
         assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM iam_security_event WHERE login_name = 'locked-user' AND event_type = 'LOGIN_FAILED'",
+                "SELECT COUNT(*) FROM audit_event WHERE actor_login_name = 'locked-user' AND action = 'LOGIN_FAILED'",
                 Integer.class)).isEqualTo(6);
         assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM iam_security_event WHERE login_name = 'locked-user' AND event_type = 'ACCOUNT_LOCK'",
+                "SELECT COUNT(*) FROM audit_event WHERE actor_login_name = 'locked-user' AND action = 'ACCOUNT_LOCK'",
                 Integer.class)).isEqualTo(1);
 
         String adminToken = loginAndChangeAdmin();
@@ -127,8 +127,8 @@ class IamControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.lockedAt").doesNotExist());
         assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM iam_security_event WHERE login_name = 'locked-user' AND event_type = 'ACCOUNT_UNLOCK'",
-                Integer.class)).isEqualTo(1);
+                "SELECT COUNT(*) FROM audit_event WHERE resource_id = ? AND action = 'ACCOUNT_UNLOCK'",
+                Integer.class, userId)).isEqualTo(1);
 
         assertThat(login("locked-user", INITIAL_PASSWORD)).isNotBlank();
     }

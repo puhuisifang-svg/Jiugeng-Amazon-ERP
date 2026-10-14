@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -26,6 +27,16 @@ class ImportRepository {
     BatchRow batch(String id) { return optional(id).orElseThrow(() -> new ImportException(404, "IMPORT_BATCH_NOT_FOUND", "导入批次不存在")); }
     Optional<BatchRow> optional(String id) { return jdbc.sql(select() + " WHERE id=:id").param("id", id).query(this::map).optional(); }
     List<BatchView> list() { return jdbc.sql(select() + " ORDER BY created_at DESC, id DESC").query((rs, row) -> map(rs, row).view()).list(); }
+
+    Set<String> activeStorageKeys() {
+        return Set.copyOf(jdbc.sql("""
+                SELECT storage_key FROM import_batch
+                WHERE status IN ('QUEUED','VALIDATING','VALIDATED','COMMITTING') AND storage_key IS NOT NULL
+                UNION
+                SELECT result_storage_key FROM import_batch
+                WHERE status IN ('QUEUED','VALIDATING','VALIDATED','COMMITTING') AND result_storage_key IS NOT NULL
+                """).query(String.class).list());
+    }
 
     void insert(String id, ImportType type, String version, String storageKey, String fileHash, String idemKey,
             String payloadHash, String actorId, String actorLogin, String source) {

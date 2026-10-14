@@ -28,6 +28,8 @@ server:
 app:
   imports:
     staging-dir: ${ERP_IMPORT_STAGING_DIR:${java.io.tmpdir}/jiugeng-erp-import-staging}
+    retention-days: ${ERP_IMPORT_RETENTION_DAYS:7}
+    cleanup-cron: ${ERP_IMPORT_CLEANUP_CRON:0 30 3 * * *}
     templates-dir: ${ERP_IMPORT_TEMPLATES_DIR:../../../../deliverables/pm/excel_templates}
     preview-hours: ${ERP_IMPORT_PREVIEW_HOURS:24}
   iam:

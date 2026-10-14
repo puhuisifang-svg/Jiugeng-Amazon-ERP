@@ -2,6 +2,8 @@ package com.jiugeng.erp.importexport;
 
 import static com.jiugeng.erp.importexport.ImportTypes.*;
 
+import com.jiugeng.erp.product.ProductImportGateway;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -25,7 +27,10 @@ class XlsxImportValidator {
     private static final long MAX_EXPANDED = 50L * 1024 * 1024;
     private static final int MAX_ENTRIES = 2048;
     private final ImportTemplateRegistry templates;
-    XlsxImportValidator(ImportTemplateRegistry templates) { this.templates = templates; }
+    private final ProductImportGateway productImports;
+    XlsxImportValidator(ImportTemplateRegistry templates, ProductImportGateway productImports) {
+        this.templates = templates; this.productImports = productImports;
+    }
 
     ValidationResult validate(ImportType type, String version, byte[] bytes) {
         inspectZip(bytes);
@@ -54,6 +59,15 @@ class XlsxImportValidator {
                     String key = data.values().stream().filter(value -> !value.isBlank()).findFirst().orElse("row-" + (rowIndex + 1));
                     previews.add(new PreviewInput(name, rowIndex + 1, key, data));
                 }
+            }
+            if ((type == ImportType.PRODUCTS || type == ImportType.VARIANTS)
+                    && issues.stream().noneMatch(IssueInput::blocking)) {
+                List<ProductImportGateway.ImportRow> rows = previews.stream()
+                        .map(row -> new ProductImportGateway.ImportRow(row.sheet(), row.row(), row.data())).toList();
+                ProductImportGateway.Validation semantic = type == ImportType.PRODUCTS
+                        ? productImports.validateProducts(rows) : productImports.validateVariants(rows);
+                semantic.errors().forEach(error -> issues.add(new IssueInput("ERROR", true, "FIELD", error.sheet(),
+                        error.rowNumber(), error.field(), error.code(), error.reason(), error.rawValue(), "修正后重新上传")));
             }
             return new ValidationResult(total, List.copyOf(issues), List.copyOf(previews));
         } catch (ImportException exception) { throw exception; }

@@ -4,6 +4,7 @@ import static com.jiugeng.erp.importexport.ImportTypes.*;
 
 import com.jiugeng.erp.iam.AuditTrail;
 import com.jiugeng.erp.iam.AuthenticatedActor;
+import com.jiugeng.erp.product.ProductImportGateway;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -17,6 +18,8 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -24,10 +27,13 @@ class ImportService {
     static final long MAX_BYTES = 10L * 1024 * 1024;
     static final String XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     private final ImportRepository repository; private final ImportFileStore files; private final XlsxImportValidator validator;
-    private final AuditTrail audit; private final int previewHours;
+    private final AuditTrail audit; private final ProductImportGateway productImports; private final TransactionTemplate transactions;
+    private final int previewHours;
     ImportService(ImportRepository repository, ImportFileStore files, XlsxImportValidator validator, AuditTrail audit,
+            ProductImportGateway productImports, PlatformTransactionManager transactionManager,
             @Value("${app.imports.preview-hours:24}") int previewHours) {
-        this.repository=repository; this.files=files; this.validator=validator; this.audit=audit; this.previewHours=previewHours;
+        this.repository=repository; this.files=files; this.validator=validator; this.audit=audit;
+        this.productImports=productImports; this.transactions=new TransactionTemplate(transactionManager); this.previewHours=previewHours;
     }
 
     @Transactional
@@ -95,22 +101,56 @@ class ImportService {
             return new UploadReceipt(queued,false);
         } catch(IOException exception) { throw new ImportException(500,"IMPORT_TECHNICAL_FAILURE","暂存文件不可读"); }
     }
-    @Transactional
     BatchView commit(String id,String previewVersion,String fileHash,boolean warningsAccepted,String idempotencyKey,
             AuthenticatedActor actor) {
-        key(idempotencyKey); var batch=repository.batch(id); requireValidated(batch);
+        String key=key(idempotencyKey); var batch=repository.batch(id);
+        String payload=hash(("commit\u001f"+id+"\u001f"+previewVersion+"\u001f"+fileHash+"\u001f"+warningsAccepted).getBytes(StandardCharsets.UTF_8));
+        var replay=repository.operation(actor.userId(),"COMMIT",id,key).orElse(null);
+        if(replay!=null){if(!replay.payloadHash().equals(payload))throw conflict();return repository.batch(replay.responseBatchId()).view();}
+        requireValidated(batch);
         if(batch.previewExpiresAt().isBefore(Instant.now())) throw new ImportException(409,"IMPORT_PREVIEW_EXPIRED","预览已过期");
         if(!java.util.Objects.equals(batch.previewVersion(),previewVersion) || !batch.fileHash().equals(fileHash))
             throw new ImportException(409,"IMPORT_PREVIEW_MISMATCH","确认快照与校验结果不一致");
         if(!batch.commitAllowed()) throw new ImportException(409,"IMPORT_COMMIT_NOT_ALLOWED","批次存在阻断问题");
         if(batch.warnings()>0 && !warningsAccepted) throw new ImportException(409,"IMPORT_WARNINGS_NOT_ACCEPTED","必须确认警告后提交");
-        throw new ImportException(409,"IMPORT_HANDLER_NOT_REGISTERED","该导入类型的业务提交处理器尚未注册");
+        if(batch.type()!=ImportType.PRODUCTS && batch.type()!=ImportType.VARIANTS)
+            throw new ImportException(409,"IMPORT_HANDLER_NOT_REGISTERED","该导入类型的业务提交处理器尚未注册");
+        transactions.executeWithoutResult(status->{
+            if(!repository.startCommit(id))throw new ImportException(409,"IMPORT_STATE_CONFLICT","批次提交状态已变化");
+            repository.operation(actor.userId(),"COMMIT",id,key,payload,id);
+        });
+        try {
+            transactions.executeWithoutResult(status->{
+                List<ProductImportGateway.ImportRow> rows=repository.previewRows(id).stream()
+                        .map(row->new ProductImportGateway.ImportRow(row.sheet(),row.row(),row.data())).toList();
+                ProductImportGateway.Validation validation=batch.type()==ImportType.PRODUCTS
+                        ?productImports.validateProducts(rows):productImports.validateVariants(rows);
+                if(!validation.valid())throw new ImportException(409,"IMPORT_DATA_CHANGED","提交前业务校验失败，请重新上传");
+                ProductImportGateway.Result result=batch.type()==ImportType.PRODUCTS
+                        ?productImports.commitProducts(rows,actor):productImports.commitVariants(rows,actor);
+                repository.succeed(id,new ImportRepository.ProductImportResult(result.created(),result.updated(),result.unchanged()));
+                audit.record(operation(actor,"IMPORT_COMMIT",id,Map.of("importType",batch.type().name(),"created",result.created(),"updated",result.updated(),"unchanged",result.unchanged())));
+            });
+        } catch(RuntimeException exception) {
+            transactions.executeWithoutResult(status->{
+                String code=failureCode(exception);repository.fail(id,code);
+                audit.record(new AuditTrail.BusinessOperation(actor.userId(),actor.loginName(),actor.displayName(),
+                        "IMPORT_COMMIT","IMPORT_BATCH",id,false,null,Map.of("importType",batch.type().name(),"failureCode",code),
+                        "产品或 SKU 导入整批回滚"));
+            });
+            throw exception instanceof ImportException value?value:new ImportException(409,"IMPORT_COMMIT_FAILED","导入提交失败，未写入任何业务数据");
+        }
+        return repository.batch(id).view();
     }
     @Transactional(readOnly=true) Map<String,Object> result(String id) {
         var batch=repository.batch(id);
         if(batch.status()!=Status.SUCCEEDED && batch.status()!=Status.FAILED && batch.status()!=Status.CANCELLED)
             throw new ImportException(409,"IMPORT_BATCH_NOT_READY","批次尚未结束");
-        return Map.of("batch",batch.view(),"writtenRows",0,"message","当前版本提供结果框架；业务处理器尚未注册");
+        Map<String,Object> result=new java.util.LinkedHashMap<>();
+        result.put("batch",batch.view());result.put("createdRows",batch.createdRows());result.put("updatedRows",batch.updatedRows());
+        result.put("unchangedRows",batch.unchangedRows());result.put("writtenRows",batch.createdRows()+batch.updatedRows());
+        result.put("committedAt",batch.committedAt());result.put("message",batch.status()==Status.SUCCEEDED?"导入提交成功":"导入未成功");
+        return result;
     }
     private void requireValidated(ImportRepository.BatchRow batch) {
         if(batch.status()!=Status.VALIDATED) throw new ImportException(409,"IMPORT_BATCH_NOT_READY","批次尚未完成校验");
@@ -130,6 +170,7 @@ class ImportService {
         return value.trim();
     }
     private ImportException conflict(){return new ImportException(409,"IDEMPOTENCY_KEY_REUSED","幂等键已用于不同载荷");}
+    private String failureCode(RuntimeException exception){return exception instanceof ImportException value?value.code():"IMPORT_COMMIT_FAILED";}
     private String hash(byte[] value){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value));}catch(NoSuchAlgorithmException e){throw new IllegalStateException(e);}}
     private AuditTrail.BusinessOperation operation(AuthenticatedActor actor,String action,String id,Map<String,?> after){return new AuditTrail.BusinessOperation(actor.userId(),actor.loginName(),actor.displayName(),action,"IMPORT_BATCH",id,true,null,after,"五类活跃导入批次");}
     record UploadReceipt(BatchView batch,boolean replayed){}

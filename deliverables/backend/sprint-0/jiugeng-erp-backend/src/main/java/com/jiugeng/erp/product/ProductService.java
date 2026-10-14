@@ -133,8 +133,13 @@ class ProductService {
         if (repository.barcodeExists(normalizedBarcode, id)) {
             throw new ProductException(409, "BARCODE_EXISTS", "商品条码已存在（忽略大小写）");
         }
-        if (input.packageWeight() != null && input.packageWeight().signum() < 0) {
-            throw new ProductException(400, "PACKAGE_WEIGHT_INVALID", "包装重量不能小于 0");
+        String weightUnit = optional(input.packageWeightUnit(), 8);
+        if (input.packageWeight() != null && input.packageWeight().signum() <= 0) {
+            throw new ProductException(400, "PACKAGE_WEIGHT_INVALID", "包装重量必须大于 0");
+        }
+        if ((input.packageWeight() == null) != (weightUnit == null)
+                || weightUnit != null && !Set.of("G", "KG", "OZ", "LB").contains(weightUnit.toUpperCase(Locale.ROOT))) {
+            throw new ProductException(400, "PACKAGE_WEIGHT_UNIT_INVALID", "包装重量与 G/KG/OZ/LB 单位必须同时填写");
         }
         List<AttributeInput> source = input.attributes() == null ? List.of() : input.attributes();
         if (source.isEmpty() || source.size() > 30) {
@@ -156,6 +161,7 @@ class ProductService {
         return new ValidatedVariant(id, sku, normalizedSku, required(input.variantName(), "规格名称", 200), barcode,
                 normalizedBarcode, optional(input.material(), 200), optional(input.specification(), 300),
                 optional(input.itemDimensions(), 200), optional(input.packageDimensions(), 200), input.packageWeight(),
+                weightUnit == null ? null : weightUnit.toUpperCase(Locale.ROOT),
                 input.status() == null ? VariantStatus.ACTIVE : input.status(), attributes, signature);
     }
 
@@ -170,12 +176,13 @@ class ProductService {
             if (variant.id() == null) {
                 repository.insertVariant(id, productId, variant.sku(), variant.normalizedSku(), variant.name(),
                         variant.barcode(), variant.normalizedBarcode(), variant.material(), variant.specification(),
-                        variant.itemDimensions(), variant.packageDimensions(), variant.packageWeight(), variant.status(),
+                        variant.itemDimensions(), variant.packageDimensions(), variant.packageWeight(),
+                        variant.packageWeightUnit(), variant.status(),
                         variant.signature());
             } else {
                 repository.updateVariant(id, variant.sku(), variant.normalizedSku(), variant.name(), variant.barcode(),
                         variant.normalizedBarcode(), variant.material(), variant.specification(), variant.itemDimensions(),
-                        variant.packageDimensions(), variant.packageWeight(), variant.status(), variant.signature());
+                        variant.packageDimensions(), variant.packageWeight(), variant.packageWeightUnit(), variant.status(), variant.signature());
             }
             repository.replaceAttributes(id, variant.attributes());
         }
@@ -251,6 +258,7 @@ class ProductService {
 
     private record ValidatedVariant(String id, String sku, String normalizedSku, String name, String barcode,
             String normalizedBarcode, String material, String specification, String itemDimensions,
-            String packageDimensions, java.math.BigDecimal packageWeight, VariantStatus status,
+            String packageDimensions, java.math.BigDecimal packageWeight, String packageWeightUnit,
+            VariantStatus status,
             List<AttributeView> attributes, String signature) {}
 }

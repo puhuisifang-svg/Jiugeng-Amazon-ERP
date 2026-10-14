@@ -62,6 +62,25 @@ class ImportRepository {
         if (changed == 0 && batch(id).status() != Status.CANCELLED)
             throw new ImportException(409, "IMPORT_NOT_CANCELLABLE", "当前批次状态不可取消");
     }
+    boolean startCommit(String id) {
+        return jdbc.sql("""
+                UPDATE import_batch SET status='COMMITTING',phase='COMMITTING_ROWS',updated_at=CURRENT_TIMESTAMP
+                WHERE id=:id AND status='VALIDATED'
+                """).param("id",id).update()==1;
+    }
+    void succeed(String id, ProductImportResult result) {
+        int changed=jdbc.sql("""
+                UPDATE import_batch SET status='SUCCEEDED',phase='DONE',processed_rows=total_rows,
+                    result_created_rows=:created,result_updated_rows=:updated,result_unchanged_rows=:unchanged,
+                    committed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=:id AND status='COMMITTING'
+                """).param("created",result.created()).param("updated",result.updated()).param("unchanged",result.unchanged())
+                .param("id",id).update();
+        if(changed!=1)throw new ImportException(409,"IMPORT_STATE_CONFLICT","批次提交状态已变化");
+    }
+    void fail(String id,String code){jdbc.sql("""
+            UPDATE import_batch SET status='FAILED',phase='DONE',failure_code=:code,commit_allowed=FALSE,
+                updated_at=CURRENT_TIMESTAMP WHERE id=:id AND status='COMMITTING'
+            """).param("code",code).param("id",id).update();}
     List<IssueView> issues(String id) {
         batch(id);
         return jdbc.sql("""
@@ -119,16 +138,19 @@ class ImportRepository {
                 rs.getString("file_hash"), rs.getString("upload_payload_hash"), rs.getInt("total_rows"),
                 rs.getInt("processed_rows"), rs.getInt("error_count"), rs.getInt("warning_count"),
                 rs.getBoolean("commit_allowed"), rs.getString("preview_version"), instant(rs,"preview_expires_at"),
-                rs.getString("revalidation_of_batch_id"), rs.getString("failure_code"), instant(rs,"created_at"), instant(rs,"updated_at"));
+                rs.getString("revalidation_of_batch_id"), rs.getString("failure_code"),
+                rs.getInt("result_created_rows"),rs.getInt("result_updated_rows"),rs.getInt("result_unchanged_rows"),
+                instant(rs,"committed_at"),instant(rs,"created_at"), instant(rs,"updated_at"));
     }
     private Instant instant(ResultSet rs, String column) throws SQLException { var value=rs.getTimestamp(column); return value==null?null:value.toInstant(); }
     record OperationRow(String payloadHash, String responseBatchId) {}
     record BatchRow(String id, ImportType type, String version, Status status, Phase phase, String storageKey,
             String fileHash, String payloadHash, int totalRows, int processedRows, int errors, int warnings,
             boolean commitAllowed, String previewVersion, Instant previewExpiresAt, String source, String failureCode,
-            Instant createdAt, Instant updatedAt) {
+            int createdRows,int updatedRows,int unchangedRows,Instant committedAt,Instant createdAt, Instant updatedAt) {
         BatchView view() { return new BatchView(id,type,version,status,phase,fileHash,totalRows,processedRows,
                 totalRows==0?(status==Status.VALIDATED?100:0):processedRows*100/totalRows,errors,warnings,
                 commitAllowed,previewVersion,previewExpiresAt,source,failureCode,createdAt,updatedAt); }
     }
+    record ProductImportResult(int created,int updated,int unchanged){}
 }

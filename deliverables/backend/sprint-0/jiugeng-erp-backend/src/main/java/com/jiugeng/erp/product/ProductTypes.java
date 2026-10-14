@@ -14,7 +14,7 @@ final class ProductTypes {
 
     record VariantView(String id, String skuCode, String variantName, String barcode, String material,
             String specification, String itemDimensions, String packageDimensions, BigDecimal packageWeight,
-            VariantStatus status, List<AttributeView> attributes) {}
+            String packageWeightUnit, VariantStatus status, List<AttributeView> attributes) {}
 
     record ProductView(String id, String productCode, String nameZh, String nameEn, String brand,
             String internalCategory, String productType, String description, ProductStatus status,
@@ -24,7 +24,7 @@ final class ProductTypes {
 
     record VariantInput(String id, String skuCode, String variantName, String barcode, String material,
             String specification, String itemDimensions, String packageDimensions, BigDecimal packageWeight,
-            VariantStatus status, List<AttributeInput> attributes) {}
+            String packageWeightUnit, VariantStatus status, List<AttributeInput> attributes) {}
 
     record ProductInput(String productCode, String nameZh, String nameEn, String brand,
             String internalCategory, String productType, String description, ProductStatus status,

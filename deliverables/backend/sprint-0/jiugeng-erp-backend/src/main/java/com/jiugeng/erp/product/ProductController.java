@@ -91,11 +91,12 @@ class ProductController {
             @Size(max = 200) String itemDimensions,
             @Size(max = 200) String packageDimensions,
             @PositiveOrZero BigDecimal packageWeight,
+            @Size(max = 8) String packageWeightUnit,
             VariantStatus status,
             @NotEmpty @Size(max = 30) List<@Valid AttributeRequest> attributes) {
         VariantInput input() {
             return new VariantInput(id, skuCode, variantName, barcode, material, specification, itemDimensions,
-                    packageDimensions, packageWeight, status,
+                    packageDimensions, packageWeight, packageWeightUnit, status,
                     attributes.stream().map(AttributeRequest::input).toList());
         }
     }

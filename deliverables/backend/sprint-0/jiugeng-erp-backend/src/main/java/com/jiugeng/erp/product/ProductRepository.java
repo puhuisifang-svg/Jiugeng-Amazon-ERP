@@ -100,34 +100,37 @@ class ProductRepository {
 
     void insertVariant(String id, String productId, String skuCode, String normalizedSku, String variantName,
             String barcode, String normalizedBarcode, String material, String specification, String itemDimensions,
-            String packageDimensions, BigDecimal packageWeight, VariantStatus status, String signature) {
+            String packageDimensions, BigDecimal packageWeight, String packageWeightUnit, VariantStatus status, String signature) {
         jdbc.sql("""
                 INSERT INTO product_variant (id, product_id, sku_code, sku_code_normalized, variant_name,
                     barcode, barcode_normalized, material, specification, item_dimensions, package_dimensions,
-                    package_weight, status, attribute_signature)
+                    package_weight, package_weight_unit, status, attribute_signature)
                 VALUES (:id, :productId, :skuCode, :normalizedSku, :variantName, :barcode, :normalizedBarcode,
-                    :material, :specification, :itemDimensions, :packageDimensions, :packageWeight, :status, :signature)
+                    :material, :specification, :itemDimensions, :packageDimensions, :packageWeight, :packageWeightUnit, :status, :signature)
                 """).param("id", id).param("productId", productId).param("skuCode", skuCode)
                 .param("normalizedSku", normalizedSku).param("variantName", variantName).param("barcode", barcode)
                 .param("normalizedBarcode", normalizedBarcode).param("material", material)
                 .param("specification", specification).param("itemDimensions", itemDimensions)
                 .param("packageDimensions", packageDimensions).param("packageWeight", packageWeight)
+                .param("packageWeightUnit", packageWeightUnit)
                 .param("status", status.name()).param("signature", signature).update();
     }
 
     void updateVariant(String id, String skuCode, String normalizedSku, String variantName, String barcode,
             String normalizedBarcode, String material, String specification, String itemDimensions,
-            String packageDimensions, BigDecimal packageWeight, VariantStatus status, String signature) {
+            String packageDimensions, BigDecimal packageWeight, String packageWeightUnit, VariantStatus status, String signature) {
         jdbc.sql("""
                 UPDATE product_variant SET sku_code = :skuCode, sku_code_normalized = :normalizedSku,
                     variant_name = :variantName, barcode = :barcode, barcode_normalized = :normalizedBarcode,
                     material = :material, specification = :specification, item_dimensions = :itemDimensions,
-                    package_dimensions = :packageDimensions, package_weight = :packageWeight, status = :status,
+                    package_dimensions = :packageDimensions, package_weight = :packageWeight,
+                    package_weight_unit = :packageWeightUnit, status = :status,
                     attribute_signature = :signature, updated_at = CURRENT_TIMESTAMP WHERE id = :id
                 """).param("id", id).param("skuCode", skuCode).param("normalizedSku", normalizedSku)
                 .param("variantName", variantName).param("barcode", barcode).param("normalizedBarcode", normalizedBarcode)
                 .param("material", material).param("specification", specification).param("itemDimensions", itemDimensions)
                 .param("packageDimensions", packageDimensions).param("packageWeight", packageWeight)
+                .param("packageWeightUnit", packageWeightUnit)
                 .param("status", status.name()).param("signature", signature).update();
     }
 
@@ -166,7 +169,7 @@ class ProductRepository {
         String id = rs.getString("id");
         List<VariantView> variants = jdbc.sql("""
                 SELECT id, sku_code, variant_name, barcode, material, specification, item_dimensions,
-                       package_dimensions, package_weight, status
+                       package_dimensions, package_weight, package_weight_unit, status
                 FROM product_variant WHERE product_id = :productId ORDER BY sku_code_normalized
                 """).param("productId", id).query(this::mapVariant).list();
         return new ProductView(id, rs.getString("product_code"), rs.getString("name_zh"), rs.getString("name_en"),
@@ -185,6 +188,7 @@ class ProductRepository {
         return new VariantView(id, rs.getString("sku_code"), rs.getString("variant_name"), rs.getString("barcode"),
                 rs.getString("material"), rs.getString("specification"), rs.getString("item_dimensions"),
                 rs.getString("package_dimensions"), rs.getBigDecimal("package_weight"),
+                rs.getString("package_weight_unit"),
                 VariantStatus.valueOf(rs.getString("status")), attributes);
     }
 

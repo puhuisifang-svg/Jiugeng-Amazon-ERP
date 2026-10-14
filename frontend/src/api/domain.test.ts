@@ -97,4 +97,19 @@ describe('domainApi synthetic write safety', () => {
       body: JSON.stringify({ mode: 'INCOMPLETE' }),
     }))
   })
+
+  it('appends a candidate review note', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ item: { candidate: { id: 'c1', asin: 'B0TEST12345', title: 'Item', status: 'NEW' }, notes: [] }, mockData: true, source: 'SYNTHETIC' }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await domainApi.addCandidateNote('c1', 'Review note')
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/selection/candidates/c1/notes'), expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ content: 'Review note' }),
+    }))
+  })
 })

@@ -158,6 +158,10 @@ onMounted(load)
           选品理由：{{ item.selectionReason }}
         </p><p v-if="item.sourceEventId">
           来源链路：{{ item.sourceStore }} → {{ item.sourceRunId }} → {{ item.sourceEventId }}
+        </p><p>
+          <RouterLink :to="`/selection/candidates/${item.id}`">
+            查看详情与评审记录
+          </RouterLink>
         </p>
         <form
           v-if="writable && drafts[item.id]"

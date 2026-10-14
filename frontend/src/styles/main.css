@@ -70,7 +70,8 @@ a { color: inherit; }
 .operation-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; min-height: 0; padding: 20px; }
 .operation-form h2 { grid-column: 1 / -1; margin: 0 0 4px; font-size: 18px; }
 .operation-form label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 700; }
-.operation-form input, .operation-form select, .inline-actions input { min-height: 40px; padding: 0 11px; color: var(--ink); background: white; border: 1px solid var(--line); border-radius: 7px; }
+.operation-form input, .operation-form select, .operation-form textarea, .inline-actions input { min-height: 40px; padding: 0 11px; color: var(--ink); background: white; border: 1px solid var(--line); border-radius: 7px; }
+.operation-form textarea { min-height: 96px; padding-block: 10px; resize: vertical; }
 .operation-form .form-wide { grid-column: span 2; }
 .operation-form button, .inline-actions button, .data-table button { min-height: 40px; padding: 0 16px; align-self: end; color: white; background: var(--accent); border: 0; border-radius: 7px; cursor: pointer; }
 .operation-form button:disabled, .inline-actions button:disabled, .data-table button:disabled { cursor: wait; opacity: .6; }

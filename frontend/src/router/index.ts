@@ -25,7 +25,7 @@ export const appRoutes: RouteRecordRaw[] = [
       { path: 'imports', name: 'imports', component: placeholder, props: { description: '六类 Excel 上传、校验、预览、提交与结果入口' }, meta: { title: '导入中心', group: '产品管理', icon: '⇧', roles: ['ADMIN', 'PRODUCT_MATERIAL'] } },
       { path: 'imports/:batchId', name: 'import-detail', component: placeholder, props: { description: '导入批次进度、错误定位与结果入口' }, meta: { title: '导入批次', hidden: true, roles: ['ADMIN', 'PRODUCT_MATERIAL'] } },
       { path: 'selection/candidates', name: 'selection-candidates', component: () => import('@/views/CandidatesView.vue'), meta: { title: '候选池', group: '选品管理', icon: '☆', roles: ['ADMIN', 'PRODUCT_MATERIAL', 'SELECTION'] } },
-      { path: 'selection/candidates/:candidateId', name: 'candidate-detail', component: placeholder, props: { description: '选品候选详情与状态流转入口' }, meta: { title: '候选详情', hidden: true, roles: ['ADMIN', 'PRODUCT_MATERIAL', 'SELECTION'] } },
+      { path: 'selection/candidates/:candidateId', name: 'candidate-detail', component: () => import('@/views/CandidateDetailView.vue'), meta: { title: '候选详情', hidden: true, roles: ['ADMIN', 'PRODUCT_MATERIAL', 'SELECTION'] } },
       { path: 'watch/stores', name: 'watch-stores', component: () => import('@/views/WatchStoresView.vue'), meta: { title: '监控店铺', group: '选品管理', icon: '◎', roles: ['ADMIN', 'PRODUCT_MATERIAL', 'SELECTION'] } },
       { path: 'watch/events', name: 'new-events', component: () => import('@/views/WatchEventsView.vue'), meta: { title: '上新事件', group: '选品管理', icon: '↗', roles: ['ADMIN', 'PRODUCT_MATERIAL', 'SELECTION'] } },
       { path: 'system/users', name: 'users', component: placeholder, props: { description: '用户、角色、停用与重置入口' }, meta: { title: '用户与角色', group: '系统管理', icon: '♙', roles: ['ADMIN'] } },

@@ -12,6 +12,7 @@ ERP-010～ERP-019 的技术功能已串联为可复现验收的试点候选版�
   - import-contract Node/Python 校验
   - MVP 活跃范围校验
   - 临时 MySQL V1→V13、重启持久化、mock 隔离
+  - 实际 MySQL 备份恢复演练与轻量性能基线
 - 备份恢复：`scripts/qa/verify-mysql-backup-restore.sh`
   - 使用临时 MySQL 8 和真实 V1→V13 schema
   - 实际执行压缩备份、清空目标库、恢复

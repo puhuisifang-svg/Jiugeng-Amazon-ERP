@@ -55,7 +55,8 @@ final class IamTypes {
     }
 
     record SessionPrincipal(String userId, String loginName, String displayName, Role role,
-                            boolean mustChangePassword, Set<String> capabilities, String tokenHash) implements Principal {
+                            boolean mustChangePassword, Set<String> capabilities, String tokenHash)
+            implements Principal, AuthenticatedActor {
         @Override
         public String getName() {
             return loginName;

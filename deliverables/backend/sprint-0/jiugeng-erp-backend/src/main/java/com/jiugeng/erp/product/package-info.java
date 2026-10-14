@@ -1,2 +1,2 @@
-@org.springframework.modulith.ApplicationModule(displayName = "Product / Amazon Mapping")
+@org.springframework.modulith.ApplicationModule(displayName = "Product / SKU")
 package com.jiugeng.erp.product;

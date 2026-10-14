@@ -4,6 +4,7 @@ import { domainApi, type CandidateStatus } from '@/api/domain'
 import type { SelectionCandidateDto } from '@/api/resources'
 import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import { session } from '@/state/session'
+import { downloadCandidatesCsv } from '@/utils/candidateCsv'
 
 type Candidate = SelectionCandidateDto & { rejectionReason?: string }
 interface EvaluationDraft { category: string; price: string; rating: string; reviewCount: string; owner: string; tags: string; selectionReason: string }
@@ -22,6 +23,7 @@ const filteredItems = computed(() => {
   })
 })
 function actions(status: string): CandidateStatus[] { if (status === 'NEW') return ['REVIEWING', 'REJECTED']; if (status === 'REVIEWING') return ['APPROVED', 'REJECTED']; return [] }
+function exportCurrentResults() { downloadCandidatesCsv(filteredItems.value) }
 function syncDraft(item: Candidate) {
   drafts[item.id] = { category: item.category ?? '', price: item.price?.toString() ?? '', rating: item.rating?.toString() ?? '', reviewCount: item.reviewCount?.toString() ?? '', owner: item.owner ?? '', tags: (item.tags ?? []).join(', '), selectionReason: item.selectionReason ?? '' }
 }
@@ -127,6 +129,13 @@ onMounted(load)
         :key="owner"
         :value="owner"
       >{{ owner }}</option></select></label>
+      <button
+        :disabled="!filteredItems.length"
+        type="button"
+        @click="exportCurrentResults"
+      >
+        导出当前结果（{{ filteredItems.length }}）
+      </button>
     </div>
     <p
       v-if="!loading && !filteredItems.length"

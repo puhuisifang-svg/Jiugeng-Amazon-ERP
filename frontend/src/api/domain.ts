@@ -39,6 +39,8 @@ export const domainApi = {
     assertSynthetic(await apiRequest<SyntheticWrite<CandidateDetailDto>>(`/selection/candidates/${id}`)),
   addCandidateNote: async (id: string, content: string) =>
     assertSynthetic(await apiRequest<SyntheticWrite<CandidateDetailDto>>(`/selection/candidates/${id}/notes`, { method: 'POST', body: JSON.stringify({ content }) })),
+  addCandidateEvidence: async (id: string, input: { name: string; url: string; description?: string }) =>
+    assertSynthetic(await apiRequest<SyntheticWrite<CandidateDetailDto>>(`/selection/candidates/${id}/evidence`, { method: 'POST', body: JSON.stringify(input) })),
   updateCandidateEvaluation: async (id: string, input: { category?: string | undefined; price?: number | undefined; rating?: number | undefined; reviewCount?: number | undefined; owner?: string | undefined; tags?: string[] | undefined; selectionReason?: string | undefined }) =>
     assertSynthetic(await apiRequest<SyntheticWrite<SelectionCandidateDto & { rejectionReason?: string }>>(`/selection/candidates/${id}/evaluation`, { method: 'PUT', body: JSON.stringify(input) })),
   transitionCandidate: async (id: string, input: { status: CandidateStatus; rejectionReason?: string }) =>

@@ -10,6 +10,9 @@ const route = useRoute()
 const candidateId = computed(() => String(route.params.candidateId))
 const detail = ref<CandidateDetailDto | null>(null)
 const content = ref('')
+const evidenceName = ref('')
+const evidenceUrl = ref('')
+const evidenceDescription = ref('')
 const loading = ref(true)
 const saving = ref(false)
 const error = ref('')
@@ -32,6 +35,23 @@ async function addNote() {
     content.value = ''
     success.value = '评审记录已追加。'
   } catch { error.value = '评审记录保存失败。' }
+  finally { saving.value = false }
+}
+
+async function addEvidence() {
+  const name = evidenceName.value.trim()
+  const url = evidenceUrl.value.trim()
+  const description = evidenceDescription.value.trim()
+  if (!name) { error.value = '证据名称不能为空。'; return }
+  try {
+    if (new URL(url).protocol !== 'https:') throw new Error('not https')
+  } catch { error.value = '证据链接必须是有效的 HTTPS URL。'; return }
+  saving.value = true; error.value = ''; success.value = ''
+  try {
+    detail.value = (await domainApi.addCandidateEvidence(candidateId.value, { name, url, ...(description ? { description } : {}) })).item
+    evidenceName.value = ''; evidenceUrl.value = ''; evidenceDescription.value = ''
+    success.value = '证据附件已追加。'
+  } catch { error.value = '证据附件保存失败，请检查名称和 HTTPS 链接。' }
   finally { saving.value = false }
 }
 
@@ -103,12 +123,72 @@ onMounted(load)
           {{ saving ? '保存中…' : '追加记录' }}
         </button>
       </form>
+      <form
+        v-if="writable"
+        class="panel operation-form evidence-form"
+        @submit.prevent="addEvidence"
+      >
+        <h2>追加证据附件</h2>
+        <label>证据名称<input
+          v-model="evidenceName"
+          maxlength="200"
+          required
+        ></label>
+        <label class="form-wide">HTTPS 链接<input
+          v-model="evidenceUrl"
+          maxlength="1000"
+          pattern="https://.*"
+          placeholder="https://example.com/evidence"
+          required
+          type="url"
+        ></label>
+        <label class="form-wide">说明（可选）<textarea
+          v-model="evidenceDescription"
+          maxlength="1000"
+          placeholder="记录证据用途或核验结论"
+        /></label>
+        <button
+          :disabled="saving"
+          type="submit"
+        >
+          {{ saving ? '保存中…' : '追加证据' }}
+        </button>
+      </form>
       <p
         v-else
         class="data-state"
       >
-        当前角色只能查看评审记录。
+        当前角色只能查看评审记录和证据附件。
       </p>
+      <section
+        class="card-list"
+        aria-label="证据附件"
+      >
+        <h2>证据附件</h2>
+        <article
+          v-for="evidenceItem in (detail.evidence ?? [])"
+          :key="evidenceItem.id"
+          class="panel compact-panel"
+        >
+          <p>
+            <a
+              :href="evidenceItem.url"
+              target="_blank"
+              rel="noopener noreferrer"
+            >{{ evidenceItem.name }}</a>
+          </p>
+          <p v-if="evidenceItem.description">
+            {{ evidenceItem.description }}
+          </p>
+          <small>{{ evidenceItem.addedByName }} · {{ evidenceItem.addedByRole }} · {{ evidenceItem.createdAt }}</small>
+        </article>
+        <p
+          v-if="!(detail.evidence ?? []).length"
+          class="data-state"
+        >
+          暂无证据附件。
+        </p>
+      </section>
       <section
         class="card-list"
         aria-label="评审记录"

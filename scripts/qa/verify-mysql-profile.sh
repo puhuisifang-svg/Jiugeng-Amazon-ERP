@@ -137,6 +137,7 @@ query_scalar "INSERT INTO product (id, product_code, product_code_normalized, na
 query_scalar "INSERT INTO product_variant (id, product_id, sku_code, sku_code_normalized, variant_name, status, attribute_signature) VALUES ('00000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000010', 'ERP-010-SKU', 'ERP-010-SKU', '探针 SKU', 'ACTIVE', '7bdb1b7ba001db3942d1996f891ac65fbc8f7d300bb344912bb105a256ea8b99')" >/dev/null
 query_scalar "INSERT INTO variant_attribute (variant_id, attribute_code, attribute_code_normalized, attribute_value, display_order) VALUES ('00000000-0000-0000-0000-000000000011', 'color', 'COLOR', 'Black', 0)" >/dev/null
 query_scalar "INSERT INTO auxiliary_material (id, material_code, material_code_normalized, name, material_type, specification, unit, status, created_by, updated_by) VALUES ('00000000-0000-0000-0000-000000000012', 'ERP-011-PROBE', 'ERP-011-PROBE', '辅料持久化探针', '包装', '标准', 'PCS', 'ACTIVE', 'system', 'system')" >/dev/null
+query_scalar "INSERT INTO product_auxiliary_material (id, product_id, variant_id, auxiliary_material_id, standard_quantity, unit, loss_rate, remark, enabled, created_by, updated_by) VALUES ('00000000-0000-0000-0000-000000000013', '00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000012', 2.0000, 'PCS', 0.050000, 'ERP-012-PROBE', TRUE, 'system', 'system')" >/dev/null
 
 stop_backend
 docker restart "$mysql_container" >/dev/null
@@ -149,6 +150,8 @@ product_probe_count=$(query_scalar "SELECT COUNT(*) FROM product p JOIN product_
 [ "$product_probe_count" = "1" ]
 material_probe_count=$(query_scalar "SELECT COUNT(*) FROM auxiliary_material WHERE material_code='ERP-011-PROBE' AND material_type='包装' AND status='ACTIVE'")
 [ "$material_probe_count" = "1" ]
+relation_probe_count=$(query_scalar "SELECT COUNT(*) FROM product_auxiliary_material WHERE variant_id='00000000-0000-0000-0000-000000000011' AND auxiliary_material_id='00000000-0000-0000-0000-000000000012' AND standard_quantity=2.0000 AND enabled=TRUE")
+[ "$relation_probe_count" = "1" ]
 
 ERP_BACKEND_URL="http://127.0.0.1:$backend_port" "$repo_root/scripts/dev/smoke-local-mysql-backend.sh"
 

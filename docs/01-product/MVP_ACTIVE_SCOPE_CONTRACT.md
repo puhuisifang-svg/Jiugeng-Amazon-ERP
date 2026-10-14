@@ -4,7 +4,7 @@
 | --- | --- |
 | 任务 | ERP-006 |
 | 版本 | v1.0 |
-| 状态 | In Review |
+| 状态 | Approved |
 | 日期 | 2026-10-15 |
 | Owner | PJM / PM / Backend / Frontend / QA |
 | 决策依据 | DEC-012、MVP_FINAL_PLAN v1.1、PRD v1.1 |

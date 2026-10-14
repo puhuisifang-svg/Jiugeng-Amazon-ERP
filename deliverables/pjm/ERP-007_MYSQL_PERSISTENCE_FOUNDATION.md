@@ -48,7 +48,7 @@ git diff --check
 
 - 分支：`feature/ERP-007-mysql-persistence-foundation`
 - 基线：`8744fab144e2a78bd07a7efd9a63cb4ca87e9baa`
-- 当前：In Review（实现完成，待 PJM/Backend 复核）
+- 当前：Completed（PJM 验收通过）
 
 ## 实施与验证结果
 

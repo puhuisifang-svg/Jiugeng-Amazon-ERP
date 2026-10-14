@@ -10,7 +10,7 @@
 | 产品 | [首期范围与实施规划](01-product/PHASE1_SCOPE_PLAN.md) | PJM/PM | Superseded |
 | 产品 | [精简 MVP 范围与实现方案](01-product/MVP_SCOPE_PLAN.md) | PJM/PM | Superseded |
 | 产品 | [MVP 最终规划](01-product/MVP_FINAL_PLAN.md) | PJM | In Review（ERP-006 增量） |
-| 产品 | [当前 MVP 活跃范围契约](01-product/MVP_ACTIVE_SCOPE_CONTRACT.md) | PJM/PM/Backend/Frontend/QA | In Review |
+| 产品 | [当前 MVP 活跃范围契约](01-product/MVP_ACTIVE_SCOPE_CONTRACT.md) | PJM/PM/Backend/Frontend/QA | Approved |
 | 产品 | [PRD](01-product/PRD.md) | PM | In Review（ERP-006 增量） |
 | 产品 | [产品与辅料编码规则](01-product/PRODUCT_CODE_STANDARD.md) | PM/Backend | Approved |
 | 产品 | [产品 Backlog](01-product/BACKLOG.md) | PM/PJM | Draft |

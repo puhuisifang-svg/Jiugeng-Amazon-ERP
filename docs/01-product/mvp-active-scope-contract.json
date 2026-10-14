@@ -3,7 +3,7 @@
   "$id": "https://jiugeng.example/contracts/mvp-active-scope-v1.json",
   "contractVersion": "1.0",
   "decision": "DEC-012",
-  "status": "IN_REVIEW",
+  "status": "APPROVED",
   "roles": ["ADMIN", "PRODUCT_MATERIAL", "SELECTION"],
   "domains": {
     "iamAudit": ["User", "Role", "Session", "AuditEvent"],

@@ -33,7 +33,9 @@
 | DEL-029 | 2026-09-12 | Frontend | DEL-025 v1.1.1 库存流水数量契约前端增量复核 | v0.1 | Completed | PJM | [增量复核](../deliverables/frontend/DEL-025_V1_1_1_INVENTORY_QUANTITY_FRONTEND_REVIEW.md) |
 | DEL-030 | 2026-09-12 | Frontend | DEL-025 v1.1.2 期初库存语义前端增量复核 | v0.1 | Completed | PJM | [增量复核](../deliverables/frontend/DEL-025_V1_1_2_OPENING_SEMANTICS_FRONTEND_REVIEW.md) |
 | DEL-031 | 2026-09-12 | Frontend | DEL-025 `ef991ea` QA-only 测试增强技术观察 | v0.3 | Superseded | PJM | [范围撤回记录](../deliverables/frontend/DEL-025_EF991EA_FINAL_GATE_FRONTEND_REVIEW.md)；不登记 Frontend Pass/Fail 或 P0/P1，不参与验收；当前 Frontend Completed 基线为 DEL-030 / `6a0989a` |
-| DEL-032 | 2026-10-15 | PJM/PM/Backend/Frontend/QA | ERP-006 当前 MVP 活跃范围契约 | v1.0 | In Review | PJM | [活跃范围契约](01-product/MVP_ACTIVE_SCOPE_CONTRACT.md) / [机器可读副本](01-product/mvp-active-scope-contract.json) / [实施记录](../deliverables/pjm/ERP-006_MVP_SCOPE_CONTRACT.md) |
+| DEL-032 | 2026-10-15 | PJM/PM/Backend/Frontend/QA | ERP-006 当前 MVP 活跃范围契约 | v1.0 | Approved | PJM | [活跃范围契约](01-product/MVP_ACTIVE_SCOPE_CONTRACT.md) / [机器可读副本](01-product/mvp-active-scope-contract.json) / [实施记录](../deliverables/pjm/ERP-006_MVP_SCOPE_CONTRACT.md) |
+| DEL-033 | 2026-10-15 | Backend/Ops/QA | ERP-007 正式运行与 MySQL 持久化底座 | v1.0 | Completed | PJM | [实施与验收记录](../deliverables/pjm/ERP-007_MYSQL_PERSISTENCE_FOUNDATION.md) |
+| DEL-034 | 2026-10-15 | Backend/Frontend/QA | ERP-008 IAM 认证与权限闭环 | v1.0 | Completed | PJM | [实施与验收记录](../deliverables/pjm/ERP-008_IAM_AUTHENTICATION.md) |
 
 ## 登记要求
 

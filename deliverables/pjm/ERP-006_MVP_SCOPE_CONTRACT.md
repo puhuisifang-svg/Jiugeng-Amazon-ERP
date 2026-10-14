@@ -39,7 +39,7 @@ git diff --check
 
 - 分支：`feature/ERP-006-mvp-scope-contract`
 - 基线：`8744fab144e2a78bd07a7efd9a63cb4ca87e9baa`
-- 当前：In Review（实现完成，待 PJM/PM 复核）
+- 当前：Completed（PJM 验收通过，已作为后续实现覆盖层）
 
 ## 实施与验证结果
 

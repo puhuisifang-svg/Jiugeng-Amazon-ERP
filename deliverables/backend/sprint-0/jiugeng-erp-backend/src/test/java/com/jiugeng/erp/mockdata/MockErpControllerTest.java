@@ -341,6 +341,45 @@ class MockErpControllerTest {
     }
 
     @Test
+    void exposesCandidateDetailAndAppendsAttributableReviewNotes() throws Exception {
+        String selectionRole = bearer("mock-session-selection");
+
+        mockMvc.perform(get("/api/selection/candidates/candidate-mock-001")
+                        .header(AUTHORIZATION, selectionRole))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.item.candidate.asin").value("B0MOCKASIN1"))
+                .andExpect(jsonPath("$.item.notes[0].authorRole").value("SELECTION"));
+
+        mockMvc.perform(post("/api/selection/candidates/candidate-mock-001/notes")
+                        .header(AUTHORIZATION, selectionRole)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"  二次评审：建议补充供应链报价。  \"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.item.notes.length()").value(2))
+                .andExpect(jsonPath("$.item.notes[1].content").value("二次评审：建议补充供应链报价。"))
+                .andExpect(jsonPath("$.item.notes[1].authorName").value("模拟选品专员"))
+                .andExpect(jsonPath("$.item.notes[1].createdAt").exists());
+
+        mockMvc.perform(post("/api/selection/candidates/candidate-mock-001/notes")
+                        .header(AUTHORIZATION, selectionRole)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"   \"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+        mockMvc.perform(post("/api/selection/candidates/candidate-mock-001/notes")
+                        .header(AUTHORIZATION, bearer("mock-session-product-material"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"无权写入\"}"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/selection/candidates/not-found")
+                        .header(AUTHORIZATION, selectionRole))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("CANDIDATE_NOT_FOUND"));
+    }
+
+    @Test
     void confirmsWatchEventIdempotentlyAndLinksOneCandidate() throws Exception {
         String selectionRole = bearer("mock-session-selection");
 

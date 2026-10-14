@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import com.jiugeng.erp.mockdata.MockErpData.CandidateStatus;
+import com.jiugeng.erp.mockdata.MockErpData.CandidateDetail;
 import com.jiugeng.erp.mockdata.MockErpData.DemoRole;
 import com.jiugeng.erp.mockdata.MockErpData.DemoSession;
 import com.jiugeng.erp.mockdata.MockErpData.InventoryBalance;
@@ -137,6 +138,25 @@ class MockErpController {
         return SyntheticItem.of(data.createCandidate(request.asinOrUrl(), request.title(), request.score()));
     }
 
+    @GetMapping("/selection/candidates/{candidateId}")
+    SyntheticItem<CandidateDetail> candidateDetail(
+            @RequestHeader(MockErpData.AUTHORIZATION_HEADER) String authorization,
+            @org.springframework.web.bind.annotation.PathVariable String candidateId) {
+        DemoSession session = data.session(authorization);
+        data.require(session, "selection.read");
+        return SyntheticItem.of(data.candidateDetail(candidateId));
+    }
+
+    @PostMapping("/selection/candidates/{candidateId}/notes")
+    SyntheticItem<CandidateDetail> addCandidateNote(
+            @RequestHeader(MockErpData.AUTHORIZATION_HEADER) String authorization,
+            @org.springframework.web.bind.annotation.PathVariable String candidateId,
+            @Valid @RequestBody CandidateNoteRequest request) {
+        DemoSession session = data.session(authorization);
+        data.require(session, "selection.write");
+        return SyntheticItem.of(data.addCandidateNote(candidateId, request.content(), session.currentUser()));
+    }
+
     @PostMapping("/selection/candidates/{candidateId}/transition")
     SyntheticItem<SelectionCandidate> transitionCandidate(
             @RequestHeader(MockErpData.AUTHORIZATION_HEADER) String authorization,
@@ -225,6 +245,9 @@ class MockErpController {
             @NotBlank @Size(max = 500) String asinOrUrl,
             @NotBlank @Size(max = 300) String title,
             @Min(0) @Max(100) Integer score) {
+    }
+
+    record CandidateNoteRequest(@NotBlank @Size(max = 1000) String content) {
     }
 
     record CandidateEvaluationRequest(

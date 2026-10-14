@@ -3,6 +3,7 @@ package com.jiugeng.erp.mockdata;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -56,6 +57,7 @@ final class MockErpData {
     private final Map<String, LedgerEntry> ledger = new LinkedHashMap<>();
     private final Set<String> openingMaterials = new java.util.HashSet<>();
     private final Map<String, SelectionCandidate> candidates = new LinkedHashMap<>();
+    private final Map<String, List<CandidateNote>> candidateNotes = new LinkedHashMap<>();
     private final Map<String, WatchEvent> watchEvents = new LinkedHashMap<>();
     private final Map<String, WatchStore> watchStores = new LinkedHashMap<>();
     private final Map<String, Set<String>> baselineAsinsByStore = new LinkedHashMap<>();
@@ -93,6 +95,8 @@ final class MockErpData {
                 WatchStatus.CONFIRMED, "candidate-mock-002"));
         putWatchStore(new WatchStore("watch-store-mock-001", "模拟美国店铺 1",
                 "https://www.amazon.com/sp?seller=SYNTHETIC", "ACTIVE", null, 0, null, null, null, null, null));
+        candidateNotes.get("candidate-mock-001").add(new CandidateNote("note-mock-001", "模拟初审：需求趋势稳定。",
+                "mock-selection", "模拟选品专员", DemoRole.SELECTION, Instant.parse("2026-09-21T09:00:00Z")));
     }
 
     DemoSession login(DemoRole role) {
@@ -213,6 +217,26 @@ final class MockErpData {
 
     synchronized List<SelectionCandidate> candidates() {
         return List.copyOf(candidates.values());
+    }
+
+    synchronized CandidateDetail candidateDetail(String candidateId) {
+        SelectionCandidate candidate = candidates.get(candidateId);
+        if (candidate == null) {
+            throw notFound("CANDIDATE_NOT_FOUND", "Unknown candidate: " + candidateId);
+        }
+        return new CandidateDetail(candidate, List.copyOf(candidateNotes.getOrDefault(candidateId, List.of())));
+    }
+
+    synchronized CandidateDetail addCandidateNote(String candidateId, String content, DemoUser author) {
+        candidateDetail(candidateId);
+        String normalizedContent = content == null ? "" : content.trim();
+        if (normalizedContent.isBlank()) {
+            throw badRequest("CANDIDATE_NOTE_REQUIRED", "content is required");
+        }
+        candidateNotes.computeIfAbsent(candidateId, ignored -> new ArrayList<>())
+                .add(new CandidateNote(id("note"), normalizedContent, author.id(), author.displayName(),
+                        author.role(), Instant.now()));
+        return candidateDetail(candidateId);
     }
 
     synchronized SelectionCandidate createCandidate(String asinOrUrl, String title, Integer score) {
@@ -400,6 +424,7 @@ final class MockErpData {
 
     private void putCandidate(SelectionCandidate candidate) {
         candidates.put(candidate.id(), candidate);
+        candidateNotes.computeIfAbsent(candidate.id(), ignored -> new ArrayList<>());
     }
 
     private void putWatchEvent(WatchEvent event) {
@@ -530,6 +555,9 @@ final class MockErpData {
                               BigDecimal rating, Integer reviewCount, String owner, List<String> tags,
                               String selectionReason, CandidateSource source, String sourceStore,
                               Instant discoveredAt, String sourceRunId, String sourceEventId) {}
+    record CandidateNote(String id, String content, String authorId, String authorName, DemoRole authorRole,
+                         Instant createdAt) {}
+    record CandidateDetail(SelectionCandidate candidate, List<CandidateNote> notes) {}
     record WatchEvent(String id, String storeId, String storeName, String asin, String title, Instant detectedAt,
                       String sourceRunId, WatchStatus status, String candidateId) {}
     record WatchStore(String id, String storeName, String sourceUrl, String status, String baselineRunId,

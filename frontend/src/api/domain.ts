@@ -44,6 +44,29 @@ export interface ProductInput {
   status: Exclude<ProductStatus, 'DISABLED'>
   variants: ProductVariantDto[]
 }
+export type MaterialStatus = 'ACTIVE' | 'DISABLED'
+export interface MaterialDetailDto {
+  id: string
+  materialCode: string
+  name: string
+  materialType: string
+  specification?: string
+  unit: string
+  imageUrl?: string
+  remark?: string
+  status: MaterialStatus
+  createdAt?: string
+  updatedAt?: string
+}
+export interface MaterialInput {
+  materialCode: string
+  name: string
+  materialType: string
+  specification?: string
+  unit: string
+  imageUrl?: string
+  remark?: string
+}
 export interface LedgerEntryDto { id: string; requestId: string; materialCode: string; type: InventoryTransactionType; quantity: number; reason: string; occurredAt: string }
 export type InventoryTransactionType = 'OPENING' | 'INBOUND' | 'OUTBOUND' | 'ADJUSTMENT'
 export type CandidateStatus = 'NEW' | 'REVIEWING' | 'APPROVED' | 'REJECTED'
@@ -123,6 +146,30 @@ async function createProduct(input: ProductInput | LegacyProductInput): Promise<
   }), mockData: false }
 }
 
+function adaptMockMaterial(material: MaterialDto): MaterialDetailDto {
+  return { ...material, materialType: '模拟辅料', status: material.status as MaterialStatus }
+}
+
+async function materials(): Promise<{ items: MaterialDetailDto[]; mockData: boolean }> {
+  if (runtimeConfig.authMode === 'mock') {
+    const response = await syntheticList<MaterialDto>('/materials')
+    return { items: response.items.map(adaptMockMaterial), mockData: true }
+  }
+  return { items: await apiRequest<MaterialDetailDto[]>('/v1/materials'), mockData: false }
+}
+
+async function createMaterial(input: MaterialInput | { materialCode: string; name: string; unit: string }) {
+  if (runtimeConfig.authMode === 'mock') {
+    const response = assertSynthetic(await apiRequest<SyntheticWrite<MaterialDto>>('/materials', {
+      method: 'POST', body: JSON.stringify({ materialCode: input.materialCode, name: input.name, unit: input.unit }),
+    }))
+    return { item: adaptMockMaterial(response.item), mockData: true }
+  }
+  return { item: await apiRequest<MaterialDetailDto>('/v1/materials', {
+    method: 'POST', body: JSON.stringify(input),
+  }), mockData: false }
+}
+
 export const domainApi = {
   products,
   product,
@@ -135,9 +182,22 @@ export const domainApi = {
     if (runtimeConfig.authMode === 'mock') throw new Error('Mock products cannot be disabled')
     return apiRequest<ProductDetailDto>(`/v1/products/${id}/disable`, { method: 'POST' })
   },
-  materials: () => syntheticList<MaterialDto>('/materials'),
-  createMaterial: async (input: { materialCode: string; name: string; unit: string }) =>
-    assertSynthetic(await apiRequest<SyntheticWrite<MaterialDto>>('/materials', { method: 'POST', body: JSON.stringify(input) })),
+  materials,
+  createMaterial,
+  material: async (id: string) => {
+    if (runtimeConfig.authMode !== 'mock') return apiRequest<MaterialDetailDto>(`/v1/materials/${id}`)
+    const item = (await materials()).items.find(value => value.id === id)
+    if (!item) throw new Error('Material not found')
+    return item
+  },
+  updateMaterial: async (id: string, input: MaterialInput) => {
+    if (runtimeConfig.authMode === 'mock') throw new Error('Mock materials cannot be edited')
+    return apiRequest<MaterialDetailDto>(`/v1/materials/${id}`, { method: 'PUT', body: JSON.stringify(input) })
+  },
+  disableMaterial: async (id: string) => {
+    if (runtimeConfig.authMode === 'mock') throw new Error('Mock materials cannot be disabled')
+    return apiRequest<MaterialDetailDto>(`/v1/materials/${id}/disable`, { method: 'POST' })
+  },
   balances: () => syntheticList<InventoryBalanceDto>('/inventory/balances'),
   ledger: () => syntheticList<LedgerEntryDto>('/inventory/ledger'),
   transact: async (input: { requestId: string; materialCode: string; type: InventoryTransactionType; quantity: number; reason: string }) =>

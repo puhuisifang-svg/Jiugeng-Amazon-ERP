@@ -58,6 +58,7 @@ final class MockErpData {
     private final Set<String> openingMaterials = new java.util.HashSet<>();
     private final Map<String, SelectionCandidate> candidates = new LinkedHashMap<>();
     private final Map<String, List<CandidateNote>> candidateNotes = new LinkedHashMap<>();
+    private final Map<String, List<CandidateEvidence>> candidateEvidence = new LinkedHashMap<>();
     private final Map<String, WatchEvent> watchEvents = new LinkedHashMap<>();
     private final Map<String, WatchStore> watchStores = new LinkedHashMap<>();
     private final Map<String, Set<String>> baselineAsinsByStore = new LinkedHashMap<>();
@@ -224,7 +225,8 @@ final class MockErpData {
         if (candidate == null) {
             throw notFound("CANDIDATE_NOT_FOUND", "Unknown candidate: " + candidateId);
         }
-        return new CandidateDetail(candidate, List.copyOf(candidateNotes.getOrDefault(candidateId, List.of())));
+        return new CandidateDetail(candidate, List.copyOf(candidateNotes.getOrDefault(candidateId, List.of())),
+                List.copyOf(candidateEvidence.getOrDefault(candidateId, List.of())));
     }
 
     synchronized CandidateDetail addCandidateNote(String candidateId, String content, DemoUser author) {
@@ -236,6 +238,24 @@ final class MockErpData {
         candidateNotes.computeIfAbsent(candidateId, ignored -> new ArrayList<>())
                 .add(new CandidateNote(id("note"), normalizedContent, author.id(), author.displayName(),
                         author.role(), Instant.now()));
+        return candidateDetail(candidateId);
+    }
+
+    synchronized CandidateDetail addCandidateEvidence(String candidateId, String name, String url,
+                                                       String description, DemoUser author) {
+        candidateDetail(candidateId);
+        String normalizedName = name == null ? "" : name.trim();
+        String normalizedUrl = url == null ? "" : url.trim();
+        String normalizedDescription = optional(description);
+        if (normalizedName.isBlank()) {
+            throw badRequest("CANDIDATE_EVIDENCE_NAME_REQUIRED", "name is required");
+        }
+        if (!isHttpsUrl(normalizedUrl)) {
+            throw badRequest("CANDIDATE_EVIDENCE_HTTPS_URL_REQUIRED", "url must be a valid HTTPS URL");
+        }
+        candidateEvidence.computeIfAbsent(candidateId, ignored -> new ArrayList<>())
+                .add(new CandidateEvidence(id("evidence"), normalizedName, normalizedUrl, normalizedDescription,
+                        author.id(), author.displayName(), author.role(), Instant.now()));
         return candidateDetail(candidateId);
     }
 
@@ -425,6 +445,18 @@ final class MockErpData {
     private void putCandidate(SelectionCandidate candidate) {
         candidates.put(candidate.id(), candidate);
         candidateNotes.computeIfAbsent(candidate.id(), ignored -> new ArrayList<>());
+        candidateEvidence.computeIfAbsent(candidate.id(), ignored -> new ArrayList<>());
+    }
+
+    private static boolean isHttpsUrl(String value) {
+        try {
+            URI uri = URI.create(value);
+            return "https".equalsIgnoreCase(uri.getScheme())
+                    && uri.getHost() != null && !uri.getHost().isBlank()
+                    && uri.getUserInfo() == null;
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
     }
 
     private void putWatchEvent(WatchEvent event) {
@@ -557,7 +589,10 @@ final class MockErpData {
                               Instant discoveredAt, String sourceRunId, String sourceEventId) {}
     record CandidateNote(String id, String content, String authorId, String authorName, DemoRole authorRole,
                          Instant createdAt) {}
-    record CandidateDetail(SelectionCandidate candidate, List<CandidateNote> notes) {}
+    record CandidateEvidence(String id, String name, String url, String description, String addedById,
+                             String addedByName, DemoRole addedByRole, Instant createdAt) {}
+    record CandidateDetail(SelectionCandidate candidate, List<CandidateNote> notes,
+                           List<CandidateEvidence> evidence) {}
     record WatchEvent(String id, String storeId, String storeName, String asin, String title, Instant detectedAt,
                       String sourceRunId, WatchStatus status, String candidateId) {}
     record WatchStore(String id, String storeName, String sourceUrl, String status, String baselineRunId,

@@ -380,6 +380,94 @@ class MockErpControllerTest {
     }
 
     @Test
+    void appendsAttributableHttpsEvidenceAndKeepsExistingEntries() throws Exception {
+        String candidateId = "candidate-mock-003";
+
+        mockMvc.perform(get("/api/selection/candidates/" + candidateId)
+                        .header(AUTHORIZATION, bearer("mock-session-product-material")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.item.evidence.length()").value(0));
+
+        mockMvc.perform(post("/api/selection/candidates/" + candidateId + "/evidence")
+                        .header(AUTHORIZATION, bearer("mock-session-admin"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"  竞品页面截图  ","url":"  https://evidence.example.com/items/1  ","description":"  首轮调研  "}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.item.evidence.length()").value(1))
+                .andExpect(jsonPath("$.item.evidence[0].name").value("竞品页面截图"))
+                .andExpect(jsonPath("$.item.evidence[0].url").value("https://evidence.example.com/items/1"))
+                .andExpect(jsonPath("$.item.evidence[0].description").value("首轮调研"))
+                .andExpect(jsonPath("$.item.evidence[0].addedById").value("mock-admin"))
+                .andExpect(jsonPath("$.item.evidence[0].addedByName").value("模拟系统管理员"))
+                .andExpect(jsonPath("$.item.evidence[0].addedByRole").value("ADMIN"))
+                .andExpect(jsonPath("$.item.evidence[0].createdAt").exists());
+
+        mockMvc.perform(post("/api/selection/candidates/" + candidateId + "/evidence")
+                        .header(AUTHORIZATION, bearer("mock-session-selection"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"供应商说明","url":"https://evidence.example.com/items/2"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.item.evidence.length()").value(2))
+                .andExpect(jsonPath("$.item.evidence[0].name").value("竞品页面截图"))
+                .andExpect(jsonPath("$.item.evidence[1].name").value("供应商说明"))
+                .andExpect(jsonPath("$.item.evidence[1].description").doesNotExist())
+                .andExpect(jsonPath("$.item.evidence[1].addedByRole").value("SELECTION"));
+    }
+
+    @Test
+    void validatesCandidateEvidenceAndEnforcesWriteCapability() throws Exception {
+        String endpoint = "/api/selection/candidates/candidate-mock-002/evidence";
+        String selectionRole = bearer("mock-session-selection");
+
+        mockMvc.perform(post(endpoint)
+                        .header(AUTHORIZATION, bearer("mock-session-product-material"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"无权证据\",\"url\":\"https://evidence.example.com/denied\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("MOCK_CAPABILITY_DENIED"));
+
+        mockMvc.perform(post(endpoint)
+                        .header(AUTHORIZATION, selectionRole)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"   \",\"url\":\"https://evidence.example.com/blank\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+        mockMvc.perform(post(endpoint)
+                        .header(AUTHORIZATION, selectionRole)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"非安全链接\",\"url\":\"http://evidence.example.com/item\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("CANDIDATE_EVIDENCE_HTTPS_URL_REQUIRED"));
+
+        mockMvc.perform(post(endpoint)
+                        .header(AUTHORIZATION, selectionRole)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"非法链接\",\"url\":\"not-a-url\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("CANDIDATE_EVIDENCE_HTTPS_URL_REQUIRED"));
+
+        mockMvc.perform(post(endpoint)
+                        .header(AUTHORIZATION, selectionRole)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"" + "x".repeat(201)
+                                + "\",\"url\":\"https://evidence.example.com/long\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+        mockMvc.perform(post("/api/selection/candidates/not-found/evidence")
+                        .header(AUTHORIZATION, selectionRole)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"不存在\",\"url\":\"https://evidence.example.com/missing\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("CANDIDATE_NOT_FOUND"));
+    }
+
+    @Test
     void confirmsWatchEventIdempotentlyAndLinksOneCandidate() throws Exception {
         String selectionRole = bearer("mock-session-selection");
 

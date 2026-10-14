@@ -157,6 +157,17 @@ class MockErpController {
         return SyntheticItem.of(data.addCandidateNote(candidateId, request.content(), session.currentUser()));
     }
 
+    @PostMapping("/selection/candidates/{candidateId}/evidence")
+    SyntheticItem<CandidateDetail> addCandidateEvidence(
+            @RequestHeader(MockErpData.AUTHORIZATION_HEADER) String authorization,
+            @org.springframework.web.bind.annotation.PathVariable String candidateId,
+            @Valid @RequestBody CandidateEvidenceRequest request) {
+        DemoSession session = data.session(authorization);
+        data.require(session, "selection.write");
+        return SyntheticItem.of(data.addCandidateEvidence(candidateId, request.name(), request.url(),
+                request.description(), session.currentUser()));
+    }
+
     @PostMapping("/selection/candidates/{candidateId}/transition")
     SyntheticItem<SelectionCandidate> transitionCandidate(
             @RequestHeader(MockErpData.AUTHORIZATION_HEADER) String authorization,
@@ -248,6 +259,12 @@ class MockErpController {
     }
 
     record CandidateNoteRequest(@NotBlank @Size(max = 1000) String content) {
+    }
+
+    record CandidateEvidenceRequest(
+            @NotBlank @Size(max = 200) String name,
+            @NotBlank @Size(max = 1000) String url,
+            @Size(max = 1000) String description) {
     }
 
     record CandidateEvaluationRequest(

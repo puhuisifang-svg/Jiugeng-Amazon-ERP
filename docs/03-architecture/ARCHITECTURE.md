@@ -3,9 +3,9 @@
 | 字段 | 内容 |
 | --- | --- |
 | Owner | Backend / Ops |
-| 版本 | v1.0 |
-| 状态 | Approved |
-| 最后更新 | 2026-09-12 |
+| 版本 | v1.1 |
+| 状态 | In Review（ERP-006 范围对齐） |
+| 最后更新 | 2026-10-15 |
 
 ## 1. 架构结论
 
@@ -16,7 +16,7 @@ Vue 3 管理端
       │ HTTPS/JSON
 Spring Boot 模块化单体
 ├── IAM / Audit
-├── Product / Amazon Mapping
+├── Product
 ├── Auxiliary Material / Inventory
 ├── Selection
 ├── Watch / Collector Adapter / Scheduler
@@ -25,7 +25,7 @@ Spring Boot 模块化单体
       ├── Redis（锁、短期缓存、任务协调）
       └── S3 兼容存储（图片、附件、导入文件、采集证据）
 
-外部：批准的公开店铺监控数据源；5 个公司店铺的 SP-API 自动同步不在 MVP
+外部：批准的公开店铺监控数据源；公司 StoreAccount、Listing 映射和 SP-API 同步不在 MVP
 ```
 
 ## 2. 技术栈基线
@@ -44,13 +44,15 @@ Spring Boot 模块化单体
 | 模块 | 负责 | 不负责 |
 | --- | --- | --- |
 | IAM/Audit | 登录、会话、账号、三角色、鉴权、审计 | SSO、组织树、多租户 |
-| Product | Product、Variant、动态属性、Amazon 目录与店铺 Listing 映射 | 订单、价格、Amazon 库存 |
+| Product | Product、Variant、动态属性 | StoreAccount、Amazon Catalog、店铺 Listing 映射、订单、价格、Amazon 库存 |
 | Material/Inventory | 辅料、SKU 对应关系、单仓余额与流水 | 采购、生产领料、成本、多仓 |
 | Selection | 候选、查重、状态、负责人、来源 | AI 决策、销量预测 |
 | Watch | 店铺配置、采集任务、快照、差异、新品事件 | 绕过平台访问控制、实时监控 |
 | Import/Export | 模板、校验、批量入库、结果文件 | 任意格式智能识别 |
 
 模块间只能通过应用服务或领域事件调用，不允许跨模块直接修改数据表。
+
+当前模块、实体、API 和五类导入边界见 [当前 MVP 活跃范围契约](../01-product/MVP_ACTIVE_SCOPE_CONTRACT.md)。Sprint 0 的六类导入与 Listing 机器契约只作为审计证据保留。
 
 ## 4. 关键一致性设计
 

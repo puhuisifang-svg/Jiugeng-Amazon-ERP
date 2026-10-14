@@ -6,13 +6,13 @@
 | DEL-002 | 2026-09-12 | PJM | 专业项目文档库与治理规范 | v0.1 | Completed | 老板 | [文档索引](INDEX.md) |
 | DEL-003 | 2026-09-12 | PJM | 本地开发环境审计报告 | v1.5 | Completed | 老板 | [环境审计](04-engineering/LOCAL_ENVIRONMENT_AUDIT.md) |
 | DEL-004 | 2026-09-12 | PJM/PM | 美国站 5 店首期范围与实施规划 | v0.2 | Superseded | 老板 | [首期规划](01-product/PHASE1_SCOPE_PLAN.md) |
-| DEL-005 | 2026-09-12 | PJM/PM | 精简 MVP 范围与店铺上新监控方案 | v1.0 | Approved | 老板 | [精简 MVP](01-product/MVP_SCOPE_PLAN.md) |
-| DEL-006 | 2026-09-12 | PM/Backend | 产品与 Amazon 多店铺数据模型 | v1.1 | Approved | 老板/PJM/QA | [产品数据模型](03-architecture/PRODUCT_DATA_MODEL.md) |
-| DEL-007 | 2026-09-12 | PM | 精简 MVP 产品需求文档 | v1.0 | Approved | 老板 | [MVP PRD](01-product/PRD.md) |
-| DEL-008 | 2026-09-12 | Backend/Ops | 精简 MVP 总体架构基线 | v1.0 | Approved | 老板 | [总体架构](03-architecture/ARCHITECTURE.md) |
+| DEL-005 | 2026-09-12 | PJM/PM | 精简 MVP 范围与店铺上新监控方案 | v1.0 | Superseded | 老板 | [精简 MVP](01-product/MVP_SCOPE_PLAN.md)；由 DEL-011/DEC-012/DEL-032 替代当前执行范围 |
+| DEL-006 | 2026-09-12 | PM/Backend | 产品与 Amazon 多店铺数据模型 | v1.2 | In Review（ERP-006 增量） | 老板/PJM/QA | [产品数据模型](03-architecture/PRODUCT_DATA_MODEL.md) |
+| DEL-007 | 2026-09-12 | PM | 精简 MVP 产品需求文档 | v1.2 | In Review（ERP-006 增量） | 老板 | [MVP PRD](01-product/PRD.md) |
+| DEL-008 | 2026-09-12 | Backend/Ops | 精简 MVP 总体架构基线 | v1.1 | In Review（ERP-006 增量） | 老板 | [总体架构](03-architecture/ARCHITECTURE.md) |
 | DEL-009 | 2026-09-12 | PM/QA/PJM | 精简 MVP 项目验收标准 | v1.0 | Approved | 老板 | [验收标准](06-quality/ACCEPTANCE_CRITERIA.md) |
 | DEL-010 | 2026-09-12 | PM/Backend | 产品与辅料编码维护规则 | v1.0 | Approved | 老板 | [编码规则](01-product/PRODUCT_CODE_STANDARD.md) |
-| DEL-011 | 2026-09-12 | PJM | 九更亚马逊 ERP MVP 最终规划 | v1.0 | Approved | 老板 | [最终规划](01-product/MVP_FINAL_PLAN.md) |
+| DEL-011 | 2026-09-12 | PJM | 九更亚马逊 ERP MVP 最终规划 | v1.2 | In Review（ERP-006 增量） | 老板 | [最终规划](01-product/MVP_FINAL_PLAN.md) |
 | DEL-012 | 2026-09-12 | PJM | Sprint 0 执行计划与任务看板 | v1.0 | Approved | 老板 | [Sprint 0 计划](08-project-management/SPRINTS/SPRINT-00/SPRINT_PLAN.md) / [任务看板](08-project-management/SPRINTS/SPRINT-00/TASK_BOARD.md) |
 | DEL-018 | 2026-09-12 | Ops | Docker Hub TLS 诊断与 ERP Compose | v1.0 | In Review（Compose/secret 生命周期 PASS；Docker Hub TLS 外部门禁未解） | PJM | [S0-OPS-01](../deliverables/ops/S0-OPS-01_DOCKER_COMPOSE.md) / [QA 动态复验](../deliverables/qa/S0_INT_01_OPS_ACCEPTANCE_INPUT.md) |
 | DEL-019 | 2026-09-12 | Ops/PJM | GitHub 授权门禁与 CI 基线 | v1.0 | In Review | PJM | [S0-OPS-02](../deliverables/ops/S0-OPS-02_GITHUB_CI.md) |
@@ -33,6 +33,7 @@
 | DEL-029 | 2026-09-12 | Frontend | DEL-025 v1.1.1 库存流水数量契约前端增量复核 | v0.1 | Completed | PJM | [增量复核](../deliverables/frontend/DEL-025_V1_1_1_INVENTORY_QUANTITY_FRONTEND_REVIEW.md) |
 | DEL-030 | 2026-09-12 | Frontend | DEL-025 v1.1.2 期初库存语义前端增量复核 | v0.1 | Completed | PJM | [增量复核](../deliverables/frontend/DEL-025_V1_1_2_OPENING_SEMANTICS_FRONTEND_REVIEW.md) |
 | DEL-031 | 2026-09-12 | Frontend | DEL-025 `ef991ea` QA-only 测试增强技术观察 | v0.3 | Superseded | PJM | [范围撤回记录](../deliverables/frontend/DEL-025_EF991EA_FINAL_GATE_FRONTEND_REVIEW.md)；不登记 Frontend Pass/Fail 或 P0/P1，不参与验收；当前 Frontend Completed 基线为 DEL-030 / `6a0989a` |
+| DEL-032 | 2026-10-15 | PJM/PM/Backend/Frontend/QA | ERP-006 当前 MVP 活跃范围契约 | v1.0 | In Review | PJM | [活跃范围契约](01-product/MVP_ACTIVE_SCOPE_CONTRACT.md) / [机器可读副本](01-product/mvp-active-scope-contract.json) / [实施记录](../deliverables/pjm/ERP-006_MVP_SCOPE_CONTRACT.md) |
 
 ## 登记要求
 

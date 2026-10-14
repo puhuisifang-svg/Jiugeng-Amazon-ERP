@@ -5,10 +5,12 @@
 | 项目 | 九更亚马逊 ERP |
 | 交付物 ID | DEL-005 |
 | 版本 | v1.0 |
-| 状态 | Approved |
+| 状态 | Superseded（由 MVP_FINAL_PLAN v1.2、DEC-012 和 ERP-006 活跃范围契约替代） |
 | Owner | PJM / PM |
 | 日期 | 2026-09-12 |
 | 适用范围 | Amazon 美国站、公司内部使用 |
+
+> 本文件保留 2026-09-12 精简范围的历史决策过程，其中五店 Listing 内容不再适用于当前 MVP。当前执行以 [MVP 最终规划](MVP_FINAL_PLAN.md)、[当前 MVP 活跃范围契约](MVP_ACTIVE_SCOPE_CONTRACT.md)和 PRD v1.2 为准。
 
 ## 1. MVP 目标
 

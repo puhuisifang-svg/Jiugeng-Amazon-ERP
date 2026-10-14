@@ -4,19 +4,21 @@
 | --- | --- |
 | 项目 | 九更亚马逊 ERP |
 | 交付物 ID | DEL-006 |
-| 版本 | v1.1 |
-| 状态 | Approved（S0-DOC-01 经 QA/PJM 复核关闭） |
+| 版本 | v1.2 |
+| 状态 | In Review（完整扩展模型；当前 MVP 由 ERP-006 范围覆盖层裁剪） |
 | Owner | PM / Backend |
-| 日期 | 2026-09-12 |
+| 日期 | 2026-10-15 |
 | 适用范围 | Amazon 美国站、5 个公司店铺 |
+
+> 当前 MVP 只实现 Product、ProductVariant、VariantAttribute 及其辅料关系。StoreAccount、AmazonCatalogItem、StoreListing 与五店映射已由 DEC-012 后置。当前实体和五类导入边界见 [当前 MVP 活跃范围契约](../01-product/MVP_ACTIVE_SCOPE_CONTRACT.md)；本文保留完整多店模型供未来范围评审和历史审计。
 
 ## 1. 设计结论
 
 产品模型分为三个层次，禁止混成一张表：
 
 1. **内部产品层**：公司自己的产品款式（SPU）和可销售规格（内部 SKU），是产品、规格和辅料关系的权威来源。
-2. **Amazon 目录层**：Amazon Catalog Item，以“站点 + ASIN”唯一；父 ASIN 用于组织变体，子 ASIN/独立 ASIN 对应可售商品。
-3. **店铺 Listing 层**：每个 Seller Account 自己的 Seller SKU、Listing、FNSKU、履约方式和状态。同一内部 SKU 可分别映射 5 个店铺的 Listing。
+2. **Amazon 目录层（后置）**：Amazon Catalog Item，以“站点 + ASIN”唯一；父 ASIN 用于组织变体，子 ASIN/独立 ASIN 对应可售商品。
+3. **店铺 Listing 层（后置）**：每个 Seller Account 自己的 Seller SKU、Listing、FNSKU、履约方式和状态。同一内部 SKU 可分别映射 5 个店铺的 Listing。
 
 核心原则：
 
@@ -24,7 +26,7 @@
 - 内部 SKU 表示真实可生产、包装和销售的最小规格，例如颜色、尺寸组合。
 - Amazon 父子体是渠道结构，不等同于内部 SPU/SKU，必须独立建模。
 - ASIN 属于 Amazon 目录；Seller SKU/Listing 属于具体店铺。不同店铺可销售同一 ASIN，但各自拥有独立 Seller SKU、FNSKU、价格、履约和 Listing 状态。
-- MVP 通过界面和 Excel 导入维护 Amazon 映射，不接入 SP-API 自动同步。后续引入同步时，Amazon 数据不得直接覆盖内部产品主档；应先保存来源、时间和原始快照，再按明确映射更新渠道字段。
+- 当前 MVP 不维护 Amazon 目录或 Listing 映射。未来经范围批准引入时，Amazon 数据不得直接覆盖内部产品主档；应先保存来源、时间和原始快照，再按明确映射更新渠道字段。
 
 关系图：[打开产品数据模型图](diagrams/PRODUCT_MODEL.html)。
 
@@ -48,7 +50,7 @@
 
 ### 2.2 ProductVariant：内部 SKU
 
-表示可独立配置辅料并映射 Amazon Listing 的具体规格。
+表示可独立配置辅料的具体规格；映射 Amazon Listing 属于后置能力。
 
 | 字段 | 说明 |
 | --- | --- |
@@ -74,7 +76,7 @@
 
 同一内部 SKU 下 `attribute_code` 唯一；同一 Product 内不得出现完全相同的变体属性组合。
 
-### 2.4 StoreAccount：Amazon 店铺
+### 2.4 StoreAccount：Amazon 店铺（后置范围）
 
 首期固定美国站 5 个店铺。
 
@@ -87,7 +89,7 @@
 | `status` | 启用、停用 |
 | `credential_ref` | Secret Store 引用；不保存凭据明文 |
 
-### 2.5 AmazonCatalogItem：Amazon 目录商品
+### 2.5 AmazonCatalogItem：Amazon 目录商品（后置范围）
 
 | 字段 | 说明 |
 | --- | --- |
@@ -101,7 +103,7 @@
 
 Catalog 数据作为 Amazon 外部事实保存，不作为公司内部产品编码来源。
 
-### 2.6 StoreListing：店铺 Listing 映射
+### 2.6 StoreListing：店铺 Listing 映射（后置范围）
 
 这是多店铺设计的核心桥接实体。
 
@@ -151,20 +153,19 @@ Catalog 数据作为 Amazon 外部事实保存，不作为公司内部产品编�
 ### 4.1 产品列表
 
 - 按产品编码、名称、品牌、类目和状态查询。
-- 展开查看 SKU 数量和 5 店 Listing 覆盖情况。
+- 展开查看 SKU 数量和状态。
 - 支持新增、编辑、停用、导入和导出。
 
 ### 4.2 产品详情
 
-采用五个页签：
+当前 MVP 采用四个页签：
 
 1. 基础信息：Product/SPU 字段。
 2. SKU/规格：Variant 与动态属性。
 3. 对应辅料：按 SKU 维护辅料、用量和损耗率。
-4. Amazon 映射：按店铺展示 Seller SKU、ASIN、父子体、FNSKU、履约和状态。
-5. 变更记录：关键字段修改前后值、人员和时间。
+4. 变更记录：关键字段修改前后值、人员和时间。
 
-### 4.3 多店铺映射视图
+### 4.3 多店铺映射视图（后置范围）
 
 以内部 SKU 为行、5 个店铺为列显示覆盖状态；点击单元格进入该店铺 Listing 详情。该视图只展示映射摘要，不把店铺字段复制进 SKU 主表。
 
@@ -173,53 +174,47 @@ Catalog 数据作为 Amazon 外部事实保存，不作为公司内部产品编�
 | 数据 | 权威来源 | 同步规则 |
 | --- | --- | --- |
 | 产品编码、内部名称、规格、辅料 | 九更 ERP | 人工维护/导入，Amazon 不得覆盖 |
-| ASIN、父子关系、目录标题与类目 | Amazon Catalog / 人工导入 | MVP 人工维护或导入；后续可用 SP-API 拉取并留快照 |
-| Seller SKU、Listing 状态、问题、履约 | 店铺 Listing / 人工导入 | MVP 按店铺人工维护或导入；自动同步后置 |
-| FNSKU | Amazon FBA/内部确认 | 按店铺 Listing 保存 |
+| ASIN、父子关系、目录标题与类目 | Amazon Catalog / 人工导入 | 当前 MVP 不维护；未来可用 SP-API 拉取并留快照 |
+| Seller SKU、Listing 状态、问题、履约 | 店铺 Listing / 人工导入 | 当前 MVP 不维护；未来范围批准后实现 |
+| FNSKU | Amazon FBA/内部确认 | 当前 MVP 不维护；未来按店铺 Listing 保存 |
 | 价格、Amazon 库存 | Amazon 店铺 | 本期仅预留字段，不纳入产品主档维护 |
 
-MVP 主档、关系和映射导入采用幂等 Upsert；库存期初采用不可覆盖的一次性幂等记账，并统一记录 `source`、导入批次和操作人。后续自动同步应补充 `source_updated_at`、`synced_at` 和请求追踪 ID；单个店铺失败不得影响其他店铺，也不得删除内部产品。
+当前 MVP 的产品、SKU、辅料和关系导入采用幂等 Upsert；库存期初采用不可覆盖的一次性幂等记账，并统一记录 `source`、导入批次和操作人。后续自动同步应补充 `source_updated_at`、`synced_at` 和请求追踪 ID；单个店铺失败不得影响其他店铺，也不得删除内部产品。
 
 ## 6. 导入模板
 
-与 Approved PRD、Sprint 0 字段字典及 Excel 模板一致，拆分为六类导入文件，避免一张宽表重复主档信息。模板文件名、导入逻辑资源名和领域实体分别定义，避免把 Excel 名称直接当数据库表名：
+当前 MVP 拆分为五类导入文件，避免一张宽表重复主档信息。Sprint 0 的 `03_store_listings_v1.0.xlsx` 及六类机器契约保留为历史审计证据，但不进入当前实现或验收。
 
 | # | 模板文件 | 逻辑资源 | 写入实体 | 幂等业务键 | 前置依赖 |
 | --- | --- | --- | --- | --- | --- |
 | 1 | `01_products_v1.0.xlsx` | `products` | `Product` | 规范化 `product_code` | 无 |
 | 2 | `02_variants_v1.0.xlsx` | `variants`、`variant_attributes` | `ProductVariant`、`VariantAttribute` | 规范化 `sku_code`；`sku_code + attribute_code` | Product；文件内先 Variant 后 Attribute |
-| 3 | `03_store_listings_v1.0.xlsx` | `store_listings` | `StoreListing`；ASIN 非空时同步 Upsert `AmazonCatalogItem` 引用 | `store_code + marketplace_id + normalized_seller_sku`；Catalog 为 `marketplace_id + asin` | Product、SKU、系统预置 StoreAccount |
-| 4 | `04_auxiliary_materials_v1.0.xlsx` | `auxiliary_materials` | `AuxiliaryMaterial` | 规范化 `material_code` | 无 |
-| 5 | `05_sku_auxiliary_materials_v1.0.xlsx` | `product_auxiliary_materials` | `ProductAuxiliaryMaterial` | `sku_code + material_code` | SKU、AuxiliaryMaterial |
-| 6 | `06_initial_inventory_v1.0.xlsx` | `auxiliary_material_opening_inventory` | `AuxiliaryMaterialInventory` 与一条 `InventoryTransaction(OPENING)` | `warehouse_code + material_code`；`warehouse_code + opening_reference` 辅助防重 | AuxiliaryMaterial、系统固定 Warehouse |
+| 3 | `04_auxiliary_materials_v1.0.xlsx` | `auxiliary_materials` | `AuxiliaryMaterial` | 规范化 `material_code` | 无 |
+| 4 | `05_sku_auxiliary_materials_v1.0.xlsx` | `product_auxiliary_materials` | `ProductAuxiliaryMaterial` | `sku_code + material_code` | SKU、AuxiliaryMaterial |
+| 5 | `06_initial_inventory_v1.0.xlsx` | `auxiliary_material_opening_inventory` | `AuxiliaryMaterialInventory` 与一条 `InventoryTransaction(OPENING)` | `warehouse_code + material_code`；`warehouse_code + opening_reference` 辅助防重 | AuxiliaryMaterial、系统固定 Warehouse |
 
-六个逻辑资源名统一为 `products`、`variants`（含 `variant_attributes` 子表）、`store_listings`、`auxiliary_materials`、`product_auxiliary_materials`、`auxiliary_material_opening_inventory`；Excel 文件名与领域实体按上表映射。代码、OpenAPI 和任务状态使用逻辑资源名，数据库映射使用实体定义，禁止再引入第三套导入命名。
+五个逻辑资源名统一为 `products`、`variants`（含 `variant_attributes` 子表）、`auxiliary_materials`、`product_auxiliary_materials`、`auxiliary_material_opening_inventory`；Excel 文件名与领域实体按上表映射。代码、OpenAPI 和任务状态使用逻辑资源名，数据库映射使用实体定义，禁止再引入第三套导入命名。
 
-依赖顺序如下；按文件编号串行执行时为 `01 → 02 → 03 → 04 → 05 → 06`，调度器也可按依赖图并行：
+依赖顺序如下；模板历史编号保留，因此当前串行执行为 `01 → 02 → 04 → 05 → 06`，调度器也可按依赖图并行：
 
 ```text
-系统预置 StoreAccount ────────────────┐
-Product ─→ Variant/Attribute ─┬──────→ StoreListing
-                              └─┐
-AuxiliaryMaterial ──────────────┴────→ SKU—AuxiliaryMaterial
+Product ─→ Variant/Attribute ────────┐
+AuxiliaryMaterial ───────────────────┴→ SKU—AuxiliaryMaterial
 系统固定 Warehouse ─┐
 AuxiliaryMaterial ───┴───────────────→ Initial Inventory（最后记账）
 ```
 
-`store_listings` 仅依赖产品与 SKU，可与辅料链路并行；SKU—辅料关系必须在 SKU 和辅料主档之后；期初库存必须在辅料主档及固定单仓配置之后，并作为库存链路首次记账步骤。Listing 同一文件内父体行必须先于引用它的子体行。
+SKU—辅料关系必须在 SKU 和辅料主档之后；期初库存必须在辅料主档及固定单仓配置之后，并作为库存链路首次记账步骤。
 
-六类导入均执行“上传 → 全量校验 → 预览 → 确认提交 → 结果下载”，并记录 `source`、导入批次、操作人和幂等请求号。前五类按表中业务键执行幂等 Upsert：相同业务键更新同一记录，不新增重复记录；该规则不得用于期初库存。期初库存是库存记账命令的特例，不允许覆盖式更新：首次确认在同一事务中创建余额/期初记录和不可编辑的 `OPENING` 流水；`opening_quantity=0` 合法，仍创建 `quantity=0` 的 `OPENING`，其他库存流水数量必须 `>0`；相同业务键、相同依据和相同载荷的重试返回既有结果且仅保留一条 `OPENING`；同键不同载荷必须拒绝，纠错只能新增调整/冲销流水。任一失败行必须返回工作表、行号、字段和原因，不得静默跳过。
+五类导入均执行“上传 → 全量校验 → 预览 → 确认提交 → 结果下载”，并记录 `source`、导入批次、操作人和幂等请求号。前四类按表中业务键执行幂等 Upsert：相同业务键更新同一记录，不新增重复记录；该规则不得用于期初库存。期初库存是库存记账命令的特例，不允许覆盖式更新：首次确认在同一事务中创建余额/期初记录和不可编辑的 `OPENING` 流水；`opening_quantity=0` 合法，仍创建 `quantity=0` 的 `OPENING`，其他库存流水数量必须 `>0`；相同业务键、相同依据和相同载荷的重试返回既有结果且仅保留一条 `OPENING`；同键不同载荷必须拒绝，纠错只能新增调整/冲销流水。任一失败行必须返回工作表、行号、字段和原因，不得静默跳过。
 
 ## 7. MVP 验收标准
 
 - 一个产品可维护多个 SKU，且同一产品内变体组合不重复。
-- 一个内部 SKU 可正确映射至 5 个店铺的独立 Listing。
-- 同一 ASIN 可被多个店铺 Listing 复用，Seller SKU/FNSKU/状态互不覆盖。
-- Amazon 父体、子体和独立 Listing 关系可表达并通过一致性校验。
 - 每个 SKU 可维护独立辅料清单；“应用到全部 SKU”后关系可分别调整。
-- 六类导入文件均能完成真实脱敏样本导入：产品、SKU/动态属性、5 店 Listing、辅料主档、SKU—辅料关系和单仓辅料期初库存；必填、唯一、枚举、引用及条件校验失败时逐行返回工作表、行号、字段和原因。
+- 五类导入文件均能完成真实脱敏样本导入：产品、SKU/动态属性、辅料主档、SKU—辅料关系和单仓辅料期初库存；必填、唯一、枚举、引用及条件校验失败时逐行返回工作表、行号、字段和原因。
 - 辅料主档可独立导入并按辅料编码全局查重；期初库存按“固定仓库 + 辅料编码”唯一并以期初依据号辅助防重，提交后生成不可编辑且幂等的 `OPENING` 流水；零期初生成一条 `quantity=0` 的 `OPENING` 并可重算为零余额，其他库存流水 `quantity>0`；相同业务键、依据和载荷的重复提交仅产生一条 `OPENING`，同键不同载荷拒绝覆盖，余额与流水重算一致。
-- Amazon 同步失败不覆盖内部主档，所有映射和关键修改可追溯。
+- 产品、SKU、辅料和关系的关键修改可追溯。
 
 ## 8. 官方依据
 
@@ -237,6 +232,7 @@ AuxiliaryMaterial ───┴───────────────→ I
 | v1.0 | 2026-09-12 | 首次 Approved 基线。 | - |
 | v1.1 | 2026-09-12 | 将导入范围由 4 类纠正为 6 类，补齐辅料主档与期初库存；冻结模板/逻辑资源/实体映射、依赖图、逐类幂等键及期初库存一次性记账语义。 | S0-DOC-01 |
 | v1.1 受控澄清 | 2026-09-12 | 明确前五类 Upsert 不适用于期初；`OPENING quantity>=0`、其他库存流水 `>0`，零期初仍生成单条不可编辑 `OPENING`。不改变 Approved 模型范围与状态。 | S0-CONTRACT-01/02 |
+| v1.2 | 2026-10-15 | 按 DEC-012 将 StoreAccount、AmazonCatalogItem、StoreListing 和 Listing 导入标为后置；当前 MVP 收口为五类导入。历史六类契约保留为审计证据。 | ERP-006 |
 
 ## 10. S0-DOC-01 技术复核
 

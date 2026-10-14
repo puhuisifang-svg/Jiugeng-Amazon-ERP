@@ -8,5 +8,7 @@
 | 2026-09-12 | 产品编码提案 v0.1 | 因公司暂无统一编码，提出系统生成的无语义 Product、SKU 和辅料编码规则 | PJM | 待老板确认 | In Review |
 | 2026-09-12 | 产品编码规则 v0.2 | 否决自动编码，改为 Product、SKU 和辅料编码由业务人员手工维护 | 老板 | 老板 | 已批准 |
 | 2026-09-12 | MVP 最终规划 v1.0 | 冻结范围、人工编码细节、架构、Sprint、验收和风险门禁 | PJM | 老板 | 已批准 |
+| 2026-09-27 | 当前 MVP 范围调整 / DEC-012 | 当前 MVP 移除店铺 Listing 映射，保留历史契约作为审计记录，开发优先选品管理 | 老板/PJM | 老板 | 已批准 |
+| 2026-10-15 | ERP-006 当前 MVP 活跃范围契约 v1.0 | 将实施范围收口为五类导入、19 个 capability 和 10 个正式 API 资源族；DATA-002 与 StoreAccount/StoreListing 后置 | Codex | PJM/PM 待复核 | In Review |
 
 正式范围变更请使用 [变更申请模板](../../templates/CHANGE_REQUEST_TEMPLATE.md)。

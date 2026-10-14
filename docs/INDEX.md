@@ -8,15 +8,16 @@
 | 治理 | [变更日志](00-governance/CHANGE_LOG.md) | PJM | Active |
 | 产品 | [原始项目规划方案](01-product/PROJECT_PLAN.md) | PJM/PM | Superseded |
 | 产品 | [首期范围与实施规划](01-product/PHASE1_SCOPE_PLAN.md) | PJM/PM | Superseded |
-| 产品 | [精简 MVP 范围与实现方案](01-product/MVP_SCOPE_PLAN.md) | PJM/PM | Approved |
-| 产品 | [MVP 最终规划](01-product/MVP_FINAL_PLAN.md) | PJM | Approved |
-| 产品 | [PRD](01-product/PRD.md) | PM | Approved |
+| 产品 | [精简 MVP 范围与实现方案](01-product/MVP_SCOPE_PLAN.md) | PJM/PM | Superseded |
+| 产品 | [MVP 最终规划](01-product/MVP_FINAL_PLAN.md) | PJM | In Review（ERP-006 增量） |
+| 产品 | [当前 MVP 活跃范围契约](01-product/MVP_ACTIVE_SCOPE_CONTRACT.md) | PJM/PM/Backend/Frontend/QA | In Review |
+| 产品 | [PRD](01-product/PRD.md) | PM | In Review（ERP-006 增量） |
 | 产品 | [产品与辅料编码规则](01-product/PRODUCT_CODE_STANDARD.md) | PM/Backend | Approved |
 | 产品 | [产品 Backlog](01-product/BACKLOG.md) | PM/PJM | Draft |
 | 产品 | [业务术语表](01-product/GLOSSARY.md) | PM | Draft |
 | 设计 | [UI/UX 设计说明](02-design/UI_UX_SPEC.md) | UI | Draft |
-| 架构 | [总体架构](03-architecture/ARCHITECTURE.md) | Backend/Ops | Approved |
-| 架构 | [产品与 Amazon 多店铺数据模型](03-architecture/PRODUCT_DATA_MODEL.md) | PM/Backend | Approved |
+| 架构 | [总体架构](03-architecture/ARCHITECTURE.md) | Backend/Ops | In Review（ERP-006 增量） |
+| 架构 | [产品与 Amazon 多店铺数据模型](03-architecture/PRODUCT_DATA_MODEL.md) | PM/Backend | In Review（当前 MVP 已裁剪） |
 | 架构 | [ADR 索引](03-architecture/adr/README.md) | Backend/Ops | Active |
 | 架构 | [API 规范](03-architecture/API_GUIDELINES.md) | Backend | Draft |
 | 架构 | [数据字典](03-architecture/DATA_DICTIONARY.md) | PM/Backend | Draft |

@@ -8,6 +8,8 @@
 | 业务基线 | DEL-017 v1.2、PRODUCT_DATA_MODEL v1.1 受控澄清、ACCESS_MATRIX v1.1 |
 | 范围 | Sprint 0 契约冻结；不包含真实接口、IAM 会话或逐接口鉴权实现 |
 
+> 历史基线说明：本目录固定 DEC-012 之前的六类导入契约及已关闭验收证据，不删除、不改写。当前 MVP 已移除 Store Listing 映射；正式实现只采用 [ERP-006 当前 MVP 活跃范围契约](../../../../docs/01-product/MVP_ACTIVE_SCOPE_CONTRACT.md)中的五类导入和 19 个 capability。引用本目录的通用状态机、错误、幂等及 OPENING 语义时，必须排除 `STORE_LISTINGS`、StoreAccount 依赖和 `listings.*` capability。
+
 ## 文件
 
 - `openapi.json`：OpenAPI 3.1；上传并入队校验、批次查询、issues、preview、过期重验、确认、取消、结果及结果文件。

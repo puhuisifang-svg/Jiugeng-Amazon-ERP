@@ -55,8 +55,8 @@ onMounted(load)
     <div class="page-heading">
       <div>
         <p class="eyebrow">
-          ERP-015 · 产品与 SKU 导入
-        </p><h1>批次详情</h1><p>逐工作表、行和字段定位问题；产品与 SKU 批次通过全量校验后原子提交。</p>
+          ERP-016 · 主数据与关系导入
+        </p><h1>批次详情</h1><p>逐工作表、行和字段定位问题；已注册类型通过全量校验后整批原子提交。</p>
       </div><RouterLink
         class="primary-link"
         to="/imports"

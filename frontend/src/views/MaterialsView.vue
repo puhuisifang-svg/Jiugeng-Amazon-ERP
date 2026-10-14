@@ -87,7 +87,7 @@ onMounted(load)
       ></label>
       <label>规格<input
         v-model="form.specification"
-        maxlength="300"
+        maxlength="500"
       ></label>
       <label>单位<input
         v-model="form.unit"

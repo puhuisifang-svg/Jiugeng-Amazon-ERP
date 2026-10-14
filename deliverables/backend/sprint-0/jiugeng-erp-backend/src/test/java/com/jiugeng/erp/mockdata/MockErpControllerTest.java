@@ -362,6 +362,75 @@ class MockErpControllerTest {
     }
 
     @Test
+    void protectsWatchBaselineDeduplicatesEventsAndTracesCandidateSource() throws Exception {
+        String selectionRole = bearer("mock-session-selection");
+        String storeId = "watch-store-mock-001";
+
+        mockMvc.perform(post("/api/watch/stores/" + storeId + "/runs")
+                        .header(AUTHORIZATION, selectionRole)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mode\":\"INCOMPLETE\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.baselineChanged").value(false))
+                .andExpect(jsonPath("$.item.baselineRunId").doesNotExist())
+                .andExpect(jsonPath("$.item.lastIntegrityStatus").value("INCOMPLETE"))
+                .andExpect(jsonPath("$.item.lastDecision").value("REJECTED_KEEP_PREVIOUS"));
+
+        String firstBaselineRunId = com.jayway.jsonpath.JsonPath.read(
+                mockMvc.perform(post("/api/watch/stores/" + storeId + "/runs")
+                                .header(AUTHORIZATION, selectionRole)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"mode\":\"COMPLETE\"}"))
+                        .andExpect(status().isOk())
+                        .andExpect(jsonPath("$.baselineChanged").value(true))
+                        .andExpect(jsonPath("$.events.length()").value(0))
+                        .andExpect(jsonPath("$.item.lastReasonCode").value("FIRST_COMPLETE_SNAPSHOT"))
+                        .andReturn().getResponse().getContentAsString(),
+                "$.item.baselineRunId");
+
+        mockMvc.perform(post("/api/watch/stores/" + storeId + "/runs")
+                        .header(AUTHORIZATION, selectionRole)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mode\":\"FAILED\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.baselineChanged").value(false))
+                .andExpect(jsonPath("$.item.baselineRunId").value(firstBaselineRunId))
+                .andExpect(jsonPath("$.item.lastIntegrityStatus").value("FAILED"));
+
+        String completeResponse = mockMvc.perform(post("/api/watch/stores/" + storeId + "/runs")
+                        .header(AUTHORIZATION, selectionRole)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mode\":\"COMPLETE\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.baselineChanged").value(true))
+                .andExpect(jsonPath("$.events.length()").value(1))
+                .andExpect(jsonPath("$.events[0].asin").value("B0NEW00001"))
+                .andReturn().getResponse().getContentAsString();
+        String eventId = com.jayway.jsonpath.JsonPath.read(completeResponse, "$.events[0].id");
+        String sourceRunId = com.jayway.jsonpath.JsonPath.read(completeResponse, "$.events[0].sourceRunId");
+
+        mockMvc.perform(post("/api/watch/stores/" + storeId + "/runs")
+                        .header(AUTHORIZATION, selectionRole)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mode\":\"COMPLETE\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.events.length()").value(0));
+
+        mockMvc.perform(post("/api/watch/events/" + eventId + "/confirm")
+                        .header(AUTHORIZATION, selectionRole))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.candidate.sourceStore").value("模拟美国店铺 1"))
+                .andExpect(jsonPath("$.candidate.sourceRunId").value(sourceRunId))
+                .andExpect(jsonPath("$.candidate.sourceEventId").value(eventId));
+
+        mockMvc.perform(post("/api/watch/stores/" + storeId + "/runs")
+                        .header(AUTHORIZATION, bearer("mock-session-product-material"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mode\":\"COMPLETE\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void enforcesWriteCapabilitiesAcrossOperationalEndpoints() throws Exception {
         String selectionRole = bearer("mock-session-selection");
         String productRole = bearer("mock-session-product-material");

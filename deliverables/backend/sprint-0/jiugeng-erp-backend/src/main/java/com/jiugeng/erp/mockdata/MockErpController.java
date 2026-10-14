@@ -15,6 +15,9 @@ import com.jiugeng.erp.mockdata.MockErpData.TransactionResult;
 import com.jiugeng.erp.mockdata.MockErpData.TransactionType;
 import com.jiugeng.erp.mockdata.MockErpData.WatchConfirmation;
 import com.jiugeng.erp.mockdata.MockErpData.WatchEvent;
+import com.jiugeng.erp.mockdata.MockErpData.WatchRunMode;
+import com.jiugeng.erp.mockdata.MockErpData.WatchRunResult;
+import com.jiugeng.erp.mockdata.MockErpData.WatchStore;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -162,6 +165,25 @@ class MockErpController {
         return SyntheticList.of(data.watchEvents());
     }
 
+    @GetMapping("/watch/stores")
+    SyntheticList<WatchStore> watchStores(@RequestHeader(MockErpData.AUTHORIZATION_HEADER) String authorization) {
+        DemoSession session = data.session(authorization);
+        data.require(session, "watch.read");
+        return SyntheticList.of(data.watchStores());
+    }
+
+    @PostMapping("/watch/stores/{storeId}/runs")
+    WatchRunResponse runWatchStore(
+            @RequestHeader(MockErpData.AUTHORIZATION_HEADER) String authorization,
+            @org.springframework.web.bind.annotation.PathVariable String storeId,
+            @Valid @RequestBody WatchRunRequest request) {
+        DemoSession session = data.session(authorization);
+        data.require(session, "watch.write");
+        WatchRunResult result = data.runWatchStore(storeId, request.mode());
+        return new WatchRunResponse(result.item(), result.events(), result.baselineChanged(), true,
+                MockErpData.SOURCE);
+    }
+
     @PostMapping("/watch/events/{eventId}/confirm")
     WatchConfirmationResponse confirmWatchEvent(
             @RequestHeader(MockErpData.AUTHORIZATION_HEADER) String authorization,
@@ -215,6 +237,9 @@ class MockErpController {
             @Size(max = 500) String selectionReason) {
     }
 
+    record WatchRunRequest(@NotNull WatchRunMode mode) {
+    }
+
     record LoginResponse(String token, MockErpData.DemoUser user, boolean mockData, String source) {
     }
 
@@ -239,6 +264,14 @@ class MockErpController {
             WatchEvent item,
             SelectionCandidate candidate,
             boolean replayed,
+            boolean mockData,
+            String source) {
+    }
+
+    record WatchRunResponse(
+            WatchStore item,
+            List<WatchEvent> events,
+            boolean baselineChanged,
             boolean mockData,
             String source) {
     }

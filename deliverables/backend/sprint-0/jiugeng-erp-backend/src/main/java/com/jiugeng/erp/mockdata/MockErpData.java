@@ -57,6 +57,10 @@ final class MockErpData {
     private final Set<String> openingMaterials = new java.util.HashSet<>();
     private final Map<String, SelectionCandidate> candidates = new LinkedHashMap<>();
     private final Map<String, WatchEvent> watchEvents = new LinkedHashMap<>();
+    private final Map<String, WatchStore> watchStores = new LinkedHashMap<>();
+    private final Map<String, Set<String>> baselineAsinsByStore = new LinkedHashMap<>();
+    private final Map<String, Integer> runSequencesByStore = new LinkedHashMap<>();
+    private final Set<String> emittedWatchEventKeys = new java.util.HashSet<>();
 
     MockErpData() {
         seedProduct("PROD-MOCK-001", "旅行收纳袋套装", List.of("SKU-MOCK-001-BLK", "SKU-MOCK-001-BGE"));
@@ -69,21 +73,26 @@ final class MockErpData {
                 CandidateStatus.REVIEWING, 86, null, canonicalAmazonUrl("B0MOCKASIN1"), "户外照明",
                 new BigDecimal("29.99"), new BigDecimal("4.6"), 1280, "模拟选品员", List.of("户外", "便携"),
                 "模拟需求稳定且便于差异化", CandidateSource.MANUAL, null,
-                Instant.parse("2026-09-21T08:00:00Z")));
+                Instant.parse("2026-09-21T08:00:00Z"), null, null));
         putCandidate(new SelectionCandidate("candidate-mock-002", "B0MOCKASIN2", "宠物慢食碗",
                 CandidateStatus.NEW, 74, null, canonicalAmazonUrl("B0MOCKASIN2"), "宠物用品",
                 new BigDecimal("18.50"), new BigDecimal("4.4"), 630, null, List.of("宠物"), null,
-                CandidateSource.WATCH, "模拟美国店铺 3", Instant.parse("2026-09-22T10:15:00Z")));
+                CandidateSource.WATCH, "模拟美国店铺 3", Instant.parse("2026-09-22T10:15:00Z"),
+                "run-mock-seed-002", "event-mock-002"));
         putCandidate(new SelectionCandidate("candidate-mock-003", "B0MOCKASIN3", "车载纸巾盒",
                 CandidateStatus.REJECTED, 41, "模拟毛利不足", canonicalAmazonUrl("B0MOCKASIN3"), "汽车用品",
                 new BigDecimal("12.99"), new BigDecimal("4.1"), 215, "模拟选品员", List.of("车载"),
                 "模拟竞争过于集中", CandidateSource.MANUAL, null,
-                Instant.parse("2026-09-20T06:00:00Z")));
+                Instant.parse("2026-09-20T06:00:00Z"), null, null));
 
-        putWatchEvent(new WatchEvent("event-mock-001", "模拟美国店铺 1", "B0MOCKASIN4", "可折叠露营灯升级款",
-                Instant.parse("2026-09-22T08:30:00Z"), WatchStatus.PENDING_REVIEW, null));
-        putWatchEvent(new WatchEvent("event-mock-002", "模拟美国店铺 3", "B0MOCKASIN2", "宠物慢食碗",
-                Instant.parse("2026-09-22T10:15:00Z"), WatchStatus.CONFIRMED, "candidate-mock-002"));
+        putWatchEvent(new WatchEvent("event-mock-001", "watch-store-mock-001", "模拟美国店铺 1", "B0MOCKASIN4",
+                "可折叠露营灯升级款", Instant.parse("2026-09-22T08:30:00Z"), "run-mock-seed-001",
+                WatchStatus.PENDING_REVIEW, null));
+        putWatchEvent(new WatchEvent("event-mock-002", "watch-store-mock-003", "模拟美国店铺 3", "B0MOCKASIN2",
+                "宠物慢食碗", Instant.parse("2026-09-22T10:15:00Z"), "run-mock-seed-002",
+                WatchStatus.CONFIRMED, "candidate-mock-002"));
+        putWatchStore(new WatchStore("watch-store-mock-001", "模拟美国店铺 1",
+                "https://www.amazon.com/sp?seller=SYNTHETIC", "ACTIVE", null, 0, null, null, null, null, null));
     }
 
     DemoSession login(DemoRole role) {
@@ -214,7 +223,7 @@ final class MockErpData {
         }
         SelectionCandidate candidate = new SelectionCandidate(id("candidate"), asin, title.trim(),
                 CandidateStatus.NEW, score == null ? 50 : score, null, canonicalAmazonUrl(asin), null, null, null,
-                null, null, List.of(), null, CandidateSource.MANUAL, null, Instant.now());
+                null, null, List.of(), null, CandidateSource.MANUAL, null, Instant.now(), null, null);
         putCandidate(candidate);
         return candidate;
     }
@@ -231,7 +240,8 @@ final class MockErpData {
         SelectionCandidate updated = new SelectionCandidate(current.id(), current.asin(), current.title(),
                 current.status(), current.score(), current.rejectionReason(), current.sourceUrl(), optional(category),
                 price, rating, reviewCount, optional(owner), normalizedTags, optional(selectionReason),
-                current.source(), current.sourceStore(), current.discoveredAt());
+                current.source(), current.sourceStore(), current.discoveredAt(), current.sourceRunId(),
+                current.sourceEventId());
         candidates.put(updated.id(), updated);
         return updated;
     }
@@ -257,7 +267,7 @@ final class MockErpData {
                 current.score(), status == CandidateStatus.REJECTED ? normalizedReason : null, current.sourceUrl(),
                 current.category(), current.price(), current.rating(), current.reviewCount(), current.owner(),
                 current.tags(), current.selectionReason(), current.source(), current.sourceStore(),
-                current.discoveredAt());
+                current.discoveredAt(), current.sourceRunId(), current.sourceEventId());
         candidates.put(updated.id(), updated);
         return updated;
     }
@@ -280,14 +290,87 @@ final class MockErpData {
                 .orElseGet(() -> {
                     SelectionCandidate created = new SelectionCandidate(id("candidate"), event.asin(), event.title(),
                             CandidateStatus.NEW, 70, null, canonicalAmazonUrl(event.asin()), null, null, null, null,
-                            null, List.of(), null, CandidateSource.WATCH, event.storeName(), event.detectedAt());
+                            null, List.of(), null, CandidateSource.WATCH, event.storeName(), event.detectedAt(),
+                            event.sourceRunId(), event.id());
                     putCandidate(created);
                     return created;
                 });
-        WatchEvent confirmed = new WatchEvent(event.id(), event.storeName(), event.asin(), event.title(),
-                event.detectedAt(), WatchStatus.CONFIRMED, candidate.id());
+        WatchEvent confirmed = new WatchEvent(event.id(), event.storeId(), event.storeName(), event.asin(),
+                event.title(), event.detectedAt(), event.sourceRunId(), WatchStatus.CONFIRMED, candidate.id());
         watchEvents.put(confirmed.id(), confirmed);
         return new WatchConfirmation(confirmed, candidate, false);
+    }
+
+    synchronized List<WatchStore> watchStores() {
+        return List.copyOf(watchStores.values());
+    }
+
+    synchronized WatchRunResult runWatchStore(String storeId, WatchRunMode mode) {
+        WatchStore current = watchStores.get(storeId);
+        if (current == null) {
+            throw notFound("WATCH_STORE_NOT_FOUND", "Unknown watch store: " + storeId);
+        }
+        int sequence = runSequencesByStore.merge(storeId, 1, Integer::sum);
+        String runId = "run-" + storeId + "-" + sequence;
+        Instant completedAt = Instant.now();
+        Set<String> candidateAsins;
+        WatchRunStatus runStatus;
+        boolean pagesComplete;
+        int itemCount;
+        if (mode == WatchRunMode.COMPLETE) {
+            candidateAsins = current.baselineRunId() == null
+                    ? Set.of("B0BASE0001", "B0BASE0002")
+                    : Set.of("B0BASE0001", "B0BASE0002", "B0NEW00001");
+            runStatus = WatchRunStatus.SUCCEEDED;
+            pagesComplete = true;
+            itemCount = candidateAsins.size();
+        } else if (mode == WatchRunMode.INCOMPLETE) {
+            candidateAsins = Set.of("B0BASE0001");
+            runStatus = WatchRunStatus.SUCCEEDED;
+            pagesComplete = false;
+            itemCount = 2;
+        } else {
+            candidateAsins = Set.of();
+            runStatus = WatchRunStatus.FAILED;
+            pagesComplete = false;
+            itemCount = 0;
+        }
+        WatchIntegrityStatus integrityStatus = runStatus == WatchRunStatus.FAILED
+                ? WatchIntegrityStatus.FAILED
+                : pagesComplete && itemCount == candidateAsins.size()
+                        ? WatchIntegrityStatus.COMPLETE
+                        : WatchIntegrityStatus.INCOMPLETE;
+        WatchBaselineDecision decision = integrityStatus == WatchIntegrityStatus.COMPLETE
+                ? WatchBaselineDecision.PROMOTED
+                : WatchBaselineDecision.REJECTED_KEEP_PREVIOUS;
+        String reasonCode = decision == WatchBaselineDecision.PROMOTED
+                ? current.baselineRunId() == null ? "FIRST_COMPLETE_SNAPSHOT" : "COMPLETE_SUCCESSOR"
+                : "INTEGRITY_NOT_COMPLETE";
+        boolean promoted = decision == WatchBaselineDecision.PROMOTED;
+        List<WatchEvent> generatedEvents = List.of();
+        if (promoted) {
+            Set<String> previousAsins = baselineAsinsByStore.getOrDefault(storeId, Set.of());
+            if (current.baselineRunId() != null) {
+                generatedEvents = candidateAsins.stream().filter(asin -> !previousAsins.contains(asin))
+                        .filter(asin -> !emittedWatchEventKeys.contains(storeId + "|" + asin))
+                        .map(asin -> {
+                    String eventKey = storeId + "|" + asin;
+                    emittedWatchEventKeys.add(eventKey);
+                    WatchEvent event = new WatchEvent(id("event"), storeId,
+                            current.storeName(), asin, "模拟监控新品 " + asin, completedAt, runId,
+                            WatchStatus.PENDING_REVIEW, null);
+                    putWatchEvent(event);
+                    return event;
+                }).toList();
+            }
+            baselineAsinsByStore.put(storeId, Set.copyOf(candidateAsins));
+        }
+        WatchStore updated = new WatchStore(current.id(), current.storeName(), current.sourceUrl(), current.status(),
+                promoted ? runId : current.baselineRunId(),
+                promoted ? candidateAsins.size() : current.baselineAsinCount(), runId, runStatus,
+                integrityStatus, decision, reasonCode, completedAt);
+        watchStores.put(updated.id(), updated);
+        return new WatchRunResult(updated, generatedEvents, promoted);
     }
 
     private void seedProduct(String code, String name, List<String> skuCodes) {
@@ -321,6 +404,10 @@ final class MockErpData {
 
     private void putWatchEvent(WatchEvent event) {
         watchEvents.put(event.id(), event);
+    }
+
+    private void putWatchStore(WatchStore store) {
+        watchStores.put(store.id(), store);
     }
 
     private static void validateQuantity(TransactionType type, BigDecimal quantity) {
@@ -421,6 +508,10 @@ final class MockErpData {
     enum CandidateStatus { NEW, REVIEWING, APPROVED, REJECTED }
     enum CandidateSource { MANUAL, WATCH }
     enum WatchStatus { PENDING_REVIEW, CONFIRMED }
+    enum WatchRunMode { COMPLETE, INCOMPLETE, FAILED }
+    enum WatchRunStatus { SUCCEEDED, FAILED }
+    enum WatchIntegrityStatus { COMPLETE, INCOMPLETE, FAILED }
+    enum WatchBaselineDecision { PROMOTED, REJECTED_KEEP_PREVIOUS }
 
     record DemoUser(String id, String displayName, DemoRole role) {}
     record DemoSession(String sessionId, DemoUser currentUser, List<String> capabilities) {}
@@ -438,8 +529,21 @@ final class MockErpData {
                               String rejectionReason, String sourceUrl, String category, BigDecimal price,
                               BigDecimal rating, Integer reviewCount, String owner, List<String> tags,
                               String selectionReason, CandidateSource source, String sourceStore,
-                              Instant discoveredAt) {}
-    record WatchEvent(String id, String storeName, String asin, String title, Instant detectedAt, WatchStatus status,
-                      String candidateId) {}
+                              Instant discoveredAt, String sourceRunId, String sourceEventId) {}
+    record WatchEvent(String id, String storeId, String storeName, String asin, String title, Instant detectedAt,
+                      String sourceRunId, WatchStatus status, String candidateId) {}
+    record WatchStore(String id, String storeName, String sourceUrl, String status, String baselineRunId,
+                      int baselineAsinCount, String lastRunId, WatchRunStatus lastRunStatus,
+                      WatchIntegrityStatus lastIntegrityStatus, WatchBaselineDecision lastDecision,
+                      String lastReasonCode, Instant lastRunAt) {
+        WatchStore(String id, String storeName, String sourceUrl, String status, String baselineRunId,
+                   int baselineAsinCount, String lastRunId, WatchRunStatus lastRunStatus,
+                   WatchIntegrityStatus lastIntegrityStatus, WatchBaselineDecision lastDecision,
+                   String lastReasonCode) {
+            this(id, storeName, sourceUrl, status, baselineRunId, baselineAsinCount, lastRunId, lastRunStatus,
+                    lastIntegrityStatus, lastDecision, lastReasonCode, null);
+        }
+    }
+    record WatchRunResult(WatchStore item, List<WatchEvent> events, boolean baselineChanged) {}
     record WatchConfirmation(WatchEvent item, SelectionCandidate candidate, boolean replayed) {}
 }

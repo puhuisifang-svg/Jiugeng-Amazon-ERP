@@ -20,7 +20,7 @@
 ## 验收证据
 
 - 后端 `./mvnw clean verify`：46 项通过（最终提交前复跑）。
-- 前端 `pnpm quality`：14 个测试文件、43 项通过（最终提交前复跑）。
+- 前端 `pnpm quality`：15 个测试文件、44 项通过（最终提交前复跑）。
 - 临时 MySQL 8：V1→V5 迁移通过，Product/SKU/属性探针在数据库重启后保持，mock 专用接口继续隔离。
 - `git diff --check`：最终提交前执行。
 

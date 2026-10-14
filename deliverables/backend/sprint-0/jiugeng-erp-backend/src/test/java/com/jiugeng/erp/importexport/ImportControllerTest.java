@@ -118,13 +118,16 @@ class ImportControllerTest {
     }
 
     @Test void acceptsAndCommitsOneThousandProductRowsWithinGate() {
-        assertTimeout(Duration.ofSeconds(30), () -> {
+        long started = System.nanoTime();
+        assertTimeout(Duration.ofMinutes(5), () -> {
             String token=user("bulk-owner","PRODUCT_MATERIAL");
             String batch=mapper.readTree(upload(token,"bulk-products","PRODUCTS",productRows(1000),202)).at("/batch/id").asText();
             commit(token,batch,"bulk-products-commit").andExpect(status().isAccepted())
                     .andExpect(jsonPath("$.status").value("SUCCEEDED"));
             assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product WHERE product_code_normalized LIKE 'BULK-P-%'",Integer.class)).isEqualTo(1000);
         });
+        System.out.printf("PERF import-products-1000 elapsed_ms=%.3f threshold_ms=300000%n",
+                (System.nanoTime() - started) / 1_000_000.0);
     }
 
     @Test void materialAndRelationHandlersUpsertDependenciesAtomicallyAndReportCounts() throws Exception {

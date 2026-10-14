@@ -7,7 +7,7 @@ import { session } from '@/state/session'
 
 const items = ref<MaterialDto[]>([]); const loading = ref(true); const saving = ref(false); const error = ref(''); const success = ref('')
 const materialCode = ref(''); const name = ref(''); const unit = ref('PCS')
-const writable = computed(() => ['ADMIN', 'PRODUCT_MATERIAL'].includes(session.user.value?.role ?? ''))
+const writable = computed(() => session.canAccess(['materials.write']))
 async function load() { loading.value = true; try { items.value = (await domainApi.materials()).items } catch { error.value = '辅料模拟数据加载失败。' } finally { loading.value = false } }
 async function create() {
   saving.value = true; error.value = ''; success.value = ''

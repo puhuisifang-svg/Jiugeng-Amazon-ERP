@@ -1,6 +1,8 @@
 spring:
   application:
     name: jiugeng-erp-backend
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
   datasource:
     url: jdbc:h2:mem:jiugeng;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
     username: sa
@@ -23,3 +25,12 @@ management:
 
 server:
   shutdown: graceful
+
+app:
+  iam:
+    session-hours: ${ERP_SESSION_HOURS:8}
+    max-failed-logins: ${ERP_MAX_FAILED_LOGINS:5}
+    bootstrap:
+      login-name: ${ERP_BOOTSTRAP_ADMIN_LOGIN:}
+      display-name: ${ERP_BOOTSTRAP_ADMIN_DISPLAY_NAME:系统管理员}
+      password: ${bootstrap_admin_password:${ERP_BOOTSTRAP_ADMIN_PASSWORD:}}

@@ -13,7 +13,7 @@ const success = ref('')
 const productCode = ref('')
 const name = ref('')
 const skuText = ref('')
-const writable = computed(() => ['ADMIN', 'PRODUCT_MATERIAL'].includes(session.user.value?.role ?? ''))
+const writable = computed(() => session.canAccess(['products.write']))
 
 async function load() {
   loading.value = true

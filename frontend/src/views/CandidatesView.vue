@@ -11,7 +11,7 @@ interface EvaluationDraft { category: string; price: string; rating: string; rev
 const items = ref<Candidate[]>([]); const loading = ref(true); const busyId = ref(''); const error = ref(''); const success = ref(''); const reasons = reactive<Record<string, string>>({})
 const saving = ref(false); const asinOrUrl = ref(''); const title = ref(''); const score = ref(50)
 const query = ref(''); const statusFilter = ref(''); const ownerFilter = ref(''); const drafts = reactive<Record<string, EvaluationDraft>>({})
-const writable = computed(() => ['ADMIN', 'SELECTION'].includes(session.user.value?.role ?? ''))
+const writable = computed(() => session.canAccess(['selection.write']))
 const owners = computed(() => [...new Set(items.value.map(item => item.owner).filter((owner): owner is string => Boolean(owner)))].sort())
 const filteredItems = computed(() => {
   const keyword = query.value.trim().toLowerCase()

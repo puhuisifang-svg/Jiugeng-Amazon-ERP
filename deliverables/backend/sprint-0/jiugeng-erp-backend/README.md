@@ -1,6 +1,6 @@
 # 九更 Amazon ERP 后端脚手架
 
-Java 21、Spring Boot 3、Spring Modulith、Flyway。Sprint 0 只定义模块边界、Collector Spike 契约和工程门禁，不实现正式业务功能。
+Java 21、Spring Boot 3、Spring Modulith、Flyway。当前已提供模块边界、Collector Spike 契约、工程门禁和 IAM 认证基础。
 
 ## 模块边界
 
@@ -28,7 +28,21 @@ Java 21、Spring Boot 3、Spring Modulith、Flyway。Sprint 0 只定义模块边
 
 真实凭据不得进入参数、配置、日志或仓库；上述 profile 所需变量应由受保护运行环境注入。
 
-健康检查：`GET /actuator/health`。除健康检查外，本脚手架不暴露业务 API。
+健康检查：`GET /actuator/health`。
+
+## 正式账号登录
+
+默认和 `mysql` profile 暴露 `/api/v1/auth/*` 与 `/api/v1/users/*`。系统不会创建固定账号或保存默认密码。空库首次启动时，可由受保护运行环境注入以下配置，系统只在用户表为空时创建管理员：
+
+- `ERP_BOOTSTRAP_ADMIN_LOGIN`
+- `ERP_BOOTSTRAP_ADMIN_DISPLAY_NAME`
+- `ERP_BOOTSTRAP_ADMIN_PASSWORD`
+
+MySQL profile 会加载 `ERP_MYSQL_SECRET_DIR` 指向的 config tree，推荐把初始密码放在权限受限的 `bootstrap_admin_password` 文件中，避免密码出现在命令参数或仓库。创建完成后应从运行环境移除该引导密码。
+
+认证使用随机不透明 Bearer token，数据库只保存 token 的 SHA-256 摘要；密码使用 BCrypt。初始密码和管理员重置后的密码会强制用户首次登录改密。连续失败默认 5 次锁定；停用、角色变更和密码重置会吊销该用户的全部活动会话。
+
+前端正式构建使用 `VITE_AUTH_MODE=password`；本地开发如需联调正式 IAM，可覆盖同名变量。管理员可创建账号、分配三类角色、启停、解锁和重置密码。
 
 ## 本地模拟联调
 

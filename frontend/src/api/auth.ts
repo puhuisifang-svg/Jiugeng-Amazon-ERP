@@ -1,39 +1,83 @@
-import type { AppRole } from '@/router/meta'
+import { capabilitiesForRole } from '@/auth/capabilities'
+import { runtimeConfig } from '@/config/runtime'
+import type { AppRole, Capability } from '@/router/meta'
 
 import { apiRequest, assertSyntheticEnvelope } from './client'
 
-export interface MockUser {
+export interface AppUser {
   id: string
+  loginName: string
   displayName: string
   role: AppRole
+  status: 'ENABLED' | 'DISABLED'
+  mustChangePassword: boolean
+  lockedAt?: string | null
+  capabilities: Capability[]
 }
 
-export interface LoginResponse {
+export interface LoginInput { loginName?: string; password?: string; role?: AppRole }
+export interface LoginResponse { token: string; expiresAt?: string; user: AppUser }
+
+interface MockLoginResponse {
   token: string
-  user: MockUser
+  user: { id: string; displayName: string; role: AppRole }
   mockData: boolean
   source: 'SYNTHETIC'
 }
 
-export interface MeResponse {
-  user?: MockUser
-  id?: string
-  displayName?: string
-  role?: AppRole
-  mockData: boolean
-  source: 'SYNTHETIC'
+function adaptMockUser(user: MockLoginResponse['user']): AppUser {
+  return {
+    ...user,
+    loginName: user.id,
+    status: 'ENABLED',
+    mustChangePassword: false,
+    capabilities: capabilitiesForRole(user.role),
+  }
 }
 
-export async function loginAs(role: AppRole): Promise<LoginResponse> {
-  const response = await apiRequest<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify({ role }) })
-  assertSyntheticEnvelope(response)
-  return response
+export async function login(input: LoginInput): Promise<LoginResponse> {
+  if (runtimeConfig.authMode === 'mock') {
+    const response = await apiRequest<MockLoginResponse>('/auth/login', {
+      method: 'POST', body: JSON.stringify({ role: input.role ?? 'ADMIN' }),
+    })
+    assertSyntheticEnvelope(response)
+    return { token: response.token, user: adaptMockUser(response.user) }
+  }
+  return apiRequest<LoginResponse>('/v1/auth/login', {
+    method: 'POST', body: JSON.stringify({ loginName: input.loginName, password: input.password }), authenticated: false,
+  })
 }
 
-export async function loadCurrentUser(): Promise<MockUser> {
-  const response = await apiRequest<MeResponse>('/auth/me')
-  assertSyntheticEnvelope(response)
-  const user = response.user ?? response
-  if (!user.id || !user.displayName || !user.role) throw new Error('Invalid /auth/me response')
-  return { id: user.id, displayName: user.displayName, role: user.role }
+export async function loadCurrentUser(): Promise<AppUser> {
+  if (runtimeConfig.authMode === 'mock') {
+    const response = await apiRequest<MockLoginResponse>('/auth/me')
+    assertSyntheticEnvelope(response)
+    return adaptMockUser(response.user)
+  }
+  return apiRequest<AppUser>('/v1/auth/me')
+}
+
+export async function logout(): Promise<void> {
+  if (runtimeConfig.authMode === 'password') await apiRequest<void>('/v1/auth/logout', { method: 'POST' })
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  await apiRequest<void>('/v1/auth/change-password', {
+    method: 'POST', body: JSON.stringify({ currentPassword, newPassword }),
+  })
+}
+
+export const usersApi = {
+  list: () => apiRequest<AppUser[]>('/v1/users'),
+  create: (input: { loginName: string; displayName: string; initialPassword: string; role: AppRole }) =>
+    apiRequest<AppUser>('/v1/users', { method: 'POST', body: JSON.stringify(input) }),
+  disable: (id: string) => apiRequest<AppUser>(`/v1/users/${id}/disable`, { method: 'POST' }),
+  enable: (id: string) => apiRequest<AppUser>(`/v1/users/${id}/enable`, { method: 'POST' }),
+  unlock: (id: string) => apiRequest<AppUser>(`/v1/users/${id}/unlock`, { method: 'POST' }),
+  setRole: (id: string, role: AppRole) => apiRequest<AppUser>(`/v1/users/${id}/role`, {
+    method: 'POST', body: JSON.stringify({ role }),
+  }),
+  resetPassword: (id: string, newPassword: string) => apiRequest<AppUser>(`/v1/users/${id}/reset-password`, {
+    method: 'POST', body: JSON.stringify({ newPassword }),
+  }),
 }

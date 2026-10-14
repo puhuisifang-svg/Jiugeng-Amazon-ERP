@@ -10,7 +10,7 @@ const loading = ref(true)
 const busyId = ref('')
 const error = ref('')
 const success = ref('')
-const writable = computed(() => ['ADMIN', 'SELECTION'].includes(session.user.value?.role ?? ''))
+const writable = computed(() => session.canAccess(['watch.write']))
 
 async function load() {
   loading.value = true

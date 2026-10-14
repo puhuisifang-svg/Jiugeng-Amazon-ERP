@@ -2,6 +2,7 @@ package com.jiugeng.erp.importexport;
 
 import static com.jiugeng.erp.importexport.ImportTypes.*;
 
+import com.jiugeng.erp.materialinventory.InventoryOpeningImportGateway;
 import com.jiugeng.erp.materialinventory.MaterialImportGateway;
 import com.jiugeng.erp.product.ProductImportGateway;
 
@@ -30,9 +31,11 @@ class XlsxImportValidator {
     private final ImportTemplateRegistry templates;
     private final ProductImportGateway productImports;
     private final MaterialImportGateway materialImports;
+    private final InventoryOpeningImportGateway openingImports;
     XlsxImportValidator(ImportTemplateRegistry templates, ProductImportGateway productImports,
-            MaterialImportGateway materialImports) {
+            MaterialImportGateway materialImports, InventoryOpeningImportGateway openingImports) {
         this.templates = templates; this.productImports = productImports; this.materialImports = materialImports;
+        this.openingImports = openingImports;
     }
 
     ValidationResult validate(ImportType type, String version, byte[] bytes) {
@@ -59,7 +62,7 @@ class XlsxImportValidator {
                     }
                     if (formula) issues.add(new IssueInput("ERROR", true, "ROW", name, rowIndex + 1, null,
                             "IMPORT_FORMULA_NOT_ALLOWED", "导入数据不得包含公式", null, "粘贴为纯值后重试"));
-                    String key = data.values().stream().filter(value -> !value.isBlank()).findFirst().orElse("row-" + (rowIndex + 1));
+                    String key = businessKey(type, data, rowIndex + 1);
                     previews.add(new PreviewInput(name, rowIndex + 1, key, data));
                 }
             }
@@ -69,6 +72,14 @@ class XlsxImportValidator {
                         .map(row -> new ProductImportGateway.ImportRow(row.sheet(), row.row(), row.data())).toList();
                 ProductImportGateway.Validation semantic = type == ImportType.PRODUCTS
                         ? productImports.validateProducts(rows) : productImports.validateVariants(rows);
+                semantic.errors().forEach(error -> issues.add(new IssueInput("ERROR", true, "FIELD", error.sheet(),
+                        error.rowNumber(), error.field(), error.code(), error.reason(), error.rawValue(), "修正后重新上传")));
+            }
+            if (type == ImportType.AUXILIARY_MATERIAL_OPENING_INVENTORY
+                    && issues.stream().noneMatch(IssueInput::blocking)) {
+                List<InventoryOpeningImportGateway.ImportRow> rows = previews.stream()
+                        .map(row -> new InventoryOpeningImportGateway.ImportRow(row.sheet(), row.row(), row.data())).toList();
+                InventoryOpeningImportGateway.Validation semantic = openingImports.validate(rows);
                 semantic.errors().forEach(error -> issues.add(new IssueInput("ERROR", true, "FIELD", error.sheet(),
                         error.rowNumber(), error.field(), error.code(), error.reason(), error.rawValue(), "修正后重新上传")));
             }
@@ -130,6 +141,21 @@ class XlsxImportValidator {
     }
     private boolean empty(Row row, int columns) {
         if (row == null) return true; for (int index = 0; index < columns; index++) if (!safe(row.getCell(index)).isBlank()) return false; return true;
+    }
+    private String businessKey(ImportType type, Map<String, String> data, int rowNumber) {
+        String key = switch (type) {
+            case PRODUCTS -> data.get("product_code");
+            case VARIANTS -> data.get("sku_code");
+            case AUXILIARY_MATERIALS -> data.get("material_code");
+            case PRODUCT_AUXILIARY_MATERIALS -> joinKey(data.get("sku_code"), data.get("material_code"));
+            case AUXILIARY_MATERIAL_OPENING_INVENTORY -> joinKey(data.get("warehouse_code"),
+                    data.get("material_code"), data.get("opening_reference"));
+        };
+        return key == null || key.isBlank() ? "row-" + rowNumber : key;
+    }
+    private String joinKey(String... values) {
+        return java.util.Arrays.stream(values).filter(value -> value != null && !value.isBlank())
+                .collect(java.util.stream.Collectors.joining("/"));
     }
     private String safe(Cell cell) { return cell == null || cell.getCellType() == CellType.FORMULA ? "" : new DataFormatter(Locale.ROOT).formatCellValue(cell).trim(); }
     private ImportException invalid(String code, String message) { return new ImportException(422, code, message); }

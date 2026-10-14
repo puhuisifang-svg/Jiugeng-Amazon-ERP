@@ -4,6 +4,7 @@ import static com.jiugeng.erp.importexport.ImportTypes.*;
 
 import com.jiugeng.erp.iam.AuditTrail;
 import com.jiugeng.erp.iam.AuthenticatedActor;
+import com.jiugeng.erp.materialinventory.InventoryOpeningImportGateway;
 import com.jiugeng.erp.materialinventory.MaterialImportGateway;
 import com.jiugeng.erp.product.ProductImportGateway;
 import java.io.ByteArrayInputStream;
@@ -29,14 +30,16 @@ class ImportService {
     static final String XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     private final ImportRepository repository; private final ImportFileStore files; private final XlsxImportValidator validator;
     private final AuditTrail audit; private final ProductImportGateway productImports;
-    private final MaterialImportGateway materialImports; private final TransactionTemplate transactions;
+    private final MaterialImportGateway materialImports; private final InventoryOpeningImportGateway openingImports;
+    private final TransactionTemplate transactions;
     private final int previewHours;
     ImportService(ImportRepository repository, ImportFileStore files, XlsxImportValidator validator, AuditTrail audit,
             ProductImportGateway productImports, MaterialImportGateway materialImports,
+            InventoryOpeningImportGateway openingImports,
             PlatformTransactionManager transactionManager,
             @Value("${app.imports.preview-hours:24}") int previewHours) {
         this.repository=repository; this.files=files; this.validator=validator; this.audit=audit;
-        this.productImports=productImports; this.materialImports=materialImports;
+        this.productImports=productImports; this.materialImports=materialImports; this.openingImports=openingImports;
         this.transactions=new TransactionTemplate(transactionManager); this.previewHours=previewHours;
     }
 
@@ -83,8 +86,16 @@ class ImportService {
         String key=key(idempotencyKey); String payload=hash(("cancel\u001f"+id).getBytes(StandardCharsets.UTF_8));
         var replay=repository.operation(actor.userId(),"CANCEL",id,key).orElse(null);
         if(replay!=null) { if(!replay.payloadHash().equals(payload)) throw conflict(); return repository.batch(replay.responseBatchId()).view(); }
-        repository.cancel(id); repository.operation(actor.userId(),"CANCEL",id,key,payload,id);
-        audit.record(operation(actor,"IMPORT_CANCEL",id,Map.of("status","CANCELLED"))); return repository.batch(id).view();
+        var batch=repository.batch(id);
+        if(batch.status()==Status.CANCELLED){repository.operation(actor.userId(),"CANCEL",id,key,payload,id);return batch.view();}
+        if(batch.status()!=Status.QUEUED&&batch.status()!=Status.VALIDATING&&batch.status()!=Status.VALIDATED)
+            throw new ImportException(409,"IMPORT_NOT_CANCELLABLE","当前批次状态不可取消");
+        String resultKey=storeResult(batch,Status.CANCELLED,null,null);
+        try {
+            repository.cancel(id,resultKey); repository.operation(actor.userId(),"CANCEL",id,key,payload,id);
+            audit.record(operation(actor,"IMPORT_CANCEL",id,Map.of("status","CANCELLED")));
+            return repository.batch(id).view();
+        } catch(RuntimeException exception) { files.delete(resultKey); throw exception; }
     }
     @Transactional
     UploadReceipt revalidate(String id,String idempotencyKey,AuthenticatedActor actor) {
@@ -117,24 +128,24 @@ class ImportService {
             throw new ImportException(409,"IMPORT_PREVIEW_MISMATCH","确认快照与校验结果不一致");
         if(!batch.commitAllowed()) throw new ImportException(409,"IMPORT_COMMIT_NOT_ALLOWED","批次存在阻断问题");
         if(batch.warnings()>0 && !warningsAccepted) throw new ImportException(409,"IMPORT_WARNINGS_NOT_ACCEPTED","必须确认警告后提交");
-        if(batch.type()!=ImportType.PRODUCTS && batch.type()!=ImportType.VARIANTS
-                && batch.type()!=ImportType.AUXILIARY_MATERIALS
-                && batch.type()!=ImportType.PRODUCT_AUXILIARY_MATERIALS)
-            throw new ImportException(409,"IMPORT_HANDLER_NOT_REGISTERED","该导入类型的业务提交处理器尚未注册");
         transactions.executeWithoutResult(status->{
             if(!repository.startCommit(id))throw new ImportException(409,"IMPORT_STATE_CONFLICT","批次提交状态已变化");
             repository.operation(actor.userId(),"COMMIT",id,key,payload,id);
         });
+        var storedResult=new java.util.concurrent.atomic.AtomicReference<String>();
         try {
             transactions.executeWithoutResult(status->{
                 ImportRepository.ProductImportResult result=commitBusinessRows(id,batch.type(),actor);
-                repository.succeed(id,result);
+                String resultKey=storeResult(batch,Status.SUCCEEDED,null,result);storedResult.set(resultKey);
+                repository.succeed(id,result,resultKey);
                 audit.record(operation(actor,"IMPORT_COMMIT",id,Map.of("importType",batch.type().name(),
                         "created",result.created(),"updated",result.updated(),"unchanged",result.unchanged())));
             });
         } catch(RuntimeException exception) {
+            if(storedResult.get()!=null)files.delete(storedResult.get());
             transactions.executeWithoutResult(status->{
-                String code=failureCode(exception);repository.fail(id,code);
+                String code=failureCode(exception);String resultKey=storeResult(batch,Status.FAILED,code,null);
+                repository.fail(id,code,resultKey);
                 audit.record(new AuditTrail.BusinessOperation(actor.userId(),actor.loginName(),actor.displayName(),
                         "IMPORT_COMMIT","IMPORT_BATCH",id,false,null,Map.of("importType",batch.type().name(),"failureCode",code),
                         "导入整批回滚"));
@@ -153,6 +164,15 @@ class ImportService {
         result.put("committedAt",batch.committedAt());result.put("message",batch.status()==Status.SUCCEEDED?"导入提交成功":"导入未成功");
         return result;
     }
+    @Transactional(readOnly=true) ResultFile resultFile(String id) {
+        var batch=repository.batch(id);
+        if(batch.status()!=Status.SUCCEEDED && batch.status()!=Status.FAILED && batch.status()!=Status.CANCELLED)
+            throw new ImportException(409,"IMPORT_BATCH_NOT_READY","批次尚未结束");
+        if(batch.resultStorageKey()==null)throw new ImportException(409,"IMPORT_RESULT_FILE_NOT_AVAILABLE","当前批次没有结果文件");
+        try(var input=files.read(batch.resultStorageKey())) {
+            return new ResultFile("import-result-"+batch.id()+".csv",input.readAllBytes());
+        } catch(IOException exception) { throw new ImportException(500,"IMPORT_TECHNICAL_FAILURE","结果文件不可读"); }
+    }
     private void requireValidated(ImportRepository.BatchRow batch) {
         if(batch.status()!=Status.VALIDATED) throw new ImportException(409,"IMPORT_BATCH_NOT_READY","批次尚未完成校验");
     }
@@ -168,14 +188,47 @@ class ImportService {
                     ?productImports.commitProducts(rows,actor):productImports.commitVariants(rows,actor);
             return new ImportRepository.ProductImportResult(result.created(),result.updated(),result.unchanged());
         }
-        List<MaterialImportGateway.ImportRow> rows=previews.stream()
-                .map(row->new MaterialImportGateway.ImportRow(row.sheet(),row.row(),row.data())).toList();
-        MaterialImportGateway.Validation validation=type==ImportType.AUXILIARY_MATERIALS
-                ?materialImports.validateMaterials(rows):materialImports.validateRelations(rows);
+        if(type==ImportType.AUXILIARY_MATERIALS || type==ImportType.PRODUCT_AUXILIARY_MATERIALS) {
+            List<MaterialImportGateway.ImportRow> rows=previews.stream()
+                    .map(row->new MaterialImportGateway.ImportRow(row.sheet(),row.row(),row.data())).toList();
+            MaterialImportGateway.Validation validation=type==ImportType.AUXILIARY_MATERIALS
+                    ?materialImports.validateMaterials(rows):materialImports.validateRelations(rows);
+            if(!validation.valid())throw new ImportException(409,"IMPORT_DATA_CHANGED","提交前业务校验失败，请重新上传");
+            MaterialImportGateway.Result result=type==ImportType.AUXILIARY_MATERIALS
+                    ?materialImports.commitMaterials(rows,actor):materialImports.commitRelations(rows,actor);
+            return new ImportRepository.ProductImportResult(result.created(),result.updated(),result.unchanged());
+        }
+        List<InventoryOpeningImportGateway.ImportRow> rows=previews.stream()
+                .map(row->new InventoryOpeningImportGateway.ImportRow(row.sheet(),row.row(),row.data())).toList();
+        InventoryOpeningImportGateway.Validation validation=openingImports.validate(rows);
         if(!validation.valid())throw new ImportException(409,"IMPORT_DATA_CHANGED","提交前业务校验失败，请重新上传");
-        MaterialImportGateway.Result result=type==ImportType.AUXILIARY_MATERIALS
-                ?materialImports.commitMaterials(rows,actor):materialImports.commitRelations(rows,actor);
+        InventoryOpeningImportGateway.Result result=openingImports.commit(rows,actor);
         return new ImportRepository.ProductImportResult(result.created(),result.updated(),result.unchanged());
+    }
+    private String storeResult(ImportRepository.BatchRow batch,Status status,String failureCode,
+            ImportRepository.ProductImportResult result) {
+        String csv=resultCsv(batch,status,failureCode,result);
+        try{return files.storeResult(new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8)));}
+        catch(IOException exception){throw new ImportException(500,"IMPORT_TECHNICAL_FAILURE","结果文件写入失败");}
+    }
+    private String resultCsv(ImportRepository.BatchRow batch,Status status,String failureCode,
+            ImportRepository.ProductImportResult result) {
+        StringBuilder csv=new StringBuilder("\uFEFFrecord_type,batch_id,import_type,batch_status,sheet,row,business_key,row_status,detail\r\n");
+        String detail=result==null?(failureCode==null?status.name():failureCode)
+                :"created="+result.created()+";updated="+result.updated()+";unchanged="+result.unchanged();
+        csv.append(csvRow("SUMMARY",batch.id(),batch.type().name(),status.name(),"","","",status.name(),detail));
+        for(var row:repository.previewRows(batch.id()))csv.append(csvRow("ROW",batch.id(),batch.type().name(),
+                status.name(),row.sheet(),String.valueOf(row.row()),row.businessKey(),status.name(),
+                status==Status.SUCCEEDED?"committed":detail));
+        return csv.toString();
+    }
+    private String csvRow(String... values) {
+        return java.util.Arrays.stream(values).map(this::csvCell).collect(java.util.stream.Collectors.joining(","))+"\r\n";
+    }
+    private String csvCell(String value) {
+        String safe=value==null?"":value;int index=0;while(index<safe.length()&&Character.isWhitespace(safe.charAt(index)))index++;
+        if(index<safe.length()&&"=+-@".indexOf(safe.charAt(index))>=0)safe="'"+safe;
+        return "\""+safe.replace("\"","\"\"")+"\"";
     }
     private void validateUploadMetadata(ImportType type,String version,String fileName,String mime,byte[] bytes) {
         if(type==null) throw new ImportException(400,"IMPORT_REQUEST_INVALID","导入类型必填");
@@ -196,4 +249,5 @@ class ImportService {
     private String hash(byte[] value){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value));}catch(NoSuchAlgorithmException e){throw new IllegalStateException(e);}}
     private AuditTrail.BusinessOperation operation(AuthenticatedActor actor,String action,String id,Map<String,?> after){return new AuditTrail.BusinessOperation(actor.userId(),actor.loginName(),actor.displayName(),action,"IMPORT_BATCH",id,true,null,after,"五类活跃导入批次");}
     record UploadReceipt(BatchView batch,boolean replayed){}
+    record ResultFile(String fileName,byte[] content){}
 }

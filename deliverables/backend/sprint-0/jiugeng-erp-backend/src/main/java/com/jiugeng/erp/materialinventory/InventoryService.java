@@ -78,7 +78,8 @@ class InventoryService implements InventoryOpeningService {
         String unit = required(command.unit(), "单位", 32);
         String reference = optional(command.referenceTransactionId(), 36);
         BigDecimal suppliedQuantity = command.quantity();
-        String hash = hash(requestId, materialId, command.type(), suppliedQuantity, unit, reason, reference);
+        String hash = hash(requestId, materialId, command.type(), suppliedQuantity, unit, reason, reference,
+                opening ? openingSafety : null);
 
         repository.lockWarehouse();
         TransactionView existing = repository.transactionByRequest(requestId).orElse(null);
@@ -165,10 +166,11 @@ class InventoryService implements InventoryOpeningService {
     }
 
     private String hash(String requestId, String materialId, TransactionType type, BigDecimal quantity, String unit,
-            String reason, String reference) {
+            String reason, String reference, BigDecimal openingSafety) {
         String canonical = String.join("\u001f", requestId, materialId, type == null ? "" : type.name(),
                 quantity == null ? "" : quantity.stripTrailingZeros().toPlainString(), unit, reason,
                 reference == null ? "" : reference);
+        if (openingSafety != null) canonical += "\u001f" + openingSafety.stripTrailingZeros().toPlainString();
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                     .digest(canonical.getBytes(StandardCharsets.UTF_8)));

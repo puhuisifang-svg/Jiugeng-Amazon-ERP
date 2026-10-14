@@ -24,7 +24,13 @@ class LocalImportFileStore implements ImportFileStore {
         } catch (IOException exception) { throw new IllegalStateException("Cannot initialize import staging", exception); }
     }
     @Override public String store(InputStream input) throws IOException {
-        String key = UUID.randomUUID() + ".xlsx";
+        return store(input, ".xlsx");
+    }
+    @Override public String storeResult(InputStream input) throws IOException {
+        return store(input, ".csv");
+    }
+    private String store(InputStream input, String extension) throws IOException {
+        String key = UUID.randomUUID() + extension;
         Path target = resolve(key);
         Files.copy(input, target);
         setPermissions(target, Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
@@ -38,7 +44,7 @@ class LocalImportFileStore implements ImportFileStore {
     }
     @Override public void delete(String key) { try { Files.deleteIfExists(resolve(key)); } catch (IOException ignored) {} }
     private Path resolve(String key) {
-        if (key == null || !key.matches("[0-9a-fA-F-]{36}\\.xlsx")) throw new IllegalArgumentException("Invalid storage key");
+        if (key == null || !key.matches("[0-9a-fA-F-]{36}\\.(?:xlsx|csv)")) throw new IllegalArgumentException("Invalid storage key");
         Path value = root.resolve(key).normalize();
         if (!value.startsWith(root)) throw new IllegalArgumentException("Invalid storage key");
         return value;

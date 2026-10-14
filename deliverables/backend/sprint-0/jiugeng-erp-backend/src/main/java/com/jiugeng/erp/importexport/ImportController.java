@@ -74,7 +74,11 @@ class ImportController {
     @GetMapping("/import-batches/{id}/result") @PreAuthorize("hasAuthority('imports.read')")
     Map<String,Object> result(@PathVariable String id){return service.result(id);}
     @GetMapping("/import-batches/{id}/result-file") @PreAuthorize("hasAuthority('imports.result.download')")
-    ResponseEntity<Void> resultFile(@PathVariable String id){service.result(id);throw new ImportException(409,
-            "IMPORT_RESULT_FILE_NOT_AVAILABLE","当前批次没有结果文件");}
+    ResponseEntity<byte[]> resultFile(@PathVariable String id){
+        var file=service.resultFile(id);return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
+                .header(HttpHeaders.CONTENT_DISPOSITION,ContentDisposition.attachment().filename(file.fileName()).build().toString())
+                .body(file.content());
+    }
     record CommitRequest(@NotBlank String previewVersion,@NotBlank String fileHash,boolean warningsAccepted){}
 }

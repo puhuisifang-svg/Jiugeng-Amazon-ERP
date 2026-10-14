@@ -39,6 +39,7 @@ class ImportControllerTest {
     @BeforeEach void reset(){
         jdbc.update("DELETE FROM import_operation_idempotency"); jdbc.update("DELETE FROM import_preview_row");
         jdbc.update("DELETE FROM import_issue"); jdbc.update("DELETE FROM import_batch");
+        jdbc.update("DELETE FROM inventory_transaction"); jdbc.update("DELETE FROM inventory_balance");
         jdbc.update("DELETE FROM product_auxiliary_material"); jdbc.update("DELETE FROM variant_attribute");
         jdbc.update("DELETE FROM product_variant"); jdbc.update("DELETE FROM product"); jdbc.update("DELETE FROM auxiliary_material");
         jdbc.update("DELETE FROM iam_password_reset_challenge"); jdbc.update("DELETE FROM audit_event");
@@ -215,6 +216,102 @@ class ImportControllerTest {
         });
     }
 
+    @Test void openingInventoryHandlerCreatesImmutableTransactionsBalancesAndDownloadableResult() throws Exception {
+        String token=user("opening-owner","PRODUCT_MATERIAL");
+        seedMaterial("OPEN-MAT-1","PCS");seedMaterial("OPEN-MAT-2","KG");
+        byte[] file=openingRows(new String[][]{
+                {"MAIN","OPEN-MAT-1","12.5000","3","2026-10-14","OPEN-REF-1","盘点"},
+                {"MAIN","OPEN-MAT-2","0","2","2026-10-14","OPEN-REF-2","零期初"}});
+        String batch=mapper.readTree(upload(token,"opening-1","AUXILIARY_MATERIAL_OPENING_INVENTORY",file,202))
+                .at("/batch/id").asText();
+        commit(token,batch,"opening-commit-1").andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.status").value("SUCCEEDED"));
+        commit(token,batch,"opening-commit-1").andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.status").value("SUCCEEDED"));
+        mvc.perform(get("/api/v1/import-batches/{id}/result",batch).header("Authorization",bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.createdRows").value(2))
+                .andExpect(jsonPath("$.writtenRows").value(2));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM inventory_transaction WHERE transaction_type='OPENING'",Integer.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT quantity FROM inventory_balance b JOIN auxiliary_material m ON m.id=b.auxiliary_material_id WHERE m.material_code_normalized='OPEN-MAT-1'",java.math.BigDecimal.class))
+                .isEqualByComparingTo("12.5000");
+        assertThat(jdbc.queryForObject("SELECT safety_stock FROM inventory_balance b JOIN auxiliary_material m ON m.id=b.auxiliary_material_id WHERE m.material_code_normalized='OPEN-MAT-2'",java.math.BigDecimal.class))
+                .isEqualByComparingTo("2");
+        byte[] csv=mvc.perform(get("/api/v1/import-batches/{id}/result-file",batch)
+                        .header("Authorization",bearer(token)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        String text=new String(csv,java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(text).startsWith("\uFEFFrecord_type").contains("SUMMARY").contains("OPEN-REF-1").contains("SUCCEEDED");
+        String denied=user("opening-reader","SELECTION");
+        mvc.perform(get("/api/v1/import-batches/{id}/result-file",batch).header("Authorization",bearer(denied)))
+                .andExpect(status().isForbidden());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE action='INVENTORY_OPENING'",Integer.class)).isEqualTo(2);
+
+        String duplicate=mapper.readTree(upload(token,"opening-duplicate","AUXILIARY_MATERIAL_OPENING_INVENTORY",file,202))
+                .at("/batch/id").asText();
+        mvc.perform(get("/api/v1/import-batches/{id}",duplicate).header("Authorization",bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.commitAllowed").value(true));
+        commit(token,duplicate,"opening-duplicate-commit").andExpect(status().isAccepted());
+        mvc.perform(get("/api/v1/import-batches/{id}/result",duplicate).header("Authorization",bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.unchangedRows").value(2));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM inventory_transaction WHERE transaction_type='OPENING'",Integer.class)).isEqualTo(2);
+
+        String conflict=mapper.readTree(upload(token,"opening-conflict","AUXILIARY_MATERIAL_OPENING_INVENTORY",
+                openingRows(new String[][]{{"MAIN","OPEN-MAT-1","12.5000","4","2026-10-14","OPEN-REF-1","盘点"}}),202))
+                .at("/batch/id").asText();
+        mvc.perform(get("/api/v1/import-batches/{id}",conflict).header("Authorization",bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.commitAllowed").value(false));
+        mvc.perform(get("/api/v1/import-batches/{id}/issues",conflict).header("Authorization",bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].code").value("OPENING_INVENTORY_CONFLICT"));
+    }
+
+    @Test void openingInventoryValidatesWarehouseReferencesNumbersDatesAndDuplicates() throws Exception {
+        String token=user("opening-owner","PRODUCT_MATERIAL");seedMaterial("VALID-MAT","PCS");
+        String batch=mapper.readTree(upload(token,"opening-invalid","AUXILIARY_MATERIAL_OPENING_INVENTORY",
+                openingRows(new String[][]{
+                        {"OTHER","VALID-MAT","-1","0","2099-01-01","DUP-REF","bad"},
+                        {"MAIN","UNKNOWN-MAT","1","-2","2026-10-14","DUP-REF","bad"},
+                        {"MAIN","VALID-MAT","1","0","2026-10-14","DUP-REF","bad"},
+                        {"MAIN","valid-mat","2","0","2026-10-14","OTHER-REF","bad"}}),202))
+                .at("/batch/id").asText();
+        String issues=mvc.perform(get("/api/v1/import-batches/{id}/issues",batch).header("Authorization",bearer(token)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(mapper.readTree(issues).findValuesAsText("code")).contains("WAREHOUSE_REFERENCE_INVALID",
+                "MATERIAL_REFERENCE_INVALID","DECIMAL_INVALID","OPENING_DATE_INVALID",
+                "OPENING_MATERIAL_DUPLICATED_IN_FILE");
+    }
+
+    @Test void lateOpeningReferenceChangeRollsBackEveryRowAndProducesFailureResult() throws Exception {
+        String token=user("opening-owner","PRODUCT_MATERIAL");seedMaterial("LATE-OPEN-1","PCS");seedMaterial("LATE-OPEN-2","PCS");
+        String batch=mapper.readTree(upload(token,"opening-late","AUXILIARY_MATERIAL_OPENING_INVENTORY",
+                openingRows(new String[][]{
+                        {"MAIN","LATE-OPEN-1","4","1","2026-10-14","LATE-REF-1","late"},
+                        {"MAIN","LATE-OPEN-2","5","1","2026-10-14","LATE-REF-2","late"}}),202))
+                .at("/batch/id").asText();
+        jdbc.update("UPDATE auxiliary_material SET status='DISABLED' WHERE material_code_normalized='LATE-OPEN-2'");
+        commit(token,batch,"opening-late-commit").andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("IMPORT_DATA_CHANGED"));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM inventory_transaction",Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM inventory_balance",Integer.class)).isZero();
+        String csv=mvc.perform(get("/api/v1/import-batches/{id}/result-file",batch).header("Authorization",bearer(token)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(csv).contains("FAILED").contains("IMPORT_DATA_CHANGED");
+    }
+
+    @Test void acceptsAndCommitsOneThousandOpeningRowsWithinGate() {
+        assertTimeout(Duration.ofSeconds(30), () -> {
+            String token=user("bulk-opening-owner","PRODUCT_MATERIAL");String[][] rows=new String[1000][];
+            for(int index=0;index<rows.length;index++){
+                String code="BULK-OPEN-"+(index+1);seedMaterial(code,"PCS");
+                rows[index]=new String[]{"MAIN",code,"0","0","2026-10-14","BULK-REF-"+(index+1),"bulk"};
+            }
+            String batch=mapper.readTree(upload(token,"bulk-opening","AUXILIARY_MATERIAL_OPENING_INVENTORY",openingRows(rows),202))
+                    .at("/batch/id").asText();
+            commit(token,batch,"bulk-opening-commit").andExpect(status().isAccepted())
+                    .andExpect(jsonPath("$.status").value("SUCCEEDED"));
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM inventory_transaction WHERE transaction_type='OPENING'",Integer.class)).isEqualTo(1000);
+        });
+    }
+
     @Test void cancelAndExpiredRevalidationFollowStateMachine() throws Exception {
         String token=user("import-owner","PRODUCT_MATERIAL"); String body=upload(token,"upload-2","AUXILIARY_MATERIALS",
                 templates.bytes(ImportTypes.ImportType.AUXILIARY_MATERIALS),202);
@@ -222,6 +319,9 @@ class ImportControllerTest {
         mvc.perform(post("/api/v1/import-batches/{id}/cancel",id).header("Authorization",bearer(token))
                         .header("Idempotency-Key","cancel-1"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CANCELLED"));
+        mvc.perform(get("/api/v1/import-batches/{id}/result-file",id).header("Authorization",bearer(token)))
+                .andExpect(status().isOk()).andExpect(result -> assertThat(result.getResponse().getContentAsString())
+                        .contains("CANCELLED"));
         mvc.perform(post("/api/v1/import-batches/{id}/cancel",id).header("Authorization",bearer(token))
                         .header("Idempotency-Key","cancel-1"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CANCELLED"));
@@ -339,12 +439,27 @@ class ImportControllerTest {
             workbook.write(output);return output.toByteArray();
         }
     }
+    private byte[] openingRows(String[][] values) throws Exception {
+        try(var workbook=new XSSFWorkbook(new ByteArrayInputStream(templates.bytes(ImportTypes.ImportType.AUXILIARY_MATERIAL_OPENING_INVENTORY)));
+            var output=new ByteArrayOutputStream()){
+            var sheet=workbook.getSheet("导入模板");
+            for(int index=0;index<values.length;index++){
+                var value=values[index];var row=sheet.createRow(index+1);
+                for(int column=0;column<value.length;column++)row.createCell(column).setCellValue(value[column]);
+            }
+            workbook.write(output);return output.toByteArray();
+        }
+    }
     private void seedProductAndVariants(String productCode,String... skus) {
         String productId=UUID.randomUUID().toString();
         jdbc.update("INSERT INTO product (id,product_code,product_code_normalized,name_zh,status,created_by,updated_by) VALUES (?,?,?,'导入依赖产品','ACTIVE','system','system')",
                 productId,productCode,productCode.toUpperCase(java.util.Locale.ROOT));
         for(String sku:skus) jdbc.update("INSERT INTO product_variant (id,product_id,sku_code,sku_code_normalized,variant_name,status,attribute_signature) VALUES (?,?,?,?,?,'ACTIVE',?)",
                 UUID.randomUUID().toString(),productId,sku,sku.toUpperCase(java.util.Locale.ROOT),sku,"signature-"+sku);
+    }
+    private void seedMaterial(String code,String unit) {
+        jdbc.update("INSERT INTO auxiliary_material (id,material_code,material_code_normalized,name,material_type,unit,status,created_by,updated_by) VALUES (?,?,?,?,? ,?,'ACTIVE','system','system')",
+                UUID.randomUUID().toString(),code,code.toUpperCase(java.util.Locale.ROOT),code,"BOX",unit);
     }
     private org.springframework.test.web.servlet.ResultActions commit(String token,String id,String key)throws Exception{
         String batch=mvc.perform(get("/api/v1/import-batches/{id}",id).header("Authorization",bearer(token))).andReturn().getResponse().getContentAsString();

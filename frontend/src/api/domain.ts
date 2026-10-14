@@ -340,10 +340,26 @@ export const domainApi = {
     if (runtimeConfig.authMode === 'mock') return assertSynthetic(await apiRequest<SyntheticWrite<SelectionCandidateDto & { rejectionReason?: string }>>(`/selection/candidates/${id}/transition`, { method: 'POST', body: JSON.stringify(input) }))
     return { item: await apiRequest<SelectionCandidateDto & { rejectionReason?: string }>(`/v1/selection/candidates/${id}/transition`, { method: 'POST', body: JSON.stringify(input) }), mockData: false }
   },
-  events: () => syntheticList<WatchEventDto & { candidateId?: string }>('/watch/events'),
-  confirmEvent: async (id: string) =>
-    assertSynthetic(await apiRequest<SyntheticWrite<WatchEventDto & { candidateId?: string }> & { candidate: SelectionCandidateDto }>(`/watch/events/${id}/confirm`, { method: 'POST', body: '{}' })),
-  watchStores: () => syntheticList<WatchStoreDto>('/watch/stores'),
-  runWatchStore: async (id: string, mode: WatchRunMode) =>
-    assertSynthetic(await apiRequest<{ item: WatchStoreDto; events: WatchEventDto[]; baselineChanged: boolean; mockData: boolean; source: 'SYNTHETIC' }>(`/watch/stores/${id}/runs`, { method: 'POST', body: JSON.stringify({ mode }) })),
+  events: async () => runtimeConfig.authMode === 'mock'
+    ? syntheticList<WatchEventDto & { candidateId?: string }>('/watch/events')
+    : { items: await apiRequest<Array<WatchEventDto & { candidateId?: string }>>('/v1/watch/events'), mockData: false },
+  confirmEvent: async (id: string) => {
+    if (runtimeConfig.authMode === 'mock') return assertSynthetic(await apiRequest<SyntheticWrite<WatchEventDto & { candidateId?: string }> & { candidate: SelectionCandidateDto }>(`/watch/events/${id}/confirm`, { method: 'POST', body: '{}' }))
+    return apiRequest<{ item: WatchEventDto & { candidateId?: string }; candidate: { id: string }; replayed: boolean }>(`/v1/watch/events/${id}/confirm`, { method: 'POST', body: '{}' })
+  },
+  watchStores: async () => runtimeConfig.authMode === 'mock'
+    ? syntheticList<WatchStoreDto>('/watch/stores')
+    : { items: await apiRequest<WatchStoreDto[]>('/v1/watch/stores'), mockData: false },
+  createWatchStore: async (input: { storeKey: string; storeName: string; sourceUrl: string }) => {
+    if (runtimeConfig.authMode === 'mock') throw new Error('Mock watch stores are fixed synthetic data')
+    return apiRequest<WatchStoreDto>('/v1/watch/stores', { method: 'POST', body: JSON.stringify(input) })
+  },
+  runWatchStore: async (id: string, mode: WatchRunMode, asins: string[] = []) => {
+    if (runtimeConfig.authMode === 'mock') return assertSynthetic(await apiRequest<{ item: WatchStoreDto; events: WatchEventDto[]; baselineChanged: boolean; mockData: boolean; source: 'SYNTHETIC' }>(`/watch/stores/${id}/runs`, { method: 'POST', body: JSON.stringify({ mode }) }))
+    const status = mode === 'FAILED' ? 'FAILED' : 'SUCCEEDED'
+    return apiRequest<{ item: WatchStoreDto; events: WatchEventDto[]; baselineChanged: boolean; replayed: boolean }>(`/v1/watch/stores/${id}/runs`, {
+      method: 'POST', body: JSON.stringify({ requestId: crypto.randomUUID(), status, itemCount: asins.length,
+        pageCount: mode === 'FAILED' ? 0 : 1, pagesComplete: mode === 'COMPLETE', asins }),
+    })
+  },
 }

@@ -35,6 +35,7 @@ export interface CandidateDetailDto { candidate: SelectionCandidateDto & { rejec
 export interface WatchEventDto { id: string; storeId?: string; storeName: string; asin: string; title?: string; detectedAt: string; sourceRunId?: string; status: string; candidateId?: string }
 export interface WatchStoreDto {
   id: string
+  storeKey?: string
   storeName: string
   sourceUrl: string
   status: string

@@ -67,6 +67,33 @@ export interface MaterialInput {
   imageUrl?: string
   remark?: string
 }
+export interface ProductMaterialRelationDto {
+  id: string
+  productId: string
+  productCode: string
+  variantId: string
+  skuCode: string
+  materialId: string
+  materialCode: string
+  materialName: string
+  standardQuantity: number
+  unit: string
+  lossRate: number
+  remark?: string
+  enabled: boolean
+  createdAt?: string
+  updatedAt?: string
+}
+export interface ProductMaterialRelationInput {
+  productId: string
+  variantId: string
+  materialId: string
+  standardQuantity: number
+  unit: string
+  lossRate: number
+  remark?: string
+  enabled?: boolean
+}
 export interface LedgerEntryDto { id: string; requestId: string; materialCode: string; type: InventoryTransactionType; quantity: number; reason: string; occurredAt: string }
 export type InventoryTransactionType = 'OPENING' | 'INBOUND' | 'OUTBOUND' | 'ADJUSTMENT'
 export type CandidateStatus = 'NEW' | 'REVIEWING' | 'APPROVED' | 'REJECTED'
@@ -197,6 +224,35 @@ export const domainApi = {
   disableMaterial: async (id: string) => {
     if (runtimeConfig.authMode === 'mock') throw new Error('Mock materials cannot be disabled')
     return apiRequest<MaterialDetailDto>(`/v1/materials/${id}/disable`, { method: 'POST' })
+  },
+  productMaterialRelations: async (filter: { productId: string } | { variantId: string }) => {
+    if (runtimeConfig.authMode === 'mock') return [] as ProductMaterialRelationDto[]
+    const query = 'productId' in filter
+      ? `productId=${encodeURIComponent(filter.productId)}`
+      : `variantId=${encodeURIComponent(filter.variantId)}`
+    return apiRequest<ProductMaterialRelationDto[]>(`/v1/product-material-relations?${query}`)
+  },
+  createProductMaterialRelation: async (input: ProductMaterialRelationInput) => {
+    if (runtimeConfig.authMode === 'mock') throw new Error('Mock product material relations are read-only')
+    return apiRequest<ProductMaterialRelationDto>('/v1/product-material-relations', {
+      method: 'POST', body: JSON.stringify(input),
+    })
+  },
+  updateProductMaterialRelation: async (id: string, input: ProductMaterialRelationInput) => {
+    if (runtimeConfig.authMode === 'mock') throw new Error('Mock product material relations are read-only')
+    return apiRequest<ProductMaterialRelationDto>(`/v1/product-material-relations/${id}`, {
+      method: 'PUT', body: JSON.stringify(input),
+    })
+  },
+  disableProductMaterialRelation: async (id: string) => {
+    if (runtimeConfig.authMode === 'mock') throw new Error('Mock product material relations are read-only')
+    return apiRequest<ProductMaterialRelationDto>(`/v1/product-material-relations/${id}/disable`, { method: 'POST' })
+  },
+  applyMaterialToAllVariants: async (input: Omit<ProductMaterialRelationInput, 'variantId' | 'enabled'>) => {
+    if (runtimeConfig.authMode === 'mock') throw new Error('Mock product material relations are read-only')
+    return apiRequest<ProductMaterialRelationDto[]>('/v1/product-material-relations/apply-to-all', {
+      method: 'POST', body: JSON.stringify(input),
+    })
   },
   balances: () => syntheticList<InventoryBalanceDto>('/inventory/balances'),
   ledger: () => syntheticList<LedgerEntryDto>('/inventory/ledger'),

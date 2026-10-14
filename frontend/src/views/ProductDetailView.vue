@@ -5,6 +5,7 @@ import { useRoute } from 'vue-router'
 import { ApiError } from '@/api/client'
 import { domainApi, type ProductDetailDto, type ProductInput } from '@/api/domain'
 import ProductForm from '@/components/ProductForm.vue'
+import ProductMaterialsPanel from '@/components/ProductMaterialsPanel.vue'
 import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
@@ -129,6 +130,16 @@ onMounted(load)
             :key="attribute.attributeCode"
           >{{ attribute.attributeCode }} = {{ attribute.attributeValue }}</span>
         </div>
+      </article>
+      <ProductMaterialsPanel
+        v-if="runtimeConfig.authMode === 'password'"
+        :product="product"
+      />
+      <article
+        v-else
+        class="panel compact-panel"
+      >
+        <h2>对应辅料</h2><p>模拟模式仅展示既有合成产品，不提供 SKU—辅料关系写入。</p>
       </article>
     </template>
   </section>

@@ -22,7 +22,7 @@ export const appRoutes: RouteRecordRaw[] = [
       { path: 'materials', name: 'materials', component: () => import('@/views/MaterialsView.vue'), meta: { title: '辅料主档', group: '产品管理', icon: '◇', capabilities: ['materials.read'] } },
       { path: 'inventory', redirect: '/inventory/balances', meta: { title: '辅料库存', hidden: true, capabilities: ['inventory.read'] } },
       { path: 'inventory/balances', name: 'inventory-balances', component: () => import('@/views/InventoryView.vue'), meta: { title: '辅料库存', group: '产品管理', icon: '▦', capabilities: ['inventory.read'] } },
-      { path: 'inventory/ledger', name: 'inventory-ledger', component: placeholder, props: { description: '不可编辑、不可删除的库存流水入口' }, meta: { title: '库存流水', hidden: true, capabilities: ['inventory.read'] } },
+      { path: 'inventory/ledger', name: 'inventory-ledger', component: () => import('@/views/InventoryLedgerView.vue'), meta: { title: '库存流水', hidden: true, capabilities: ['inventory.read'] } },
       { path: 'imports', name: 'imports', component: placeholder, props: { description: '五类 Excel 上传、校验、预览、提交与结果入口' }, meta: { title: '导入中心', group: '产品管理', icon: '⇧', capabilities: ['imports.read'] } },
       { path: 'imports/:batchId', name: 'import-detail', component: placeholder, props: { description: '导入批次进度、错误定位与结果入口' }, meta: { title: '导入批次', hidden: true, capabilities: ['imports.read'] } },
       { path: 'selection/candidates', name: 'selection-candidates', component: () => import('@/views/CandidatesView.vue'), meta: { title: '候选池', group: '选品管理', icon: '☆', capabilities: ['selection.read'] } },

@@ -94,8 +94,41 @@ export interface ProductMaterialRelationInput {
   remark?: string
   enabled?: boolean
 }
-export interface LedgerEntryDto { id: string; requestId: string; materialCode: string; type: InventoryTransactionType; quantity: number; reason: string; occurredAt: string }
-export type InventoryTransactionType = 'OPENING' | 'INBOUND' | 'OUTBOUND' | 'ADJUSTMENT'
+export type InventoryTransactionType = 'OPENING' | 'INBOUND' | 'OUTBOUND' | 'ADJUST_IN' | 'ADJUST_OUT' | 'REVERSAL' | 'ADJUSTMENT'
+export type InventoryCommandType = Exclude<InventoryTransactionType, 'OPENING' | 'ADJUSTMENT'>
+export interface InventoryBalanceViewDto extends InventoryBalanceDto {
+  materialId?: string
+  safetyStock?: number
+  lowStock?: boolean
+  updatedAt?: string
+}
+export interface LedgerEntryDto {
+  id: string
+  requestId: string
+  warehouseCode?: string
+  materialId?: string
+  materialCode: string
+  materialName?: string
+  type: InventoryTransactionType
+  quantity: number
+  signedQuantity?: number
+  unit?: string
+  reason: string
+  referenceTransactionId?: string
+  balanceAfter?: number
+  actorLoginName?: string
+  occurredAt: string
+}
+export interface InventoryCommandInput {
+  requestId: string
+  materialId?: string
+  materialCode?: string
+  type: InventoryTransactionType
+  quantity?: number
+  unit?: string
+  reason: string
+  referenceTransactionId?: string
+}
 export type CandidateStatus = 'NEW' | 'REVIEWING' | 'APPROVED' | 'REJECTED'
 export type WatchRunMode = 'COMPLETE' | 'INCOMPLETE' | 'FAILED'
 
@@ -254,10 +287,31 @@ export const domainApi = {
       method: 'POST', body: JSON.stringify(input),
     })
   },
-  balances: () => syntheticList<InventoryBalanceDto>('/inventory/balances'),
-  ledger: () => syntheticList<LedgerEntryDto>('/inventory/ledger'),
-  transact: async (input: { requestId: string; materialCode: string; type: InventoryTransactionType; quantity: number; reason: string }) =>
-    assertSynthetic(await apiRequest<SyntheticWrite<LedgerEntryDto> & { balance: InventoryBalanceDto }>('/inventory/transactions', { method: 'POST', body: JSON.stringify(input) })),
+  balances: async (): Promise<{ items: InventoryBalanceViewDto[]; mockData: boolean }> => {
+    if (runtimeConfig.authMode === 'mock') return syntheticList<InventoryBalanceDto>('/inventory/balances')
+    return { items: await apiRequest<InventoryBalanceViewDto[]>('/v1/inventory/balances'), mockData: false }
+  },
+  ledger: async (materialId?: string): Promise<{ items: LedgerEntryDto[]; mockData: boolean }> => {
+    if (runtimeConfig.authMode === 'mock') return syntheticList<LedgerEntryDto>('/inventory/ledger')
+    const query = materialId ? `?materialId=${encodeURIComponent(materialId)}` : ''
+    return { items: await apiRequest<LedgerEntryDto[]>(`/v1/inventory/transactions${query}`), mockData: false }
+  },
+  transact: async (input: InventoryCommandInput) => {
+    if (runtimeConfig.authMode === 'mock') {
+      return assertSynthetic(await apiRequest<SyntheticWrite<LedgerEntryDto> & { balance: InventoryBalanceDto }>('/inventory/transactions', {
+        method: 'POST', body: JSON.stringify(input),
+      }))
+    }
+    return apiRequest<{ item: LedgerEntryDto; balance: InventoryBalanceViewDto; replayed: boolean }>('/v1/inventory/transactions', {
+      method: 'POST', body: JSON.stringify(input),
+    })
+  },
+  updateSafetyStock: async (materialId: string, safetyStock: number) => {
+    if (runtimeConfig.authMode === 'mock') throw new Error('Mock inventory safety stock is read-only')
+    return apiRequest<InventoryBalanceViewDto>(`/v1/inventory/balances/${materialId}/safety-stock`, {
+      method: 'PUT', body: JSON.stringify({ safetyStock }),
+    })
+  },
   candidates: () => syntheticList<SelectionCandidateDto & { rejectionReason?: string }>('/selection/candidates'),
   createCandidate: async (input: { asinOrUrl: string; title: string; score?: number }) =>
     assertSynthetic(await apiRequest<SyntheticWrite<SelectionCandidateDto & { rejectionReason?: string }>>('/selection/candidates', { method: 'POST', body: JSON.stringify(input) })),

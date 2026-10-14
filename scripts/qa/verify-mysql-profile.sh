@@ -146,6 +146,10 @@ query_scalar "INSERT INTO inventory_transaction (id, request_id, payload_hash, w
 query_scalar "INSERT INTO import_batch (id, import_type, template_version, status, phase, storage_key, file_hash, upload_idempotency_key, upload_payload_hash, actor_user_id, actor_login_name, total_rows, processed_rows, commit_allowed, preview_version, preview_expires_at) VALUES ('00000000-0000-0000-0000-000000000015', 'PRODUCTS', '1.0', 'VALIDATED', 'WAITING_CONFIRMATION', '00000000000000000000000000000000.xlsx', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'ERP-014-PROBE', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'system', 'system', 1, 1, TRUE, '00000000-0000-0000-0000-000000000016', DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 1 DAY))" >/dev/null
 query_scalar "INSERT INTO import_preview_row (id, batch_id, sheet_name, source_row_number, business_key, row_data_json, sort_order) VALUES ('00000000-0000-0000-0000-000000000017', '00000000-0000-0000-0000-000000000015', '导入模板', 2, 'ERP-014-PROBE', '{\"product_code\":\"ERP-014-PROBE\"}', 0)" >/dev/null
 query_scalar "UPDATE import_batch SET status='SUCCEEDED', phase='DONE', result_created_rows=1, result_updated_rows=2, result_unchanged_rows=3, result_storage_key='00000000000000000000000000000001.csv', committed_at=CURRENT_TIMESTAMP WHERE id='00000000-0000-0000-0000-000000000015'" >/dev/null
+query_scalar "INSERT INTO selection_candidate (id, asin, asin_normalized, title, status, score, source_url, source, created_by, updated_by) VALUES ('00000000-0000-0000-0000-000000000020', 'B0ERP018001', 'B0ERP018001', 'ERP-018 持久化探针', 'REVIEWING', 82, 'https://www.amazon.com/dp/B0ERP018001', 'MANUAL', 'system', 'system')" >/dev/null
+query_scalar "INSERT INTO selection_candidate_tag (candidate_id, tag, tag_normalized, display_order) VALUES ('00000000-0000-0000-0000-000000000020', '持久化', '持久化', 0)" >/dev/null
+query_scalar "INSERT INTO selection_candidate_note (id, candidate_id, content, author_id, author_name, author_role) VALUES ('00000000-0000-0000-0000-000000000021', '00000000-0000-0000-0000-000000000020', 'ERP-018 重启评审记录', 'system', 'system', 'ADMIN')" >/dev/null
+query_scalar "INSERT INTO selection_candidate_evidence (id, candidate_id, name, url, added_by_id, added_by_name, added_by_role) VALUES ('00000000-0000-0000-0000-000000000022', '00000000-0000-0000-0000-000000000020', '重启证据', 'https://evidence.example/erp-018', 'system', 'system', 'ADMIN')" >/dev/null
 
 stop_backend
 docker restart "$mysql_container" >/dev/null
@@ -168,6 +172,8 @@ opening_probe_count=$(query_scalar "SELECT COUNT(*) FROM inventory_balance b JOI
 [ "$opening_probe_count" = "1" ]
 import_probe_count=$(query_scalar "SELECT COUNT(*) FROM import_batch b JOIN import_preview_row p ON p.batch_id=b.id WHERE b.id='00000000-0000-0000-0000-000000000015' AND b.import_type='PRODUCTS' AND b.status='SUCCEEDED' AND b.result_created_rows=1 AND b.result_updated_rows=2 AND b.result_unchanged_rows=3 AND b.result_storage_key LIKE '%.csv' AND b.committed_at IS NOT NULL AND p.business_key='ERP-014-PROBE'")
 [ "$import_probe_count" = "1" ]
+selection_probe_count=$(query_scalar "SELECT COUNT(*) FROM selection_candidate c JOIN selection_candidate_tag t ON t.candidate_id=c.id JOIN selection_candidate_note n ON n.candidate_id=c.id JOIN selection_candidate_evidence e ON e.candidate_id=c.id WHERE c.asin_normalized='B0ERP018001' AND c.status='REVIEWING' AND t.tag='持久化' AND n.content='ERP-018 重启评审记录' AND e.url='https://evidence.example/erp-018'")
+[ "$selection_probe_count" = "1" ]
 
 ERP_BACKEND_URL="http://127.0.0.1:$backend_port" "$repo_root/scripts/dev/smoke-local-mysql-backend.sh"
 

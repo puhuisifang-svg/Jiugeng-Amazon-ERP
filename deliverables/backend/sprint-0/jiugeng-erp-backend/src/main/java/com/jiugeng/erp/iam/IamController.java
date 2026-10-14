@@ -1,6 +1,7 @@
 package com.jiugeng.erp.iam;
 
 import static com.jiugeng.erp.iam.IamTypes.Role;
+import static com.jiugeng.erp.iam.IamTypes.RecoveryChannel;
 import static com.jiugeng.erp.iam.IamTypes.SessionPrincipal;
 import static com.jiugeng.erp.iam.IamTypes.Status;
 import static com.jiugeng.erp.iam.IamTypes.UserView;
@@ -56,6 +57,17 @@ class IamController {
         service.changePassword(principal, request.currentPassword(), request.newPassword());
     }
 
+    @PostMapping("/auth/password-reset/request")
+    PasswordResetRequestResponse requestPasswordReset(@Valid @RequestBody PasswordResetRequest request) {
+        service.requestPasswordReset(request.channel(), request.destination());
+        return new PasswordResetRequestResponse("如果信息匹配，验证码将发送到对应联系方式");
+    }
+
+    @PostMapping("/auth/password-reset/confirm")
+    void confirmPasswordReset(@Valid @RequestBody PasswordResetConfirmRequest request) {
+        service.confirmPasswordReset(request.channel(), request.destination(), request.code(), request.newPassword());
+    }
+
     @GetMapping("/users")
     @PreAuthorize("hasAuthority('system.users.manage')")
     List<UserView> users() {
@@ -66,8 +78,8 @@ class IamController {
     @PreAuthorize("hasAuthority('system.users.manage')")
     UserView createUser(@Valid @RequestBody CreateUserRequest request,
             @AuthenticationPrincipal SessionPrincipal principal) {
-        return service.createUser(request.loginName(), request.displayName(), request.initialPassword(), request.role(),
-                principal);
+        return service.createUser(request.loginName(), request.displayName(), request.email(), request.phone(),
+                request.initialPassword(), request.role(), principal);
     }
 
     @PostMapping("/users/{userId}/disable")
@@ -102,6 +114,14 @@ class IamController {
         return service.resetPassword(userId, request.newPassword(), principal);
     }
 
+    @PostMapping("/users/{userId}/recovery-contacts")
+    @PreAuthorize("hasAuthority('system.users.manage')")
+    UserView updateRecoveryContacts(@PathVariable String userId,
+            @AuthenticationPrincipal SessionPrincipal principal,
+            @Valid @RequestBody RecoveryContactsRequest request) {
+        return service.updateRecoveryContacts(userId, request.email(), request.phone(), principal);
+    }
+
     record LoginRequest(
             @NotBlank @Size(max = 128) String loginName,
             @NotBlank @Size(max = 128) String password) {
@@ -112,19 +132,37 @@ class IamController {
 
     record ChangePasswordRequest(
             @NotBlank @Size(max = 128) String currentPassword,
-            @NotBlank @Size(min = 12, max = 128) String newPassword) {
+            @NotBlank @Size(min = 6, max = 128) String newPassword) {
     }
 
     record CreateUserRequest(
             @NotBlank @Pattern(regexp = "[A-Za-z0-9._-]{3,128}") String loginName,
             @NotBlank @Size(max = 128) String displayName,
-            @NotBlank @Size(min = 12, max = 128) String initialPassword,
+            @Size(max = 254) String email,
+            @Size(max = 32) String phone,
+            @NotBlank @Size(min = 6, max = 128) String initialPassword,
             @NotNull Role role) {
     }
 
-    record ResetPasswordRequest(@NotBlank @Size(min = 12, max = 128) String newPassword) {
+    record ResetPasswordRequest(@NotBlank @Size(min = 6, max = 128) String newPassword) {
     }
 
     record ChangeRoleRequest(@NotNull Role role) {
+    }
+
+    record RecoveryContactsRequest(@Size(max = 254) String email, @Size(max = 32) String phone) {
+    }
+
+    record PasswordResetRequest(@NotNull RecoveryChannel channel,
+                                @NotBlank @Size(max = 254) String destination) {
+    }
+
+    record PasswordResetRequestResponse(String message) {
+    }
+
+    record PasswordResetConfirmRequest(@NotNull RecoveryChannel channel,
+                                       @NotBlank @Size(max = 254) String destination,
+                                       @NotBlank @Pattern(regexp = "\\d{6}") String code,
+                                       @NotBlank @Size(min = 6, max = 128) String newPassword) {
     }
 }

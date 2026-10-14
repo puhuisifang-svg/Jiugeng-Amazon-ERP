@@ -1,6 +1,8 @@
 package com.jiugeng.erp.iam;
 
 import static com.jiugeng.erp.iam.IamTypes.Role;
+import static com.jiugeng.erp.iam.IamTypes.RecoveryChannel;
+import static com.jiugeng.erp.iam.IamTypes.PasswordResetChallenge;
 import static com.jiugeng.erp.iam.IamTypes.SessionPrincipal;
 import static com.jiugeng.erp.iam.IamTypes.Status;
 import static com.jiugeng.erp.iam.IamTypes.User;
@@ -24,7 +26,7 @@ class IamRepository {
 
     Optional<User> findUserByLoginName(String loginName) {
         return jdbc.sql("""
-                SELECT id, login_name, display_name, password_hash, role, status, must_change_password,
+                SELECT id, login_name, display_name, email, phone, password_hash, role, status, must_change_password,
                        failed_login_count, locked_at
                 FROM iam_user WHERE login_name = :loginName
                 """).param("loginName", loginName).query(this::mapUser).optional();
@@ -32,7 +34,7 @@ class IamRepository {
 
     Optional<User> findUserById(String id) {
         return jdbc.sql("""
-                SELECT id, login_name, display_name, password_hash, role, status, must_change_password,
+                SELECT id, login_name, display_name, email, phone, password_hash, role, status, must_change_password,
                        failed_login_count, locked_at
                 FROM iam_user WHERE id = :id
                 """).param("id", id).query(this::mapUser).optional();
@@ -40,7 +42,7 @@ class IamRepository {
 
     List<User> findUsers() {
         return jdbc.sql("""
-                SELECT id, login_name, display_name, password_hash, role, status, must_change_password,
+                SELECT id, login_name, display_name, email, phone, password_hash, role, status, must_change_password,
                        failed_login_count, locked_at
                 FROM iam_user ORDER BY created_at, login_name
                 """).query(this::mapUser).list();
@@ -50,13 +52,25 @@ class IamRepository {
         return jdbc.sql("SELECT COUNT(*) FROM iam_user").query(Integer.class).single() > 0;
     }
 
-    void insertUser(String id, String loginName, String displayName, String passwordHash, Role role) {
+    Optional<User> findUserByRecoveryDestination(RecoveryChannel channel, String destination) {
+        String column = channel == RecoveryChannel.EMAIL ? "email" : "phone";
+        String sql = """
+                SELECT id, login_name, display_name, email, phone, password_hash, role, status, must_change_password,
+                       failed_login_count, locked_at
+                FROM iam_user WHERE %s = :destination
+                """.formatted(column);
+        return jdbc.sql(sql).param("destination", destination).query(this::mapUser).optional();
+    }
+
+    void insertUser(String id, String loginName, String displayName, String email, String phone,
+            String passwordHash, Role role) {
         jdbc.sql("""
                 INSERT INTO iam_user
-                    (id, login_name, display_name, password_hash, role, status, must_change_password)
-                VALUES (:id, :loginName, :displayName, :passwordHash, :role, 'ENABLED', TRUE)
+                    (id, login_name, display_name, email, phone, password_hash, role, status, must_change_password)
+                VALUES (:id, :loginName, :displayName, :email, :phone, :passwordHash, :role, 'ENABLED', TRUE)
                 """).param("id", id).param("loginName", loginName).param("displayName", displayName)
-                .param("passwordHash", passwordHash).param("role", role.name()).update();
+                .param("email", email).param("phone", phone).param("passwordHash", passwordHash)
+                .param("role", role.name()).update();
     }
 
     int recordFailedLogin(User user, int maxFailures) {
@@ -129,6 +143,70 @@ class IamRepository {
                 """).param("passwordHash", passwordHash).param("id", userId).update();
     }
 
+    void updateRecoveryContacts(String userId, String email, String phone) {
+        jdbc.sql("""
+                UPDATE iam_user SET email = :email, phone = :phone, updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id
+                """).param("email", email).param("phone", phone).param("id", userId).update();
+    }
+
+    int countPasswordResetRequests(String userId, RecoveryChannel channel, Instant since) {
+        return jdbc.sql("""
+                SELECT COUNT(*) FROM iam_password_reset_challenge
+                WHERE user_id = :userId AND channel = :channel AND requested_at >= :since
+                """).param("userId", userId).param("channel", channel.name()).param("since", since)
+                .query(Integer.class).single();
+    }
+
+    void invalidatePasswordResetChallenges(String userId, RecoveryChannel channel) {
+        jdbc.sql("""
+                UPDATE iam_password_reset_challenge SET consumed_at = CURRENT_TIMESTAMP
+                WHERE user_id = :userId AND channel = :channel AND consumed_at IS NULL
+                """).param("userId", userId).param("channel", channel.name()).update();
+    }
+
+    void insertPasswordResetChallenge(PasswordResetChallenge challenge) {
+        jdbc.sql("""
+                INSERT INTO iam_password_reset_challenge
+                    (id, user_id, channel, destination, code_hash, expires_at, remaining_attempts)
+                VALUES (:id, :userId, :channel, :destination, :codeHash, :expiresAt, :remainingAttempts)
+                """).param("id", challenge.id()).param("userId", challenge.userId())
+                .param("channel", challenge.channel().name()).param("destination", challenge.destination())
+                .param("codeHash", challenge.codeHash()).param("expiresAt", challenge.expiresAt())
+                .param("remainingAttempts", challenge.remainingAttempts()).update();
+    }
+
+    Optional<PasswordResetChallenge> findActivePasswordResetChallenge(
+            RecoveryChannel channel, String destination, Instant now) {
+        return jdbc.sql("""
+                SELECT id, user_id, channel, destination, code_hash, expires_at, remaining_attempts
+                FROM iam_password_reset_challenge
+                WHERE channel = :channel AND destination = :destination AND consumed_at IS NULL
+                  AND expires_at > :now AND remaining_attempts > 0
+                ORDER BY requested_at DESC LIMIT 1
+                """).param("channel", channel.name()).param("destination", destination).param("now", now)
+                .query((rs, rowNum) -> new PasswordResetChallenge(rs.getString("id"), rs.getString("user_id"),
+                        RecoveryChannel.valueOf(rs.getString("channel")), rs.getString("destination"),
+                        rs.getString("code_hash"), rs.getTimestamp("expires_at").toInstant(),
+                        rs.getInt("remaining_attempts"))).optional();
+    }
+
+    void recordPasswordResetFailure(String challengeId) {
+        jdbc.sql("""
+                UPDATE iam_password_reset_challenge
+                SET remaining_attempts = remaining_attempts - 1,
+                    consumed_at = CASE WHEN remaining_attempts <= 1 THEN CURRENT_TIMESTAMP ELSE consumed_at END
+                WHERE id = :id AND consumed_at IS NULL
+                """).param("id", challengeId).update();
+    }
+
+    void consumePasswordResetChallenge(String challengeId) {
+        jdbc.sql("""
+                UPDATE iam_password_reset_challenge SET consumed_at = CURRENT_TIMESTAMP
+                WHERE id = :id AND consumed_at IS NULL
+                """).param("id", challengeId).update();
+    }
+
     void setStatus(String userId, Status status) {
         jdbc.sql("UPDATE iam_user SET status = :status, updated_at = CURRENT_TIMESTAMP WHERE id = :id")
                 .param("status", status.name()).param("id", userId).update();
@@ -146,6 +224,7 @@ class IamRepository {
     private User mapUser(ResultSet rs, int rowNum) throws SQLException {
         var lockedAt = rs.getTimestamp("locked_at");
         return new User(rs.getString("id"), rs.getString("login_name"), rs.getString("display_name"),
+                rs.getString("email"), rs.getString("phone"),
                 Role.valueOf(rs.getString("role")), Status.valueOf(rs.getString("status")),
                 rs.getBoolean("must_change_password"), rs.getInt("failed_login_count"),
                 lockedAt == null ? null : lockedAt.toInstant(), rs.getString("password_hash"));

@@ -25,6 +25,10 @@ app:
   iam:
     session-hours: ${ERP_SESSION_HOURS:8}
     max-failed-logins: ${ERP_MAX_FAILED_LOGINS:5}
+    password-reset:
+      email-from: ${ERP_PASSWORD_RESET_EMAIL_FROM:}
+      sms-webhook-url: ${ERP_PASSWORD_RESET_SMS_WEBHOOK_URL:}
+      sms-webhook-token: ${sms_webhook_token:}
     bootstrap:
       login-name: ${ERP_BOOTSTRAP_ADMIN_LOGIN:}
       display-name: ${ERP_BOOTSTRAP_ADMIN_DISPLAY_NAME:系统管理员}

@@ -1,6 +1,8 @@
 package com.jiugeng.erp.iam;
 
 import static com.jiugeng.erp.iam.IamTypes.Role;
+import static com.jiugeng.erp.iam.IamTypes.RecoveryChannel;
+import static com.jiugeng.erp.iam.IamTypes.PasswordResetChallenge;
 import static com.jiugeng.erp.iam.IamTypes.SessionPrincipal;
 import static com.jiugeng.erp.iam.IamTypes.Status;
 import static com.jiugeng.erp.iam.IamTypes.User;
@@ -29,19 +31,31 @@ import org.springframework.transaction.annotation.Transactional;
 class IamService {
     private static final java.util.regex.Pattern LOGIN_NAME_PATTERN =
             java.util.regex.Pattern.compile("[A-Za-z0-9._-]{3,128}");
+    private static final java.util.regex.Pattern EMAIL_PATTERN =
+            java.util.regex.Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
+    private static final java.util.regex.Pattern PHONE_PATTERN =
+            java.util.regex.Pattern.compile("^(?:\\+[1-9]\\d{7,14}|1\\d{10})$");
+    private static final java.util.regex.Pattern PASSWORD_LETTER = java.util.regex.Pattern.compile("[A-Za-z]");
+    private static final java.util.regex.Pattern PASSWORD_DIGIT = java.util.regex.Pattern.compile("\\d");
+    private static final Duration RESET_CODE_DURATION = Duration.ofMinutes(10);
+    private static final int RESET_CODE_ATTEMPTS = 5;
+    private static final int RESET_REQUESTS_PER_HOUR = 5;
     private final IamRepository repository;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
+    private final PasswordResetDelivery passwordResetDelivery;
     private final SecureRandom secureRandom = new SecureRandom();
     private final Duration sessionDuration;
     private final int maxFailedLogins;
 
     IamService(IamRepository repository, PasswordEncoder passwordEncoder, AuditService auditService,
+            PasswordResetDelivery passwordResetDelivery,
             @Value("${app.iam.session-hours:8}") long sessionHours,
             @Value("${app.iam.max-failed-logins:5}") int maxFailedLogins) {
         this.repository = repository;
         this.passwordEncoder = passwordEncoder;
         this.auditService = auditService;
+        this.passwordResetDelivery = passwordResetDelivery;
         this.sessionDuration = Duration.ofHours(sessionHours);
         this.maxFailedLogins = maxFailedLogins;
     }
@@ -124,16 +138,23 @@ class IamService {
 
     @Transactional
     UserView createUser(String loginName, String displayName, String initialPassword, Role role) {
-        return createUser(loginName, displayName, initialPassword, role, Actor.system());
+        return createUser(loginName, displayName, null, null, initialPassword, role, Actor.system());
     }
 
     @Transactional
     UserView createUser(String loginName, String displayName, String initialPassword, Role role,
             SessionPrincipal principal) {
-        return createUser(loginName, displayName, initialPassword, role, Actor.authenticated(principal));
+        return createUser(loginName, displayName, null, null, initialPassword, role, Actor.authenticated(principal));
     }
 
-    private UserView createUser(String loginName, String displayName, String initialPassword, Role role, Actor actor) {
+    @Transactional
+    UserView createUser(String loginName, String displayName, String email, String phone, String initialPassword,
+            Role role, SessionPrincipal principal) {
+        return createUser(loginName, displayName, email, phone, initialPassword, role, Actor.authenticated(principal));
+    }
+
+    private UserView createUser(String loginName, String displayName, String email, String phone,
+            String initialPassword, Role role, Actor actor) {
         String normalized = normalize(loginName);
         if (!LOGIN_NAME_PATTERN.matcher(normalized).matches()) {
             throw new IamException(400, "LOGIN_NAME_INVALID", "登录名格式不正确");
@@ -142,11 +163,15 @@ class IamService {
             throw new IamException(400, "DISPLAY_NAME_INVALID", "显示名称格式不正确");
         }
         requireValidPassword(initialPassword);
+        String normalizedEmail = normalizeEmail(email);
+        String normalizedPhone = normalizePhone(phone);
+        ensureRecoveryContactsAvailable(normalizedEmail, normalizedPhone, null);
         if (repository.findUserByLoginName(normalized).isPresent()) {
             throw new IamException(409, "LOGIN_NAME_EXISTS", "登录名已存在");
         }
         String id = UUID.randomUUID().toString();
-        repository.insertUser(id, normalized, displayName.trim(), passwordEncoder.encode(initialPassword), role);
+        repository.insertUser(id, normalized, displayName.trim(), normalizedEmail, normalizedPhone,
+                passwordEncoder.encode(initialPassword), role);
         UserView created = repository.findUserById(id).orElseThrow().view();
         auditService.account(actor, "ACCOUNT_CREATE", null, created, null);
         return created;
@@ -203,6 +228,72 @@ class IamService {
         return after;
     }
 
+    @Transactional
+    UserView updateRecoveryContacts(String userId, String email, String phone, SessionPrincipal principal) {
+        User user = requireUser(userId);
+        String normalizedEmail = normalizeEmail(email);
+        String normalizedPhone = normalizePhone(phone);
+        if (normalizedEmail == null && normalizedPhone == null) {
+            throw new IamException(400, "RECOVERY_CONTACT_REQUIRED", "邮箱和手机号至少填写一项");
+        }
+        ensureRecoveryContactsAvailable(normalizedEmail, normalizedPhone, userId);
+        UserView before = user.view();
+        repository.updateRecoveryContacts(userId, normalizedEmail, normalizedPhone);
+        UserView after = requireUser(userId).view();
+        auditService.account(Actor.authenticated(principal), "RECOVERY_CONTACT_CHANGE", before, after, null);
+        return after;
+    }
+
+    @Transactional
+    void requestPasswordReset(RecoveryChannel channel, String destination) {
+        if (!passwordResetDelivery.supports(channel)) {
+            throw new IamException(503, "PASSWORD_RESET_DELIVERY_UNAVAILABLE", "该验证方式暂未配置，请联系管理员");
+        }
+        String normalizedDestination = normalizeDestination(channel, destination);
+        Optional<User> found = repository.findUserByRecoveryDestination(channel, normalizedDestination);
+        if (found.isEmpty() || found.get().status() != Status.ENABLED) return;
+        User user = found.get();
+        if (repository.countPasswordResetRequests(user.id(), channel, Instant.now().minus(Duration.ofHours(1)))
+                >= RESET_REQUESTS_PER_HOUR) return;
+
+        repository.invalidatePasswordResetChallenges(user.id(), channel);
+        String code = String.format(Locale.ROOT, "%06d", secureRandom.nextInt(1_000_000));
+        PasswordResetChallenge challenge = new PasswordResetChallenge(UUID.randomUUID().toString(), user.id(),
+                channel, normalizedDestination, passwordEncoder.encode(code), Instant.now().plus(RESET_CODE_DURATION),
+                RESET_CODE_ATTEMPTS);
+        repository.insertPasswordResetChallenge(challenge);
+        try {
+            passwordResetDelivery.send(channel, normalizedDestination, code, RESET_CODE_DURATION);
+            auditService.security(Actor.attemptedLogin(user.id(), user.loginName(), user.displayName()),
+                    "PASSWORD_RESET_REQUEST", user.id(), Outcome.SUCCESS, channel.name());
+        }
+        catch (RuntimeException exception) {
+            repository.consumePasswordResetChallenge(challenge.id());
+            auditService.security(Actor.attemptedLogin(user.id(), user.loginName(), user.displayName()),
+                    "PASSWORD_RESET_REQUEST", user.id(), Outcome.FAILURE, "DELIVERY_FAILED");
+            throw new IamException(503, "PASSWORD_RESET_DELIVERY_FAILED", "验证码发送失败，请稍后重试");
+        }
+    }
+
+    @Transactional(noRollbackFor = IamException.class)
+    void confirmPasswordReset(RecoveryChannel channel, String destination, String code, String newPassword) {
+        requireValidPassword(newPassword);
+        String normalizedDestination = normalizeDestination(channel, destination);
+        PasswordResetChallenge challenge = repository.findActivePasswordResetChallenge(
+                channel, normalizedDestination, Instant.now()).orElseThrow(this::invalidResetCode);
+        if (!passwordEncoder.matches(code, challenge.codeHash())) {
+            repository.recordPasswordResetFailure(challenge.id());
+            throw invalidResetCode();
+        }
+        User user = requireUser(challenge.userId());
+        if (user.status() != Status.ENABLED) throw invalidResetCode();
+        repository.changePassword(user.id(), passwordEncoder.encode(newPassword));
+        repository.revokeUserSessions(user.id());
+        repository.consumePasswordResetChallenge(challenge.id());
+        auditService.security(Actor.attemptedLogin(user.id(), user.loginName(), user.displayName()),
+                "PASSWORD_RECOVERY", user.id(), Outcome.SUCCESS, channel.name());
+    }
+
     void bootstrapAdmin(String loginName, String displayName, String password) {
         if (!repository.userExists()) createUser(loginName, displayName, password, Role.ADMIN);
     }
@@ -216,9 +307,47 @@ class IamService {
     }
 
     private void requireValidPassword(String password) {
-        if (password == null || password.length() < 12 || password.length() > 128) {
-            throw new IamException(400, "PASSWORD_POLICY_VIOLATION", "密码长度必须为 12 至 128 位");
+        if (password == null || password.length() < 6 || password.length() > 128
+                || !PASSWORD_LETTER.matcher(password).find() || !PASSWORD_DIGIT.matcher(password).find()) {
+            throw new IamException(400, "PASSWORD_POLICY_VIOLATION", "密码须为 6 至 128 位，并同时包含字母和数字");
         }
+    }
+
+    private String normalizeEmail(String email) {
+        if (email == null || email.isBlank()) return null;
+        String normalized = email.trim().toLowerCase(Locale.ROOT);
+        if (normalized.length() > 254 || !EMAIL_PATTERN.matcher(normalized).matches()) {
+            throw new IamException(400, "EMAIL_INVALID", "邮箱格式不正确");
+        }
+        return normalized;
+    }
+
+    private String normalizePhone(String phone) {
+        if (phone == null || phone.isBlank()) return null;
+        String normalized = phone.replaceAll("[\\s-]", "");
+        if (!PHONE_PATTERN.matcher(normalized).matches()) {
+            throw new IamException(400, "PHONE_INVALID", "手机号格式不正确");
+        }
+        return normalized;
+    }
+
+    private String normalizeDestination(RecoveryChannel channel, String destination) {
+        String normalized = channel == RecoveryChannel.EMAIL ? normalizeEmail(destination) : normalizePhone(destination);
+        if (normalized == null) throw new IamException(400, "RECOVERY_DESTINATION_INVALID", "验证账号不能为空");
+        return normalized;
+    }
+
+    private void ensureRecoveryContactsAvailable(String email, String phone, String currentUserId) {
+        if (email != null) repository.findUserByRecoveryDestination(RecoveryChannel.EMAIL, email)
+                .filter(user -> !user.id().equals(currentUserId))
+                .ifPresent(user -> { throw new IamException(409, "EMAIL_EXISTS", "邮箱已绑定其他账号"); });
+        if (phone != null) repository.findUserByRecoveryDestination(RecoveryChannel.SMS, phone)
+                .filter(user -> !user.id().equals(currentUserId))
+                .ifPresent(user -> { throw new IamException(409, "PHONE_EXISTS", "手机号已绑定其他账号"); });
+    }
+
+    private IamException invalidResetCode() {
+        return new IamException(400, "PASSWORD_RESET_CODE_INVALID", "验证码无效或已过期");
     }
 
     private String newToken() {

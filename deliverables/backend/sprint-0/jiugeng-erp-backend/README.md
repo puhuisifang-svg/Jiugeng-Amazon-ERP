@@ -58,6 +58,14 @@ MySQL profile 会加载 `ERP_MYSQL_SECRET_DIR` 指向的 config tree，推荐把
 
 前端正式构建使用 `VITE_AUTH_MODE=password`；本地开发如需联调正式 IAM，可覆盖同名变量。管理员可创建账号、分配三类角色、启停、解锁和重置密码。
 
+## 密码找回
+
+登录页支持通过已登记邮箱或手机号获取验证码并重置密码。密码长度为 6–128 个字符，且必须同时包含字母和数字。验证码只以 BCrypt 摘要保存，10 分钟有效、最多尝试 5 次且成功后立即失效；请求接口对不存在、停用或受限账号返回相同提示，避免泄露账号是否存在。
+
+管理员应先在账号管理页面为用户登记唯一邮箱或手机号。邮件通道使用 SMTP，需要配置标准 Spring Mail 环境变量 `SPRING_MAIL_HOST`、`SPRING_MAIL_PORT`、`SPRING_MAIL_USERNAME`、`SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH`、`SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE` 以及 `ERP_PASSWORD_RESET_EMAIL_FROM`，并把 SMTP 密码写入 configtree 的 `smtp_password` 文件。短信通道使用 HTTPS webhook，需要配置 `ERP_PASSWORD_RESET_SMS_WEBHOOK_URL`，并把 Bearer token 写入 configtree 的 `sms_webhook_token` 文件；请求体固定为 `phone`、`code`、`expiresMinutes`。所有密码和 token 必须由 Secret Store 注入，不得进入参数、配置、日志或仓库。
+
+未配置对应投递通道时，密码找回接口返回服务不可用，不会生成或泄露验证码。正式启用前必须分别用目标 SMTP 与短信服务商完成端到端验收。
+
 ## 操作审计
 
 非 `mock` profile 暴露只读接口 `GET /api/v1/audit/events`，支持按操作账号、类别、动作、资源、结果和时间范围筛选并分页。具有 `audit.read.all` 的管理员可查看全部记录；只有 `audit.read.self` 的业务角色由后端强制限定为当前用户记录，不能通过查询参数扩大范围。

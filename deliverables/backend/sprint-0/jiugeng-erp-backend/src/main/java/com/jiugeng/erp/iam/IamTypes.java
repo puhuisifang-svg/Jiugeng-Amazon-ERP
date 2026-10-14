@@ -16,6 +16,10 @@ final class IamTypes {
         ENABLED, DISABLED
     }
 
+    enum RecoveryChannel {
+        EMAIL, SMS
+    }
+
     static Set<String> capabilities(Role role) {
         return switch (role) {
             case ADMIN -> Set.of(
@@ -34,16 +38,20 @@ final class IamTypes {
         };
     }
 
-    record User(String id, String loginName, String displayName, Role role, Status status,
+    record User(String id, String loginName, String displayName, String email, String phone, Role role, Status status,
                 boolean mustChangePassword, int failedLoginCount, java.time.Instant lockedAt, String passwordHash) {
         UserView view() {
-            return new UserView(id, loginName, displayName, role, status, mustChangePassword, lockedAt,
+            return new UserView(id, loginName, displayName, email, phone, role, status, mustChangePassword, lockedAt,
                     capabilities(role).stream().sorted().toList());
         }
     }
 
-    record UserView(String id, String loginName, String displayName, Role role, Status status,
+    record UserView(String id, String loginName, String displayName, String email, String phone, Role role, Status status,
                     boolean mustChangePassword, java.time.Instant lockedAt, List<String> capabilities) {
+    }
+
+    record PasswordResetChallenge(String id, String userId, RecoveryChannel channel, String destination,
+                                  String codeHash, java.time.Instant expiresAt, int remainingAttempts) {
     }
 
     record SessionPrincipal(String userId, String loginName, String displayName, Role role,

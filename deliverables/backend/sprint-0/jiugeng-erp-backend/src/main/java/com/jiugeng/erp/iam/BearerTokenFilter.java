@@ -21,6 +21,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 class BearerTokenFilter extends OncePerRequestFilter {
     private static final Set<String> PASSWORD_CHANGE_PATHS = Set.of(
             "/api/v1/auth/me", "/api/v1/auth/logout", "/api/v1/auth/change-password");
+    private static final Set<String> PUBLIC_PATHS = Set.of(
+            "/api/v1/auth/login", "/api/v1/auth/password-reset/request", "/api/v1/auth/password-reset/confirm");
     private final IamService service;
 
     BearerTokenFilter(IamService service) {
@@ -29,7 +31,7 @@ class BearerTokenFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return "/api/v1/auth/login".equals(request.getRequestURI());
+        return PUBLIC_PATHS.contains(request.getRequestURI());
     }
 
     @Override

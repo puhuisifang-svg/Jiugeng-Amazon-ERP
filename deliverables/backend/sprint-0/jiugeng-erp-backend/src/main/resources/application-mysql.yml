@@ -1,6 +1,8 @@
 spring:
   config:
     import: "configtree:${ERP_MYSQL_SECRET_DIR}"
+  mail:
+    password: ${smtp_password:}
   datasource:
     url: ${DATABASE_URL}
     username: ${DATABASE_USERNAME}

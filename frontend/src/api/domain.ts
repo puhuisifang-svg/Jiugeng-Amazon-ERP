@@ -313,19 +313,33 @@ export const domainApi = {
       method: 'PUT', body: JSON.stringify({ safetyStock }),
     })
   },
-  candidates: () => syntheticList<SelectionCandidateDto & { rejectionReason?: string }>('/selection/candidates'),
-  createCandidate: async (input: { asinOrUrl: string; title: string; score?: number }) =>
-    assertSynthetic(await apiRequest<SyntheticWrite<SelectionCandidateDto & { rejectionReason?: string }>>('/selection/candidates', { method: 'POST', body: JSON.stringify(input) })),
-  candidateDetail: async (id: string) =>
-    assertSynthetic(await apiRequest<SyntheticWrite<CandidateDetailDto>>(`/selection/candidates/${id}`)),
-  addCandidateNote: async (id: string, content: string) =>
-    assertSynthetic(await apiRequest<SyntheticWrite<CandidateDetailDto>>(`/selection/candidates/${id}/notes`, { method: 'POST', body: JSON.stringify({ content }) })),
-  addCandidateEvidence: async (id: string, input: { name: string; url: string; description?: string }) =>
-    assertSynthetic(await apiRequest<SyntheticWrite<CandidateDetailDto>>(`/selection/candidates/${id}/evidence`, { method: 'POST', body: JSON.stringify(input) })),
-  updateCandidateEvaluation: async (id: string, input: { category?: string | undefined; price?: number | undefined; rating?: number | undefined; reviewCount?: number | undefined; owner?: string | undefined; tags?: string[] | undefined; selectionReason?: string | undefined }) =>
-    assertSynthetic(await apiRequest<SyntheticWrite<SelectionCandidateDto & { rejectionReason?: string }>>(`/selection/candidates/${id}/evaluation`, { method: 'PUT', body: JSON.stringify(input) })),
-  transitionCandidate: async (id: string, input: { status: CandidateStatus; rejectionReason?: string }) =>
-    assertSynthetic(await apiRequest<SyntheticWrite<SelectionCandidateDto & { rejectionReason?: string }>>(`/selection/candidates/${id}/transition`, { method: 'POST', body: JSON.stringify(input) })),
+  candidates: async () => runtimeConfig.authMode === 'mock'
+    ? syntheticList<SelectionCandidateDto & { rejectionReason?: string }>('/selection/candidates')
+    : { items: await apiRequest<Array<SelectionCandidateDto & { rejectionReason?: string }>>('/v1/selection/candidates'), mockData: false },
+  createCandidate: async (input: { asinOrUrl: string; title: string; score?: number }) => {
+    if (runtimeConfig.authMode === 'mock') return assertSynthetic(await apiRequest<SyntheticWrite<SelectionCandidateDto & { rejectionReason?: string }>>('/selection/candidates', { method: 'POST', body: JSON.stringify(input) }))
+    return { item: await apiRequest<SelectionCandidateDto & { rejectionReason?: string }>('/v1/selection/candidates', { method: 'POST', body: JSON.stringify(input) }), mockData: false }
+  },
+  candidateDetail: async (id: string) => {
+    if (runtimeConfig.authMode === 'mock') return assertSynthetic(await apiRequest<SyntheticWrite<CandidateDetailDto>>(`/selection/candidates/${id}`))
+    return { item: await apiRequest<CandidateDetailDto>(`/v1/selection/candidates/${id}`), mockData: false }
+  },
+  addCandidateNote: async (id: string, content: string) => {
+    if (runtimeConfig.authMode === 'mock') return assertSynthetic(await apiRequest<SyntheticWrite<CandidateDetailDto>>(`/selection/candidates/${id}/notes`, { method: 'POST', body: JSON.stringify({ content }) }))
+    return { item: await apiRequest<CandidateDetailDto>(`/v1/selection/candidates/${id}/notes`, { method: 'POST', body: JSON.stringify({ content }) }), mockData: false }
+  },
+  addCandidateEvidence: async (id: string, input: { name: string; url: string; description?: string }) => {
+    if (runtimeConfig.authMode === 'mock') return assertSynthetic(await apiRequest<SyntheticWrite<CandidateDetailDto>>(`/selection/candidates/${id}/evidence`, { method: 'POST', body: JSON.stringify(input) }))
+    return { item: await apiRequest<CandidateDetailDto>(`/v1/selection/candidates/${id}/evidence`, { method: 'POST', body: JSON.stringify(input) }), mockData: false }
+  },
+  updateCandidateEvaluation: async (id: string, input: { category?: string | undefined; price?: number | undefined; rating?: number | undefined; reviewCount?: number | undefined; owner?: string | undefined; tags?: string[] | undefined; selectionReason?: string | undefined }) => {
+    if (runtimeConfig.authMode === 'mock') return assertSynthetic(await apiRequest<SyntheticWrite<SelectionCandidateDto & { rejectionReason?: string }>>(`/selection/candidates/${id}/evaluation`, { method: 'PUT', body: JSON.stringify(input) }))
+    return { item: await apiRequest<SelectionCandidateDto & { rejectionReason?: string }>(`/v1/selection/candidates/${id}/evaluation`, { method: 'PUT', body: JSON.stringify(input) }), mockData: false }
+  },
+  transitionCandidate: async (id: string, input: { status: CandidateStatus; rejectionReason?: string }) => {
+    if (runtimeConfig.authMode === 'mock') return assertSynthetic(await apiRequest<SyntheticWrite<SelectionCandidateDto & { rejectionReason?: string }>>(`/selection/candidates/${id}/transition`, { method: 'POST', body: JSON.stringify(input) }))
+    return { item: await apiRequest<SelectionCandidateDto & { rejectionReason?: string }>(`/v1/selection/candidates/${id}/transition`, { method: 'POST', body: JSON.stringify(input) }), mockData: false }
+  },
   events: () => syntheticList<WatchEventDto & { candidateId?: string }>('/watch/events'),
   confirmEvent: async (id: string) =>
     assertSynthetic(await apiRequest<SyntheticWrite<WatchEventDto & { candidateId?: string }> & { candidate: SelectionCandidateDto }>(`/watch/events/${id}/confirm`, { method: 'POST', body: '{}' })),

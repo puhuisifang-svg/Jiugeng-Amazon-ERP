@@ -30,7 +30,7 @@ function syncDraft(item: Candidate) {
 function draftFor(candidateId: string): EvaluationDraft {
   return drafts[candidateId] ?? (drafts[candidateId] = { category: '', price: '', rating: '', reviewCount: '', owner: '', tags: '', selectionReason: '' })
 }
-async function load() { loading.value = true; try { items.value = (await domainApi.candidates()).items; items.value.forEach(syncDraft) } catch { error.value = '候选池模拟数据加载失败。' } finally { loading.value = false } }
+async function load() { loading.value = true; try { items.value = (await domainApi.candidates()).items; items.value.forEach(syncDraft) } catch { error.value = '候选池数据加载失败。' } finally { loading.value = false } }
 async function create() {
   saving.value = true; error.value = ''; success.value = ''
   try {

@@ -32,6 +32,7 @@
 | DEL-028 | 2026-09-12 | Frontend | DEL-025 v1.1 OpenAPI 前端增量复核 | v0.1 | Completed | PJM | [增量复核](../deliverables/frontend/DEL-025_V1_1_INCREMENTAL_FRONTEND_REVIEW.md) |
 | DEL-029 | 2026-09-12 | Frontend | DEL-025 v1.1.1 库存流水数量契约前端增量复核 | v0.1 | Completed | PJM | [增量复核](../deliverables/frontend/DEL-025_V1_1_1_INVENTORY_QUANTITY_FRONTEND_REVIEW.md) |
 | DEL-030 | 2026-09-12 | Frontend | DEL-025 v1.1.2 期初库存语义前端增量复核 | v0.1 | Completed | PJM | [增量复核](../deliverables/frontend/DEL-025_V1_1_2_OPENING_SEMANTICS_FRONTEND_REVIEW.md) |
+| DEL-031 | 2026-09-12 | Frontend | DEL-025 `ef991ea` QA-only 测试增强技术观察 | v0.3 | Superseded | PJM | [范围撤回记录](../deliverables/frontend/DEL-025_EF991EA_FINAL_GATE_FRONTEND_REVIEW.md)；不登记 Frontend Pass/Fail 或 P0/P1，不参与验收；当前 Frontend Completed 基线为 DEL-030 / `6a0989a` |
 
 ## 登记要求
 

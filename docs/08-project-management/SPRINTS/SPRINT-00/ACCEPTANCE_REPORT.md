@@ -15,6 +15,7 @@
 - 任务边界：BE-CONTRACT-P0-01/02 与 Backend 机器契约专项属于 `S0-CONTRACT-01` 关闭门禁；`S0-INT-01` 并行等待真实业务输入与后续运行实现，二者不得混作旧文档状态回退。
 - `BE-CONTRACT-P0-01/02`：PM 已按 PJM 决策完成修订；Backend、PJM、QA 在 `106a0e2` 基线回归通过，现已 Closed。该关闭仅代表静态契约一致，不代表运行时实现或真实样本验收完成。
 - `QA-CONTRACT-P1-01`：`21870a8` 的 Draft 2020-12 合法 4/4、非法 6/6 实例测试已由 PJM/QA 独立复验通过，现已 Closed。
+- `QA-CONTRACT-P1-02`：QA 对 `ef991ea` 的 4+12 覆盖增强发现防退化门禁缺口；Backend 修订 `f8a6b45` 固定全部 12 个非法场景文件名与语义，并加入逐项删除 12/12、语义替换 12/12 变异门禁。PJM 与 QA 均从精确提交独立复验通过；QA 外部磁盘级删除 12/12、替换/语义漂移 12/12 全部非零退出、0 个漏检。该项现已 Closed，不回退或改变 QA-CONTRACT-P1-01、DEL-025、S0-CONTRACT 的既有关闭状态。
 - 真实接口/IAM/事务及 DATA-001～004、真实 5 店和固定仓库编码仍未到位，运行与真实样本验收保持 Blocked。
 
 ### P0/P1 整改复核（提交 `106a0e2`）
@@ -110,6 +111,7 @@ DEL-016 已纳入 S0-INT-01，后续只验证低保真契约落地与运行时�
 
 - 当前结论：**BUG-S0-OPS-001 Dynamic Pass / Closed；BUG-S0-OPS-002 Local Static Pass / GitHub Online Blocked；Ops P0=0**。
 - `BUG-S0-OPS-001`：**Closed**。QA 已完成 stable gitignored secret 初始化幂等、权限/保留、restart、stop/start、down/up、受控轮换、三类持久化探针及最终安全收尾复验；PJM 复核通过。
+- QA 动态验收审计快照已由精确提交 `4c0c745` 固化；提交仅包含 `S0_INT_01_OPS_ACCEPTANCE_INPUT.md`，定向 diff 与高置信敏感模式检查通过。
 - `BUG-S0-OPS-002`：**Local Static Pass / Online Blocked**。5/5 远程 Action SHA 与官方 major tag 的 direct/peeled commit 精确匹配；GitHub 在线 run、job 结论与失败门禁仍待安全授权。
 - Ops 的 Compose 生命周期门禁已通过；DEL-018 仍因 Docker Hub TLS 外部门禁保持 In Review。CI 整体仍不能 Pass，直至可追溯 GitHub Actions 在线证据到位。
 - 证据：[QA Ops 验收输入](../../../../deliverables/qa/S0_INT_01_OPS_ACCEPTANCE_INPUT.md) / [Compose 交付](../../../../deliverables/ops/S0-OPS-01_DOCKER_COMPOSE.md) / [CI 交付](../../../../deliverables/ops/S0-OPS-02_GITHUB_CI.md)。
@@ -117,10 +119,11 @@ DEL-016 已纳入 S0-INT-01，后续只验证低保真契约落地与运行时�
 ### S0-INT-01 / DEL-020、DEL-021 后端验收输入
 
 - DEL-021 结论：**PASS / 已纳入动态证据**。
-- PJM 实测：`./mvnw clean verify` BUILD SUCCESS；7 tests / 0 failure / 0 error / 0 skipped；Modulith 门禁、Flyway H2 MySQL 模式通过。真实 MySQL 8 集成随后完成：V1 baseline 应用成功，`0.0.1-SNAPSHOT` Jar 使用 configtree 无回显注入启动，`/actuator/health` 返回 HTTP 200 / `UP`（提交 `4e4aacb`）。
+- PJM 实测：提交 `3f2b876` 后，`./mvnw clean verify` BUILD SUCCESS；9 tests / 0 failure / 0 error / 0 skipped；新增静态禁止旧密码占位符及临时 configtree 真实 profile 取值测试。受控真实 MySQL 8 复验确认 Flyway 成功校验 1 个迁移、Schema v1/up-to-date，`0.0.1-SNAPSHOT` Jar 使用 configtree 无回显注入启动，`/actuator/health` 返回 HTTP 200 / `UP`；应用随后完成 Tomcat/Hikari 优雅关闭（动态证据提交 `1f174e4`）。
+- QA 定向终验：严格绑定 `3f2b876 + 1f174e4`，独立复跑 Maven 9/9 tests，并核对 configtree 取值、真实 MySQL 8/Flyway/health 证据及安全停机终态，结论 PASS、无新增 P0/P1。只读终态为 18081 closed、ERP MySQL/Redis/MinIO 均 `Exited(0)`、三命名卷与 0700/0600 非空 stable secrets 保留、chewy MySQL/Redis healthy；停止容器残留的 `Health.Status` 不作为当前服务健康判定，也不改变 exit 0 的安全停机结论。
 - QA 复核：4 个 Surefire XML 汇总为 7/0/0/0；Jar 存在且非空；4/4 JSON Schema 经 `jq empty` 通过；Backend 目录高置信敏感扫描与 `git diff --check` 通过。
 - DEL-020 结论：**STATIC PASS / 3 店连续 7 天 BLOCKED**。框架、Schema、Runbook 和框架内快照保护/去重测试通过，但无批准店铺链接和数据源审批，不能整体 Pass。
-- 受控遗留：真实 MySQL 8 Compose 联调已完成；CI 专用 Secret Scanner 仍为最终门禁证据。
+- 受控遗留：真实 MySQL 8 Compose 与 configtree profile 联调均已完成并经 QA 定向终验；CI 专用 Secret Scanner 仍为线上门禁证据。该结论不替代 DEL-020 的 3 店连续 7 天 Spike。
 - 证据：[QA 后端输入记录](../../../../deliverables/qa/S0_INT_01_BACKEND_ACCEPTANCE_INPUT.md) / [Backend 自测](../../../../deliverables/backend/sprint-0/TEST_REPORT.md) / [Collector Runbook](../../../../deliverables/backend/sprint-0/collector-spike/RUNBOOK.md)。
 
 ### S0-INT-01 / DEL-013、DEL-017 字段与 Excel 结构契约

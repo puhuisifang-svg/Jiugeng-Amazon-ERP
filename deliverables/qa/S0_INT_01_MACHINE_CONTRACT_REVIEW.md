@@ -5,6 +5,10 @@
 > DEL-025 v1.1.1 的精确提交 `c364a37` 数量条件 Schema 终验见 [S0_CONTRACT_DEL025_V1_1_1_INCREMENTAL_REVIEW.md](S0_CONTRACT_DEL025_V1_1_1_INCREMENTAL_REVIEW.md)：静态 Pass，P0=0 / P1=0；IMP-010/014～018 继续 Blocked。
 >
 > DEL-025 v1.1.2 的精确提交 `6a0989a` OPENING 语义终验见 [S0_CONTRACT_DEL025_V1_1_2_INCREMENTAL_REVIEW.md](S0_CONTRACT_DEL025_V1_1_2_INCREMENTAL_REVIEW.md)：静态 Pass，P0=0 / P1=0；运行门禁不变。
+>
+> `ef991ea` 的当前 4+12 实例语义无回归，仅作为已关闭 QA-CONTRACT-P1-01 的补充增强证据。QA 独立复验发现新的 Backend 测试完整性缺陷 QA-CONTRACT-P1-02，详见 [QA_CONTRACT_P1_02_EF991EA_REVIEW.md](QA_CONTRACT_P1_02_EF991EA_REVIEW.md)：两个 blocking 冲突夹具可被等量非法夹具替换后保持绿灯。原 QA-CONTRACT-P1-01 与 S0-CONTRACT 保持 Closed，DEL-025 保持 Completed。DEL-031 可作为 `ef991ea` 相对 `6a0989a` 无回归的补充历史证据，但不是 P1-02 关闭依据。
+>
+> QA-CONTRACT-P1-02 修复提交 `f8a6b45` 的定向复验见 [QA_CONTRACT_P1_02_F8A6B45_RETEST.md](QA_CONTRACT_P1_02_F8A6B45_RETEST.md)：12/12 删除及 12/12 替换/语义漂移变异全部被门禁检测，Retest Pass / Closed；动态门禁不变。
 
 | 字段 | 内容 |
 | --- | --- |
@@ -16,7 +20,8 @@
 | 基线 | PM 修订 `106a0e2`；Backend 机器契约 `4ebd2be`；实例测试修订 `21870a8`；DEL-017 v1.2 |
 | 范围 | OpenAPI、状态机、提交语义、依赖 DAG、capability、契约测试 |
 | 结论 | PASS（静态机器契约）；运行实现与真实样本继续 Blocked |
-| 动态状态 | Runtime API / IAM / 真实样本 Blocked |
+| 当前静态待办 | **无**；QA-CONTRACT-P1-02 已 Closed，其余静态契约缺陷保持 Closed，DEL-025 保持 Completed |
+| 动态状态 | IMP-010/014～018、Runtime API / DB / IAM / Worker / 真实样本继续 Blocked |
 | 日期 | 2026-09-12 |
 
 ## 0. 环境基线快照
@@ -40,8 +45,8 @@ $ git log -3 --oneline
 | --- | --- | --- |
 | JSON 语法 | Pass | 5/5 JSON 经 `jq empty` |
 | OpenAPI 3.1 | Pass | Redocly CLI 1.34.5：0 error / 0 warning |
-| Backend 契约测试 | Pass | `importTypes=6 statuses=7 phases=8 operations=10 capabilities=21 errors=24` |
-| ImportIssue 实例测试 | Pass | AJV 8 / Draft 2020-12：合法 4/4 通过，非法 6/6 拒绝；`npm ci && npm test` 可复现 |
+| Backend 契约测试 | Pass | `importTypes=6 statuses=7 phases=8 operations=11 capabilities=21 errors=25` |
+| ImportIssue 实例测试 | Retest Pass | `f8a6b45` 合法 4/4、非法 12/12；required 12/12、删除变异 12/12、替换/语义漂移 12/12；QA 外部变异 24/24 被检测 |
 | 本地 `$ref` | Pass | 无外部引用，测试脚本递归解析全部 `$ref` |
 | P0 修订 | Pass（静态） | 前五类才允许 Upsert；期初为一次性命令；零期初生成唯一 `quantity=0` OPENING；其他流水 `>0` |
 | DEL-017 v1.2 工作簿 | Pass | 6/6 `_meta`、17 个 DataValidation、零期初正例、Listing 四类负例 4/4 |
@@ -66,7 +71,7 @@ npx --yes @redocly/cli@1.34.5 lint deliverables/backend/sprint-0/import-contract
 | --- | --- | --- |
 | FE-CONTRACT-01 文件/版本/限制 | `openapi.json` 上传 schema、`LimitSnapshot` | Pass |
 | FE-CONTRACT-02 状态/取消/expiry | `import-batch-state-machine.json`、OpenAPI batch/commit/cancel | Pass |
-| FE-CONTRACT-03 Issue DTO | `openapi.json#/components/schemas/ImportIssue` | Pass；scope 条件与 severity/blocking 均有 Draft 2020-12 实例级回归 |
+| FE-CONTRACT-03 Issue DTO | `openapi.json#/components/schemas/ImportIssue` | Retest Pass；当前 4+12 实例与 severity/blocking 防退化门禁完整，QA-CONTRACT-P1-02 已 Closed |
 | FE-CONTRACT-04 Preview/diff/impact | Preview/summary/impact/page schemas | Pass（静态形状） |
 | FE-CONTRACT-05 原子/幂等/重试 | `import-commit-semantics.json`、commit API、错误目录 | Pass（静态语义） |
 | FE-CONTRACT-06 DAG | `import-dependency-dag.json` | Pass |
@@ -104,6 +109,14 @@ DEL-017 要求：批次级 issue 的 `sheet` 可空；SHEET/ROW/FIELD 级必须�
 
 结论：**Pass；QA-CONTRACT-P1-01 已由 PJM 关闭。**
 
+### QA-CONTRACT-P1-02：`ef991ea` 防退化完整性
+
+QA 同哈希复验确认当前 4 个合法实例全部接受、12 个非法实例全部拒绝，但 `requiredLocatorCoverage` 只固定 10 个 locator 文件，未固定 ERROR/WARNING blocking 冲突夹具。隔离负向变异移除两个 blocking 夹具并用其他非法夹具补足总数后，测试仍为绿色。
+
+因此 QA-CONTRACT-P1-02 在 `ef991ea` 时点作为独立测试完整性 P1 建立。它不回退已关闭的原始 Schema 缺陷或 S0-CONTRACT，DEL-025 继续 Completed。DEL-031 仅保留为 `ef991ea` 相对 `6a0989a` 无回归的补充历史证据，不作为 P1-02 关闭依据。
+
+修复提交 `f8a6b45` 已固定全部 12 个目标文件名及语义谓词。QA 从该 Git object 导出隔离快照，确认当前实例、跨文件 validator、InventoryTransaction 与 Redocly 全部通过，并额外执行磁盘级删除 12/12、相邻场景替换/语义漂移 12/12，全部被门禁检测，0 个漏检。结论：**Retest Pass，QA-CONTRACT-P1-02 已 Closed。**
+
 ## 4. 静态回归项与保留门禁
 
 - `BE-CONTRACT-P0-01/02`：在 `106a0e2` 的 DEL-013、DEL-017 v1.2、产品模型受控澄清中已对齐，Backend/PJM/QA 回归通过，PJM 已标记 Closed；该关闭不替代运行时回归。
@@ -122,7 +135,7 @@ DEL-017 要求：批次级 issue 的 `sheet` 可空；SHEET/ROW/FIELD 级必须�
 | IMP-010 | 零期初成功并生成唯一 `quantity=0` OPENING；非 OPENING 零数量拒绝 | Blocked：待运行实现 |
 | IMP-017 | OPENING 禁止更新/删除；纠错仅追加正数量调整/冲销且保留审计链 | Blocked：待运行实现 |
 | IMP-018 | 余额与流水重算一致；首/中/末行提交故障使整批余额、流水、派生记录与审计全回滚 | Blocked：待运行实现 |
-| IMP-DAG/IMP-011/012 | 两根依赖链、Listing 四类负例、`display_order>=1` | Static Pass；动态服务端校验待实现 |
+| IMP-DAG/IMP-011/012 | 两根依赖链、Listing 四类负例；`display_order` 空值、null、0、负数、非整数、越界及同 SKU 重复顺序 | Static Pass；动态服务端校验待实现 |
 
 DEL-013/017 的静态结构与机器契约 Pass；运行行为与真实样本仍未 Pass，不得用静态结果替代动态验收。
 

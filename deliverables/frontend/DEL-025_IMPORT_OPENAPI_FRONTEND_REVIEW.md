@@ -4,10 +4,12 @@
 | --- | --- |
 | 交付物 ID | DEL-026 |
 | 复核人 | Frontend |
-| 输入 | DEL-025 `import-contract/`、DEL-017 v1.2、权限矩阵 v1.1 |
+| 输入 | DEL-025 修订前 10-operation 工作树快照（早于 `4ebd2be`）、DEL-017 v1.2、权限矩阵 v1.1 |
 | 日期 | 2026-09-12 |
 | 状态 | Completed（PJM 核验通过；评审结论为 FAIL） |
 | 总结论 | **FAIL（FE-CONTRACT 4 PASS / 3 FAIL；P0=0、P1=3）** |
+
+> **历史快照声明：** 本报告的 FAIL 仅适用于修订前 10-operation 快照，用于保留问题发现与关闭依据，不代表 DEL-025 当前结论。三项 P1 已由 `4ebd2be` 关闭并经 DEL-027 复验；后续 DEL-028～030 分别验证 v1.1～v1.1.2。当前 v1.1.2 结论为 Backend/Frontend/PJM PASS、待 QA，不能用本报告覆盖。
 
 ## 1. 逐项结论
 
@@ -88,8 +90,10 @@ Redocly PASS 与 Backend 自检结果成立；上述 FAIL 是其现有静态检�
 
 **FAIL，P0=0。** DEL-025 已覆盖绝大多数 FE-CONTRACT 产品语义，但仍需关闭 P1-01～03 后，Frontend 才能把 OpenAPI 作为无猜测的 DTO/客户端生成基线。本轮不接入接口、不实现 IAM。
 
+该结论是历史时点判断；`4ebd2be` 及后续提交已满足上述关闭条件。当前冻结基线与复验结论参见 DEL-027～030。
+
 ## 7. PJM 核验
 
 - DEL-026 作为独立评审报告：**PASS / Completed**；其对所审 DEL-025 快照的 3 个 P1 判定成立。
-- 当前共享工作树已出现 Backend 整改候选，但尚无稳定提交号；不得以可变工作树替代关闭证据。
-- DEL-025 继续 In Review，须由 Backend 精确提交修订后再交 Frontend/QA 复验。
+- 后续 `4ebd2be` 已关闭三项 P1；DEL-027 为 7/7 PASS，DEL-028～030 对 `49bef4a`、`c364a37`、`6a0989a` 的增量复验均为 P0=0/P1=0。
+- 本报告继续保留为旧基线历史证据，不覆盖 DEL-025 v1.1.2 当前结论。

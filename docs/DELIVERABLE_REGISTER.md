@@ -36,6 +36,7 @@
 | DEL-032 | 2026-10-15 | PJM/PM/Backend/Frontend/QA | ERP-006 当前 MVP 活跃范围契约 | v1.0 | Approved | PJM | [活跃范围契约](01-product/MVP_ACTIVE_SCOPE_CONTRACT.md) / [机器可读副本](01-product/mvp-active-scope-contract.json) / [实施记录](../deliverables/pjm/ERP-006_MVP_SCOPE_CONTRACT.md) |
 | DEL-033 | 2026-10-15 | Backend/Ops/QA | ERP-007 正式运行与 MySQL 持久化底座 | v1.0 | Completed | PJM | [实施与验收记录](../deliverables/pjm/ERP-007_MYSQL_PERSISTENCE_FOUNDATION.md) |
 | DEL-034 | 2026-10-15 | Backend/Frontend/QA | ERP-008 IAM 认证与权限闭环 | v1.0 | Completed | PJM | [实施与验收记录](../deliverables/pjm/ERP-008_IAM_AUTHENTICATION.md) |
+| DEL-035 | 2026-10-15 | Backend/Frontend/QA | ERP-009 操作审计闭环 | v1.0 | Completed | PJM | [实施与验收记录](../deliverables/pjm/ERP-009_AUDIT_CLOSURE.md) |
 
 ## 登记要求
 

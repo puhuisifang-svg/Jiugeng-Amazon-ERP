@@ -20,11 +20,11 @@ describe('application routes', () => {
     expect(groups).toEqual(new Set(['工作台', '产品管理', '选品管理', '系统管理']))
   })
 
-  it('restricts inventory navigation to authorized roles', () => {
+  it('restricts inventory navigation to the required capability', () => {
     const shell = appRoutes.find((route) => route.path === '/')
     const inventory = shell?.children?.find((route) => route.name === 'inventory-balances')
 
-    expect(inventory?.meta?.roles).toEqual(['ADMIN', 'PRODUCT_MATERIAL'])
+    expect(inventory?.meta?.capabilities).toEqual(['inventory.read'])
   })
 
   it('matches the reviewed UI IA module routes', () => {

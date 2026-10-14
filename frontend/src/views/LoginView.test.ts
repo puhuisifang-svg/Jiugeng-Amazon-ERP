@@ -35,7 +35,7 @@ describe('LoginView', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/auth/login'), expect.objectContaining({ method: 'POST' }))
     expect(router.currentRoute.value.path).toBe('/home')
-    expect(window.localStorage.getItem('jiugeng.mock.session.user')).toContain('SELECTION')
+    expect(window.localStorage.getItem('jiugeng.session.user')).toContain('SELECTION')
   })
 
   it('refuses a login response without the synthetic marker', async () => {
@@ -61,6 +61,6 @@ describe('LoginView', () => {
 
     expect(router.currentRoute.value.path).toBe('/login')
     expect(wrapper.get('[role="alert"]').text()).toContain('mock profile')
-    expect(window.localStorage.getItem('jiugeng.mock.session.token')).toBeNull()
+    expect(window.localStorage.getItem('jiugeng.session.token')).toBeNull()
   })
 })

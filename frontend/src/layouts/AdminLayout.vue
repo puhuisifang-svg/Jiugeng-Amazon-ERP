@@ -14,7 +14,7 @@ const menuGroups = computed(() => {
   const groups = new Map<string, NonNullable<typeof shell>['children']>()
 
   for (const item of shell?.children ?? []) {
-    if (item.meta?.hidden || !session.canAccess(item.meta?.roles)) continue
+    if (item.meta?.hidden || !session.canAccess(item.meta?.capabilities)) continue
     const group = item.meta?.group ?? '其他'
     const entries = groups.get(group) ?? []
     entries.push(item)
@@ -25,7 +25,7 @@ const menuGroups = computed(() => {
 })
 
 async function logout() {
-  session.logout()
+  await session.logout()
   await router.replace('/login')
 }
 </script>
@@ -116,7 +116,7 @@ async function logout() {
           </button>
           <div
             class="account-placeholder"
-            aria-label="当前模拟账号"
+            aria-label="当前账号"
           >
             <span class="status-dot" />
             <span>{{ session.user.value?.displayName }} · {{ session.user.value?.role }}</span>

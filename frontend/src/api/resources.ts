@@ -26,10 +26,26 @@ export interface SelectionCandidateDto {
   source?: 'MANUAL' | 'WATCH'
   sourceStore?: string
   discoveredAt?: string
+  sourceRunId?: string
+  sourceEventId?: string
 }
-export interface WatchEventDto { id: string; storeName: string; asin: string; title?: string; detectedAt: string; status: string }
+export interface WatchEventDto { id: string; storeId?: string; storeName: string; asin: string; title?: string; detectedAt: string; sourceRunId?: string; status: string; candidateId?: string }
+export interface WatchStoreDto {
+  id: string
+  storeName: string
+  sourceUrl: string
+  status: string
+  baselineRunId?: string
+  baselineAsinCount: number
+  lastRunId?: string
+  lastRunStatus?: 'SUCCEEDED' | 'FAILED'
+  lastIntegrityStatus?: 'COMPLETE' | 'INCOMPLETE' | 'FAILED'
+  lastDecision?: 'PROMOTED' | 'REJECTED_KEEP_PREVIOUS'
+  lastReasonCode?: string
+  lastRunAt?: string
+}
 
-export type ResourceDto = ProductDto | MaterialDto | InventoryBalanceDto | SelectionCandidateDto | WatchEventDto
+export type ResourceDto = ProductDto | MaterialDto | InventoryBalanceDto | SelectionCandidateDto | WatchEventDto | WatchStoreDto
 
 export async function loadResource<T extends ResourceDto>(path: string): Promise<SyntheticList<T>> {
   const response = await apiRequest<SyntheticList<T>>(path)

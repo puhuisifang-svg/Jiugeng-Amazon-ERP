@@ -5,7 +5,7 @@ import type { WatchEventDto } from '@/api/resources'
 import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import { session } from '@/state/session'
 
-type Event = WatchEventDto & { candidateId?: string }
+type Event = WatchEventDto
 const items = ref<Event[]>([]); const loading = ref(true); const busyId = ref(''); const error = ref(''); const success = ref('')
 const writable = computed(() => ['ADMIN', 'SELECTION'].includes(session.user.value?.role ?? ''))
 async function load() { loading.value = true; try { items.value = (await domainApi.events()).items } catch { error.value = '上新事件模拟数据加载失败。' } finally { loading.value = false } }
@@ -42,12 +42,12 @@ onMounted(load)
       class="panel table-panel"
     >
       <table class="data-table">
-        <thead><tr><th>店铺</th><th>ASIN</th><th>商品</th><th>发现时间</th><th>状态</th><th>操作</th></tr></thead><tbody>
+        <thead><tr><th>店铺</th><th>ASIN</th><th>商品</th><th>来源运行</th><th>发现时间</th><th>状态</th><th>操作</th></tr></thead><tbody>
           <tr
             v-for="item in items"
             :key="item.id"
           >
-            <td>{{ item.storeName }}</td><td>{{ item.asin }}</td><td>{{ item.title }}</td><td>{{ item.detectedAt }}</td><td>{{ item.status }}</td><td>
+            <td>{{ item.storeName }}</td><td>{{ item.asin }}</td><td>{{ item.title }}</td><td>{{ item.sourceRunId ?? '—' }}</td><td>{{ item.detectedAt }}</td><td>{{ item.status }}</td><td>
               <button
                 v-if="writable"
                 :disabled="busyId === item.id"

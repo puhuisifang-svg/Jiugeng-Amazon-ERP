@@ -156,6 +156,8 @@ onMounted(load)
           标签：{{ item.tags.join('、') }}
         </p><p v-if="item.selectionReason">
           选品理由：{{ item.selectionReason }}
+        </p><p v-if="item.sourceEventId">
+          来源链路：{{ item.sourceStore }} → {{ item.sourceRunId }} → {{ item.sourceEventId }}
         </p>
         <form
           v-if="writable && drafts[item.id]"

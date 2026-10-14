@@ -82,4 +82,19 @@ describe('domainApi synthetic write safety', () => {
       body: JSON.stringify({ category: 'Home', price: 19.9, rating: 4.5, reviewCount: 120, owner: 'Owner', tags: ['tag'], selectionReason: 'Reason' }),
     }))
   })
+
+  it('runs a synthetic watch snapshot with an explicit safety mode', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ item: { id: 'store-1', storeName: 'Store', sourceUrl: 'https://example.test', status: 'ACTIVE', baselineAsinCount: 0 }, events: [], baselineChanged: false, mockData: true, source: 'SYNTHETIC' }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await domainApi.runWatchStore('store-1', 'INCOMPLETE')
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/watch/stores/store-1/runs'), expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ mode: 'INCOMPLETE' }),
+    }))
+  })
 })

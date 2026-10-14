@@ -1,11 +1,12 @@
 import { apiRequest, assertSyntheticEnvelope } from './client'
-import type { InventoryBalanceDto, MaterialDto, ProductDto, SelectionCandidateDto, SyntheticList, WatchEventDto } from './resources'
+import type { InventoryBalanceDto, MaterialDto, ProductDto, SelectionCandidateDto, SyntheticList, WatchEventDto, WatchStoreDto } from './resources'
 
 export interface SkuDto { skuCode: string }
 export interface ProductDetailDto extends ProductDto { skus: SkuDto[] }
 export interface LedgerEntryDto { id: string; requestId: string; materialCode: string; type: InventoryTransactionType; quantity: number; reason: string; occurredAt: string }
 export type InventoryTransactionType = 'OPENING' | 'INBOUND' | 'OUTBOUND' | 'ADJUSTMENT'
 export type CandidateStatus = 'NEW' | 'REVIEWING' | 'APPROVED' | 'REJECTED'
+export type WatchRunMode = 'COMPLETE' | 'INCOMPLETE' | 'FAILED'
 
 interface SyntheticWrite<T> { mockData: boolean; source: 'SYNTHETIC'; item: T; replayed?: boolean }
 
@@ -41,4 +42,7 @@ export const domainApi = {
   events: () => syntheticList<WatchEventDto & { candidateId?: string }>('/watch/events'),
   confirmEvent: async (id: string) =>
     assertSynthetic(await apiRequest<SyntheticWrite<WatchEventDto & { candidateId?: string }> & { candidate: SelectionCandidateDto }>(`/watch/events/${id}/confirm`, { method: 'POST', body: '{}' })),
+  watchStores: () => syntheticList<WatchStoreDto>('/watch/stores'),
+  runWatchStore: async (id: string, mode: WatchRunMode) =>
+    assertSynthetic(await apiRequest<{ item: WatchStoreDto; events: WatchEventDto[]; baselineChanged: boolean; mockData: boolean; source: 'SYNTHETIC' }>(`/watch/stores/${id}/runs`, { method: 'POST', body: JSON.stringify({ mode }) })),
 }

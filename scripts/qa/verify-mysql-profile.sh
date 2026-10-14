@@ -138,6 +138,8 @@ query_scalar "INSERT INTO product_variant (id, product_id, sku_code, sku_code_no
 query_scalar "INSERT INTO variant_attribute (variant_id, attribute_code, attribute_code_normalized, attribute_value, display_order) VALUES ('00000000-0000-0000-0000-000000000011', 'color', 'COLOR', 'Black', 0)" >/dev/null
 query_scalar "INSERT INTO auxiliary_material (id, material_code, material_code_normalized, name, material_type, specification, unit, status, created_by, updated_by) VALUES ('00000000-0000-0000-0000-000000000012', 'ERP-011-PROBE', 'ERP-011-PROBE', '辅料持久化探针', '包装', '标准', 'PCS', 'ACTIVE', 'system', 'system')" >/dev/null
 query_scalar "INSERT INTO product_auxiliary_material (id, product_id, variant_id, auxiliary_material_id, standard_quantity, unit, loss_rate, remark, enabled, created_by, updated_by) VALUES ('00000000-0000-0000-0000-000000000013', '00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000012', 2.0000, 'PCS', 0.050000, 'ERP-012-PROBE', TRUE, 'system', 'system')" >/dev/null
+query_scalar "INSERT INTO inventory_balance (warehouse_id, auxiliary_material_id, quantity, safety_stock, unit) VALUES ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000012', 12.0000, 5.0000, 'PCS')" >/dev/null
+query_scalar "INSERT INTO inventory_transaction (id, request_id, payload_hash, warehouse_id, auxiliary_material_id, transaction_type, quantity, signed_quantity, unit, reason, balance_after, actor_user_id, actor_login_name) VALUES ('00000000-0000-0000-0000-000000000014', 'ERP-013-PROBE', 'd08d096cafc01e9f0870fb2b2c083a74149fc10efcb2075fdc202ebf2e2ea8ca', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000012', 'INBOUND', 12.0000, 12.0000, 'PCS', 'ERP-013 restart probe', 12.0000, 'system', 'system')" >/dev/null
 
 stop_backend
 docker restart "$mysql_container" >/dev/null
@@ -152,6 +154,10 @@ material_probe_count=$(query_scalar "SELECT COUNT(*) FROM auxiliary_material WHE
 [ "$material_probe_count" = "1" ]
 relation_probe_count=$(query_scalar "SELECT COUNT(*) FROM product_auxiliary_material WHERE variant_id='00000000-0000-0000-0000-000000000011' AND auxiliary_material_id='00000000-0000-0000-0000-000000000012' AND standard_quantity=2.0000 AND enabled=TRUE")
 [ "$relation_probe_count" = "1" ]
+inventory_probe_count=$(query_scalar "SELECT COUNT(*) FROM inventory_balance b JOIN inventory_transaction t ON t.warehouse_id=b.warehouse_id AND t.auxiliary_material_id=b.auxiliary_material_id WHERE b.auxiliary_material_id='00000000-0000-0000-0000-000000000012' AND b.quantity=12.0000 AND b.safety_stock=5.0000 AND t.request_id='ERP-013-PROBE' AND t.signed_quantity=12.0000")
+[ "$inventory_probe_count" = "1" ]
+inventory_recomputed=$(query_scalar "SELECT CAST(SUM(signed_quantity) AS DECIMAL(18,4)) FROM inventory_transaction WHERE auxiliary_material_id='00000000-0000-0000-0000-000000000012'")
+[ "$inventory_recomputed" = "12.0000" ]
 
 ERP_BACKEND_URL="http://127.0.0.1:$backend_port" "$repo_root/scripts/dev/smoke-local-mysql-backend.sh"
 

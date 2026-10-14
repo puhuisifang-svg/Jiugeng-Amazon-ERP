@@ -150,6 +150,12 @@ query_scalar "INSERT INTO selection_candidate (id, asin, asin_normalized, title,
 query_scalar "INSERT INTO selection_candidate_tag (candidate_id, tag, tag_normalized, display_order) VALUES ('00000000-0000-0000-0000-000000000020', '持久化', '持久化', 0)" >/dev/null
 query_scalar "INSERT INTO selection_candidate_note (id, candidate_id, content, author_id, author_name, author_role) VALUES ('00000000-0000-0000-0000-000000000021', '00000000-0000-0000-0000-000000000020', 'ERP-018 重启评审记录', 'system', 'system', 'ADMIN')" >/dev/null
 query_scalar "INSERT INTO selection_candidate_evidence (id, candidate_id, name, url, added_by_id, added_by_name, added_by_role) VALUES ('00000000-0000-0000-0000-000000000022', '00000000-0000-0000-0000-000000000020', '重启证据', 'https://evidence.example/erp-018', 'system', 'system', 'ADMIN')" >/dev/null
+query_scalar "INSERT INTO watch_store (id, store_key, store_key_normalized, store_name, source_url, created_by) VALUES ('00000000-0000-0000-0000-000000000023', 'ERP-019-STORE', 'ERP-019-STORE', 'ERP-019 持久化店铺', 'https://example.com/store', 'system')" >/dev/null
+query_scalar "INSERT INTO watch_run (id, store_id, request_id, payload_hash, adapter_name, adapter_version, run_status, item_count, unique_asin_count, page_count, pages_complete, content_sha256, integrity_status, decision, reason_code, completed_at, created_by) VALUES ('00000000-0000-0000-0000-000000000024', '00000000-0000-0000-0000-000000000023', 'ERP-019-PROBE', 'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd', 'manual-snapshot', '1.0', 'SUCCEEDED', 1, 1, 1, TRUE, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'COMPLETE', 'PROMOTED', 'FIRST_COMPLETE_SNAPSHOT', CURRENT_TIMESTAMP, 'system')" >/dev/null
+query_scalar "UPDATE watch_store SET baseline_run_id='00000000-0000-0000-0000-000000000024' WHERE id='00000000-0000-0000-0000-000000000023'" >/dev/null
+query_scalar "INSERT INTO watch_snapshot_asin (run_id, asin) VALUES ('00000000-0000-0000-0000-000000000024', 'B0ERP019001')" >/dev/null
+query_scalar "INSERT INTO watch_baseline_asin (store_id, asin, source_run_id) VALUES ('00000000-0000-0000-0000-000000000023', 'B0ERP019001', '00000000-0000-0000-0000-000000000024')" >/dev/null
+query_scalar "INSERT INTO watch_new_product_event (id, event_key, store_id, detected_run_id, asin, title, status, candidate_id, first_detected_at, confirmed_at, confirmed_by) VALUES ('00000000-0000-0000-0000-000000000025', 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', '00000000-0000-0000-0000-000000000023', '00000000-0000-0000-0000-000000000024', 'B0ERP018001', 'ERP-019 事件', 'CONFIRMED', '00000000-0000-0000-0000-000000000020', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'system')" >/dev/null
 
 stop_backend
 docker restart "$mysql_container" >/dev/null
@@ -174,6 +180,8 @@ import_probe_count=$(query_scalar "SELECT COUNT(*) FROM import_batch b JOIN impo
 [ "$import_probe_count" = "1" ]
 selection_probe_count=$(query_scalar "SELECT COUNT(*) FROM selection_candidate c JOIN selection_candidate_tag t ON t.candidate_id=c.id JOIN selection_candidate_note n ON n.candidate_id=c.id JOIN selection_candidate_evidence e ON e.candidate_id=c.id WHERE c.asin_normalized='B0ERP018001' AND c.status='REVIEWING' AND t.tag='持久化' AND n.content='ERP-018 重启评审记录' AND e.url='https://evidence.example/erp-018'")
 [ "$selection_probe_count" = "1" ]
+watch_probe_count=$(query_scalar "SELECT COUNT(*) FROM watch_store s JOIN watch_run r ON r.id=s.baseline_run_id JOIN watch_baseline_asin b ON b.store_id=s.id JOIN watch_new_product_event e ON e.store_id=s.id WHERE s.store_key='ERP-019-STORE' AND r.request_id='ERP-019-PROBE' AND b.asin='B0ERP019001' AND e.candidate_id='00000000-0000-0000-0000-000000000020'")
+[ "$watch_probe_count" = "1" ]
 
 ERP_BACKEND_URL="http://127.0.0.1:$backend_port" "$repo_root/scripts/dev/smoke-local-mysql-backend.sh"
 

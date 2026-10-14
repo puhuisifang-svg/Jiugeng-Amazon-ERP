@@ -17,8 +17,8 @@ export const appRoutes: RouteRecordRaw[] = [
     children: [
       { path: 'home', name: 'home', component: () => import('@/views/DashboardView.vue'), meta: { title: '首页', group: '工作台', icon: '⌂' } },
       { path: 'products', name: 'products', component: () => import('@/views/ProductsView.vue'), meta: { title: '产品与 SKU', group: '产品管理', icon: '◆', capabilities: ['products.read'] } },
-      { path: 'products/new', name: 'product-new', component: placeholder, props: { description: '新建 Product 与首个 SKU 流程入口' }, meta: { title: '新建产品', hidden: true, capabilities: ['products.write'] } },
-      { path: 'products/:productId/:section(overview|variants|materials|changes)?', name: 'product-detail', component: placeholder, props: { description: 'Product 详情与业务页签入口' }, meta: { title: '产品详情', hidden: true, capabilities: ['products.read'] } },
+      { path: 'products/new', name: 'product-new', component: () => import('@/views/ProductNewView.vue'), meta: { title: '新建产品', hidden: true, capabilities: ['products.write'] } },
+      { path: 'products/:productId/:section(overview|variants|materials|changes)?', name: 'product-detail', component: () => import('@/views/ProductDetailView.vue'), meta: { title: '产品详情', hidden: true, capabilities: ['products.read'] } },
       { path: 'materials', name: 'materials', component: () => import('@/views/MaterialsView.vue'), meta: { title: '辅料主档', group: '产品管理', icon: '◇', capabilities: ['materials.read'] } },
       { path: 'inventory', redirect: '/inventory/balances', meta: { title: '辅料库存', hidden: true, capabilities: ['inventory.read'] } },
       { path: 'inventory/balances', name: 'inventory-balances', component: () => import('@/views/InventoryView.vue'), meta: { title: '辅料库存', group: '产品管理', icon: '▦', capabilities: ['inventory.read'] } },

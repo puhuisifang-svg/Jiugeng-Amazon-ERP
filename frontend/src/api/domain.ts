@@ -1,8 +1,49 @@
 import { apiRequest, assertSyntheticEnvelope } from './client'
 import type { CandidateDetailDto, InventoryBalanceDto, MaterialDto, ProductDto, SelectionCandidateDto, SyntheticList, WatchEventDto, WatchStoreDto } from './resources'
+import { runtimeConfig } from '@/config/runtime'
 
-export interface SkuDto { skuCode: string }
-export interface ProductDetailDto extends ProductDto { skus: SkuDto[] }
+export type ProductStatus = 'DRAFT' | 'ACTIVE' | 'DISABLED'
+export type VariantStatus = 'ACTIVE' | 'DISABLED'
+export interface VariantAttributeDto { attributeCode: string; attributeValue: string; displayOrder: number }
+export interface ProductVariantDto {
+  id?: string
+  skuCode: string
+  variantName: string
+  barcode?: string
+  material?: string
+  specification?: string
+  itemDimensions?: string
+  packageDimensions?: string
+  packageWeight?: number
+  status: VariantStatus
+  attributes: VariantAttributeDto[]
+}
+export interface ProductDetailDto {
+  id: string
+  productCode: string
+  nameZh: string
+  nameEn?: string
+  brand?: string
+  internalCategory?: string
+  productType?: string
+  description?: string
+  status: ProductStatus
+  variants: ProductVariantDto[]
+  skuCount: number
+  createdAt?: string
+  updatedAt?: string
+}
+export interface ProductInput {
+  productCode: string
+  nameZh: string
+  nameEn?: string
+  brand?: string
+  internalCategory?: string
+  productType?: string
+  description?: string
+  status: Exclude<ProductStatus, 'DISABLED'>
+  variants: ProductVariantDto[]
+}
 export interface LedgerEntryDto { id: string; requestId: string; materialCode: string; type: InventoryTransactionType; quantity: number; reason: string; occurredAt: string }
 export type InventoryTransactionType = 'OPENING' | 'INBOUND' | 'OUTBOUND' | 'ADJUSTMENT'
 export type CandidateStatus = 'NEW' | 'REVIEWING' | 'APPROVED' | 'REJECTED'
@@ -21,10 +62,79 @@ async function syntheticList<T>(path: string): Promise<SyntheticList<T>> {
   return response
 }
 
+interface MockProduct extends ProductDto { name: string; skus: Array<{ skuCode: string; status?: string }> }
+
+function adaptMockProduct(product: MockProduct): ProductDetailDto {
+  return {
+    id: product.id,
+    productCode: product.productCode,
+    nameZh: product.name,
+    status: product.status as ProductStatus,
+    skuCount: product.skuCount ?? product.skus.length,
+    variants: product.skus.map((sku, index) => ({
+      skuCode: sku.skuCode,
+      variantName: sku.skuCode,
+      status: (sku.status ?? 'ACTIVE') as VariantStatus,
+      attributes: [{ attributeCode: 'mock_sequence', attributeValue: String(index + 1), displayOrder: 0 }],
+    })),
+  }
+}
+
+async function products(): Promise<{ items: ProductDetailDto[]; mockData: boolean }> {
+  if (runtimeConfig.authMode === 'mock') {
+    const response = await syntheticList<MockProduct>('/products')
+    return { items: response.items.map(adaptMockProduct), mockData: true }
+  }
+  return { items: await apiRequest<ProductDetailDto[]>('/v1/products'), mockData: false }
+}
+
+async function product(id: string): Promise<ProductDetailDto> {
+  if (runtimeConfig.authMode === 'mock') {
+    const response = await syntheticList<MockProduct>('/products')
+    const item = response.items.find(value => value.id === id)
+    if (!item) throw new Error('Product not found')
+    return adaptMockProduct(item)
+  }
+  return apiRequest<ProductDetailDto>(`/v1/products/${id}`)
+}
+
+type LegacyProductInput = { productCode: string; name: string; skuCodes: string[] }
+
+async function createProduct(input: ProductInput | LegacyProductInput): Promise<{ item: ProductDetailDto; mockData: boolean }> {
+  const normalized: ProductInput = 'name' in input ? {
+    productCode: input.productCode,
+    nameZh: input.name,
+    status: 'ACTIVE',
+    variants: input.skuCodes.map((skuCode, index) => ({ skuCode, variantName: skuCode, status: 'ACTIVE',
+      attributes: [{ attributeCode: 'mock_sequence', attributeValue: String(index + 1), displayOrder: 0 }] })),
+  } : input
+  if (runtimeConfig.authMode === 'mock') {
+    const response = assertSynthetic(await apiRequest<SyntheticWrite<MockProduct>>('/products', {
+      method: 'POST', body: JSON.stringify({
+        productCode: normalized.productCode,
+        name: normalized.nameZh,
+        skuCodes: normalized.variants.map(variant => variant.skuCode),
+      }),
+    }))
+    return { item: adaptMockProduct(response.item), mockData: true }
+  }
+  return { item: await apiRequest<ProductDetailDto>('/v1/products', {
+    method: 'POST', body: JSON.stringify(normalized),
+  }), mockData: false }
+}
+
 export const domainApi = {
-  products: () => syntheticList<ProductDetailDto>('/products'),
-  createProduct: async (input: { productCode: string; name: string; skuCodes: string[] }) =>
-    assertSynthetic(await apiRequest<SyntheticWrite<ProductDetailDto>>('/products', { method: 'POST', body: JSON.stringify(input) })),
+  products,
+  product,
+  createProduct,
+  updateProduct: async (id: string, input: ProductInput) => {
+    if (runtimeConfig.authMode === 'mock') throw new Error('Mock products cannot be edited')
+    return apiRequest<ProductDetailDto>(`/v1/products/${id}`, { method: 'PUT', body: JSON.stringify(input) })
+  },
+  disableProduct: async (id: string) => {
+    if (runtimeConfig.authMode === 'mock') throw new Error('Mock products cannot be disabled')
+    return apiRequest<ProductDetailDto>(`/v1/products/${id}/disable`, { method: 'POST' })
+  },
   materials: () => syntheticList<MaterialDto>('/materials'),
   createMaterial: async (input: { materialCode: string; name: string; unit: string }) =>
     assertSynthetic(await apiRequest<SyntheticWrite<MaterialDto>>('/materials', { method: 'POST', body: JSON.stringify(input) })),

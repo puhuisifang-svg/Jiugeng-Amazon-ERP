@@ -124,6 +124,22 @@ a { color: inherit; }
 .placeholder-form span { height: 42px; background: #f1f3f7; border: 1px solid var(--line); border-radius: 8px; }
 .placeholder-form .placeholder-form__button { background: #ffd8bb; border-color: #ffc79d; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.page-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.page-actions p { margin: 0; color: var(--muted); }
+.primary-link, .form-footer button, .secondary-action, .table-actions button { display: inline-flex; min-height: 40px; align-items: center; justify-content: center; padding: 0 16px; color: white; background: var(--accent); border: 0; border-radius: 7px; font-weight: 700; text-decoration: none; cursor: pointer; }
+.product-card { color: inherit; text-decoration: none; }
+.product-card:hover { border-color: #ffc79d; }
+.variant-editor h3 { margin: 20px 0 10px; }
+.nested-form { padding: 14px 0; box-shadow: none; border: 0; }
+.attribute-row { display: grid; grid-template-columns: 1fr 1fr 120px auto; gap: 10px; margin-bottom: 10px; }
+.attribute-row input { min-height: 40px; padding: 0 11px; border: 1px solid var(--line); border-radius: 7px; }
+.attribute-row button, .secondary-action { min-height: 40px; padding: 0 14px; border: 0; border-radius: 7px; cursor: pointer; }
+.secondary-action, .attribute-row .secondary-button { color: var(--muted); background: #eef0f4; }
+.form-footer { display: flex; justify-content: space-between; gap: 12px; }
+.danger-link { color: #9f2f2f; background: transparent; border: 0; cursor: pointer; }
+.danger-button { background: #b63b3b !important; }
+.attribute-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.attribute-chips span { padding: 6px 10px; background: #f1f3f7; border-radius: 999px; font-size: 13px; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }

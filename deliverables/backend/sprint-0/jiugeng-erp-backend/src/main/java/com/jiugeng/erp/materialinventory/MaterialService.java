@@ -82,7 +82,7 @@ class MaterialService {
         String imageUrl = optional(input.imageUrl(), 500);
         if (imageUrl != null) validateHttpsUrl(imageUrl);
         return new ValidatedMaterial(code, normalized, required(input.name(), "辅料名称", 200),
-                required(input.materialType(), "辅料类型", 100), optional(input.specification(), 300),
+                required(input.materialType(), "辅料类型", 100), optional(input.specification(), 500),
                 required(input.unit(), "单位", 32), imageUrl, optional(input.remark(), 1000));
     }
 

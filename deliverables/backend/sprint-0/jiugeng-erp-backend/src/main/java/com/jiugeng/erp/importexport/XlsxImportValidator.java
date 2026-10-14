@@ -2,6 +2,7 @@ package com.jiugeng.erp.importexport;
 
 import static com.jiugeng.erp.importexport.ImportTypes.*;
 
+import com.jiugeng.erp.materialinventory.MaterialImportGateway;
 import com.jiugeng.erp.product.ProductImportGateway;
 
 import java.io.ByteArrayInputStream;
@@ -28,8 +29,10 @@ class XlsxImportValidator {
     private static final int MAX_ENTRIES = 2048;
     private final ImportTemplateRegistry templates;
     private final ProductImportGateway productImports;
-    XlsxImportValidator(ImportTemplateRegistry templates, ProductImportGateway productImports) {
-        this.templates = templates; this.productImports = productImports;
+    private final MaterialImportGateway materialImports;
+    XlsxImportValidator(ImportTemplateRegistry templates, ProductImportGateway productImports,
+            MaterialImportGateway materialImports) {
+        this.templates = templates; this.productImports = productImports; this.materialImports = materialImports;
     }
 
     ValidationResult validate(ImportType type, String version, byte[] bytes) {
@@ -66,6 +69,15 @@ class XlsxImportValidator {
                         .map(row -> new ProductImportGateway.ImportRow(row.sheet(), row.row(), row.data())).toList();
                 ProductImportGateway.Validation semantic = type == ImportType.PRODUCTS
                         ? productImports.validateProducts(rows) : productImports.validateVariants(rows);
+                semantic.errors().forEach(error -> issues.add(new IssueInput("ERROR", true, "FIELD", error.sheet(),
+                        error.rowNumber(), error.field(), error.code(), error.reason(), error.rawValue(), "修正后重新上传")));
+            }
+            if ((type == ImportType.AUXILIARY_MATERIALS || type == ImportType.PRODUCT_AUXILIARY_MATERIALS)
+                    && issues.stream().noneMatch(IssueInput::blocking)) {
+                List<MaterialImportGateway.ImportRow> rows = previews.stream()
+                        .map(row -> new MaterialImportGateway.ImportRow(row.sheet(), row.row(), row.data())).toList();
+                MaterialImportGateway.Validation semantic = type == ImportType.AUXILIARY_MATERIALS
+                        ? materialImports.validateMaterials(rows) : materialImports.validateRelations(rows);
                 semantic.errors().forEach(error -> issues.add(new IssueInput("ERROR", true, "FIELD", error.sheet(),
                         error.rowNumber(), error.field(), error.code(), error.reason(), error.rawValue(), "修正后重新上传")));
             }

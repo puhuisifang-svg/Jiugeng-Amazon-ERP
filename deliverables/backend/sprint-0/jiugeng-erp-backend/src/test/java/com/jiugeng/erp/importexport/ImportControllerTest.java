@@ -40,7 +40,7 @@ class ImportControllerTest {
         jdbc.update("DELETE FROM import_operation_idempotency"); jdbc.update("DELETE FROM import_preview_row");
         jdbc.update("DELETE FROM import_issue"); jdbc.update("DELETE FROM import_batch");
         jdbc.update("DELETE FROM product_auxiliary_material"); jdbc.update("DELETE FROM variant_attribute");
-        jdbc.update("DELETE FROM product_variant"); jdbc.update("DELETE FROM product");
+        jdbc.update("DELETE FROM product_variant"); jdbc.update("DELETE FROM product"); jdbc.update("DELETE FROM auxiliary_material");
         jdbc.update("DELETE FROM iam_password_reset_challenge"); jdbc.update("DELETE FROM audit_event");
         jdbc.update("DELETE FROM iam_session"); jdbc.update("DELETE FROM iam_user");
     }
@@ -123,6 +123,95 @@ class ImportControllerTest {
             commit(token,batch,"bulk-products-commit").andExpect(status().isAccepted())
                     .andExpect(jsonPath("$.status").value("SUCCEEDED"));
             assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product WHERE product_code_normalized LIKE 'BULK-P-%'",Integer.class)).isEqualTo(1000);
+        });
+    }
+
+    @Test void materialAndRelationHandlersUpsertDependenciesAtomicallyAndReportCounts() throws Exception {
+        String token=user("material-import-owner","PRODUCT_MATERIAL");
+        seedProductAndVariants("MAT-P001", "MAT-SKU001", "MAT-SKU002");
+
+        String materialBatch=mapper.readTree(upload(token,"materials-1","AUXILIARY_MATERIALS",
+                materialRows(new String[][]{{"MAT-IMP001","包装盒","BOX","PCS","ACTIVE"}}),202))
+                .at("/batch/id").asText();
+        commit(token,materialBatch,"materials-commit-1").andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.status").value("SUCCEEDED"));
+        mvc.perform(get("/api/v1/import-batches/{id}/result",materialBatch).header("Authorization",bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.createdRows").value(1));
+        String materialUpdate=mapper.readTree(upload(token,"materials-2","AUXILIARY_MATERIALS",
+                materialRows(new String[][]{{"mat-imp001","加厚包装盒","BOX","PCS","ACTIVE"}}),202))
+                .at("/batch/id").asText();
+        commit(token,materialUpdate,"materials-commit-2").andExpect(status().isAccepted());
+        mvc.perform(get("/api/v1/import-batches/{id}/result",materialUpdate).header("Authorization",bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.updatedRows").value(1));
+        assertThat(jdbc.queryForObject("SELECT material_code FROM auxiliary_material WHERE material_code_normalized='MAT-IMP001'",String.class))
+                .isEqualTo("MAT-IMP001");
+
+        String relationBatch=mapper.readTree(upload(token,"relations-1","PRODUCT_AUXILIARY_MATERIALS",
+                relationRows(new String[][]{{"MAT-SKU001","MAT-IMP001","2.0000","PCS","0.0500","TRUE"},
+                        {"MAT-SKU002","MAT-IMP001","1.0000","PCS","0.0000","FALSE"}}),202))
+                .at("/batch/id").asText();
+        commit(token,relationBatch,"relations-commit-1").andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.status").value("SUCCEEDED"));
+        mvc.perform(get("/api/v1/import-batches/{id}/result",relationBatch).header("Authorization",bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.createdRows").value(2));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product_auxiliary_material",Integer.class)).isEqualTo(2);
+
+        String replay=mapper.readTree(upload(token,"relations-2","PRODUCT_AUXILIARY_MATERIALS",
+                relationRows(new String[][]{{"mat-sku001","mat-imp001","2","PCS","0.05","TRUE"},
+                        {"MAT-SKU002","MAT-IMP001","1","PCS","0","FALSE"}}),202)).at("/batch/id").asText();
+        commit(token,replay,"relations-commit-2").andExpect(status().isAccepted());
+        mvc.perform(get("/api/v1/import-batches/{id}/result",replay).header("Authorization",bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.unchangedRows").value(2));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE action='MATERIAL_IMPORT_CREATE'",Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE action='PRODUCT_MATERIAL_IMPORT_CREATE'",Integer.class)).isEqualTo(2);
+    }
+
+    @Test void relationUploadRejectsMissingDependenciesDuplicatesAndUnitMismatch() throws Exception {
+        String token=user("material-import-owner","PRODUCT_MATERIAL");
+        seedProductAndVariants("DEP-P001", "DEP-SKU001", "DEP-SKU002");
+        jdbc.update("""
+                INSERT INTO auxiliary_material (id,material_code,material_code_normalized,name,material_type,unit,status,created_by,updated_by)
+                VALUES (?,?,?,?,?,'PCS','ACTIVE','system','system')
+                """,UUID.randomUUID().toString(),"DEP-MAT001","DEP-MAT001","依赖辅料","BOX");
+        String batch=mapper.readTree(upload(token,"relations-invalid","PRODUCT_AUXILIARY_MATERIALS",
+                relationRows(new String[][]{{"UNKNOWN-SKU","DEP-MAT001","1","PCS","0","TRUE"},
+                        {"DEP-SKU001","UNKNOWN-MAT","1","PCS","0","TRUE"},
+                        {"DEP-SKU002","DEP-MAT001","1","KG","0","TRUE"},
+                        {"DEP-SKU002","dep-mat001","1","PCS","0","TRUE"}}),202)).at("/batch/id").asText();
+        mvc.perform(get("/api/v1/import-batches/{id}",batch).header("Authorization",bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.commitAllowed").value(false));
+        String issues=mvc.perform(get("/api/v1/import-batches/{id}/issues",batch).header("Authorization",bearer(token)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(mapper.readTree(issues).findValuesAsText("code"))
+                .contains("SKU_REFERENCE_INVALID","MATERIAL_REFERENCE_INVALID","MATERIAL_UNIT_MISMATCH",
+                        "MATERIAL_RELATION_DUPLICATED_IN_FILE");
+    }
+
+    @Test void lateMaterialDisableFailsWholeRelationBatchWithoutPartialWrites() throws Exception {
+        String token=user("material-import-owner","PRODUCT_MATERIAL");
+        seedProductAndVariants("LATE-MAT-P", "LATE-MAT-SKU1", "LATE-MAT-SKU2");
+        String materialBatch=mapper.readTree(upload(token,"late-material","AUXILIARY_MATERIALS",
+                materialRows(new String[][]{{"LATE-MAT","稍后停用","BOX","PCS","ACTIVE"}}),202)).at("/batch/id").asText();
+        commit(token,materialBatch,"late-material-commit").andExpect(status().isAccepted());
+        String relationBatch=mapper.readTree(upload(token,"late-relations","PRODUCT_AUXILIARY_MATERIALS",
+                relationRows(new String[][]{{"LATE-MAT-SKU1","LATE-MAT","1","PCS","0","TRUE"},
+                        {"LATE-MAT-SKU2","LATE-MAT","1","PCS","0","TRUE"}}),202)).at("/batch/id").asText();
+        jdbc.update("UPDATE auxiliary_material SET status='DISABLED' WHERE material_code_normalized='LATE-MAT'");
+        commit(token,relationBatch,"late-relations-commit").andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("IMPORT_DATA_CHANGED"));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product_auxiliary_material",Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT status FROM import_batch WHERE id=?",String.class,relationBatch)).isEqualTo("FAILED");
+    }
+
+    @Test void acceptsAndCommitsOneThousandMaterialRowsWithinGate() {
+        assertTimeout(Duration.ofSeconds(30), () -> {
+            String token=user("bulk-material-owner","PRODUCT_MATERIAL");
+            String[][] rows=new String[1000][];
+            for(int index=0;index<rows.length;index++) rows[index]=new String[]{"BULK-MAT-"+(index+1),"批量辅料 "+(index+1),"BOX","PCS","ACTIVE"};
+            String batch=mapper.readTree(upload(token,"bulk-materials","AUXILIARY_MATERIALS",materialRows(rows),202)).at("/batch/id").asText();
+            commit(token,batch,"bulk-materials-commit").andExpect(status().isAccepted())
+                    .andExpect(jsonPath("$.status").value("SUCCEEDED"));
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM auxiliary_material WHERE material_code_normalized LIKE 'BULK-MAT-%'",Integer.class)).isEqualTo(1000);
         });
     }
 
@@ -221,6 +310,41 @@ class ImportControllerTest {
             for(int index=1;index<=count;index++){var row=sheet.createRow(index);row.createCell(0).setCellValue("BULK-P-"+index);row.createCell(1).setCellValue("批量产品 "+index);row.createCell(7).setCellValue("ACTIVE");}
             workbook.write(output);return output.toByteArray();
         }
+    }
+    private byte[] materialRows(String[][] values) throws Exception {
+        try(var workbook=new XSSFWorkbook(new ByteArrayInputStream(templates.bytes(ImportTypes.ImportType.AUXILIARY_MATERIALS)));
+            var output=new ByteArrayOutputStream()){
+            var sheet=workbook.getSheet("导入模板");
+            for(int index=0;index<values.length;index++){
+                var value=values[index];var row=sheet.createRow(index+1);
+                row.createCell(0).setCellValue(value[0]);row.createCell(1).setCellValue(value[1]);
+                row.createCell(2).setCellValue(value[2]);row.createCell(3).setCellValue("标准规格");
+                row.createCell(4).setCellValue(value[3]);row.createCell(6).setCellValue(value[4]);
+                row.createCell(7).setCellValue("ERP-016 test");
+            }
+            workbook.write(output);return output.toByteArray();
+        }
+    }
+    private byte[] relationRows(String[][] values) throws Exception {
+        try(var workbook=new XSSFWorkbook(new ByteArrayInputStream(templates.bytes(ImportTypes.ImportType.PRODUCT_AUXILIARY_MATERIALS)));
+            var output=new ByteArrayOutputStream()){
+            var sheet=workbook.getSheet("导入模板");
+            for(int index=0;index<values.length;index++){
+                var value=values[index];var row=sheet.createRow(index+1);
+                row.createCell(0).setCellValue(value[0]);row.createCell(1).setCellValue(value[1]);
+                row.createCell(2).setCellValue(value[2]);row.createCell(3).setCellValue(value[3]);
+                row.createCell(4).setCellValue(value[4]);row.createCell(5).setCellValue(value[5]);
+                row.createCell(6).setCellValue("ERP-016 test");
+            }
+            workbook.write(output);return output.toByteArray();
+        }
+    }
+    private void seedProductAndVariants(String productCode,String... skus) {
+        String productId=UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO product (id,product_code,product_code_normalized,name_zh,status,created_by,updated_by) VALUES (?,?,?,'导入依赖产品','ACTIVE','system','system')",
+                productId,productCode,productCode.toUpperCase(java.util.Locale.ROOT));
+        for(String sku:skus) jdbc.update("INSERT INTO product_variant (id,product_id,sku_code,sku_code_normalized,variant_name,status,attribute_signature) VALUES (?,?,?,?,?,'ACTIVE',?)",
+                UUID.randomUUID().toString(),productId,sku,sku.toUpperCase(java.util.Locale.ROOT),sku,"signature-"+sku);
     }
     private org.springframework.test.web.servlet.ResultActions commit(String token,String id,String key)throws Exception{
         String batch=mvc.perform(get("/api/v1/import-batches/{id}",id).header("Authorization",bearer(token))).andReturn().getResponse().getContentAsString();

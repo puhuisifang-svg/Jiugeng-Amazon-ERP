@@ -11,4 +11,8 @@ public interface CollectorAdapter {
     String version();
 
     CollectorResult collect(CollectorRequest request);
+
+    default CollectorResult collectManual(CollectorRequest request, ManualSnapshot snapshot) {
+        throw new UnsupportedOperationException("This collector does not accept manual snapshots");
+    }
 }

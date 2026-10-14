@@ -20,7 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-class SelectionService {
+class SelectionService implements SelectionCandidateGateway {
     private static final Pattern ASIN = Pattern.compile("[A-Z0-9]{10,16}");
     private static final Pattern PATH = Pattern.compile("/(?:DP|GP/PRODUCT)/([A-Z0-9]{10,16})(?:/|$)");
     private final SelectionRepository repository;
@@ -95,6 +95,23 @@ class SelectionService {
         repository.insertEvidence(evidenceId,id,cleanName,cleanUrl,cleanDescription,actor.userId(),actor.displayName(),role);
         audit.record(operation(actor,"CANDIDATE_EVIDENCE_APPEND",id,null,Map.of("evidenceId",evidenceId,"name",cleanName,"url","[REDACTED_HTTPS_URL]"),"追加证据（URL 已脱敏）"));
         return detail(id);
+    }
+
+    @Override @Transactional
+    public Confirmation confirmWatchCandidate(String asin,String title,String storeName,java.time.Instant discoveredAt,
+            String runId,String eventId,AuthenticatedActor actor){
+        String normalized=extractAsin(asin);
+        var existing=repository.findByAsin(normalized);
+        if(existing.isPresent()) return new Confirmation(existing.get().id(),true);
+        String id=UUID.randomUUID().toString();
+        try { repository.insertWatch(id,normalized,required(title,"标题",300),canonical(normalized),
+                required(storeName,"店铺名称",200),discoveredAt,required(runId,"来源运行",100),required(eventId,"来源事件",100),actor.userId()); }
+        catch(DataIntegrityViolationException conflict){
+            return new Confirmation(repository.findByAsin(normalized).orElseThrow(()->conflict("CANDIDATE_ASIN_EXISTS","ASIN 并发确认冲突")).id(),true);
+        }
+        CandidateView created=candidate(id);
+        audit.record(operation(actor,"CANDIDATE_CREATE_FROM_WATCH",id,null,snapshot(created),"确认监控事件生成候选"));
+        return new Confirmation(id,false);
     }
 
     private CandidateView candidate(String id){ return repository.findById(id).orElseThrow(()->new SelectionException(404,"CANDIDATE_NOT_FOUND","候选不存在："+id)); }

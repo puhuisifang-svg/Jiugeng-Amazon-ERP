@@ -23,6 +23,7 @@ class SelectionControllerTest {
     @Autowired MockMvc mvc; @Autowired ObjectMapper json; @Autowired JdbcTemplate jdbc;
 
     @BeforeEach void reset(){
+        jdbc.update("DELETE FROM watch_new_product_event");
         jdbc.update("DELETE FROM selection_candidate_evidence"); jdbc.update("DELETE FROM selection_candidate_note");
         jdbc.update("DELETE FROM selection_candidate_tag"); jdbc.update("DELETE FROM selection_candidate");
         jdbc.update("DELETE FROM iam_password_reset_challenge"); jdbc.update("DELETE FROM audit_event");

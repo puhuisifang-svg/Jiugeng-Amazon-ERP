@@ -41,6 +41,11 @@ class SelectionRepository {
                 .param("asin", normalized).query(Integer.class).single() > 0;
     }
 
+    Optional<CandidateView> findByAsin(String normalized) {
+        return jdbc.sql("SELECT * FROM selection_candidate WHERE asin_normalized=:asin").param("asin", normalized)
+                .query(this::mapCandidate).optional();
+    }
+
     void insert(String id, String asin, String title, int score, String url, String actorId) {
         jdbc.sql("""
                 INSERT INTO selection_candidate (id, asin, asin_normalized, title, status, score, source_url,
@@ -48,6 +53,16 @@ class SelectionRepository {
                 VALUES (:id,:asin,:asin,:title,'NEW',:score,:url,'MANUAL',CURRENT_TIMESTAMP,:actor,:actor)
                 """).param("id", id).param("asin", asin).param("title", title).param("score", score)
                 .param("url", url).param("actor", actorId).update();
+    }
+
+    void insertWatch(String id,String asin,String title,String url,String storeName,Instant discoveredAt,
+            String runId,String eventId,String actorId){
+        jdbc.sql("""
+                INSERT INTO selection_candidate (id,asin,asin_normalized,title,status,score,source_url,source,
+                    source_store,discovered_at,source_run_id,source_event_id,created_by,updated_by)
+                VALUES (:id,:asin,:asin,:title,'NEW',70,:url,'WATCH',:store,:discovered,:run,:event,:actor,:actor)
+                """).param("id",id).param("asin",asin).param("title",title).param("url",url).param("store",storeName)
+                .param("discovered",discoveredAt).param("run",runId).param("event",eventId).param("actor",actorId).update();
     }
 
     void updateEvaluation(String id, EvaluationInput input, String actorId) {

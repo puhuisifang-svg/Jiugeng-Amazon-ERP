@@ -6,6 +6,7 @@ import { ApiError } from '@/api/client'
 import { runtimeConfig } from '@/config/runtime'
 import type { AppRole } from '@/router/meta'
 import { session } from '@/state/session'
+import PasswordField from '@/components/PasswordField.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -66,7 +67,8 @@ async function submit() {
           <label for="login-name">登录名</label>
           <input id="login-name" v-model.trim="loginName" autocomplete="username" maxlength="128" required>
           <label for="password">密码</label>
-          <input id="password" v-model="password" autocomplete="current-password" maxlength="128" required type="password">
+          <PasswordField id="password" v-model="password" autocomplete="current-password" required />
+          <RouterLink class="form-link" to="/forgot-password">忘记密码？</RouterLink>
         </template>
         <p v-if="errorMessage" class="data-state data-state--error" role="alert">{{ errorMessage }}</p>
         <button :disabled="loading" type="submit">

@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { changePassword } from '@/api/auth'
 import { ApiError } from '@/api/client'
 import { session } from '@/state/session'
+import PasswordField from '@/components/PasswordField.vue'
 
 const router = useRouter()
 const currentPassword = ref('')
@@ -41,14 +42,14 @@ async function submit() {
       <span class="brand__mark">九</span>
       <p class="eyebrow">账号安全</p>
       <h1 id="change-password-title">修改密码</h1>
-      <p>新密码至少 12 位。完成后即可进入系统。</p>
+      <p>新密码至少 6 位，且必须同时包含字母和数字。完成后即可进入系统。</p>
       <form class="login-form" @submit.prevent="submit">
         <label for="current-password">当前密码</label>
-        <input id="current-password" v-model="currentPassword" autocomplete="current-password" required type="password">
+        <PasswordField id="current-password" v-model="currentPassword" autocomplete="current-password" required />
         <label for="new-password">新密码</label>
-        <input id="new-password" v-model="newPassword" autocomplete="new-password" minlength="12" maxlength="128" required type="password">
+        <PasswordField id="new-password" v-model="newPassword" autocomplete="new-password" :minlength="6" pattern="(?=.*[A-Za-z])(?=.*\\d).{6,128}" required />
         <label for="confirm-password">确认新密码</label>
-        <input id="confirm-password" v-model="confirmation" autocomplete="new-password" minlength="12" maxlength="128" required type="password">
+        <PasswordField id="confirm-password" v-model="confirmation" autocomplete="new-password" :minlength="6" pattern="(?=.*[A-Za-z])(?=.*\\d).{6,128}" required />
         <p v-if="errorMessage" class="data-state data-state--error" role="alert">{{ errorMessage }}</p>
         <button :disabled="loading" type="submit">{{ loading ? '正在保存…' : '保存新密码' }}</button>
       </form>

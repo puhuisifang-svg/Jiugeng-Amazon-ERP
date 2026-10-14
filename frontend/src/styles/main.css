@@ -109,7 +109,14 @@ a { color: inherit; }
 .login-form label { color: var(--ink); font-size: 13px; font-weight: 700; }
 .login-form select, .login-form input { width: 100%; height: 44px; padding: 0 12px; color: var(--ink); background: white; border: 1px solid var(--line); border-radius: 8px; }
 .login-form button { min-height: 44px; margin-top: 6px; color: white; background: var(--accent); border: 0; border-radius: 8px; font-weight: 700; cursor: pointer; }
+.login-form .secondary-button { color: var(--ink); background: #eef0f4; }
 .login-form button:disabled { cursor: wait; opacity: .65; }
+.password-field { position: relative; }
+.password-field input { padding-right: 48px; }
+.password-field .password-toggle { position: absolute; top: 0; right: 0; width: 44px; min-height: 44px; margin: 0; padding: 11px; color: var(--muted); background: transparent; }
+.password-toggle svg { display: block; width: 22px; height: 22px; fill: currentColor; }
+.form-link { justify-self: end; color: var(--accent); font-size: 14px; font-weight: 700; text-decoration: none; }
+.form-link:hover { text-decoration: underline; }
 .logout-button { cursor: pointer; }
 .table-actions { display: flex; gap: 8px; }
 .table-actions button { min-height: 32px; padding-inline: 10px; }

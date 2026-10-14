@@ -8,6 +8,7 @@ const placeholder = () => import('@/views/PlaceholderView.vue')
 export const appRoutes: RouteRecordRaw[] = [
   { path: '/login', name: 'login', component: () => import('@/views/LoginView.vue'), meta: { title: '登录', hidden: true } },
   { path: '/change-password', name: 'change-password', component: () => import('@/views/ChangePasswordView.vue'), meta: { title: '修改密码', hidden: true } },
+  { path: '/forgot-password', name: 'forgot-password', component: () => import('@/views/ForgotPasswordView.vue'), meta: { title: '忘记密码', hidden: true } },
   { path: '/forbidden', name: 'forbidden', component: placeholder, props: { description: '当前角色无权访问此页面（403）' }, meta: { title: '权限受限', hidden: true } },
   {
     path: '/',
@@ -42,7 +43,7 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
-  if (to.name === 'login') {
+  if (to.name === 'login' || to.name === 'forgot-password') {
     return session.isAuthenticated.value ? { name: 'home' } : true
   }
   if (!session.isAuthenticated.value) return { name: 'login', query: { redirect: to.fullPath } }

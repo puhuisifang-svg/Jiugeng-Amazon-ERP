@@ -8,6 +8,8 @@ export interface AppUser {
   id: string
   loginName: string
   displayName: string
+  email?: string | null
+  phone?: string | null
   role: AppRole
   status: 'ENABLED' | 'DISABLED'
   mustChangePassword: boolean
@@ -17,6 +19,7 @@ export interface AppUser {
 
 export interface LoginInput { loginName?: string; password?: string; role?: AppRole }
 export interface LoginResponse { token: string; expiresAt?: string; user: AppUser }
+export type RecoveryChannel = 'EMAIL' | 'SMS'
 
 interface MockLoginResponse {
   token: string
@@ -67,9 +70,20 @@ export async function changePassword(currentPassword: string, newPassword: strin
   })
 }
 
+export const passwordRecoveryApi = {
+  request: (input: { channel: RecoveryChannel; destination: string }) =>
+    apiRequest<{ message: string }>('/v1/auth/password-reset/request', {
+      method: 'POST', body: JSON.stringify(input), authenticated: false,
+    }),
+  confirm: (input: { channel: RecoveryChannel; destination: string; code: string; newPassword: string }) =>
+    apiRequest<void>('/v1/auth/password-reset/confirm', {
+      method: 'POST', body: JSON.stringify(input), authenticated: false,
+    }),
+}
+
 export const usersApi = {
   list: () => apiRequest<AppUser[]>('/v1/users'),
-  create: (input: { loginName: string; displayName: string; initialPassword: string; role: AppRole }) =>
+  create: (input: { loginName: string; displayName: string; email?: string; phone?: string; initialPassword: string; role: AppRole }) =>
     apiRequest<AppUser>('/v1/users', { method: 'POST', body: JSON.stringify(input) }),
   disable: (id: string) => apiRequest<AppUser>(`/v1/users/${id}/disable`, { method: 'POST' }),
   enable: (id: string) => apiRequest<AppUser>(`/v1/users/${id}/enable`, { method: 'POST' }),
@@ -80,4 +94,8 @@ export const usersApi = {
   resetPassword: (id: string, newPassword: string) => apiRequest<AppUser>(`/v1/users/${id}/reset-password`, {
     method: 'POST', body: JSON.stringify({ newPassword }),
   }),
+  updateRecoveryContacts: (id: string, email: string, phone: string) =>
+    apiRequest<AppUser>(`/v1/users/${id}/recovery-contacts`, {
+      method: 'POST', body: JSON.stringify({ email, phone }),
+    }),
 }

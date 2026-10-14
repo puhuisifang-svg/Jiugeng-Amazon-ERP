@@ -4,7 +4,7 @@ vi.mock('@/config/runtime', () => ({
   runtimeConfig: { apiBaseUrl: 'http://localhost:8080/api', authMode: 'password' },
 }))
 
-import { changePassword, login, logout, usersApi } from './auth'
+import { changePassword, login, logout, passwordRecoveryApi, usersApi } from './auth'
 import { SESSION_TOKEN_KEY } from './client'
 
 describe('password authentication API', () => {
@@ -76,5 +76,24 @@ describe('password authentication API', () => {
       'http://localhost:8080/api/v1/users',
       expect.objectContaining({ headers: expect.any(Headers) }),
     )
+  })
+
+  it('uses unauthenticated password recovery endpoints', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true, status: 200, json: async () => ({ message: '验证码已发送' }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await passwordRecoveryApi.request({ channel: 'EMAIL', destination: 'user@example.com' })
+    await passwordRecoveryApi.confirm({
+      channel: 'EMAIL', destination: 'user@example.com', code: '123456', newPassword: 'Reset123',
+    })
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('http://localhost:8080/api/v1/auth/password-reset/request')
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('http://localhost:8080/api/v1/auth/password-reset/confirm')
+    for (const call of fetchMock.mock.calls) {
+      const headers = call[1]?.headers as Headers
+      expect(headers.has('Authorization')).toBe(false)
+    }
   })
 })

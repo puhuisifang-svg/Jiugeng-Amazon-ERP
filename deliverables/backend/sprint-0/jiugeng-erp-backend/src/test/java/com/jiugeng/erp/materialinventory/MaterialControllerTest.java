@@ -32,6 +32,8 @@ class MaterialControllerTest {
 
     @BeforeEach
     void reset() {
+        jdbc.update("DELETE FROM inventory_transaction");
+        jdbc.update("DELETE FROM inventory_balance");
         jdbc.update("DELETE FROM product_auxiliary_material");
         jdbc.update("DELETE FROM auxiliary_material");
         jdbc.update("DELETE FROM iam_password_reset_challenge");

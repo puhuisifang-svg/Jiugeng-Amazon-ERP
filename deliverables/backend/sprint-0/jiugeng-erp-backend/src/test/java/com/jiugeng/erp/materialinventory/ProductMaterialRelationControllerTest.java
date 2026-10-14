@@ -37,6 +37,8 @@ class ProductMaterialRelationControllerTest {
 
     @BeforeEach
     void reset() {
+        jdbc.update("DELETE FROM inventory_transaction");
+        jdbc.update("DELETE FROM inventory_balance");
         jdbc.update("DELETE FROM product_auxiliary_material");
         jdbc.update("DELETE FROM variant_attribute");
         jdbc.update("DELETE FROM product_variant");

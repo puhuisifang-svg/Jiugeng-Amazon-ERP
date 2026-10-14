@@ -9,7 +9,9 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@RestControllerAdvice(assignableTypes = {MaterialController.class, ProductMaterialRelationController.class})
+@RestControllerAdvice(assignableTypes = {
+        MaterialController.class, ProductMaterialRelationController.class, InventoryController.class
+})
 @Profile("!mock")
 class MaterialExceptionHandler {
     @ExceptionHandler(MaterialException.class)

@@ -19,4 +19,5 @@ Owner：Jiugeng_PJM
 - [ERP-009 操作审计闭环](ERP-009_AUDIT_CLOSURE.md)
 - [ERP-009-001 登录与密码恢复体验优化](ERP-009-001_PASSWORD_RECOVERY.md)
 - [ERP-010 正式 Product / SKU 持久化](ERP-010_PRODUCT_PERSISTENCE.md)
+- [ERP-011 正式辅料主数据持久化](ERP-011_MATERIAL_MASTER.md)
 - [ERP-010～ERP-020 串行交付主计划](ERP-010_020_MASTER_PLAN.md)

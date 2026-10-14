@@ -136,6 +136,7 @@ query_scalar "INSERT INTO schema_baseline (id, module_name, baseline_version) VA
 query_scalar "INSERT INTO product (id, product_code, product_code_normalized, name_zh, status, created_by, updated_by) VALUES ('00000000-0000-0000-0000-000000000010', 'ERP-010-PROBE', 'ERP-010-PROBE', '持久化探针', 'ACTIVE', 'system', 'system')" >/dev/null
 query_scalar "INSERT INTO product_variant (id, product_id, sku_code, sku_code_normalized, variant_name, status, attribute_signature) VALUES ('00000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000010', 'ERP-010-SKU', 'ERP-010-SKU', '探针 SKU', 'ACTIVE', '7bdb1b7ba001db3942d1996f891ac65fbc8f7d300bb344912bb105a256ea8b99')" >/dev/null
 query_scalar "INSERT INTO variant_attribute (variant_id, attribute_code, attribute_code_normalized, attribute_value, display_order) VALUES ('00000000-0000-0000-0000-000000000011', 'color', 'COLOR', 'Black', 0)" >/dev/null
+query_scalar "INSERT INTO auxiliary_material (id, material_code, material_code_normalized, name, material_type, specification, unit, status, created_by, updated_by) VALUES ('00000000-0000-0000-0000-000000000012', 'ERP-011-PROBE', 'ERP-011-PROBE', '辅料持久化探针', '包装', '标准', 'PCS', 'ACTIVE', 'system', 'system')" >/dev/null
 
 stop_backend
 docker restart "$mysql_container" >/dev/null
@@ -146,6 +147,8 @@ probe_count=$(query_scalar "SELECT COUNT(*) FROM schema_baseline WHERE module_na
 [ "$probe_count" = "1" ]
 product_probe_count=$(query_scalar "SELECT COUNT(*) FROM product p JOIN product_variant v ON v.product_id=p.id JOIN variant_attribute a ON a.variant_id=v.id WHERE p.product_code='ERP-010-PROBE' AND v.sku_code='ERP-010-SKU' AND a.attribute_value='Black'")
 [ "$product_probe_count" = "1" ]
+material_probe_count=$(query_scalar "SELECT COUNT(*) FROM auxiliary_material WHERE material_code='ERP-011-PROBE' AND material_type='包装' AND status='ACTIVE'")
+[ "$material_probe_count" = "1" ]
 
 ERP_BACKEND_URL="http://127.0.0.1:$backend_port" "$repo_root/scripts/dev/smoke-local-mysql-backend.sh"
 

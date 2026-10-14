@@ -1,6 +1,10 @@
 spring:
   application:
     name: jiugeng-erp-backend
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 11MB
   autoconfigure:
     exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
   flyway:
@@ -22,6 +26,10 @@ server:
   shutdown: graceful
 
 app:
+  imports:
+    staging-dir: ${ERP_IMPORT_STAGING_DIR:${java.io.tmpdir}/jiugeng-erp-import-staging}
+    templates-dir: ${ERP_IMPORT_TEMPLATES_DIR:../../../../deliverables/pm/excel_templates}
+    preview-hours: ${ERP_IMPORT_PREVIEW_HOURS:24}
   iam:
     session-hours: ${ERP_SESSION_HOURS:8}
     max-failed-logins: ${ERP_MAX_FAILED_LOGINS:5}

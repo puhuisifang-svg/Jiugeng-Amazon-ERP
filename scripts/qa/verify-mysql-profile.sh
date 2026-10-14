@@ -140,6 +140,8 @@ query_scalar "INSERT INTO auxiliary_material (id, material_code, material_code_n
 query_scalar "INSERT INTO product_auxiliary_material (id, product_id, variant_id, auxiliary_material_id, standard_quantity, unit, loss_rate, remark, enabled, created_by, updated_by) VALUES ('00000000-0000-0000-0000-000000000013', '00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000012', 2.0000, 'PCS', 0.050000, 'ERP-012-PROBE', TRUE, 'system', 'system')" >/dev/null
 query_scalar "INSERT INTO inventory_balance (warehouse_id, auxiliary_material_id, quantity, safety_stock, unit) VALUES ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000012', 12.0000, 5.0000, 'PCS')" >/dev/null
 query_scalar "INSERT INTO inventory_transaction (id, request_id, payload_hash, warehouse_id, auxiliary_material_id, transaction_type, quantity, signed_quantity, unit, reason, balance_after, actor_user_id, actor_login_name) VALUES ('00000000-0000-0000-0000-000000000014', 'ERP-013-PROBE', 'd08d096cafc01e9f0870fb2b2c083a74149fc10efcb2075fdc202ebf2e2ea8ca', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000012', 'INBOUND', 12.0000, 12.0000, 'PCS', 'ERP-013 restart probe', 12.0000, 'system', 'system')" >/dev/null
+query_scalar "INSERT INTO import_batch (id, import_type, template_version, status, phase, storage_key, file_hash, upload_idempotency_key, upload_payload_hash, actor_user_id, actor_login_name, total_rows, processed_rows, commit_allowed, preview_version, preview_expires_at) VALUES ('00000000-0000-0000-0000-000000000015', 'PRODUCTS', '1.0', 'VALIDATED', 'WAITING_CONFIRMATION', '00000000000000000000000000000000.xlsx', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'ERP-014-PROBE', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'system', 'system', 1, 1, TRUE, '00000000-0000-0000-0000-000000000016', DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 1 DAY))" >/dev/null
+query_scalar "INSERT INTO import_preview_row (id, batch_id, sheet_name, source_row_number, business_key, row_data_json, sort_order) VALUES ('00000000-0000-0000-0000-000000000017', '00000000-0000-0000-0000-000000000015', '导入模板', 2, 'ERP-014-PROBE', '{\"product_code\":\"ERP-014-PROBE\"}', 0)" >/dev/null
 
 stop_backend
 docker restart "$mysql_container" >/dev/null
@@ -158,6 +160,8 @@ inventory_probe_count=$(query_scalar "SELECT COUNT(*) FROM inventory_balance b J
 [ "$inventory_probe_count" = "1" ]
 inventory_recomputed=$(query_scalar "SELECT CAST(SUM(signed_quantity) AS DECIMAL(18,4)) FROM inventory_transaction WHERE auxiliary_material_id='00000000-0000-0000-0000-000000000012'")
 [ "$inventory_recomputed" = "12.0000" ]
+import_probe_count=$(query_scalar "SELECT COUNT(*) FROM import_batch b JOIN import_preview_row p ON p.batch_id=b.id WHERE b.id='00000000-0000-0000-0000-000000000015' AND b.import_type='PRODUCTS' AND b.status='VALIDATED' AND p.business_key='ERP-014-PROBE'")
+[ "$import_probe_count" = "1" ]
 
 ERP_BACKEND_URL="http://127.0.0.1:$backend_port" "$repo_root/scripts/dev/smoke-local-mysql-backend.sh"
 

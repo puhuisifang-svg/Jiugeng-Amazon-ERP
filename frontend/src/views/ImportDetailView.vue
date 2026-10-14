@@ -3,12 +3,13 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { ApiError } from '@/api/client'
-import { importsApi, type ImportBatch, type ImportIssue, type ImportPreview } from '@/api/imports'
+import { importsApi, type ImportBatch, type ImportIssue, type ImportPreview, type ImportResult } from '@/api/imports'
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
 
 const route = useRoute(); const router = useRouter(); const id = computed(() => String(route.params.batchId))
 const batch = ref<ImportBatch | null>(null); const issues = ref<ImportIssue[]>([]); const preview = ref<ImportPreview | null>(null)
+const result = ref<ImportResult | null>(null); const warningsAccepted = ref(false)
 const loading = ref(true); const saving = ref(false); const error = ref(''); const success = ref('')
 const formal = runtimeConfig.authMode === 'password'
 const canCancel = computed(() => session.canAccess(['imports.cancel']) && batch.value && ['QUEUED', 'VALIDATING', 'VALIDATED'].includes(batch.value.status))
@@ -21,8 +22,18 @@ async function load() {
     batch.value = await importsApi.get(id.value)
     issues.value = await importsApi.issues(id.value)
     preview.value = batch.value.status === 'VALIDATED' && !expired.value ? await importsApi.preview(id.value) : null
+    result.value = ['SUCCEEDED', 'FAILED', 'CANCELLED'].includes(batch.value.status) ? await importsApi.result(id.value) : null
   } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '批次详情加载失败。' }
   finally { loading.value = false }
+}
+async function commit() {
+  if (!batch.value?.previewVersion) return
+  saving.value = true; error.value = ''; success.value = ''
+  try {
+    batch.value = await importsApi.commit(id.value, batch.value.previewVersion, batch.value.fileHash, warningsAccepted.value)
+    preview.value = null; result.value = await importsApi.result(id.value); success.value = '批次提交完成。'
+  } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '提交失败。' }
+  finally { saving.value = false }
 }
 async function cancel() {
   saving.value = true; error.value = ''
@@ -44,8 +55,8 @@ onMounted(load)
     <div class="page-heading">
       <div>
         <p class="eyebrow">
-          ERP-014 · 导入批次
-        </p><h1>批次详情</h1><p>逐工作表、行和字段定位问题；业务处理器未注册前不会伪装提交成功。</p>
+          ERP-015 · 产品与 SKU 导入
+        </p><h1>批次详情</h1><p>逐工作表、行和字段定位问题；产品与 SKU 批次通过全量校验后原子提交。</p>
       </div><RouterLink
         class="primary-link"
         to="/imports"
@@ -84,7 +95,25 @@ onMounted(load)
           >
             重新校验
           </button>
+          <label v-if="batch.status === 'VALIDATED' && batch.warningCount > 0"><input
+            v-model="warningsAccepted"
+            type="checkbox"
+          >我已确认警告</label>
+          <button
+            v-if="batch.status === 'VALIDATED' && batch.commitAllowed && session.canAccess(['imports.commit'])"
+            :disabled="saving || (batch.warningCount > 0 && !warningsAccepted)"
+            type="button"
+            @click="commit"
+          >
+            提交导入
+          </button>
         </div>
+      </article>
+      <article
+        v-if="result"
+        class="panel import-summary"
+      >
+        <h2>提交结果</h2><p>新增 {{ result.createdRows }} · 更新 {{ result.updatedRows }} · 未变化 {{ result.unchangedRows }} · 实际写入 {{ result.writtenRows }}</p>
       </article>
       <p
         v-if="success"

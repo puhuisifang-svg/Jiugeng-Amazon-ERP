@@ -121,6 +121,10 @@ function submit() { emit('submit', structuredClone(toRaw(model))) }
           min="0"
           step="0.0001"
         ></label>
+        <label>重量单位<select
+          v-model="variant.packageWeightUnit"
+          :required="variant.packageWeight != null"
+        ><option value="">未填写</option><option value="G">G</option><option value="KG">KG</option><option value="OZ">OZ</option><option value="LB">LB</option></select></label>
         <label>状态<select v-model="variant.status"><option value="ACTIVE">启用</option><option value="DISABLED">停用</option></select></label>
       </div>
       <h3>动态属性</h3>

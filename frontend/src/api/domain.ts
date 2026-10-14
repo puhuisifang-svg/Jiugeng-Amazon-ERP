@@ -15,6 +15,7 @@ export interface ProductVariantDto {
   itemDimensions?: string
   packageDimensions?: string
   packageWeight?: number
+  packageWeightUnit?: 'G' | 'KG' | 'OZ' | 'LB'
   status: VariantStatus
   attributes: VariantAttributeDto[]
 }

@@ -36,4 +36,20 @@ describe('importsApi', () => {
 
     expect(result.batch.id).toBe('b1')
   })
+
+  it('commits a validated snapshot and reads accurate result counts', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.endsWith('/commit')) {
+        expect(init?.method).toBe('POST')
+        expect(new Headers(init?.headers).get('Idempotency-Key')).toBe('commit-key')
+        expect(JSON.parse(String(init?.body))).toEqual({ previewVersion: 'pv1', fileHash: 'hash1', warningsAccepted: true })
+        return new Response(JSON.stringify({ id: 'b1', status: 'SUCCEEDED' }), { status: 202 })
+      }
+      return new Response(JSON.stringify({ batch: { id: 'b1' }, createdRows: 1, updatedRows: 2, unchangedRows: 3, writtenRows: 3, message: 'ok' }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    expect((await importsApi.commit('b1', 'pv1', 'hash1', true, 'commit-key')).status).toBe('SUCCEEDED')
+    expect((await importsApi.result('b1')).writtenRows).toBe(3)
+  })
 })

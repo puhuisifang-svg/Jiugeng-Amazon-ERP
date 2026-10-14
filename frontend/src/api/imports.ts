@@ -67,6 +67,15 @@ export interface ImportPreview {
 }
 
 export interface ImportReceipt { batch: ImportBatch; replayed: boolean }
+export interface ImportResult {
+  batch: ImportBatch
+  createdRows: number
+  updatedRows: number
+  unchangedRows: number
+  writtenRows: number
+  committedAt?: string | null
+  message: string
+}
 
 function idempotencyKey(operation: string): string {
   return `${operation}-${Date.now()}-${Math.random().toString(16).slice(2)}`
@@ -125,5 +134,10 @@ export const importsApi = {
     `/v1/import-batches/${encodeURIComponent(id)}/revalidate`,
     { method: 'POST', headers: { 'Idempotency-Key': key } },
   ),
+  commit: (id: string, previewVersion: string, fileHash: string, warningsAccepted: boolean, key = idempotencyKey('commit')) => apiRequest<ImportBatch>(
+    `/v1/import-batches/${encodeURIComponent(id)}/commit`,
+    { method: 'POST', headers: { 'Idempotency-Key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ previewVersion, fileHash, warningsAccepted }) },
+  ),
+  result: (id: string) => apiRequest<ImportResult>(`/v1/import-batches/${encodeURIComponent(id)}/result`),
   downloadTemplate: download,
 }

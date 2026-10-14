@@ -37,7 +37,10 @@ async function commit() {
 }
 async function cancel() {
   saving.value = true; error.value = ''
-  try { batch.value = await importsApi.cancel(id.value); success.value = '批次已取消。'; preview.value = null }
+  try {
+    batch.value = await importsApi.cancel(id.value); result.value = await importsApi.result(id.value)
+    success.value = '批次已取消。'; preview.value = null
+  }
   catch (exception) { error.value = exception instanceof ApiError ? exception.message : '取消失败。' }
   finally { saving.value = false }
 }
@@ -45,6 +48,12 @@ async function revalidate() {
   saving.value = true; error.value = ''
   try { const receipt = await importsApi.revalidate(id.value); await router.push(`/imports/${receipt.batch.id}`) }
   catch (exception) { error.value = exception instanceof ApiError ? exception.message : '重新校验失败。' }
+  finally { saving.value = false }
+}
+async function downloadResult() {
+  saving.value = true; error.value = ''
+  try { await importsApi.downloadResult(id.value) }
+  catch (exception) { error.value = exception instanceof ApiError ? exception.message : '结果文件下载失败。' }
   finally { saving.value = false }
 }
 onMounted(load)
@@ -55,7 +64,7 @@ onMounted(load)
     <div class="page-heading">
       <div>
         <p class="eyebrow">
-          ERP-016 · 主数据与关系导入
+          ERP-017 · 五类导入收口
         </p><h1>批次详情</h1><p>逐工作表、行和字段定位问题；已注册类型通过全量校验后整批原子提交。</p>
       </div><RouterLink
         class="primary-link"
@@ -114,6 +123,14 @@ onMounted(load)
         class="panel import-summary"
       >
         <h2>提交结果</h2><p>新增 {{ result.createdRows }} · 更新 {{ result.updatedRows }} · 未变化 {{ result.unchangedRows }} · 实际写入 {{ result.writtenRows }}</p>
+        <button
+          v-if="session.canAccess(['imports.result.download'])"
+          :disabled="saving"
+          type="button"
+          @click="downloadResult"
+        >
+          下载逐行结果
+        </button>
       </article>
       <p
         v-if="success"

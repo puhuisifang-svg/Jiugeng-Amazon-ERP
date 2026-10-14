@@ -94,11 +94,11 @@ async function multipart<T>(path: string, body: FormData, key: string): Promise<
   return response.json() as Promise<T>
 }
 
-async function download(type: ImportType): Promise<void> {
+async function downloadFile(path: string, fileName: string): Promise<void> {
   const headers = new Headers()
   const token = window.localStorage.getItem(SESSION_TOKEN_KEY)
   if (token) headers.set('Authorization', `Bearer ${token}`)
-  const response = await fetch(`${runtimeConfig.apiBaseUrl}/v1/import-templates/${type}`, { headers })
+  const response = await fetch(`${runtimeConfig.apiBaseUrl}${path}`, { headers })
   if (!response.ok) {
     const problem = await response.json().catch(() => null) as { code?: string; detail?: string } | null
     if (response.status === 401) window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))
@@ -107,11 +107,15 @@ async function download(type: ImportType): Promise<void> {
   const url = URL.createObjectURL(await response.blob())
   const anchor = document.createElement('a')
   anchor.href = url
-  anchor.download = `${type.toLowerCase()}_v1.0.xlsx`
+  anchor.download = fileName
   document.body.appendChild(anchor)
   anchor.click()
   anchor.remove()
   URL.revokeObjectURL(url)
+}
+
+async function downloadTemplate(type: ImportType): Promise<void> {
+  return downloadFile(`/v1/import-templates/${type}`, `${type.toLowerCase()}_v1.0.xlsx`)
 }
 
 export const importsApi = {
@@ -139,5 +143,9 @@ export const importsApi = {
     { method: 'POST', headers: { 'Idempotency-Key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ previewVersion, fileHash, warningsAccepted }) },
   ),
   result: (id: string) => apiRequest<ImportResult>(`/v1/import-batches/${encodeURIComponent(id)}/result`),
-  downloadTemplate: download,
+  downloadTemplate,
+  downloadResult: (id: string) => downloadFile(
+    `/v1/import-batches/${encodeURIComponent(id)}/result-file`,
+    `import-result-${id.replace(/[^A-Za-z0-9_-]/g, '_')}.csv`,
+  ),
 }

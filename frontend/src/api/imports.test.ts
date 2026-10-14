@@ -52,4 +52,25 @@ describe('importsApi', () => {
     expect((await importsApi.commit('b1', 'pv1', 'hash1', true, 'commit-key')).status).toBe('SUCCEEDED')
     expect((await importsApi.result('b1')).writtenRows).toBe(3)
   })
+
+  it('downloads the protected per-row result and revokes its object URL', async () => {
+    window.localStorage.setItem(SESSION_TOKEN_KEY, 'token')
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toContain('/v1/import-batches/batch%2F1/result-file')
+      expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer token')
+      return new Response('\ufeffbatch_id,status\r\nb1,SUCCEEDED\r\n', { status: 200 })
+    })
+    const createObjectURL = vi.fn(() => 'blob:result')
+    const revokeObjectURL = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL })
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+
+    await importsApi.downloadResult('batch/1')
+
+    expect(createObjectURL).toHaveBeenCalledOnce()
+    expect(click).toHaveBeenCalledOnce()
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:result')
+    click.mockRestore()
+  })
 })

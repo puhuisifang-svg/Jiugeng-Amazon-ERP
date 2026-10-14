@@ -32,6 +32,7 @@ class MaterialControllerTest {
 
     @BeforeEach
     void reset() {
+        jdbc.update("DELETE FROM product_auxiliary_material");
         jdbc.update("DELETE FROM auxiliary_material");
         jdbc.update("DELETE FROM iam_password_reset_challenge");
         jdbc.update("DELETE FROM audit_event");

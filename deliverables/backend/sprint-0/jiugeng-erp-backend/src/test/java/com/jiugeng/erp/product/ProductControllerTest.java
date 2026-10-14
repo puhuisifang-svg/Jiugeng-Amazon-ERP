@@ -34,6 +34,7 @@ class ProductControllerTest {
 
     @BeforeEach
     void reset() {
+        jdbc.update("DELETE FROM product_auxiliary_material");
         jdbc.update("DELETE FROM variant_attribute");
         jdbc.update("DELETE FROM product_variant");
         jdbc.update("DELETE FROM product");

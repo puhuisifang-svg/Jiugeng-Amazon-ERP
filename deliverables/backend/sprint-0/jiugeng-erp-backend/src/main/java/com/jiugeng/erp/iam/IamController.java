@@ -10,6 +10,8 @@ import java.time.Instant;
 import java.util.List;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -37,8 +39,13 @@ class IamController {
 
     @PostMapping("/auth/login")
     LoginResponse login(@Valid @RequestBody LoginRequest request) {
-        var result = service.login(request.loginName(), request.password());
+        var result = service.login(request.loginName(), request.password(), request.staySignedIn());
         return new LoginResponse(result.token(), result.expiresAt(), result.user());
+    }
+
+    @GetMapping("/auth/login-settings")
+    LoginSettingsResponse loginSettings() {
+        return new LoginSettingsResponse(service.staySignedInDays());
     }
 
     @GetMapping("/auth/me")
@@ -107,6 +114,25 @@ class IamController {
         return service.unlock(userId, principal);
     }
 
+    @PostMapping("/users/{userId}/lock")
+    @PreAuthorize("hasAuthority('system.users.manage')")
+    UserView lock(@PathVariable String userId, @AuthenticationPrincipal SessionPrincipal principal) {
+        return service.lock(userId, principal);
+    }
+
+    @GetMapping("/settings/security")
+    @PreAuthorize("hasAuthority('system.users.manage')")
+    LoginSettingsResponse securitySettings() {
+        return new LoginSettingsResponse(service.staySignedInDays());
+    }
+
+    @PostMapping("/settings/security")
+    @PreAuthorize("hasAuthority('system.users.manage')")
+    LoginSettingsResponse updateSecuritySettings(@AuthenticationPrincipal SessionPrincipal principal,
+            @Valid @RequestBody SecuritySettingsRequest request) {
+        return new LoginSettingsResponse(service.updateStaySignedInDays(request.staySignedInDays(), principal));
+    }
+
     @PostMapping("/users/{userId}/reset-password")
     @PreAuthorize("hasAuthority('system.users.manage')")
     UserView resetPassword(@PathVariable String userId, @AuthenticationPrincipal SessionPrincipal principal,
@@ -124,10 +150,17 @@ class IamController {
 
     record LoginRequest(
             @NotBlank @Size(max = 128) String loginName,
-            @NotBlank @Size(max = 128) String password) {
+            @NotBlank @Size(max = 128) String password,
+            boolean staySignedIn) {
     }
 
     record LoginResponse(String token, Instant expiresAt, UserView user) {
+    }
+
+    record LoginSettingsResponse(int staySignedInDays) {
+    }
+
+    record SecuritySettingsRequest(@Min(1) @Max(30) int staySignedInDays) {
     }
 
     record ChangePasswordRequest(

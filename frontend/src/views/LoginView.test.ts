@@ -7,6 +7,7 @@ import LoginView from './LoginView.vue'
 describe('LoginView', () => {
   afterEach(() => {
     window.localStorage.clear()
+    window.sessionStorage.clear()
     vi.unstubAllGlobals()
   })
 

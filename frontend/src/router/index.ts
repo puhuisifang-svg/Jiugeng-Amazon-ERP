@@ -31,6 +31,7 @@ export const appRoutes: RouteRecordRaw[] = [
       { path: 'watch/events', name: 'new-events', component: () => import('@/views/WatchEventsView.vue'), meta: { title: '上新事件', group: '选品管理', icon: '↗', capabilities: ['watch.read'] } },
       { path: 'system/users', name: 'users', component: () => import('@/views/UsersView.vue'), meta: { title: '用户与角色', group: '系统管理', icon: '♙', capabilities: ['system.users.manage'] } },
       { path: 'system/audit', name: 'audit', component: () => import('@/views/AuditView.vue'), meta: { title: '审计日志', group: '系统管理', icon: '◫', capabilities: ['audit.read.self'] } },
+      { path: 'settings', name: 'settings', component: () => import('@/views/SettingsView.vue'), meta: { title: '设置', group: '系统管理', icon: '⚙' } },
     ],
   },
   { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('@/views/NotFoundView.vue'), meta: { title: '页面不存在', hidden: true } },

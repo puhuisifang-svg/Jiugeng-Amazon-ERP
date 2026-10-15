@@ -4,12 +4,13 @@ vi.mock('@/config/runtime', () => ({
   runtimeConfig: { apiBaseUrl: 'http://localhost:8080/api', authMode: 'password' },
 }))
 
-import { changePassword, login, logout, passwordRecoveryApi, usersApi } from './auth'
-import { SESSION_TOKEN_KEY } from './client'
+import { changePassword, login, logout, passwordRecoveryApi, securitySettingsApi, usersApi } from './auth'
+import { clearSessionToken, getSessionToken, SESSION_TOKEN_KEY, setSessionToken } from './client'
 
 describe('password authentication API', () => {
   afterEach(() => {
     window.localStorage.clear()
+    window.sessionStorage.clear()
     vi.unstubAllGlobals()
   })
 
@@ -35,9 +36,37 @@ describe('password authentication API', () => {
       'http://localhost:8080/api/v1/auth/login',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ loginName: 'admin', password: 'test-password' }),
+        body: JSON.stringify({ loginName: 'admin', password: 'test-password', staySignedIn: false }),
       }),
     )
+  })
+
+  it('loads and updates the configured stay-signed-in duration', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ staySignedInDays: 7 }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ staySignedInDays: 14 }) })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(securitySettingsApi.loginSettings()).resolves.toEqual({ staySignedInDays: 7 })
+    await expect(securitySettingsApi.update(14)).resolves.toEqual({ staySignedInDays: 14 })
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('http://localhost:8080/api/v1/auth/login-settings')
+    expect(fetchMock.mock.calls[1]?.[1]).toEqual(expect.objectContaining({
+      method: 'POST', body: JSON.stringify({ staySignedInDays: 14 }),
+    }))
+  })
+
+  it('stores short sessions in session storage and remembered sessions persistently', () => {
+    setSessionToken('short-token', false)
+    expect(window.sessionStorage.getItem(SESSION_TOKEN_KEY)).toBe('short-token')
+    expect(window.localStorage.getItem(SESSION_TOKEN_KEY)).toBeNull()
+    expect(getSessionToken()).toBe('short-token')
+
+    setSessionToken('remembered-token', true)
+    expect(window.localStorage.getItem(SESSION_TOKEN_KEY)).toBe('remembered-token')
+    expect(window.sessionStorage.getItem(SESSION_TOKEN_KEY)).toBeNull()
+    clearSessionToken()
+    expect(getSessionToken()).toBeNull()
   })
 
   it('uses the bearer token for password changes and logout', async () => {

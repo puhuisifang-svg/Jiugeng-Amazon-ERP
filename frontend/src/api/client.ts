@@ -9,6 +9,22 @@ export class ApiError extends Error {
 export const SESSION_TOKEN_KEY = 'jiugeng.session.token'
 export const SESSION_EXPIRED_EVENT = 'jiugeng:session-expired'
 
+export function getSessionToken(): string | null {
+  return window.localStorage.getItem(SESSION_TOKEN_KEY) ?? window.sessionStorage.getItem(SESSION_TOKEN_KEY)
+}
+
+export function setSessionToken(token: string, persistent: boolean) {
+  window.localStorage.removeItem(SESSION_TOKEN_KEY)
+  window.sessionStorage.removeItem(SESSION_TOKEN_KEY)
+  const storage = persistent ? window.localStorage : window.sessionStorage
+  storage.setItem(SESSION_TOKEN_KEY, token)
+}
+
+export function clearSessionToken() {
+  window.localStorage.removeItem(SESSION_TOKEN_KEY)
+  window.sessionStorage.removeItem(SESSION_TOKEN_KEY)
+}
+
 export interface ApiRequestInit extends RequestInit {
   authenticated?: boolean
 }
@@ -28,7 +44,7 @@ export function assertSyntheticEnvelope<T>(value: T): asserts value is T & Synth
 
 export async function apiRequest<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
   const { authenticated = true, ...requestInit } = init
-  const token = window.localStorage.getItem(SESSION_TOKEN_KEY)
+  const token = getSessionToken()
   const headers = new Headers(requestInit.headers)
   headers.set('Accept', 'application/json')
   if (init.body) headers.set('Content-Type', 'application/json')

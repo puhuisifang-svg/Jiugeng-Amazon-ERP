@@ -61,7 +61,7 @@ class IamService {
     }
 
     @Transactional(noRollbackFor = IamException.class)
-    LoginResult login(String loginName, String password) {
+    LoginResult login(String loginName, String password, boolean staySignedIn) {
         String normalized = normalize(loginName);
         Optional<User> found = repository.findUserByLoginName(normalized);
         if (found.isEmpty()) {
@@ -91,7 +91,10 @@ class IamService {
         }
         repository.clearFailedLogins(user.id());
         String token = newToken();
-        Instant expiresAt = Instant.now().plus(sessionDuration);
+        Duration effectiveDuration = staySignedIn
+                ? Duration.ofDays(repository.staySignedInDays())
+                : sessionDuration;
+        Instant expiresAt = Instant.now().plus(effectiveDuration);
         repository.insertSession(UUID.randomUUID().toString(), user.id(), hashToken(token), expiresAt);
         auditService.security(actor, "LOGIN", user.id(), Outcome.SUCCESS, null);
         User current = repository.findUserById(user.id()).orElseThrow();
@@ -110,6 +113,23 @@ class IamService {
 
     UserView me(SessionPrincipal principal) {
         return repository.findUserById(principal.userId()).orElseThrow(() -> IamException.unauthorized()).view();
+    }
+
+    int staySignedInDays() {
+        return repository.staySignedInDays();
+    }
+
+    @Transactional
+    int updateStaySignedInDays(int days, SessionPrincipal principal) {
+        if (days < 1 || days > 30) {
+            throw new IamException(400, "STAY_SIGNED_IN_DAYS_INVALID", "免登录天数必须在 1 到 30 天之间");
+        }
+        int before = repository.staySignedInDays();
+        repository.updateStaySignedInDays(days, principal.userId());
+        auditService.append(Actor.authenticated(principal), "CONFIG", "SESSION_POLICY_UPDATE", "SECURITY_SETTING",
+                "stay_signed_in_days", Outcome.SUCCESS, java.util.Map.of("days", before),
+                java.util.Map.of("days", days), null);
+        return days;
     }
 
     @Transactional(noRollbackFor = IamException.class)
@@ -213,6 +233,20 @@ class IamService {
         repository.unlock(userId);
         UserView after = repository.findUserById(userId).orElseThrow().view();
         auditService.account(Actor.authenticated(principal), "ACCOUNT_UNLOCK", before, after, null);
+        return after;
+    }
+
+    @Transactional
+    UserView lock(String userId, SessionPrincipal principal) {
+        if (userId.equals(principal.userId())) {
+            throw new IamException(400, "SELF_LOCK_FORBIDDEN", "不能锁定当前登录账号");
+        }
+        User user = requireUser(userId);
+        UserView before = user.view();
+        repository.lock(userId);
+        repository.revokeUserSessions(userId);
+        UserView after = repository.findUserById(userId).orElseThrow().view();
+        auditService.account(Actor.authenticated(principal), "ACCOUNT_LOCK", before, after, "MANUAL_ADMIN_LOCK");
         return after;
     }
 

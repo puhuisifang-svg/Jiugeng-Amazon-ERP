@@ -17,9 +17,10 @@ export interface AppUser {
   capabilities: Capability[]
 }
 
-export interface LoginInput { loginName?: string; password?: string; role?: AppRole }
+export interface LoginInput { loginName?: string; password?: string; role?: AppRole; staySignedIn?: boolean }
 export interface LoginResponse { token: string; expiresAt?: string; user: AppUser }
 export type RecoveryChannel = 'EMAIL' | 'SMS'
+export interface LoginSettings { staySignedInDays: number }
 
 interface MockLoginResponse {
   token: string
@@ -47,8 +48,18 @@ export async function login(input: LoginInput): Promise<LoginResponse> {
     return { token: response.token, user: adaptMockUser(response.user) }
   }
   return apiRequest<LoginResponse>('/v1/auth/login', {
-    method: 'POST', body: JSON.stringify({ loginName: input.loginName, password: input.password }), authenticated: false,
+    method: 'POST',
+    body: JSON.stringify({ loginName: input.loginName, password: input.password, staySignedIn: input.staySignedIn ?? false }),
+    authenticated: false,
   })
+}
+
+export const securitySettingsApi = {
+  loginSettings: () => apiRequest<LoginSettings>('/v1/auth/login-settings', { authenticated: false }),
+  get: () => apiRequest<LoginSettings>('/v1/settings/security'),
+  update: (staySignedInDays: number) => apiRequest<LoginSettings>('/v1/settings/security', {
+    method: 'POST', body: JSON.stringify({ staySignedInDays }),
+  }),
 }
 
 export async function loadCurrentUser(): Promise<AppUser> {
@@ -88,6 +99,7 @@ export const usersApi = {
   disable: (id: string) => apiRequest<AppUser>(`/v1/users/${id}/disable`, { method: 'POST' }),
   enable: (id: string) => apiRequest<AppUser>(`/v1/users/${id}/enable`, { method: 'POST' }),
   unlock: (id: string) => apiRequest<AppUser>(`/v1/users/${id}/unlock`, { method: 'POST' }),
+  lock: (id: string) => apiRequest<AppUser>(`/v1/users/${id}/lock`, { method: 'POST' }),
   setRole: (id: string, role: AppRole) => apiRequest<AppUser>(`/v1/users/${id}/role`, {
     method: 'POST', body: JSON.stringify({ role }),
   }),

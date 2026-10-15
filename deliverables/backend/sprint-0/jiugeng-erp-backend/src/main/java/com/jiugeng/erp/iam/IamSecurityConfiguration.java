@@ -41,6 +41,7 @@ class IamSecurityConfiguration {
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login",
                                 "/api/v1/auth/password-reset/request", "/api/v1/auth/password-reset/confirm")
                         .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/auth/login-settings").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers("/api/v1/**").authenticated()
                         .anyRequest().permitAll())

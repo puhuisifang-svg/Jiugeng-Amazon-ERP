@@ -221,6 +221,27 @@ class IamRepository {
         clearFailedLogins(userId);
     }
 
+    void lock(String userId) {
+        jdbc.sql("""
+                UPDATE iam_user SET locked_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id
+                """).param("id", userId).update();
+    }
+
+    int staySignedInDays() {
+        return jdbc.sql("""
+                SELECT setting_value FROM iam_security_setting WHERE setting_key = 'stay_signed_in_days'
+                """).query(String.class).optional().map(Integer::parseInt).orElse(7);
+    }
+
+    void updateStaySignedInDays(int days, String actorUserId) {
+        jdbc.sql("""
+                UPDATE iam_security_setting
+                SET setting_value = :days, updated_by = :actorUserId, updated_at = CURRENT_TIMESTAMP
+                WHERE setting_key = 'stay_signed_in_days'
+                """).param("days", Integer.toString(days)).param("actorUserId", actorUserId).update();
+    }
+
     private User mapUser(ResultSet rs, int rowNum) throws SQLException {
         var lockedAt = rs.getTimestamp("locked_at");
         return new User(rs.getString("id"), rs.getString("login_name"), rs.getString("display_name"),

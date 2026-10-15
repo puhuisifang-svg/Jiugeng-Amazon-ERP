@@ -9,6 +9,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jiugeng.erp.iam.IamTypes.Role;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,7 +40,47 @@ class IamControllerTest {
         jdbc.update("DELETE FROM audit_event");
         jdbc.update("DELETE FROM iam_session");
         jdbc.update("DELETE FROM iam_user");
+        jdbc.update("UPDATE iam_security_setting SET setting_value = '7', updated_by = NULL");
         service.createUser("admin", "测试管理员", INITIAL_PASSWORD, Role.ADMIN);
+    }
+
+    @Test
+    void administratorConfiguresStaySignedInDurationAndLoginAppliesIt() throws Exception {
+        mvc.perform(get("/api/v1/auth/login-settings"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.staySignedInDays").value(7));
+
+        String adminToken = loginAndChangeAdmin();
+        mvc.perform(post("/api/v1/settings/security").header("Authorization", bearer(adminToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("staySignedInDays", 14))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.staySignedInDays").value(14));
+
+        String body = mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of(
+                                "loginName", "admin",
+                                "password", CHANGED_PASSWORD,
+                                "staySignedIn", true))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        Instant expiresAt = Instant.parse(objectMapper.readTree(body).get("expiresAt").asText());
+        assertThat(Duration.between(Instant.now(), expiresAt).toHours()).isBetween(335L, 336L);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM audit_event WHERE action = 'SESSION_POLICY_UPDATE'", Integer.class))
+                .isEqualTo(1);
+
+        mvc.perform(post("/api/v1/settings/security").header("Authorization", bearer(adminToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("staySignedInDays", 31))))
+                .andExpect(status().isBadRequest());
+
+        service.createUser("selector", "选品员", INITIAL_PASSWORD, Role.SELECTION);
+        String selectorToken = login("selector", INITIAL_PASSWORD);
+        changePassword(selectorToken, INITIAL_PASSWORD, CHANGED_PASSWORD);
+        mvc.perform(get("/api/v1/settings/security").header("Authorization", bearer(selectorToken)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("CAPABILITY_DENIED"));
     }
 
     @Test
@@ -131,6 +173,33 @@ class IamControllerTest {
                 Integer.class, userId)).isEqualTo(1);
 
         assertThat(login("locked-user", INITIAL_PASSWORD)).isNotBlank();
+    }
+
+    @Test
+    void administratorCanManuallyLockAndRestoreAnAccount() throws Exception {
+        service.createUser("operator", "操作员", INITIAL_PASSWORD, Role.PRODUCT_MATERIAL);
+        String operatorToken = login("operator", INITIAL_PASSWORD);
+        String adminToken = loginAndChangeAdmin();
+        String userId = jdbc.queryForObject(
+                "SELECT id FROM iam_user WHERE login_name = 'operator'", String.class);
+
+        mvc.perform(post("/api/v1/users/{id}/lock", userId).header("Authorization", bearer(adminToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lockedAt").isNotEmpty());
+        mvc.perform(get("/api/v1/auth/me").header("Authorization", bearer(operatorToken)))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(loginRequest("operator", INITIAL_PASSWORD)).andExpect(status().isLocked());
+
+        mvc.perform(post("/api/v1/users/{id}/unlock", userId).header("Authorization", bearer(adminToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lockedAt").doesNotExist());
+        assertThat(login("operator", INITIAL_PASSWORD)).isNotBlank();
+
+        String adminId = jdbc.queryForObject(
+                "SELECT id FROM iam_user WHERE login_name = 'admin'", String.class);
+        mvc.perform(post("/api/v1/users/{id}/lock", adminId).header("Authorization", bearer(adminToken)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("SELF_LOCK_FORBIDDEN"));
     }
 
     @Test

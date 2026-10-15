@@ -1,14 +1,15 @@
 import { computed, reactive } from 'vue'
 
 import { loadCurrentUser, login, logout as logoutRemote, type AppUser, type LoginInput } from '@/api/auth'
-import { SESSION_EXPIRED_EVENT, SESSION_TOKEN_KEY } from '@/api/client'
+import { clearSessionToken, getSessionToken, SESSION_EXPIRED_EVENT, SESSION_TOKEN_KEY, setSessionToken } from '@/api/client'
+import { runtimeConfig } from '@/config/runtime'
 import type { AppRole, Capability } from '@/router/meta'
 
 const STORAGE_KEY = 'jiugeng.session.user'
 
 function restoreUser(): AppUser | null {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
+    const raw = window.localStorage.getItem(STORAGE_KEY) ?? window.sessionStorage.getItem(STORAGE_KEY)
     return raw ? JSON.parse(raw) as AppUser : null
   }
   catch {
@@ -18,16 +19,21 @@ function restoreUser(): AppUser | null {
 
 const state = reactive<{ user: AppUser | null }>({ user: restoreUser() })
 
-function persist(user: AppUser, token?: string) {
+function persist(user: AppUser, token?: string, persistent?: boolean) {
   state.user = user
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(user))
-  if (token) window.localStorage.setItem(SESSION_TOKEN_KEY, token)
+  const usePersistentStorage = persistent ?? Boolean(window.localStorage.getItem(SESSION_TOKEN_KEY))
+  const storage = usePersistentStorage ? window.localStorage : window.sessionStorage
+  window.localStorage.removeItem(STORAGE_KEY)
+  window.sessionStorage.removeItem(STORAGE_KEY)
+  storage.setItem(STORAGE_KEY, JSON.stringify(user))
+  if (token) setSessionToken(token, usePersistentStorage)
 }
 
 function clear() {
   state.user = null
   window.localStorage.removeItem(STORAGE_KEY)
-  window.localStorage.removeItem(SESSION_TOKEN_KEY)
+  window.sessionStorage.removeItem(STORAGE_KEY)
+  clearSessionToken()
   window.localStorage.removeItem('jiugeng.mock.session.user')
   window.localStorage.removeItem('jiugeng.mock.session.token')
 }
@@ -36,10 +42,11 @@ window.addEventListener(SESSION_EXPIRED_EVENT, clear)
 
 export const session = {
   user: computed(() => state.user),
-  isAuthenticated: computed(() => Boolean(state.user && window.localStorage.getItem(SESSION_TOKEN_KEY))),
+  isAuthenticated: computed(() => Boolean(state.user && getSessionToken())),
   async login(input: LoginInput | AppRole) {
-    const response = await login(typeof input === 'string' ? { role: input } : input)
-    persist(response.user, response.token)
+    const normalized = typeof input === 'string' ? { role: input } : input
+    const response = await login(normalized)
+    persist(response.user, response.token, runtimeConfig.authMode === 'mock' || Boolean(normalized.staySignedIn))
   },
   async refresh() {
     const user = await loadCurrentUser()
@@ -55,7 +62,7 @@ export const session = {
   },
   clear,
   async initialize() {
-    if (!state.user || !window.localStorage.getItem(SESSION_TOKEN_KEY)) {
+    if (!state.user || !getSessionToken()) {
       clear()
       return
     }

@@ -104,6 +104,9 @@ a { color: inherit; }
 .login-card { width: min(420px, 100%); padding: 38px; background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0, 0, 0, .28); }
 .login-card h1 { margin: 12px 0 8px; }
 .login-card p { color: var(--muted); line-height: 1.6; }
+.login-options { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.login-options .checkbox-label { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 13px; font-weight: 600; }
+.login-options .checkbox-label input { width: 16px; min-height: 16px; margin: 0; }
 .login-notice { margin-top: 20px; }
 .login-form { display: grid; gap: 12px; margin-top: 20px; }
 .login-form label { color: var(--ink); font-size: 13px; font-weight: 700; }

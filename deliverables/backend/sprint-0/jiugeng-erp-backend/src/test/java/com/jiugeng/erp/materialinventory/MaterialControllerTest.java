@@ -63,7 +63,11 @@ class MaterialControllerTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.specification").value("50cm × 40cm × 30cm"));
         mvc.perform(post("/api/v1/materials/{id}/disable", id).header("Authorization", bearer(token)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("DISABLED"));
-        mvc.perform(post("/api/v1/materials/{id}/enable", id).header("Authorization", bearer(token)))
+        mvc.perform(post("/api/v1/materials/{id}/enable", id)
+                        .header("Authorization", bearer(token))
+                        .header("Origin", "https://erp.example.test")
+                        .header("X-Forwarded-Proto", "https")
+                        .header("X-Forwarded-Host", "erp.example.test"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("ACTIVE"));
 
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM auxiliary_material WHERE id = ?", Integer.class, id))

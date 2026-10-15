@@ -24,6 +24,7 @@ management:
 
 server:
   shutdown: graceful
+  forward-headers-strategy: framework
 
 app:
   catalog:

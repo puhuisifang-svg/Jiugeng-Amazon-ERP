@@ -223,201 +223,239 @@ onMounted(load)
         查看库存流水
       </RouterLink>
     </section>
-    <form
+    <div
       v-if="writable && showMaterialForm"
-      class="panel operation-form"
-      @submit.prevent="save"
+      class="operation-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="material-dialog-title"
+      @click.self="resetForm"
+      @keydown.esc="resetForm"
     >
-      <h2>{{ editingId ? '编辑辅料' : formal ? '新增辅料' : '新增模拟辅料' }}</h2>
-      <label>辅料编码<input
-        v-model="form.materialCode"
-        required
-        maxlength="64"
-        :readonly="Boolean(editingId)"
-      ></label>
-      <label>辅料名称<input
-        v-model="form.name"
-        required
-        maxlength="200"
-      ></label>
-      <label>辅料类型<input
-        v-model="form.materialType"
-        :required="formal"
-        maxlength="100"
-      ></label>
-      <label>规格<input
-        v-model="form.specification"
-        maxlength="500"
-      ></label>
-      <label>单位<select
-        v-model="form.unit"
-        required
-      ><option
-        v-for="unit in unitOptions"
-        :key="unit"
-        :value="unit"
-      >{{ unit }}</option></select></label>
-      <label>图片 HTTPS 地址<input
-        v-model="form.imageUrl"
-        maxlength="500"
-        type="url"
-        placeholder="也可以直接上传图片"
-        @input="useImageUrl"
-      ></label>
-      <section
-        v-if="formal"
-        class="form-wide catalog-image-editor material-image-editor"
+      <form
+        class="panel operation-form operation-dialog__card"
+        @submit.prevent="save"
       >
-        <AuthenticatedCatalogImage
-          :image-id="form.imageAssetId"
-          alt="辅料图片"
-        />
-        <label class="secondary-action">{{ uploading ? '上传中…' : '上传辅料图片' }}<input
-          class="sr-only"
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          :disabled="uploading"
-          @change="uploadImage"
+        <button
+          class="operation-dialog__close"
+          type="button"
+          aria-label="关闭辅料操作"
+          @click="resetForm"
+        >
+          ×
+        </button>
+        <h2 id="material-dialog-title">
+          {{ editingId ? '编辑辅料' : formal ? '新增辅料' : '新增模拟辅料' }}
+        </h2>
+        <label>辅料编码<input
+          v-model="form.materialCode"
+          required
+          maxlength="64"
+          :readonly="Boolean(editingId)"
+        ></label>
+        <label>辅料名称<input
+          v-model="form.name"
+          required
+          maxlength="200"
+        ></label>
+        <label>辅料类型<input
+          v-model="form.materialType"
+          :required="formal"
+          maxlength="100"
+        ></label>
+        <label>规格<input
+          v-model="form.specification"
+          maxlength="500"
+        ></label>
+        <label>单位<select
+          v-model="form.unit"
+          required
+        ><option
+          v-for="unit in unitOptions"
+          :key="unit"
+          :value="unit"
+        >{{ unit }}</option></select></label>
+        <label>图片 HTTPS 地址<input
+          v-model="form.imageUrl"
+          maxlength="500"
+          type="url"
+          placeholder="也可以直接上传图片"
+          @input="useImageUrl"
+        ></label>
+        <section
+          v-if="formal"
+          class="form-wide catalog-image-editor material-image-editor"
+        >
+          <AuthenticatedCatalogImage
+            :image-id="form.imageAssetId"
+            alt="辅料图片"
+          />
+          <label class="secondary-action">{{ uploading ? '上传中…' : '上传辅料图片' }}<input
+            class="sr-only"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            :disabled="uploading"
+            @change="uploadImage"
+          ></label>
+          <button
+            v-if="form.imageAssetId"
+            type="button"
+            class="secondary-button"
+            @click="form.imageAssetId = ''"
+          >
+            移除上传图片
+          </button>
+        </section>
+        <p
+          v-if="imageError"
+          class="form-wide data-state data-state--error"
+          role="alert"
+        >
+          {{ imageError }}
+        </p>
+        <label class="form-wide">备注<textarea
+          v-model="form.remark"
+          maxlength="1000"
+        /></label>
+        <section
+          v-if="supplierWritable"
+          class="form-wide relation-editor"
+        >
+          <h3>关联供应商</h3>
+          <p>
+            <RouterLink to="/suppliers">
+              维护或新建供应商档案
+            </RouterLink>；供应商档案独立保存，关联随辅料保存。
+          </p>
+          <select
+            aria-label="添加辅料供应商"
+            value=""
+            @change="addSupplier($event)"
+          >
+            <option value="">
+              选择供应商…
+            </option><option
+              v-for="supplier in supplierOptions"
+              :key="supplier.id"
+              :value="supplier.id"
+            >
+              {{ supplier.name }}
+            </option>
+          </select>
+          <div
+            v-for="link in supplierLinks"
+            :key="link.supplierId"
+            class="relation-row"
+          >
+            <strong>{{ supplierName(link.supplierId) }}</strong>
+            <label><input
+              type="radio"
+              name="material-primary-supplier"
+              :checked="link.primary"
+              @change="makePrimary(link.supplierId)"
+            >主供应商</label>
+            <input
+              v-model="link.purchaseUrl"
+              aria-label="辅料采购链接"
+              type="url"
+              placeholder="1688 HTTPS 采购链接"
+            ><input
+              v-model="link.remark"
+              aria-label="辅料供应商关系备注"
+              maxlength="500"
+              placeholder="关系备注"
+            >
+            <button
+              type="button"
+              class="danger-link"
+              @click="supplierLinks.splice(supplierLinks.indexOf(link), 1)"
+            >
+              解除
+            </button>
+          </div>
+        </section>
+        <button
+          :disabled="saving || uploading"
+          type="submit"
+        >
+          {{ saving ? '保存中…' : editingId ? '保存修改' : '新增辅料' }}
+        </button>
+        <button
+          class="secondary-button"
+          type="button"
+          @click="resetForm"
+        >
+          取消
+        </button>
+      </form>
+    </div>
+    <div
+      v-if="inventoryWritable && showInventoryForm"
+      class="operation-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="inventory-dialog-title"
+      @click.self="showInventoryForm = false"
+      @keydown.esc="showInventoryForm = false"
+    >
+      <form
+        class="panel operation-form operation-dialog__card operation-dialog__card--compact"
+        @submit.prevent="submitInventory"
+      >
+        <button
+          class="operation-dialog__close"
+          type="button"
+          aria-label="关闭库存操作"
+          @click="showInventoryForm = false"
+        >
+          ×
+        </button>
+        <h2 id="inventory-dialog-title">
+          提交{{ mockMode ? '模拟' : '正式' }}库存命令
+        </h2>
+        <label v-if="mockMode">辅料编码<input
+          v-model="inventoryForm.materialCode"
+          required
+        ></label>
+        <label v-else>辅料<select
+          v-model="inventoryForm.materialId"
+          required
+        ><option
+          value=""
+          disabled
+        >请选择</option><option
+          v-for="item in activeMaterials"
+          :key="item.id"
+          :value="item.id"
+        >{{ item.materialCode }} · {{ item.name }}</option></select></label>
+        <label>类型<select v-model="inventoryForm.type"><template v-if="mockMode"><option>OPENING</option><option>INBOUND</option><option>OUTBOUND</option><option>ADJUSTMENT</option></template><template v-else><option>INBOUND</option><option>OUTBOUND</option><option>ADJUST_IN</option><option>ADJUST_OUT</option></template></select></label>
+        <label>数量<input
+          v-model.number="inventoryForm.quantity"
+          required
+          min="0.0001"
+          type="number"
+          step="0.0001"
+        ></label>
+        <label class="form-wide">原因<input
+          v-model="inventoryForm.reason"
+          required
+          maxlength="500"
         ></label>
         <button
-          v-if="form.imageAssetId"
-          type="button"
-          class="secondary-button"
-          @click="form.imageAssetId = ''"
+          :disabled="saving"
+          type="submit"
         >
-          移除上传图片
+          {{ saving ? '提交中…' : '提交流水' }}
         </button>
-      </section>
-      <p
-        v-if="imageError"
-        class="form-wide data-state data-state--error"
-        role="alert"
-      >
-        {{ imageError }}
-      </p>
-      <label class="form-wide">备注<textarea
-        v-model="form.remark"
-        maxlength="1000"
-      /></label>
-      <section
-        v-if="supplierWritable"
-        class="form-wide relation-editor"
-      >
-        <h3>关联供应商</h3>
-        <p>
-          <RouterLink to="/suppliers">
-            维护或新建供应商档案
-          </RouterLink>；供应商档案独立保存，关联随辅料保存。
-        </p>
-        <select
-          aria-label="添加辅料供应商"
-          value=""
-          @change="addSupplier($event)"
+        <button
+          class="secondary-button"
+          type="button"
+          @click="showInventoryForm = false"
         >
-          <option value="">
-            选择供应商…
-          </option><option
-            v-for="supplier in supplierOptions"
-            :key="supplier.id"
-            :value="supplier.id"
-          >
-            {{ supplier.name }}
-          </option>
-        </select>
-        <div
-          v-for="link in supplierLinks"
-          :key="link.supplierId"
-          class="relation-row"
-        >
-          <strong>{{ supplierName(link.supplierId) }}</strong>
-          <label><input
-            type="radio"
-            name="material-primary-supplier"
-            :checked="link.primary"
-            @change="makePrimary(link.supplierId)"
-          >主供应商</label>
-          <input
-            v-model="link.purchaseUrl"
-            aria-label="辅料采购链接"
-            type="url"
-            placeholder="1688 HTTPS 采购链接"
-          ><input
-            v-model="link.remark"
-            aria-label="辅料供应商关系备注"
-            maxlength="500"
-            placeholder="关系备注"
-          >
-          <button
-            type="button"
-            class="danger-link"
-            @click="supplierLinks.splice(supplierLinks.indexOf(link), 1)"
-          >
-            解除
-          </button>
-        </div>
-      </section>
-      <button
-        :disabled="saving || uploading"
-        type="submit"
-      >
-        {{ saving ? '保存中…' : editingId ? '保存修改' : '新增辅料' }}
-      </button>
-      <button
-        class="secondary-button"
-        type="button"
-        @click="resetForm"
-      >
-        取消
-      </button>
-    </form>
-    <form
-      v-if="inventoryWritable && showInventoryForm"
-      class="panel operation-form"
-      @submit.prevent="submitInventory"
-    >
-      <h2>提交{{ mockMode ? '模拟' : '正式' }}库存命令</h2>
-      <label v-if="mockMode">辅料编码<input
-        v-model="inventoryForm.materialCode"
-        required
-      ></label>
-      <label v-else>辅料<select
-        v-model="inventoryForm.materialId"
-        required
-      ><option
-        value=""
-        disabled
-      >请选择</option><option
-        v-for="item in activeMaterials"
-        :key="item.id"
-        :value="item.id"
-      >{{ item.materialCode }} · {{ item.name }}</option></select></label>
-      <label>类型<select v-model="inventoryForm.type"><template v-if="mockMode"><option>OPENING</option><option>INBOUND</option><option>OUTBOUND</option><option>ADJUSTMENT</option></template><template v-else><option>INBOUND</option><option>OUTBOUND</option><option>ADJUST_IN</option><option>ADJUST_OUT</option></template></select></label>
-      <label>数量<input
-        v-model.number="inventoryForm.quantity"
-        required
-        min="0.0001"
-        type="number"
-        step="0.0001"
-      ></label>
-      <label class="form-wide">原因<input
-        v-model="inventoryForm.reason"
-        required
-        maxlength="500"
-      ></label>
-      <button
-        :disabled="saving"
-        type="submit"
-      >
-        {{ saving ? '提交中…' : '提交流水' }}
-      </button>
-      <button
-        class="secondary-button"
-        type="button"
-        @click="showInventoryForm = false"
-      >
-        取消
-      </button>
-    </form>
+          取消
+        </button>
+      </form>
+    </div>
     <p
       v-if="success"
       class="data-state data-state--success"

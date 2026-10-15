@@ -74,6 +74,9 @@ describe('MaterialsView merged material management', () => {
 
     const toolbar = wrapper.get('.material-toolbar')
     await toolbar.findAll('button').find(button => button.text() === '添加辅料')!.trigger('click')
+    expect(wrapper.findAll('[role="dialog"]')).toHaveLength(1)
+    expect(wrapper.get('[role="dialog"]').attributes('aria-labelledby')).toBe('material-dialog-title')
+    expect(wrapper.find('.material-table').exists()).toBe(true)
     expect(wrapper.text()).toContain('新增辅料')
     expect(wrapper.text()).not.toContain('提交正式库存命令')
     const materialForm = wrapper.findAll('form').find(item => item.text().includes('新增辅料'))!
@@ -82,8 +85,27 @@ describe('MaterialsView merged material management', () => {
     expect(unitSelect.text()).toContain('套')
 
     await toolbar.findAll('button').find(button => button.text() === '库存操作')!.trigger('click')
+    expect(wrapper.findAll('[role="dialog"]')).toHaveLength(1)
+    expect(wrapper.get('[role="dialog"]').attributes('aria-labelledby')).toBe('inventory-dialog-title')
+    expect(wrapper.find('.material-table').exists()).toBe(true)
     expect(wrapper.text()).not.toContain('新增辅料')
     expect(wrapper.text()).toContain('提交正式库存命令')
+  })
+
+  it('closes each operation independently without hiding the material list', async () => {
+    const wrapper = mount(MaterialsView, { global })
+    await flushPromises()
+
+    const toolbar = wrapper.get('.material-toolbar')
+    await toolbar.findAll('button').find(button => button.text() === '添加辅料')!.trigger('click')
+    await wrapper.get('button[aria-label="关闭辅料操作"]').trigger('click')
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    expect(wrapper.find('.material-table').exists()).toBe(true)
+
+    await toolbar.findAll('button').find(button => button.text() === '库存操作')!.trigger('click')
+    await wrapper.get('button[aria-label="关闭库存操作"]').trigger('click')
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    expect(wrapper.find('.material-table').exists()).toBe(true)
   })
 
   it('uploads a material image and saves supplier links for a new material', async () => {

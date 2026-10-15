@@ -27,7 +27,10 @@ describe('SuppliersView', () => {
     const wrapper = mount(SuppliersView, { global: { stubs: { AuthenticatedCatalogImage } } })
     await flushPromises()
 
+    expect(wrapper.findAll('form').some(item => item.text().includes('新增供应商'))).toBe(false)
+    await wrapper.get('.material-toolbar button').trigger('click')
     const form = wrapper.findAll('form').find(item => item.text().includes('新增供应商'))!
+    expect(wrapper.get('[role="dialog"]').attributes('aria-labelledby')).toBe('supplier-dialog-title')
     await form.get('input[required]').setValue('  包装供应商  ')
     await form.findAll('input')[1]!.setValue('张三')
     await form.trigger('submit')
@@ -35,6 +38,6 @@ describe('SuppliersView', () => {
 
     expect(createSupplier).toHaveBeenCalledWith({ name: '包装供应商', contactPerson: '张三', status: 'ACTIVE' })
     expect(wrapper.get('[role="status"]').text()).toContain('供应商已创建')
-    expect(form.get('button[type="submit"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
   })
 })

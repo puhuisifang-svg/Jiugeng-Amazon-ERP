@@ -1,8 +1,8 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { createMaterial, replaceMaterialSupplierLinks, transact, updateSafetyStock, uploadImage } = vi.hoisted(() => ({
-  createMaterial: vi.fn(), replaceMaterialSupplierLinks: vi.fn(), transact: vi.fn(), updateSafetyStock: vi.fn(), uploadImage: vi.fn(),
+const { createMaterial, materialSupplierLinks, replaceMaterialSupplierLinks, supplier, transact, updateSafetyStock, uploadImage } = vi.hoisted(() => ({
+  createMaterial: vi.fn(), materialSupplierLinks: vi.fn(), replaceMaterialSupplierLinks: vi.fn(), supplier: vi.fn(), transact: vi.fn(), updateSafetyStock: vi.fn(), uploadImage: vi.fn(),
 }))
 
 vi.mock('@/config/runtime', () => ({ runtimeConfig: { authMode: 'password' } }))
@@ -17,7 +17,8 @@ vi.mock('@/api/domain', () => ({
     balances: vi.fn(async () => ({ items: [{ warehouseCode: 'MAIN', materialId: 'm1', materialCode: 'MAT-1',
       materialName: '纸箱', quantity: 2, safetyStock: 3, unit: 'PCS', lowStock: true }], mockData: false })),
     suppliers: vi.fn(async () => ({ items: [{ id: 's1', name: '包装供应商', status: 'ACTIVE', version: 0 }], totalCount: 1, page: 0, size: 100 })),
-    materialSupplierLinks: vi.fn(async () => []),
+    materialSupplierLinks,
+    supplier,
     createMaterial,
     replaceMaterialSupplierLinks,
     transact,
@@ -33,7 +34,7 @@ const global = { stubs: { RouterLink, AuthenticatedCatalogImage } }
 
 describe('MaterialsView merged material management', () => {
   beforeEach(() => {
-    createMaterial.mockReset(); replaceMaterialSupplierLinks.mockReset(); transact.mockReset(); updateSafetyStock.mockReset(); uploadImage.mockReset()
+    createMaterial.mockReset(); materialSupplierLinks.mockReset().mockResolvedValue([]); replaceMaterialSupplierLinks.mockReset(); supplier.mockReset(); transact.mockReset(); updateSafetyStock.mockReset(); uploadImage.mockReset()
   })
 
   it('shows master data and inventory in one filterable table', async () => {
@@ -82,6 +83,25 @@ describe('MaterialsView merged material management', () => {
     expect(dialog.get('img').attributes('src')).toBe('https://images.example.com/box.jpg')
     await dialog.get('button[aria-label="关闭图片预览"]').trigger('click')
     expect(wrapper.find('[aria-label="纸箱图片预览"]').exists()).toBe(false)
+  })
+
+  it('opens purchasing suppliers from a material row', async () => {
+    materialSupplierLinks.mockResolvedValue([{ id: 'l1', ownerId: 'm1', supplierId: 's1', supplierName: '包装供应商', supplierStatus: 'ACTIVE', purchaseUrl: 'https://detail.1688.com/offer/1.html', primary: true, remark: '月结' }])
+    supplier.mockResolvedValue({ id: 's1', name: '包装供应商', contactPerson: '张三', phone: '13800000000', status: 'ACTIVE', version: 0 })
+    const wrapper = mount(MaterialsView, { global })
+    await flushPromises()
+
+    const row = wrapper.findAll('tbody tr').find(item => item.text().includes('MAT-1'))!
+    await row.findAll('button').find(button => button.text() === '采购')!.trigger('click')
+    await flushPromises()
+
+    const dialog = wrapper.get('[role="dialog"][aria-labelledby="purchase-dialog-title"]')
+    expect(materialSupplierLinks).toHaveBeenCalledWith('m1')
+    expect(supplier).toHaveBeenCalledWith('s1')
+    expect(dialog.text()).toContain('包装供应商')
+    expect(dialog.text()).toContain('张三')
+    expect(dialog.text()).toContain('13800000000')
+    expect(dialog.get('a').attributes('href')).toBe('https://detail.1688.com/offer/1.html')
   })
 
   it('keeps material and inventory operations exclusive and offers common units', async () => {

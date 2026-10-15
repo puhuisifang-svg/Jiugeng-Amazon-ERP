@@ -6,11 +6,12 @@ import { domainApi, type SupplierDto, type SupplierInput } from '@/api/domain'
 import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vue'
 import { session } from '@/state/session'
 
-const items = ref<SupplierDto[]>([]); const query = ref(''); const status = ref(''); const loading = ref(true); const saving = ref(false); const error = ref(''); const success = ref(''); const editing = ref<SupplierDto | null>(null); const preview = ref<string>()
+const items = ref<SupplierDto[]>([]); const query = ref(''); const status = ref(''); const loading = ref(true); const saving = ref(false); const error = ref(''); const success = ref(''); const editing = ref<SupplierDto | null>(null); const preview = ref<string>(); const showForm = ref(false)
 const form = reactive<SupplierInput>({ name: '', contactPerson: '', phone: '', sourceUrl: '', qrImageId: '', remark: '', status: 'ACTIVE' })
 const writable = computed(() => session.canAccess(['suppliers.write']))
-function reset() { Object.assign(form, { name: '', contactPerson: '', phone: '', sourceUrl: '', qrImageId: '', remark: '', status: 'ACTIVE', version: undefined }); editing.value = null }
-function edit(item: SupplierDto) { editing.value = item; Object.assign(form, { name: item.name, contactPerson: item.contactPerson ?? '', phone: item.phone ?? '', sourceUrl: item.sourceUrl ?? '', qrImageId: item.qrImageId ?? '', remark: item.remark ?? '', status: item.status, version: item.version }) }
+function reset() { Object.assign(form, { name: '', contactPerson: '', phone: '', sourceUrl: '', qrImageId: '', remark: '', status: 'ACTIVE', version: undefined }); editing.value = null; showForm.value = false }
+function openCreate() { reset(); showForm.value = true; error.value = ''; success.value = '' }
+function edit(item: SupplierDto) { editing.value = item; Object.assign(form, { name: item.name, contactPerson: item.contactPerson ?? '', phone: item.phone ?? '', sourceUrl: item.sourceUrl ?? '', qrImageId: item.qrImageId ?? '', remark: item.remark ?? '', status: item.status, version: item.version }); showForm.value = true; error.value = ''; success.value = '' }
 async function load() { loading.value = true; error.value = ''; try { const result = await domainApi.suppliers({ ...(query.value ? { q: query.value } : {}), ...(status.value ? { status: status.value as 'ACTIVE' | 'DISABLED' } : {}), size: 100 }); items.value = result.items } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '供应商加载失败。' } finally { loading.value = false } }
 async function upload(event: Event) { const file = (event.target as HTMLInputElement).files?.[0]; if (!file) return; saving.value = true; try { form.qrImageId = (await catalogApi.uploadImage('SUPPLIER_QR', file)).id } catch (exception) { error.value = exception instanceof Error ? exception.message : '二维码上传失败。' } finally { saving.value = false } }
 function supplierInput(): SupplierInput {
@@ -48,69 +49,103 @@ onMounted(load)
         查询
       </button>
     </form>
-    <form
-      v-if="writable"
-      class="panel operation-form"
-      @submit.prevent="save"
+    <section
+      class="panel material-toolbar"
+      aria-label="供应商管理操作"
     >
-      <h2>{{ editing ? '编辑供应商' : '新增供应商' }}</h2><label>供应商名称<input
-        v-model="form.name"
-        required
-        maxlength="128"
-      ></label><label>联系人<input
-        v-model="form.contactPerson"
-        maxlength="64"
-      ></label><label>电话<input
-        v-model="form.phone"
-        maxlength="32"
-      ></label><label>1688 链接<input
-        v-model="form.sourceUrl"
-        type="url"
-        maxlength="500"
-        placeholder="https://detail.1688.com/..."
-      ></label><label>微信二维码<input
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        @change="upload"
-      ></label><label>状态<select v-model="form.status"><option value="ACTIVE">启用</option><option value="DISABLED">停用</option></select></label><label class="form-wide">备注<textarea
-        v-model="form.remark"
-        maxlength="500"
-      /></label><div
-        v-if="form.qrImageId"
-        class="form-wide catalog-image-editor"
-      >
+      <div>
         <button
+          v-if="writable"
           type="button"
-          class="image-button"
-          @click="preview = form.qrImageId"
+          @click="openCreate"
         >
-          <AuthenticatedCatalogImage
-            :image-id="form.qrImageId"
-            alt="供应商微信二维码"
-          />
-        </button><button
-          type="button"
-          class="secondary-button"
-          @click="form.qrImageId = undefined"
-        >
-          移除二维码
-        </button>
-      </div><div class="operation-form__actions">
-        <button
-          v-if="editing"
-          type="button"
-          class="secondary-button"
-          @click="reset"
-        >
-          取消
-        </button><button
-          :disabled="saving"
-          type="submit"
-        >
-          {{ saving ? '保存中…' : '保存供应商' }}
+          新增供应商
         </button>
       </div>
-    </form>
+      <span class="toolbar-hint">维护供应商档案、联系方式与采购来源</span>
+    </section>
+    <div
+      v-if="writable && showForm"
+      class="operation-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="supplier-dialog-title"
+      @click.self="reset"
+      @keydown.esc="reset"
+    >
+      <form
+        class="panel operation-form operation-dialog__card"
+        @submit.prevent="save"
+      >
+        <button
+          class="operation-dialog__close"
+          type="button"
+          aria-label="关闭供应商操作"
+          @click="reset"
+        >
+          ×
+        </button>
+        <h2 id="supplier-dialog-title">
+          {{ editing ? '编辑供应商' : '新增供应商' }}
+        </h2><label>供应商名称<input
+          v-model="form.name"
+          required
+          maxlength="128"
+        ></label><label>联系人<input
+          v-model="form.contactPerson"
+          maxlength="64"
+        ></label><label>电话<input
+          v-model="form.phone"
+          maxlength="32"
+        ></label><label>1688 链接<input
+          v-model="form.sourceUrl"
+          type="url"
+          maxlength="500"
+          placeholder="https://detail.1688.com/..."
+        ></label><label>微信二维码<input
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          @change="upload"
+        ></label><label>状态<select v-model="form.status"><option value="ACTIVE">启用</option><option value="DISABLED">停用</option></select></label><label class="form-wide">备注<textarea
+          v-model="form.remark"
+          maxlength="500"
+        /></label><div
+          v-if="form.qrImageId"
+          class="form-wide catalog-image-editor"
+        >
+          <button
+            type="button"
+            class="image-button"
+            @click="preview = form.qrImageId"
+          >
+            <AuthenticatedCatalogImage
+              :image-id="form.qrImageId"
+              alt="供应商微信二维码"
+            />
+          </button><button
+            type="button"
+            class="secondary-button"
+            @click="form.qrImageId = undefined"
+          >
+            移除二维码
+          </button>
+        </div><div class="operation-form__actions">
+          <button
+            v-if="editing"
+            type="button"
+            class="secondary-button"
+            @click="reset"
+          >
+            取消
+          </button><button
+            :disabled="saving"
+            type="submit"
+          >
+            {{ saving ? '保存中…' : '保存供应商' }}
+          </button>
+        </div>
+      </form>
+    </div>
     <p
       v-if="success"
       class="data-state data-state--success"

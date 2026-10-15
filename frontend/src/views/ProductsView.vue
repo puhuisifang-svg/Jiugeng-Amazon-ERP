@@ -27,22 +27,27 @@ onMounted(load)
 <template>
   <section class="page-stack">
     <SyntheticNotice v-if="runtimeConfig.authMode === 'mock'" />
-    <div class="page-actions">
-      <p>{{ runtimeConfig.authMode === 'mock' ? '当前展示模拟产品。' : '产品与内部 SKU 主档。' }}</p>
-      <RouterLink
-        v-if="writable"
-        class="primary-link"
-        to="/products/new"
-      >
-        新增产品
-      </RouterLink>
-    </div>
     <section class="panel filter-panel product-filters">
       <label>搜索<input
         v-model="query"
         type="search"
         placeholder="产品编号 / 名称"
       ></label><label>状态<select v-model="status"><option value="">全部</option><option value="ACTIVE">启用</option><option value="DRAFT">待定</option><option value="DISABLED">停用</option></select></label>
+    </section>
+    <section
+      class="panel material-toolbar"
+      aria-label="产品管理操作"
+    >
+      <div>
+        <RouterLink
+          v-if="writable"
+          class="primary-link"
+          to="/products/new"
+        >
+          新增产品
+        </RouterLink>
+      </div>
+      <span class="toolbar-hint">{{ runtimeConfig.authMode === 'mock' ? '当前展示模拟产品。' : '产品与内部 SKU 主档。' }}</span>
     </section>
     <p
       v-if="error"

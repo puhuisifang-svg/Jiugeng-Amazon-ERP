@@ -4,7 +4,7 @@ import { RouterLink } from 'vue-router'
 
 import { ApiError } from '@/api/client'
 import { catalogApi } from '@/api/catalog'
-import { domainApi, type InventoryBalanceViewDto, type InventoryCommandType, type MaterialDetailDto, type MaterialInput, type SupplierAssignmentDto, type SupplierDto } from '@/api/domain'
+import { domainApi, type InventoryBalanceViewDto, type InventoryCommandType, type MaterialDetailDto, type MaterialInput, type SupplierAssignmentDto, type SupplierDto, type SupplierLinkDto } from '@/api/domain'
 import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vue'
 import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import { runtimeConfig } from '@/config/runtime'
@@ -25,6 +25,9 @@ const uploading = ref(false); const imageError = ref('')
 const failedRemoteImages = ref<Set<string>>(new Set())
 type MaterialImagePreview = { alt: string; imageUrl: string } | { alt: string; imageAssetId: string }
 const imagePreview = ref<MaterialImagePreview | null>(null)
+const purchaseMaterial = ref<MaterialDetailDto | null>(null)
+const purchaseLoading = ref(false)
+const purchaseSuppliers = ref<Array<{ link: SupplierLinkDto; supplier: SupplierDto }>>([])
 const unitOptions = ['件', '个', '套', '盒', '包', '卷', '米', '千克', '克', 'PCS', 'SET', 'BOX', 'PACK', 'ROLL', 'M', 'KG']
 const writable = computed(() => session.canAccess(['materials.write']))
 const formal = computed(() => runtimeConfig.authMode === 'password')
@@ -34,6 +37,7 @@ const inventoryWritable = computed(() => inventoryReadable.value && (mockMode.va
 const importReadable = computed(() => session.canAccess(['imports.read']))
 const supplierAccess = computed(() => session.canAccess(['suppliers.read']))
 const supplierWritable = computed(() => writable.value && session.canAccess(['suppliers.read', 'suppliers.write']))
+const rowActionsAvailable = computed(() => writable.value || inventoryWritable.value || (formal.value && supplierAccess.value))
 const activeMaterials = computed(() => items.value.filter(item => item.status === 'ACTIVE'))
 const selectedMaterial = computed(() => items.value.find(item => item.id === inventoryForm.materialId))
 const balanceByMaterial = computed(() => new Map(balances.value.map(item => [item.materialId ?? item.materialCode, item])))
@@ -81,6 +85,14 @@ function markRemoteImageFailed(key: string) { failedRemoteImages.value = new Set
 function previewImage(item: MaterialDetailDto) {
   if (item.imageAssetId) imagePreview.value = { alt: item.name, imageAssetId: item.imageAssetId }
   else if (item.imageUrl) imagePreview.value = { alt: item.name, imageUrl: item.imageUrl }
+}
+async function openPurchase(item: MaterialDetailDto) {
+  purchaseMaterial.value = item; purchaseSuppliers.value = []; purchaseLoading.value = true; error.value = ''
+  try {
+    const links = await domainApi.materialSupplierLinks(item.id)
+    purchaseSuppliers.value = await Promise.all(links.map(async link => ({ link, supplier: await domainApi.supplier(link.supplierId) })))
+  } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '供应商采购信息加载失败。' }
+  finally { purchaseLoading.value = false }
 }
 async function uploadImage(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
@@ -509,7 +521,7 @@ onMounted(load)
                 安全库存
               </th><th>单位</th><th v-if="inventoryReadable">
                 库存状态
-              </th><th>主档状态</th><th v-if="writable || inventoryWritable">
+              </th><th>主档状态</th><th v-if="rowActionsAvailable">
                 操作
               </th>
             </tr>
@@ -580,7 +592,7 @@ onMounted(load)
                 {{ balanceFor(item) ? (balanceFor(item)?.lowStock ? '低库存' : '正常') : '未初始化' }}
               </td>
               <td>{{ item.status === 'ACTIVE' ? '启用' : '停用' }}</td>
-              <td v-if="writable || inventoryWritable">
+              <td v-if="rowActionsAvailable">
                 <div class="table-actions">
                   <button
                     v-if="writable"
@@ -600,6 +612,14 @@ onMounted(load)
                     库存
                   </button>
                   <button
+                    v-if="formal && supplierAccess"
+                    class="secondary-button"
+                    type="button"
+                    @click="openPurchase(item)"
+                  >
+                    采购
+                  </button>
+                  <button
                     v-if="formal && writable"
                     type="button"
                     class="danger-button"
@@ -612,7 +632,7 @@ onMounted(load)
               </td>
             </tr>
             <tr v-if="!filteredItems.length">
-              <td :colspan="6 + (inventoryReadable ? 3 : 0) + (writable || inventoryWritable ? 1 : 0)">
+              <td :colspan="6 + (inventoryReadable ? 3 : 0) + (rowActionsAvailable ? 1 : 0)">
                 没有符合条件的辅料。
               </td>
             </tr>
@@ -623,6 +643,69 @@ onMounted(load)
         共 {{ filteredItems.length }} 条
       </footer>
     </article>
+    <div
+      v-if="purchaseMaterial"
+      class="operation-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="purchase-dialog-title"
+      @click.self="purchaseMaterial = null"
+      @keydown.esc="purchaseMaterial = null"
+    >
+      <section class="panel operation-dialog__card purchase-dialog">
+        <button
+          class="operation-dialog__close"
+          type="button"
+          aria-label="关闭采购信息"
+          @click="purchaseMaterial = null"
+        >
+          ×
+        </button>
+        <h2 id="purchase-dialog-title">
+          {{ purchaseMaterial.materialCode }} · {{ purchaseMaterial.name }}采购供应商
+        </h2>
+        <p
+          v-if="purchaseLoading"
+          class="data-state"
+        >
+          正在加载供应商信息…
+        </p>
+        <p
+          v-else-if="!purchaseSuppliers.length"
+          class="data-state"
+        >
+          暂未关联供应商，请先编辑辅料并维护供应商关系。
+        </p>
+        <div
+          v-else
+          class="table-scroll"
+        >
+          <table class="data-table purchase-table">
+            <thead><tr><th>供应商</th><th>联系人</th><th>电话</th><th>采购链接</th><th>关系</th><th>备注</th></tr></thead>
+            <tbody>
+              <tr
+                v-for="item in purchaseSuppliers"
+                :key="item.link.supplierId"
+              >
+                <td><strong>{{ item.supplier.name }}</strong><small>{{ item.supplier.status === 'ACTIVE' ? '启用' : '停用' }}</small></td>
+                <td>{{ item.supplier.contactPerson || '—' }}</td>
+                <td>{{ item.supplier.phone || '—' }}</td>
+                <td>
+                  <a
+                    v-if="item.link.purchaseUrl || item.supplier.sourceUrl"
+                    :href="item.link.purchaseUrl || item.supplier.sourceUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >打开采购链接</a><span v-else>—</span>
+                </td>
+                <td>{{ item.link.primary ? '主供应商' : '备选供应商' }}</td>
+                <td>{{ item.link.remark || item.supplier.remark || '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
     <div
       v-if="imagePreview"
       class="image-dialog"

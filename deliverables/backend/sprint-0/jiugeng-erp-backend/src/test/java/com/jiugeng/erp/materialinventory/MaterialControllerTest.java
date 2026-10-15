@@ -44,7 +44,7 @@ class MaterialControllerTest {
     }
 
     @Test
-    void materialWriterCanCreateReadUpdateAndLogicallyDisableMaterial() throws Exception {
+    void materialWriterCanCreateReadUpdateDisableAndEnableMaterial() throws Exception {
         String token = createUserAndLogin("material-owner", "PRODUCT_MATERIAL");
         String body = mvc.perform(post("/api/v1/materials").header("Authorization", bearer(token))
                         .contentType(MediaType.APPLICATION_JSON).content(json(material("MAT-001", "纸箱"))))
@@ -63,11 +63,13 @@ class MaterialControllerTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.specification").value("50cm × 40cm × 30cm"));
         mvc.perform(post("/api/v1/materials/{id}/disable", id).header("Authorization", bearer(token)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("DISABLED"));
+        mvc.perform(post("/api/v1/materials/{id}/enable", id).header("Authorization", bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("ACTIVE"));
 
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM auxiliary_material WHERE id = ?", Integer.class, id))
                 .isEqualTo(1);
         assertThat(jdbc.queryForList("SELECT action FROM audit_event WHERE resource_id = ?", String.class, id))
-                .containsExactly("MATERIAL_CREATE", "MATERIAL_UPDATE", "MATERIAL_DISABLE");
+                .containsExactly("MATERIAL_CREATE", "MATERIAL_UPDATE", "MATERIAL_DISABLE", "MATERIAL_ENABLE");
     }
 
     @Test

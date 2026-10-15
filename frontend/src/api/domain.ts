@@ -298,6 +298,10 @@ export const domainApi = {
     if (runtimeConfig.authMode === 'mock') throw new Error('Mock materials cannot be disabled')
     return apiRequest<MaterialDetailDto>(`/v1/materials/${id}/disable`, { method: 'POST' })
   },
+  enableMaterial: async (id: string) => {
+    if (runtimeConfig.authMode === 'mock') throw new Error('Mock materials cannot be enabled')
+    return apiRequest<MaterialDetailDto>(`/v1/materials/${id}/enable`, { method: 'POST' })
+  },
   productMaterialRelations: async (filter: { productId: string } | { variantId: string }) => {
     if (runtimeConfig.authMode === 'mock') return [] as ProductMaterialRelationDto[]
     const query = 'productId' in filter

@@ -169,13 +169,15 @@ async function saveSafety(item: MaterialDetailDto) {
   } catch { error.value = '安全库存更新失败。' }
   finally { saving.value = false }
 }
-async function disable(item: MaterialDetailDto) {
-  if (!window.confirm(`确认停用辅料 ${item.materialCode}？`)) return
+async function toggleStatus(item: MaterialDetailDto) {
+  const enabling = item.status === 'DISABLED'
+  if (!window.confirm(`确认${enabling ? '启用' : '停用'}辅料 ${item.materialCode}？`)) return
   saving.value = true; error.value = ''; success.value = ''
   try {
-    const disabled = await domainApi.disableMaterial(item.id)
-    items.value = items.value.map(value => value.id === disabled.id ? disabled : value); success.value = '辅料已停用。'
-  } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '辅料停用失败。' }
+    const updated = enabling ? await domainApi.enableMaterial(item.id) : await domainApi.disableMaterial(item.id)
+    items.value = items.value.map(value => value.id === updated.id ? updated : value)
+    success.value = `辅料已${enabling ? '启用' : '停用'}。`
+  } catch (exception) { error.value = exception instanceof ApiError ? exception.message : `辅料${enabling ? '启用' : '停用'}失败。` }
   finally { saving.value = false }
 }
 onMounted(load)
@@ -622,11 +624,11 @@ onMounted(load)
                   <button
                     v-if="formal && writable"
                     type="button"
-                    class="danger-button"
-                    :disabled="item.status === 'DISABLED' || saving"
-                    @click="disable(item)"
+                    :class="item.status === 'ACTIVE' ? 'danger-button' : 'secondary-button'"
+                    :disabled="saving"
+                    @click="toggleStatus(item)"
                   >
-                    停用
+                    {{ item.status === 'ACTIVE' ? '停用' : '启用' }}
                   </button>
                 </div>
               </td>

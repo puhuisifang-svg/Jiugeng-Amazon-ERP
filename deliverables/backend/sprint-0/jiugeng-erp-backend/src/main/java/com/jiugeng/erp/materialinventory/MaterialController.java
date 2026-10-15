@@ -55,6 +55,12 @@ class MaterialController {
         return service.disable(materialId, actor);
     }
 
+    @PostMapping("/{materialId}/enable")
+    @PreAuthorize("hasAuthority('materials.write')")
+    MaterialView enable(@PathVariable String materialId, @AuthenticationPrincipal AuthenticatedActor actor) {
+        return service.enable(materialId, actor);
+    }
+
     record MaterialRequest(@NotBlank @Size(max = 64) String materialCode,
             @NotBlank @Size(max = 200) String name,
             @NotBlank @Size(max = 100) String materialType,

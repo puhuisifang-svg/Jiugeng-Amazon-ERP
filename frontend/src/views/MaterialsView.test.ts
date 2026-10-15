@@ -1,8 +1,8 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { createMaterial, materialSupplierLinks, replaceMaterialSupplierLinks, supplier, transact, updateSafetyStock, uploadImage } = vi.hoisted(() => ({
-  createMaterial: vi.fn(), materialSupplierLinks: vi.fn(), replaceMaterialSupplierLinks: vi.fn(), supplier: vi.fn(), transact: vi.fn(), updateSafetyStock: vi.fn(), uploadImage: vi.fn(),
+const { createMaterial, disableMaterial, enableMaterial, materialSupplierLinks, replaceMaterialSupplierLinks, supplier, transact, updateSafetyStock, uploadImage } = vi.hoisted(() => ({
+  createMaterial: vi.fn(), disableMaterial: vi.fn(), enableMaterial: vi.fn(), materialSupplierLinks: vi.fn(), replaceMaterialSupplierLinks: vi.fn(), supplier: vi.fn(), transact: vi.fn(), updateSafetyStock: vi.fn(), uploadImage: vi.fn(),
 }))
 
 vi.mock('@/config/runtime', () => ({ runtimeConfig: { authMode: 'password' } }))
@@ -13,6 +13,7 @@ vi.mock('@/api/domain', () => ({
     materials: vi.fn(async () => ({ items: [
       { id: 'm1', materialCode: 'MAT-1', name: '纸箱', materialType: '包装', specification: '30×20', unit: 'PCS', status: 'ACTIVE', imageUrl: 'https://images.example.com/box.jpg' },
       { id: 'm2', materialCode: 'MAT-2', name: '胶带', materialType: '耗材', unit: 'ROLL', status: 'ACTIVE' },
+      { id: 'm3', materialCode: 'MAT-3', name: '标签', materialType: '耗材', unit: '件', status: 'DISABLED' },
     ], mockData: false })),
     balances: vi.fn(async () => ({ items: [{ warehouseCode: 'MAIN', materialId: 'm1', materialCode: 'MAT-1',
       materialName: '纸箱', quantity: 2, safetyStock: 3, unit: 'PCS', lowStock: true }], mockData: false })),
@@ -20,6 +21,8 @@ vi.mock('@/api/domain', () => ({
     materialSupplierLinks,
     supplier,
     createMaterial,
+    disableMaterial,
+    enableMaterial,
     replaceMaterialSupplierLinks,
     transact,
     updateSafetyStock,
@@ -34,7 +37,7 @@ const global = { stubs: { RouterLink, AuthenticatedCatalogImage } }
 
 describe('MaterialsView merged material management', () => {
   beforeEach(() => {
-    createMaterial.mockReset(); materialSupplierLinks.mockReset().mockResolvedValue([]); replaceMaterialSupplierLinks.mockReset(); supplier.mockReset(); transact.mockReset(); updateSafetyStock.mockReset(); uploadImage.mockReset()
+    createMaterial.mockReset(); disableMaterial.mockReset(); enableMaterial.mockReset(); materialSupplierLinks.mockReset().mockResolvedValue([]); replaceMaterialSupplierLinks.mockReset(); supplier.mockReset(); transact.mockReset(); updateSafetyStock.mockReset(); uploadImage.mockReset()
   })
 
   it('shows master data and inventory in one filterable table', async () => {
@@ -167,5 +170,22 @@ describe('MaterialsView merged material management', () => {
     expect(uploadImage).toHaveBeenCalledWith('MATERIAL_IMAGE', file)
     expect(createMaterial).toHaveBeenCalledWith(expect.objectContaining({ unit: '件', imageAssetId: 'image-1' }))
     expect(replaceMaterialSupplierLinks).toHaveBeenCalledWith('m3', [expect.objectContaining({ supplierId: 's1', primary: true })])
+  })
+
+  it('allows a disabled material to be enabled again', async () => {
+    enableMaterial.mockResolvedValue({ id: 'm3', materialCode: 'MAT-3', name: '标签', materialType: '耗材', unit: '件', status: 'ACTIVE' })
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const wrapper = mount(MaterialsView, { global })
+    await flushPromises()
+
+    const row = wrapper.findAll('tbody tr').find(item => item.text().includes('MAT-3'))!
+    const enableButton = row.findAll('button').find(button => button.text() === '启用')!
+    expect(enableButton.attributes('disabled')).toBeUndefined()
+    await enableButton.trigger('click')
+    await flushPromises()
+
+    expect(enableMaterial).toHaveBeenCalledWith('m3')
+    expect(row.text()).toContain('启用')
+    expect(row.findAll('button').some(button => button.text() === '停用')).toBe(true)
   })
 })

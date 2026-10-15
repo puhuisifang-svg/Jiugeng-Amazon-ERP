@@ -88,6 +88,16 @@ class MaterialService {
         return disabled;
     }
 
+    @Transactional
+    MaterialView enable(String id, AuthenticatedActor actor) {
+        MaterialView before = material(id);
+        if (before.status() == MaterialStatus.ACTIVE) return before;
+        repository.enable(id, actor.userId());
+        MaterialView enabled = material(id);
+        auditTrail.record(operation(actor, "MATERIAL_ENABLE", id, snapshot(before), snapshot(enabled), "重新启用辅料"));
+        return enabled;
+    }
+
     private ValidatedMaterial validate(MaterialInput input, String excludingId) {
         String code = required(input.materialCode(), "辅料编码", 64);
         String normalized = MaterialRepository.normalize(code);

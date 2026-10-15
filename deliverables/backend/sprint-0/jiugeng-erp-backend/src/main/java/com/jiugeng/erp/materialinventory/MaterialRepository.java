@@ -75,6 +75,13 @@ class MaterialRepository {
                 """).param("id", id).param("actorId", actorId).update();
     }
 
+    void enable(String id, String actorId) {
+        jdbc.sql("""
+                UPDATE auxiliary_material SET status = 'ACTIVE', updated_by = :actorId,
+                    updated_at = CURRENT_TIMESTAMP WHERE id = :id
+                """).param("id", id).param("actorId", actorId).update();
+    }
+
     private MaterialView map(ResultSet rs, int rowNum) throws SQLException {
         return new MaterialView(rs.getString("id"), rs.getString("material_code"), rs.getString("name"),
                 rs.getString("material_type"), rs.getString("specification"), rs.getString("unit"),

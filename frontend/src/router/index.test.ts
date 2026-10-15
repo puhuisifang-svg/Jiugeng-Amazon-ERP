@@ -1,7 +1,11 @@
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { appRoutes } from './index'
+import { session } from '@/state/session'
+
+import { appRoutes, refreshAccessIfStale } from './index'
+
+afterEach(() => vi.restoreAllMocks())
 
 describe('application routes', () => {
   it('redirects the root shell to the home page', async () => {
@@ -40,5 +44,23 @@ describe('application routes', () => {
 
     expect(expectedPaths.every((path) => paths.has(path))).toBe(true)
     expect(paths.has('/listing-mappings')).toBe(false)
+  })
+
+  it('refreshes server capabilities before treating a persisted session as forbidden', async () => {
+    const canAccess = vi.spyOn(session, 'canAccess')
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true)
+    const refresh = vi.spyOn(session, 'refresh').mockResolvedValue()
+
+    await expect(refreshAccessIfStale(['dashboard.read'])).resolves.toBe(true)
+    expect(refresh).toHaveBeenCalledOnce()
+    expect(canAccess).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a genuine server-side capability denial forbidden after refresh', async () => {
+    vi.spyOn(session, 'canAccess').mockReturnValue(false)
+    vi.spyOn(session, 'refresh').mockResolvedValue()
+
+    await expect(refreshAccessIfStale(['dashboard.shipments.manage'])).resolves.toBe(false)
   })
 })

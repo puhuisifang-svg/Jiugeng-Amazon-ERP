@@ -2,8 +2,20 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import { session } from '@/state/session'
+import type { Capability } from '@/router/meta'
 
 const placeholder = () => import('@/views/PlaceholderView.vue')
+
+export async function refreshAccessIfStale(capabilities?: Capability[]) {
+  if (session.canAccess(capabilities)) return true
+  try {
+    await session.refresh()
+  }
+  catch {
+    return false
+  }
+  return session.canAccess(capabilities)
+}
 
 export const appRoutes: RouteRecordRaw[] = [
   { path: '/login', name: 'login', component: () => import('@/views/LoginView.vue'), meta: { title: '登录', hidden: true } },
@@ -46,13 +58,15 @@ const router = createRouter({
   scrollBehavior: () => ({ top: 0 }),
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   if (to.name === 'login' || to.name === 'forgot-password') {
     return session.isAuthenticated.value ? { name: 'home' } : true
   }
   if (!session.isAuthenticated.value) return { name: 'login', query: { redirect: to.fullPath } }
   if (session.user.value?.mustChangePassword && to.name !== 'change-password') return { name: 'change-password' }
-  if (!session.canAccess(to.meta.capabilities)) return { name: 'forbidden' }
+  if (!await refreshAccessIfStale(to.meta.capabilities)) {
+    return session.isAuthenticated.value ? { name: 'forbidden' } : { name: 'login', query: { redirect: to.fullPath } }
+  }
   return true
 })
 

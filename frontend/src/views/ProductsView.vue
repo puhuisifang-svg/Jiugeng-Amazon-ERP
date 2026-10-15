@@ -37,7 +37,7 @@ onMounted(load)
         新增产品
       </RouterLink>
     </div>
-    <section class="panel filter-bar">
+    <section class="panel filter-panel product-filters">
       <label>搜索<input
         v-model="query"
         type="search"

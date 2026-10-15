@@ -177,6 +177,10 @@ a { color: inherit; }
 .dashboard-filters button { min-height: 40px; align-self: end; padding: 0 16px; color: white; background: var(--accent); border: 0; border-radius: 7px; }
 .dashboard-image-preview { display: flex; min-height: 72px; align-items: center; }
 .dashboard-image-preview img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; }
+.dashboard-history { position: relative; width: min(720px, 90vw); max-height: 80vh; min-height: 0; overflow: auto; }
+.dashboard-history > button { position: absolute; top: 14px; right: 14px; width: 36px; height: 36px; border: 0; border-radius: 50%; cursor: pointer; }
+.dashboard-history ol { display: grid; gap: 12px; padding-left: 22px; }
+.dashboard-history li span { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
 
 @keyframes worklist-scroll { from { transform: translateY(0); } to { transform: translateY(-50%); } }
 

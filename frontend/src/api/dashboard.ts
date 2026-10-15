@@ -24,6 +24,7 @@ export type DashboardItem = TodayShipment | PendingShipment | PendingProduct
 export interface HomeSlice<T> { items: T[]; totalCount: number; truncated: boolean; businessDate: string; generatedAt: string }
 export interface Page<T> { items: T[]; page: number; size: number; totalElements: number; totalPages: number }
 export interface ImageReceipt { id: string; purpose: 'SHIPMENT' | 'PENDING_PRODUCT'; sourceFileName: string; mediaType: string; byteSize: number; width: number; height: number; sha256: string }
+export interface DashboardHistoryEvent { id: string; action: string; actorLoginName: string; actorDisplayName: string; beforeValue?: unknown; afterValue?: unknown; detail?: string; occurredAt: string }
 export interface ShipmentInput { date: string; productId: string; imageId?: string | undefined; quantity: number; boxCount: number; remark?: string | undefined; latestShipTime: string }
 export interface PendingProductInput { productName: string; imageId?: string | undefined; expectedQuantity: number; remark?: string | undefined; expectedCompletionDate: string }
 
@@ -54,6 +55,7 @@ function qs(filters: Record<string, string | number | undefined>) {
 export const dashboardApi = {
   home: <T extends DashboardItem>(kind: WorklistKind) => apiRequest<HomeSlice<T>>(`/v1/dashboard/${kind}`),
   page: <T extends DashboardItem>(kind: WorklistKind, filters: Record<string, string | number | undefined>) => apiRequest<Page<T>>(`/v1/dashboard-maintenance/${kind}${qs(filters)}`),
+  history: (kind: WorklistKind, id: string) => apiRequest<DashboardHistoryEvent[]>(`/v1/dashboard-maintenance/${kind}/${id}/history`),
   createShipment: (kind: Exclude<WorklistKind, 'pending-products'>, input: ShipmentInput) => apiRequest<TodayShipment | PendingShipment>(`/v1/dashboard-maintenance/${kind}`, { method: 'POST', headers: { 'Idempotency-Key': key() }, body: JSON.stringify(input) }),
   updateShipment: (kind: Exclude<WorklistKind, 'pending-products'>, id: string, input: ShipmentInput, version: number, correctionReason?: string) => apiRequest<TodayShipment | PendingShipment>(`/v1/dashboard-maintenance/${kind}/${id}`, { method: 'PATCH', body: JSON.stringify({ shipment: input, version, correctionReason }) }),
   createPendingProduct: (input: PendingProductInput) => apiRequest<PendingProduct>('/v1/dashboard-maintenance/pending-products', { method: 'POST', headers: { 'Idempotency-Key': key() }, body: JSON.stringify(input) }),

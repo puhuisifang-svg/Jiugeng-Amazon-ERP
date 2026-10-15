@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-class AuditService implements AuditTrail {
+class AuditService implements AuditTrail, AuditHistoryLookup {
     private final AuditRepository repository;
     private final ObjectMapper objectMapper;
 
@@ -73,6 +73,18 @@ class AuditService implements AuditTrail {
             throw new IamException(400, "AUDIT_TIME_RANGE_INVALID", "开始时间不能晚于结束时间");
         }
         return AuditPage.of(repository.find(filter), filter.page(), filter.size(), repository.count(filter));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<HistoryEvent> find(String resourceType, String resourceId) {
+        if (resourceType == null || !resourceType.matches("[A-Z][A-Z0-9_]{0,63}")
+                || resourceId == null || resourceId.isBlank() || resourceId.length() > 128) {
+            throw new IllegalArgumentException("Valid audit resource type and id are required");
+        }
+        return repository.findResource(resourceType, resourceId).stream().map(event -> new HistoryEvent(
+                event.id(), event.action(), event.actorLoginName(), event.actorDisplayName(), event.beforeValue(),
+                event.afterValue(), event.detail(), event.occurredAt())).toList();
     }
 
     private JsonNode tree(Object value) {

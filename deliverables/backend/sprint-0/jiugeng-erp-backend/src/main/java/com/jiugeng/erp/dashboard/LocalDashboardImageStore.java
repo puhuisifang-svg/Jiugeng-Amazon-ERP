@@ -76,8 +76,9 @@ class LocalDashboardImageStore implements DashboardImageStore {
     }
 
     @Override
-    public void delete(String key) {
-        try { Files.deleteIfExists(resolve(key)); } catch (IOException | IllegalArgumentException ignored) { }
+    public void delete(String key) throws IOException {
+        try { Files.deleteIfExists(resolve(key)); }
+        catch (IllegalArgumentException exception) { throw new IOException("Invalid dashboard image key", exception); }
     }
 
     private Decoded decode(byte[] source) throws IOException {

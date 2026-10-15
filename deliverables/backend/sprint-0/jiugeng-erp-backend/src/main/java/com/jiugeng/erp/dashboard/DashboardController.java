@@ -3,6 +3,7 @@ package com.jiugeng.erp.dashboard;
 import static com.jiugeng.erp.dashboard.DashboardTypes.*;
 
 import com.jiugeng.erp.iam.AuthenticatedActor;
+import com.jiugeng.erp.iam.AuditHistoryLookup;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -13,6 +14,7 @@ import jakarta.validation.constraints.Size;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import org.springframework.context.annotation.Profile;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.CacheControl;
@@ -70,6 +72,8 @@ class DashboardController {
     TodayShipment archiveToday(@PathVariable String id,@Valid @RequestBody StateRequest request,
             @RequestHeader("Idempotency-Key") String key,@AuthenticationPrincipal AuthenticatedActor actor){
         return service.archiveToday(id,request.version(),request.reason(),key,actor);}
+    @GetMapping("/dashboard-maintenance/today-shipments/{id}/history") @PreAuthorize("hasAuthority('dashboard.shipments.manage')")
+    List<AuditHistoryLookup.HistoryEvent> todayHistory(@PathVariable String id){return service.history("TODAY_SHIPMENT",id);}
 
     @GetMapping("/dashboard-maintenance/pending-shipments") @PreAuthorize("hasAuthority('dashboard.shipments.manage')")
     Page<PendingShipment> pendingShipmentList(@RequestParam(required=false) @Size(max=128) String keyword,
@@ -93,6 +97,8 @@ class DashboardController {
     PendingShipment archivePendingShipment(@PathVariable String id,@Valid @RequestBody StateRequest request,
             @RequestHeader("Idempotency-Key") String key,@AuthenticationPrincipal AuthenticatedActor actor){
         return service.archivePendingShipment(id,request.version(),request.reason(),key,actor);}
+    @GetMapping("/dashboard-maintenance/pending-shipments/{id}/history") @PreAuthorize("hasAuthority('dashboard.shipments.manage')")
+    List<AuditHistoryLookup.HistoryEvent> pendingShipmentHistory(@PathVariable String id){return service.history("PENDING_SHIPMENT",id);}
 
     @PostMapping("/dashboard-maintenance/pending-shipments/{id}/transfer-to-today")
     @PreAuthorize("hasAuthority('dashboard.shipments.manage')")
@@ -128,6 +134,8 @@ class DashboardController {
     PendingProduct archivePendingProduct(@PathVariable String id,@Valid @RequestBody StateRequest request,
             @RequestHeader("Idempotency-Key") String key,@AuthenticationPrincipal AuthenticatedActor actor){
         return service.archivePendingProduct(id,request.version(),request.reason(),key,actor);}
+    @GetMapping("/dashboard-maintenance/pending-products/{id}/history") @PreAuthorize("hasAuthority('dashboard.pending-products.manage')")
+    List<AuditHistoryLookup.HistoryEvent> pendingProductHistory(@PathVariable String id){return service.history("PENDING_PRODUCT",id);}
 
     @PostMapping(value="/dashboard-images",consumes=MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyAuthority('dashboard.shipments.manage','dashboard.pending-products.manage')")
@@ -140,11 +148,18 @@ class DashboardController {
     }
 
     @GetMapping("/dashboard-images/{id}/thumbnail") @PreAuthorize("hasAuthority('dashboard.read')")
-    ResponseEntity<byte[]> thumbnail(@PathVariable String id,@AuthenticationPrincipal AuthenticatedActor actor)throws IOException{
-        return image(service.image(id,true,actor));}
+    ResponseEntity<byte[]> thumbnail(@PathVariable String id,Authentication authentication,
+            @AuthenticationPrincipal AuthenticatedActor actor)throws IOException{
+        return image(service.image(id,true,actor,has(authentication,"dashboard.shipments.manage"),
+                has(authentication,"dashboard.pending-products.manage")));}
     @GetMapping("/dashboard-images/{id}/original") @PreAuthorize("hasAuthority('dashboard.read')")
-    ResponseEntity<byte[]> original(@PathVariable String id,@AuthenticationPrincipal AuthenticatedActor actor)throws IOException{
-        return image(service.image(id,false,actor));}
+    ResponseEntity<byte[]> original(@PathVariable String id,Authentication authentication,
+            @AuthenticationPrincipal AuthenticatedActor actor)throws IOException{
+        return image(service.image(id,false,actor,has(authentication,"dashboard.shipments.manage"),
+                has(authentication,"dashboard.pending-products.manage")));}
+
+    private boolean has(Authentication authentication,String authority){return authentication.getAuthorities().stream()
+            .anyMatch(value->value.getAuthority().equals(authority));}
 
     private ResponseEntity<byte[]> image(DashboardService.ImageContent image){return ResponseEntity.ok()
             .contentType(MediaType.parseMediaType(image.mediaType())).cacheControl(CacheControl.noStore())

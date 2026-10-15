@@ -66,6 +66,12 @@ class AuditRepository {
                 .params(query.parameters).query(Long.class).single();
     }
 
+    List<AuditEvent> findResource(String resourceType, String resourceId) {
+        return jdbc.sql("SELECT * FROM audit_event WHERE resource_type=:type AND resource_id=:id"
+                        + " ORDER BY occurred_at DESC,id DESC LIMIT 200")
+                .param("type", resourceType).param("id", resourceId).query(this::mapEvent).list();
+    }
+
     private Query query(AuditFilter filter) {
         StringBuilder sql = new StringBuilder("SELECT * FROM audit_event WHERE 1 = 1");
         Map<String, Object> parameters = new HashMap<>();

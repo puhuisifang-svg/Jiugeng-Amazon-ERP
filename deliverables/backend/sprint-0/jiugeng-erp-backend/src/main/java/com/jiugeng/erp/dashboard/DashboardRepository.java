@@ -47,6 +47,38 @@ class DashboardRepository {
                 .param("id", id).param("purpose", purpose.name()).param("actor", actorId).update();
     }
 
+    int transferImage(String id, String sourceId, String targetId, Instant at) {
+        return jdbc.sql("""
+                UPDATE dashboard_image_asset SET attached_resource_type='TODAY_SHIPMENT',attached_resource_id=:target,
+                    attached_at=:at WHERE id=:id AND status='ACTIVE' AND purpose='SHIPMENT'
+                    AND attached_resource_type='PENDING_SHIPMENT' AND attached_resource_id=:source
+                """).param("target", targetId).param("at", at).param("id", id).param("source", sourceId).update();
+    }
+
+    void releaseImage(String id, String resourceType, String resourceId, Instant at) {
+        if (id == null) return;
+        jdbc.sql("""
+                UPDATE dashboard_image_asset SET status='PENDING',attached_resource_type=NULL,attached_resource_id=NULL,
+                    attached_at=NULL,created_at=:at WHERE id=:id AND status='ACTIVE'
+                    AND attached_resource_type=:type AND attached_resource_id=:resource
+                """).param("at", at).param("id", id).param("type", resourceType).param("resource", resourceId).update();
+    }
+
+    boolean imageVisible(ImageAsset image, LocalDate businessDate, boolean shipmentManager, boolean productManager) {
+        if (image.status() != ImageStatus.ACTIVE) return false;
+        String type=image.attachedResourceType(); String id=image.attachedResourceId();
+        if ("TODAY_SHIPMENT".equals(type)) return shipmentManager || jdbc.sql(
+                "SELECT COUNT(*) FROM dashboard_today_shipment WHERE id=:id AND status='ACTIVE' AND ship_date=:date")
+                .param("id",id).param("date",businessDate).query(Long.class).single()>0;
+        if ("PENDING_SHIPMENT".equals(type)) return shipmentManager || jdbc.sql(
+                "SELECT COUNT(*) FROM dashboard_pending_shipment WHERE id=:id AND status='PENDING'")
+                .param("id",id).query(Long.class).single()>0;
+        if ("PENDING_PRODUCT".equals(type)) return productManager || jdbc.sql(
+                "SELECT COUNT(*) FROM dashboard_pending_product WHERE id=:id AND status='PENDING'")
+                .param("id",id).query(Long.class).single()>0;
+        return false;
+    }
+
     List<ImageAsset> orphanImages(Instant cutoff) {
         return jdbc.sql("SELECT * FROM dashboard_image_asset WHERE status='PENDING' AND created_at < :cutoff")
                 .param("cutoff", cutoff).query(this::mapImage).list();

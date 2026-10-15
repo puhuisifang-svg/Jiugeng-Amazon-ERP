@@ -160,6 +160,48 @@ class DashboardControllerTest {
     }
 
     @Test
+    void transfersShipmentImageExposesHistoryAndRestrictsArchivedImageToManagers() throws Exception {
+        String productId=createProduct("DASH-IMG","带图发货产品");
+        String productToken=user("image-manager","PRODUCT_MATERIAL");
+        String selectionToken=user("image-reader","SELECTION");
+        MockMultipartFile file=new MockMultipartFile("file","shipment.png","image/png",png());
+        String upload=mvc.perform(multipart("/api/v1/dashboard-images").file(file).param("purpose","SHIPMENT")
+                        .header("Authorization",bearer(productToken)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String imageId=json.readTree(upload).get("id").asText();
+        LocalDate tomorrow=LocalDate.now(ZoneId.of("Asia/Shanghai")).plusDays(1);
+        Map<String,Object> pending=new LinkedHashMap<>(shipment(tomorrow,productId,7,3,
+                LocalDateTime.of(tomorrow,java.time.LocalTime.of(18,0))));pending.put("imageId",imageId);
+        String created=mvc.perform(post("/api/v1/dashboard-maintenance/pending-shipments")
+                        .header("Authorization",bearer(productToken)).header("Idempotency-Key","with-image")
+                        .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(pending)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String pendingId=json.readTree(created).get("id").asText();
+        LocalDate today=LocalDate.now(ZoneId.of("Asia/Shanghai"));
+        Map<String,Object> transfer=Map.of("quantity",7,"boxCount",3,"remark","带图转入","imageId",imageId,
+                "latestShipTime",LocalDateTime.of(today,java.time.LocalTime.of(18,0)).toString(),"version",0);
+        String transferred=mvc.perform(post("/api/v1/dashboard-maintenance/pending-shipments/{id}/transfer-to-today",pendingId)
+                        .header("Authorization",bearer(productToken)).header("Idempotency-Key","with-image-transfer")
+                        .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(transfer)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.imageId").value(imageId))
+                .andReturn().getResponse().getContentAsString();
+        String todayId=json.readTree(transferred).get("id").asText();
+        assertThat(jdbc.queryForMap("SELECT attached_resource_type,attached_resource_id FROM dashboard_image_asset WHERE id=?",imageId))
+                .containsEntry("ATTACHED_RESOURCE_TYPE","TODAY_SHIPMENT").containsEntry("ATTACHED_RESOURCE_ID",todayId);
+        mvc.perform(get("/api/v1/dashboard-maintenance/pending-shipments/{id}/history",pendingId)
+                        .header("Authorization",bearer(productToken)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].action").value("DASHBOARD_PENDING_SHIPMENT_TRANSFER"));
+        mvc.perform(post("/api/v1/dashboard-maintenance/today-shipments/{id}/archive",todayId)
+                        .header("Authorization",bearer(productToken)).header("Idempotency-Key","archive-image-today")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"version\":0,\"reason\":\"验收归档\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/dashboard-images/{id}/thumbnail",imageId).header("Authorization",bearer(selectionToken)))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/dashboard-images/{id}/thumbnail",imageId).header("Authorization",bearer(productToken)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void removesExpiredUnattachedImagesFromDatabaseAndDisk() throws Exception {
         String selectionToken=user("orphan-owner","SELECTION");
         MockMultipartFile file=new MockMultipartFile("file","orphan.png","image/png",png());

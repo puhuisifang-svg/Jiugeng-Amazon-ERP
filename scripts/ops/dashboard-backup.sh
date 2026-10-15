@@ -23,8 +23,14 @@ tar -C "$ERP_DASHBOARD_IMAGE_DIR" -czf "$bundle_dir/dashboard-images.tar.gz" .
 
 schema_version=$(mysql --defaults-extra-file="$ERP_MYSQL_CLIENT_CONFIG_FILE" --batch --skip-column-names \
   "$ERP_MYSQL_DATABASE" --execute "SELECT version FROM flyway_schema_history WHERE success=1 ORDER BY installed_rank DESC LIMIT 1;")
-image_counts=$(mysql --defaults-extra-file="$ERP_MYSQL_CLIENT_CONFIG_FILE" --batch --skip-column-names \
-  "$ERP_MYSQL_DATABASE" --execute "SELECT CONCAT(COUNT(*),'|',SUM(status='ACTIVE'),'|',SUM(status='PENDING')) FROM dashboard_image_asset;")
+image_table_exists=$(mysql --defaults-extra-file="$ERP_MYSQL_CLIENT_CONFIG_FILE" --batch --skip-column-names \
+  "$ERP_MYSQL_DATABASE" --execute "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='dashboard_image_asset';")
+if [ "$image_table_exists" = 1 ]; then
+  image_counts=$(mysql --defaults-extra-file="$ERP_MYSQL_CLIENT_CONFIG_FILE" --batch --skip-column-names \
+    "$ERP_MYSQL_DATABASE" --execute "SELECT CONCAT(COUNT(*),'|',COALESCE(SUM(status='ACTIVE'),0),'|',COALESCE(SUM(status='PENDING'),0)) FROM dashboard_image_asset;")
+else
+  image_counts='0|0|0'
+fi
 sha256(){ if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"; else shasum -a 256 "$1"; fi; }
 database_sha=$(sha256 "$bundle_dir/$database_file" | awk '{print $1}')
 images_sha=$(sha256 "$bundle_dir/dashboard-images.tar.gz" | awk '{print $1}')

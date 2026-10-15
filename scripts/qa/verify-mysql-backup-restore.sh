@@ -32,7 +32,7 @@ openssl rand -hex 32 > "$work_dir/mysql_app_password"
   printf '%s\n' '[client]' 'user=root'
   printf 'password='; tr -d '\r\n' < "$work_dir/mysql_root_password"; printf '\n%s\n' 'host=127.0.0.1'
 } > "$work_dir/root.cnf"
-mkdir "$work_dir/backups"; chmod 700 "$work_dir/backups"
+mkdir "$work_dir/backups" "$work_dir/images"; chmod 700 "$work_dir/backups" "$work_dir/images"
 
 docker run -d --name "$container" --pull never -p 127.0.0.1::3306 \
   -e MYSQL_DATABASE=erp_backup_verify -e MYSQL_USER=erp_backup \
@@ -61,20 +61,28 @@ kill "$backend_pid"; wait "$backend_pid" 2>/dev/null || true; backend_pid=""
 
 docker exec "$container" mysql --defaults-extra-file=/run/secrets/client.cnf erp_backup_verify --execute \
   "INSERT INTO schema_baseline(id,module_name,baseline_version) VALUES('00000000-0000-0000-0000-000000000020','erp-020-backup-drill','verified');"
+printf '%s' 'dashboard-original-evidence' > "$work_dir/images/probe-original.png"
+printf '%s' 'dashboard-thumbnail-evidence' > "$work_dir/images/probe-thumbnail.png"
+docker exec "$container" mysql --defaults-extra-file=/run/secrets/client.cnf erp_backup_verify --execute \
+  "INSERT INTO dashboard_image_asset(id,purpose,status,original_storage_key,thumbnail_storage_key,source_file_name,source_media_type,stored_media_type,byte_size,sha256,pixel_width,pixel_height,uploaded_by) VALUES('00000000-0000-0000-0000-000000000021','PENDING_PRODUCT','PENDING','probe-original.png','probe-thumbnail.png','probe.png','image/png','image/png',27,REPEAT('a',64),1,1,'backup-drill');"
 before=$(docker exec "$container" mysql --defaults-extra-file=/run/secrets/client.cnf --batch --skip-column-names erp_backup_verify --execute \
-  "SELECT CONCAT((SELECT version FROM flyway_schema_history WHERE success=1 ORDER BY installed_rank DESC LIMIT 1),'|',(SELECT COUNT(*) FROM schema_baseline),'|',(SELECT COUNT(*) FROM warehouse));")
+  "SELECT CONCAT((SELECT version FROM flyway_schema_history WHERE success=1 ORDER BY installed_rank DESC LIMIT 1),'|',(SELECT COUNT(*) FROM schema_baseline),'|',(SELECT COUNT(*) FROM warehouse),'|',(SELECT COUNT(*) FROM dashboard_image_asset));")
+file_before=$(sha256sum "$work_dir/images/probe-original.png" | awk '{print $1}')
 
 docker run --rm --network "container:$container" -v "$repo_root:/repo:ro" -v "$work_dir:/work" "$mysql_image" sh -c \
-  'ERP_MYSQL_CLIENT_CONFIG_FILE=/work/client.cnf ERP_MYSQL_DATABASE=erp_backup_verify ERP_MYSQL_BACKUP_DIR=/work/backups /repo/scripts/ops/mysql-backup.sh > /work/backup-path'
+  'cd /repo && ERP_MYSQL_CLIENT_CONFIG_FILE=/work/client.cnf ERP_MYSQL_DATABASE=erp_backup_verify ERP_DASHBOARD_WRITES_PAUSED=YES ERP_DASHBOARD_IMAGE_DIR=/work/images ERP_DASHBOARD_BACKUP_DIR=/work/backups /repo/scripts/ops/dashboard-backup.sh > /work/backup-path'
 backup_name=$(basename "$(cat "$work_dir/backup-path")")
 docker exec "$container" mysql --defaults-extra-file=/run/secrets/root.cnf --execute \
   "DROP DATABASE erp_backup_verify; CREATE DATABASE erp_backup_verify CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
+find "$work_dir/images" -type f -delete
 docker run --rm --network "container:$container" -v "$repo_root:/repo:ro" -v "$work_dir:/work" "$mysql_image" sh -c \
-  "ERP_MYSQL_CLIENT_CONFIG_FILE=/work/client.cnf ERP_MYSQL_DATABASE=erp_backup_verify ERP_MYSQL_BACKUP_FILE=/work/backups/$backup_name ERP_MYSQL_RESTORE_CONFIRM=erp_backup_verify /repo/scripts/ops/mysql-restore.sh"
+  "cd /repo && ERP_MYSQL_CLIENT_CONFIG_FILE=/work/client.cnf ERP_MYSQL_DATABASE=erp_backup_verify ERP_MYSQL_RESTORE_CONFIRM=erp_backup_verify ERP_DASHBOARD_WRITES_PAUSED=YES ERP_DASHBOARD_BACKUP_FILE=/work/backups/$backup_name ERP_DASHBOARD_IMAGE_DIR=/work/images ERP_DASHBOARD_IMAGE_RESTORE_CONFIRM=/work/images /repo/scripts/ops/dashboard-restore.sh"
 after=$(docker exec "$container" mysql --defaults-extra-file=/run/secrets/client.cnf --batch --skip-column-names erp_backup_verify --execute \
-  "SELECT CONCAT((SELECT version FROM flyway_schema_history WHERE success=1 ORDER BY installed_rank DESC LIMIT 1),'|',(SELECT COUNT(*) FROM schema_baseline),'|',(SELECT COUNT(*) FROM warehouse));")
+  "SELECT CONCAT((SELECT version FROM flyway_schema_history WHERE success=1 ORDER BY installed_rank DESC LIMIT 1),'|',(SELECT COUNT(*) FROM schema_baseline),'|',(SELECT COUNT(*) FROM warehouse),'|',(SELECT COUNT(*) FROM dashboard_image_asset));")
 [ "$before" = "$after" ]
+[ -f "$work_dir/images/probe-original.png" ]; [ -f "$work_dir/images/probe-thumbnail.png" ]
+[ "$(sha256sum "$work_dir/images/probe-original.png" | awk '{print $1}')" = "$file_before" ]
 probe=$(docker exec "$container" mysql --defaults-extra-file=/run/secrets/client.cnf --batch --skip-column-names erp_backup_verify --execute \
   "SELECT COUNT(*) FROM schema_baseline WHERE module_name='erp-020-backup-drill' AND baseline_version='verified';")
 [ "$probe" = 1 ]
-echo "PASS: actual MySQL backup/restore preserved schema version and key table counts ($after)."
+echo "PASS: actual database and dashboard-image backup/restore preserved schema, counts and file hashes ($after)."

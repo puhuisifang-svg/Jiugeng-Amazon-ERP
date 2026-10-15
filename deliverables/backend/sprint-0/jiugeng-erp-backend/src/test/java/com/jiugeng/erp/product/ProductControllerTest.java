@@ -34,6 +34,8 @@ class ProductControllerTest {
 
     @BeforeEach
     void reset() {
+        jdbc.update("DELETE FROM product_variant_supplier");
+        jdbc.update("DELETE FROM auxiliary_material_supplier");
         jdbc.update("DELETE FROM product_auxiliary_material");
         jdbc.update("DELETE FROM variant_attribute");
         jdbc.update("DELETE FROM product_variant");
@@ -53,38 +55,44 @@ class ProductControllerTest {
         Map<String, Object> secondVariant = new java.util.LinkedHashMap<>(createVariants.getFirst());
         secondVariant.put("skuCode", "SKU-002");
         secondVariant.put("variantName", "白色款");
-        secondVariant.put("attributes", List.of(Map.of(
-                "attributeCode", "color", "attributeValue", "White", "displayOrder", 0)));
         createVariants.add(secondVariant);
         String createdBody = mvc.perform(post("/api/v1/products")
                         .header("Authorization", bearer(token)).contentType(MediaType.APPLICATION_JSON)
                         .content(json(createInput)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.productCode").value("PROD-001"))
-                .andExpect(jsonPath("$.variants[0].attributes[0].attributeCode").value("color"))
+                .andExpect(jsonPath("$.productName").value("旅行收纳袋"))
+                .andExpect(jsonPath("$.variants[0].status").value("DRAFT"))
                 .andReturn().getResponse().getContentAsString();
         JsonNode created = objectMapper.readTree(createdBody);
         String id = created.get("id").asText();
         String variantId = created.at("/variants/0/id").asText();
+        long productVersion = created.get("version").asLong();
+        long variantVersion = created.at("/variants/0/version").asLong();
 
         Map<String, Object> update = product("prod-001", "旅行收纳袋升级版", "sku-001", "Blue");
         @SuppressWarnings("unchecked")
         Map<String, Object> variant = (Map<String, Object>) ((List<?>) update.get("variants")).getFirst();
         variant.put("id", variantId);
+        variant.put("version", variantVersion);
+        update.put("version", productVersion);
         mvc.perform(put("/api/v1/products/{id}", id).header("Authorization", bearer(token))
                         .contentType(MediaType.APPLICATION_JSON).content(json(update)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.nameZh").value("旅行收纳袋升级版"))
-                .andExpect(jsonPath("$.variants[0].attributes[0].attributeValue").value("Blue"));
+                .andExpect(jsonPath("$.productName").value("旅行收纳袋升级版"));
 
         mvc.perform(get("/api/v1/products/{id}", id).header("Authorization", bearer(token)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.skuCount").value(2));
         assertThat(jdbc.queryForObject("SELECT status FROM product_variant WHERE sku_code = 'SKU-002'", String.class))
                 .isEqualTo("DISABLED");
-        mvc.perform(post("/api/v1/products/{id}/disable", id).header("Authorization", bearer(token)))
+        String reloaded = mvc.perform(get("/api/v1/products/{id}", id).header("Authorization", bearer(token)))
+                .andReturn().getResponse().getContentAsString();
+        mvc.perform(post("/api/v1/products/{id}/disable", id).header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("version", objectMapper.readTree(reloaded).get("version").asLong()))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("DISABLED"))
-                .andExpect(jsonPath("$.variants[0].status").value("DISABLED"));
+                .andExpect(jsonPath("$.variants[0].status").value("DRAFT"));
 
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product WHERE id = ?", Integer.class, id)).isEqualTo(1);
         assertThat(jdbc.queryForList("SELECT action FROM audit_event WHERE resource_id = ?", String.class, id))
@@ -92,7 +100,7 @@ class ProductControllerTest {
     }
 
     @Test
-    void codesAndVariantCombinationsAreUniqueIgnoringCase() throws Exception {
+    void codesRemainUniqueButAttributeCombinationsNoLongerBlockSkuCreation() throws Exception {
         String token = createUserAndLogin("product-owner", "PRODUCT_MATERIAL");
         mvc.perform(post("/api/v1/products").header("Authorization", bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -114,8 +122,8 @@ class ProductControllerTest {
         variants.add(second);
         mvc.perform(post("/api/v1/products").header("Authorization", bearer(token))
                         .contentType(MediaType.APPLICATION_JSON).content(json(duplicateCombination)))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("VARIANT_COMBINATION_EXISTS"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.variants.length()").value(2));
     }
 
     @Test
@@ -135,6 +143,49 @@ class ProductControllerTest {
                 .andExpect(jsonPath("$.code").value("CAPABILITY_DENIED"));
     }
 
+    @Test
+    void aggregateSavePersistsSupplierAndMaterialAndRollsBackOnInvalidUnit() throws Exception {
+        String token = createUserAndLogin("aggregate-owner", "PRODUCT_MATERIAL");
+        String supplierId = java.util.UUID.randomUUID().toString();
+        String materialId = java.util.UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO supplier(id,name,phone,status,created_by,updated_by)
+                VALUES (?, '聚合供应商', '10086', 'ACTIVE', 'test', 'test')
+                """, supplierId);
+        jdbc.update("""
+                INSERT INTO auxiliary_material
+                    (id, material_code, material_code_normalized, name, material_type, unit, status, created_by, updated_by)
+                VALUES (?, 'MAT-AGG', 'MAT-AGG', '聚合辅料', 'PACKAGING', '个', 'ACTIVE', 'test', 'test')
+                """, materialId);
+
+        Map<String, Object> aggregate = product("PROD-AGG", "聚合产品", "SKU-AGG", "蓝色");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> variant = (Map<String, Object>) ((List<?>) aggregate.get("variants")).getFirst();
+        variant.put("suppliers", List.of(Map.of("supplierId", supplierId, "primary", true)));
+        variant.put("materials", List.of(Map.of(
+                "materialId", materialId, "standardQuantity", "2.500", "unit", "个",
+                "lossRate", "0.050", "enabled", true)));
+        mvc.perform(post("/api/v1/products").header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(aggregate)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.variants[0].suppliers[0].supplierId").value(supplierId))
+                .andExpect(jsonPath("$.variants[0].materials[0].materialId").value(materialId));
+
+        Map<String, Object> invalid = product("PROD-ROLLBACK", "回滚产品", "SKU-ROLLBACK", "白色");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> invalidVariant = (Map<String, Object>) ((List<?>) invalid.get("variants")).getFirst();
+        invalidVariant.put("materials", List.of(Map.of(
+                "materialId", materialId, "standardQuantity", "1", "unit", "套",
+                "lossRate", "0", "enabled", true)));
+        mvc.perform(post("/api/v1/products").header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(invalid)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("MATERIAL_UNIT_MISMATCH"));
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM product WHERE product_code_normalized='PROD-ROLLBACK'", Integer.class))
+                .isZero();
+    }
+
     private String createUserAndLogin(String loginName, String role) throws Exception {
         String id = java.util.UUID.randomUUID().toString();
         var encoder = new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder();
@@ -150,18 +201,16 @@ class ProductControllerTest {
     }
 
     private Map<String, Object> product(String productCode, String name, String skuCode, String color) {
-        Map<String, Object> attribute = new java.util.LinkedHashMap<>();
-        attribute.put("attributeCode", "color");
-        attribute.put("attributeValue", color);
-        attribute.put("displayOrder", 0);
         Map<String, Object> variant = new java.util.LinkedHashMap<>();
         variant.put("skuCode", skuCode);
         variant.put("variantName", color + " 款");
-        variant.put("status", "ACTIVE");
-        variant.put("attributes", List.of(attribute));
+        variant.put("status", "DRAFT");
+        variant.put("packageWeightGrams", "120.500");
+        variant.put("suppliers", List.of());
+        variant.put("materials", List.of());
         Map<String, Object> product = new java.util.LinkedHashMap<>();
         product.put("productCode", productCode);
-        product.put("nameZh", name);
+        product.put("productName", name);
         product.put("status", "ACTIVE");
         product.put("variants", new java.util.ArrayList<>(List.of(variant)));
         return product;

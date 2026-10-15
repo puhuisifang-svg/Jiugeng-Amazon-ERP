@@ -13,8 +13,9 @@ describe('persistent product API routing', () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => [{
-        id: 'product-1', productCode: 'PROD-1', nameZh: '正式产品', status: 'ACTIVE', skuCount: 1,
-        variants: [{ id: 'variant-1', skuCode: 'SKU-1', variantName: '黑色', status: 'ACTIVE', attributes: [] }],
+        id: 'product-1', productCode: 'PROD-1', productName: '正式产品', status: 'ACTIVE', version: 0,
+        supplierDetailsAvailable: true, skuCount: 1,
+        variants: [{ id: 'variant-1', skuCode: 'SKU-1', variantName: '黑色', status: 'ACTIVE', version: 0, attributes: [], suppliers: [], materials: [] }],
       }],
     })
     vi.stubGlobal('fetch', fetchMock)
@@ -23,7 +24,7 @@ describe('persistent product API routing', () => {
     const response = await domainApi.products()
 
     expect(response.mockData).toBe(false)
-    expect(response.items[0]?.nameZh).toBe('正式产品')
+    expect(response.items[0]?.productName).toBe('正式产品')
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/v1/products'), expect.any(Object))
   })
 })

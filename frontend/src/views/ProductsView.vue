@@ -10,7 +10,10 @@ import { session } from '@/state/session'
 const items = ref<ProductDetailDto[]>([])
 const loading = ref(true)
 const error = ref('')
+const query = ref(''); const status = ref('')
 const writable = computed(() => session.canAccess(['products.write']))
+const filtered = computed(() => items.value.filter(item => (!status.value || item.status === status.value)
+  && (!query.value || `${item.productCode} ${item.productName}`.toLowerCase().includes(query.value.toLowerCase()))))
 
 async function load() {
   loading.value = true; error.value = ''
@@ -34,6 +37,13 @@ onMounted(load)
         新增产品
       </RouterLink>
     </div>
+    <section class="panel filter-bar">
+      <label>搜索<input
+        v-model="query"
+        type="search"
+        placeholder="产品编号 / 名称"
+      ></label><label>状态<select v-model="status"><option value="">全部</option><option value="ACTIVE">启用</option><option value="DRAFT">待定</option><option value="DISABLED">停用</option></select></label>
+    </section>
     <p
       v-if="error"
       class="data-state data-state--error"
@@ -48,7 +58,7 @@ onMounted(load)
       正在加载…
     </p>
     <article
-      v-else-if="!items.length"
+      v-else-if="!filtered.length"
       class="panel empty-state"
     >
       <h2>暂无产品</h2><p>点击“新增产品”创建 Product 与首个 SKU。</p>
@@ -58,15 +68,15 @@ onMounted(load)
       class="card-list"
     >
       <RouterLink
-        v-for="product in items"
+        v-for="product in filtered"
         :key="product.id"
         class="panel compact-panel product-card"
         :to="`/products/${product.id}`"
       >
         <div class="card-heading">
-          <div><strong>{{ product.productCode }}</strong><h2>{{ product.nameZh }}</h2></div><span class="placeholder-badge">{{ product.status }}</span>
+          <div><strong>{{ product.productCode }}</strong><h2>{{ product.productName }}</h2></div><span class="placeholder-badge">{{ product.status }}</span>
         </div>
-        <p>{{ product.skuCount }} 个内部 SKU<span v-if="product.brand"> · {{ product.brand }}</span></p>
+        <p>{{ product.skuCount }} 个内部 SKU · 更新于 {{ product.updatedAt || '—' }}</p>
         <div
           v-for="sku in product.variants"
           :key="sku.id ?? sku.skuCode"

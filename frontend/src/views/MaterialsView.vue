@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import { ApiError } from '@/api/client'
-import { domainApi, type MaterialDetailDto, type MaterialInput } from '@/api/domain'
+import { domainApi, type MaterialDetailDto, type MaterialInput, type SupplierAssignmentDto, type SupplierDto } from '@/api/domain'
 import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
@@ -10,22 +10,27 @@ import { session } from '@/state/session'
 const items = ref<MaterialDetailDto[]>([])
 const loading = ref(true); const saving = ref(false); const error = ref(''); const success = ref('')
 const editingId = ref<string | null>(null)
+const supplierOptions = ref<SupplierDto[]>([]); const supplierLinks = ref<SupplierAssignmentDto[]>([])
 const form = reactive<MaterialInput>({ materialCode: '', name: '', materialType: '', specification: '', unit: 'PCS', imageUrl: '', remark: '' })
 const writable = computed(() => session.canAccess(['materials.write']))
 const formal = computed(() => runtimeConfig.authMode === 'password')
 
 function resetForm() {
   Object.assign(form, { materialCode: '', name: '', materialType: '', specification: '', unit: 'PCS', imageUrl: '', remark: '' })
-  editingId.value = null
+  editingId.value = null; supplierLinks.value = []
 }
-function edit(item: MaterialDetailDto) {
+async function edit(item: MaterialDetailDto) {
   Object.assign(form, { materialCode: item.materialCode, name: item.name, materialType: item.materialType,
     specification: item.specification ?? '', unit: item.unit, imageUrl: item.imageUrl ?? '', remark: item.remark ?? '' })
   editingId.value = item.id; success.value = ''; error.value = ''
+  if (session.canAccess(['suppliers.read'])) supplierLinks.value = (await domainApi.materialSupplierLinks(item.id)).map(link => ({ supplierId: link.supplierId, purchaseUrl: link.purchaseUrl, remark: link.remark, primary: link.primary }))
 }
+function addSupplier(event: Event) { const select = event.target as HTMLSelectElement; const id = select.value; select.value = ''; if (id && !supplierLinks.value.some(item => item.supplierId === id)) supplierLinks.value.push({ supplierId: id, primary: supplierLinks.value.length === 0 }) }
+function supplierName(id: string) { return supplierOptions.value.find(item => item.id === id)?.name ?? id }
+function makePrimary(id: string) { supplierLinks.value.forEach(item => { item.primary = item.supplierId === id }) }
 async function load() {
   loading.value = true; error.value = ''
-  try { items.value = (await domainApi.materials()).items }
+  try { items.value = (await domainApi.materials()).items; if (session.canAccess(['suppliers.read'])) supplierOptions.value = (await domainApi.suppliers({ status: 'ACTIVE', size: 100 })).items }
   catch { error.value = formal.value ? '辅料数据加载失败。' : '辅料模拟数据加载失败。' }
   finally { loading.value = false }
 }
@@ -39,7 +44,8 @@ async function save() {
       ...(form.remark?.trim() ? { remark: form.remark.trim() } : {}) }
     if (editingId.value) {
       const updated = await domainApi.updateMaterial(editingId.value, input)
-      items.value = items.value.map(item => item.id === updated.id ? updated : item); success.value = '辅料已更新。'
+      await domainApi.replaceMaterialSupplierLinks(updated.id, supplierLinks.value)
+      items.value = items.value.map(item => item.id === updated.id ? updated : item); success.value = '辅料及供应商关系已更新。'
     } else {
       const response = await domainApi.createMaterial(input)
       items.value.unshift(response.item); success.value = response.mockData ? '模拟辅料已创建。' : '辅料已创建。'
@@ -103,6 +109,54 @@ onMounted(load)
         v-model="form.remark"
         maxlength="1000"
       /></label>
+      <section
+        v-if="editingId && session.canAccess(['suppliers.read'])"
+        class="form-wide relation-editor"
+      >
+        <h3>关联供应商</h3>
+        <select
+          aria-label="添加辅料供应商"
+          value=""
+          @change="addSupplier($event)"
+        >
+          <option value="">
+            选择供应商…
+          </option>
+          <option
+            v-for="supplier in supplierOptions"
+            :key="supplier.id"
+            :value="supplier.id"
+          >
+            {{ supplier.name }}
+          </option>
+        </select>
+        <div
+          v-for="link in supplierLinks"
+          :key="link.supplierId"
+          class="relation-row"
+        >
+          <strong>{{ supplierName(link.supplierId) }}</strong>
+          <label><input
+            type="radio"
+            name="material-primary-supplier"
+            :checked="link.primary"
+            @change="makePrimary(link.supplierId)"
+          >主供应商</label>
+          <input
+            v-model="link.purchaseUrl"
+            aria-label="辅料采购链接"
+            type="url"
+            placeholder="1688 HTTPS 采购链接"
+          >
+          <button
+            type="button"
+            class="danger-link"
+            @click="supplierLinks.splice(supplierLinks.indexOf(link), 1)"
+          >
+            解除
+          </button>
+        </div>
+      </section>
       <button
         :disabled="saving"
         type="submit"

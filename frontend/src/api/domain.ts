@@ -3,8 +3,10 @@ import type { CandidateDetailDto, InventoryBalanceDto, MaterialDto, ProductDto, 
 import { runtimeConfig } from '@/config/runtime'
 
 export type ProductStatus = 'DRAFT' | 'ACTIVE' | 'DISABLED'
-export type VariantStatus = 'ACTIVE' | 'DISABLED'
+export type VariantStatus = 'DRAFT' | 'ACTIVE' | 'DISABLED'
 export interface VariantAttributeDto { attributeCode: string; attributeValue: string; displayOrder: number }
+export interface SupplierAssignmentDto { supplierId: string; purchaseUrl?: string | undefined; remark?: string | undefined; primary: boolean }
+export interface MaterialAssignmentDto { materialId: string; standardQuantity: number; unit: string; lossRate: number; remark?: string | undefined; enabled: boolean }
 export interface ProductVariantDto {
   id?: string
   skuCode: string
@@ -16,35 +18,51 @@ export interface ProductVariantDto {
   packageDimensions?: string
   packageWeight?: number
   packageWeightUnit?: 'G' | 'KG' | 'OZ' | 'LB'
+  packageWeightGrams?: number
+  imageAssetId?: string
+  version?: number
   status: VariantStatus
   attributes: VariantAttributeDto[]
+  suppliers: SupplierAssignmentDto[]
+  materials: MaterialAssignmentDto[]
+}
+export interface ProductVariantInput {
+  id?: string | undefined; skuCode: string; variantName: string; itemDimensions?: string | undefined; packageDimensions?: string | undefined
+  packageWeightGrams?: number | undefined; status: VariantStatus; imageAssetId?: string | undefined; version?: number | undefined
+  suppliers: SupplierAssignmentDto[]; materials: MaterialAssignmentDto[]
 }
 export interface ProductDetailDto {
   id: string
   productCode: string
+  productName: string
   nameZh: string
   nameEn?: string
   brand?: string
   internalCategory?: string
-  productType?: string
-  description?: string
+  productType?: string | undefined
+  description?: string | undefined
   status: ProductStatus
+  version: number
   variants: ProductVariantDto[]
   skuCount: number
+  supplierDetailsAvailable: boolean
   createdAt?: string
   updatedAt?: string
 }
 export interface ProductInput {
   productCode: string
-  nameZh: string
-  nameEn?: string
-  brand?: string
-  internalCategory?: string
-  productType?: string
-  description?: string
-  status: Exclude<ProductStatus, 'DISABLED'>
-  variants: ProductVariantDto[]
+  productName: string
+  productType?: string | undefined
+  description?: string | undefined
+  status: ProductStatus
+  version?: number | undefined
+  variants: ProductVariantInput[]
 }
+export type SupplierStatus = 'ACTIVE' | 'DISABLED'
+export interface SupplierDto { id: string; name: string; contactPerson?: string; phone?: string; sourceUrl?: string; qrImageId?: string; remark?: string; status: SupplierStatus; version: number; createdAt?: string; updatedAt?: string }
+export interface SupplierInput { name: string; contactPerson?: string | undefined; phone?: string | undefined; sourceUrl?: string | undefined; qrImageId?: string | undefined; remark?: string | undefined; status: SupplierStatus; version?: number | undefined }
+export interface SupplierLinkDto extends SupplierAssignmentDto { id: string; ownerId: string; supplierName: string; supplierStatus: SupplierStatus; updatedAt?: string }
+export interface PageDto<T> { items: T[]; totalCount: number; page: number; size: number }
 export type MaterialStatus = 'ACTIVE' | 'DISABLED'
 export interface MaterialDetailDto {
   id: string
@@ -152,14 +170,18 @@ function adaptMockProduct(product: MockProduct): ProductDetailDto {
   return {
     id: product.id,
     productCode: product.productCode,
+    productName: product.name,
     nameZh: product.name,
     status: product.status as ProductStatus,
+    version: 0,
+    supplierDetailsAvailable: false,
     skuCount: product.skuCount ?? product.skus.length,
     variants: product.skus.map((sku, index) => ({
       skuCode: sku.skuCode,
       variantName: sku.skuCode,
-      status: (sku.status ?? 'ACTIVE') as VariantStatus,
+      status: (sku.status ?? 'ACTIVE') as VariantStatus, version: 0,
       attributes: [{ attributeCode: 'mock_sequence', attributeValue: String(index + 1), displayOrder: 0 }],
+      suppliers: [], materials: [],
     })),
   }
 }
@@ -187,16 +209,16 @@ type LegacyProductInput = { productCode: string; name: string; skuCodes: string[
 async function createProduct(input: ProductInput | LegacyProductInput): Promise<{ item: ProductDetailDto; mockData: boolean }> {
   const normalized: ProductInput = 'name' in input ? {
     productCode: input.productCode,
-    nameZh: input.name,
-    status: 'ACTIVE',
-    variants: input.skuCodes.map((skuCode, index) => ({ skuCode, variantName: skuCode, status: 'ACTIVE',
-      attributes: [{ attributeCode: 'mock_sequence', attributeValue: String(index + 1), displayOrder: 0 }] })),
+    productName: input.name,
+    status: 'DRAFT',
+    variants: input.skuCodes.map((skuCode, index) => ({ skuCode, variantName: skuCode, status: 'DRAFT',
+      attributes: [{ attributeCode: 'mock_sequence', attributeValue: String(index + 1), displayOrder: 0 }], suppliers: [], materials: [] })),
   } : input
   if (runtimeConfig.authMode === 'mock') {
     const response = assertSynthetic(await apiRequest<SyntheticWrite<MockProduct>>('/products', {
       method: 'POST', body: JSON.stringify({
         productCode: normalized.productCode,
-        name: normalized.nameZh,
+        name: normalized.productName,
         skuCodes: normalized.variants.map(variant => variant.skuCode),
       }),
     }))
@@ -241,8 +263,23 @@ export const domainApi = {
   },
   disableProduct: async (id: string) => {
     if (runtimeConfig.authMode === 'mock') throw new Error('Mock products cannot be disabled')
-    return apiRequest<ProductDetailDto>(`/v1/products/${id}/disable`, { method: 'POST' })
+    const current = await product(id)
+    return apiRequest<ProductDetailDto>(`/v1/products/${id}/disable`, { method: 'POST', body: JSON.stringify({ version: current.version }) })
   },
+  suppliers: async (filters: { q?: string; status?: SupplierStatus; page?: number; size?: number } = {}) => {
+    if (runtimeConfig.authMode === 'mock') return { items: [], totalCount: 0, page: 0, size: filters.size ?? 100 } as PageDto<SupplierDto>
+    const search = new URLSearchParams()
+    if (filters.q) search.set('q', filters.q)
+    if (filters.status) search.set('status', filters.status)
+    search.set('page', String(filters.page ?? 0)); search.set('size', String(filters.size ?? 100))
+    return apiRequest<PageDto<SupplierDto>>(`/v1/suppliers?${search}`)
+  },
+  supplier: (id: string) => apiRequest<SupplierDto>(`/v1/suppliers/${id}`),
+  createSupplier: (input: SupplierInput) => apiRequest<SupplierDto>('/v1/suppliers', { method: 'POST', body: JSON.stringify(input) }),
+  updateSupplier: (id: string, input: SupplierInput) => apiRequest<SupplierDto>(`/v1/suppliers/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
+  disableSupplier: (id: string, version: number) => apiRequest<SupplierDto>(`/v1/suppliers/${id}/disable`, { method: 'POST', body: JSON.stringify({ version }) }),
+  materialSupplierLinks: (id: string) => apiRequest<SupplierLinkDto[]>(`/v1/suppliers/material/${id}`),
+  replaceMaterialSupplierLinks: (id: string, links: SupplierAssignmentDto[]) => apiRequest<SupplierLinkDto[]>(`/v1/suppliers/material/${id}`, { method: 'PUT', body: JSON.stringify({ links }) }),
   materials,
   createMaterial,
   material: async (id: string) => {

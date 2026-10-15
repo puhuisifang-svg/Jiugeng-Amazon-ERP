@@ -35,6 +35,7 @@ export const appRoutes: RouteRecordRaw[] = [
       { path: 'products/new', name: 'product-new', component: () => import('@/views/ProductNewView.vue'), meta: { title: '新建产品', hidden: true, capabilities: ['products.write'] } },
       { path: 'products/:productId/:section(overview|variants|materials|changes)?', name: 'product-detail', component: () => import('@/views/ProductDetailView.vue'), meta: { title: '产品详情', hidden: true, capabilities: ['products.read'] } },
       { path: 'materials', name: 'materials', component: () => import('@/views/MaterialsView.vue'), meta: { title: '辅料主档', group: '产品管理', icon: '◇', capabilities: ['materials.read'] } },
+      { path: 'suppliers', name: 'suppliers', component: () => import('@/views/SuppliersView.vue'), meta: { title: '供应商管理', group: '产品管理', icon: '供', capabilities: ['suppliers.read'] } },
       { path: 'inventory', redirect: '/inventory/balances', meta: { title: '辅料库存', hidden: true, capabilities: ['inventory.read'] } },
       { path: 'inventory/balances', name: 'inventory-balances', component: () => import('@/views/InventoryView.vue'), meta: { title: '辅料库存', group: '产品管理', icon: '▦', capabilities: ['inventory.read'] } },
       { path: 'inventory/ledger', name: 'inventory-ledger', component: () => import('@/views/InventoryLedgerView.vue'), meta: { title: '库存流水', hidden: true, capabilities: ['inventory.read'] } },

@@ -2,6 +2,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { session } from '@/state/session'
+import { capabilitiesForRole } from '@/auth/capabilities'
 
 import { appRoutes, refreshAccessIfStale } from './index'
 
@@ -35,7 +36,7 @@ describe('application routes', () => {
     const shell = appRoutes.find((route) => route.path === '/')
     const paths = new Set(shell?.children?.map((route) => `/${route.path}`))
     const expectedPaths = [
-      '/home', '/products', '/materials', '/inventory/balances',
+      '/home', '/products', '/materials', '/suppliers', '/inventory/balances',
       '/inventory/ledger', '/imports', '/selection/candidates', '/watch/stores',
       '/watch/events', '/system/users', '/system/audit',
       '/dashboard-maintenance/today-shipments', '/dashboard-maintenance/pending-shipments',
@@ -44,6 +45,13 @@ describe('application routes', () => {
 
     expect(expectedPaths.every((path) => paths.has(path))).toBe(true)
     expect(paths.has('/listing-mappings')).toBe(false)
+  })
+
+  it('protects supplier contact data with its dedicated capability', () => {
+    const shell = appRoutes.find((route) => route.path === '/')
+    const suppliers = shell?.children?.find((route) => route.name === 'suppliers')
+    expect(suppliers?.meta?.capabilities).toEqual(['suppliers.read'])
+    expect(capabilitiesForRole('SELECTION')).not.toContain('suppliers.read')
   })
 
   it('refreshes server capabilities before treating a persisted session as forbidden', async () => {

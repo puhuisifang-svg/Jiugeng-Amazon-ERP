@@ -52,9 +52,9 @@ export async function apiRequest<T>(path: string, init: ApiRequestInit = {}): Pr
 
   const response = await fetch(`${runtimeConfig.apiBaseUrl}${path}`, { ...requestInit, headers })
   if (!response.ok) {
-    const problem = await response.json().catch(() => null) as { code?: string; detail?: string } | null
+    const problem = await response.json().catch(() => null) as { code?: string; detail?: string; message?: string } | null
     if (response.status === 401 && authenticated) window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))
-    throw new ApiError(response.status, problem?.code ?? 'REQUEST_FAILED', problem?.detail ?? `请求失败（${response.status}）`)
+    throw new ApiError(response.status, problem?.code ?? 'REQUEST_FAILED', problem?.detail ?? problem?.message ?? `请求失败（${response.status}）`)
   }
   if (response.status === 204) return undefined as T
   return response.json().catch(() => undefined as T)

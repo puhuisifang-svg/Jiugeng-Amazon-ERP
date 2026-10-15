@@ -159,7 +159,7 @@ onMounted(async () => {
             v-for="product in products"
             :key="product.id"
             :value="product.id"
-          >{{ product.productCode }} · {{ product.nameZh }}</option></select></label>
+          >{{ product.productCode }} · {{ product.productName }}</option></select></label>
           <label>{{ dateLabel }}<input
             v-model="shipment.date"
             required

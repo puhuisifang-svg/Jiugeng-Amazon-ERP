@@ -177,6 +177,19 @@ a { color: inherit; }
 .dashboard-filters button { min-height: 40px; align-self: end; padding: 0 16px; color: white; background: var(--accent); border: 0; border-radius: 7px; }
 .dashboard-image-preview { display: flex; min-height: 72px; align-items: center; }
 .dashboard-image-preview img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; }
+.catalog-image { display: block; width: 72px; height: 72px; object-fit: cover; background: #f1f3f7; border-radius: 10px; }
+.catalog-image--placeholder, .catalog-image--loading { display: grid; place-items: center; color: #8a93a5; }
+.catalog-image-editor { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sku-editor-grid { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 20px; align-items: start; }
+.relation-editor { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+.relation-editor > select { min-width: min(100%, 360px); }
+.relation-row { display: grid; grid-template-columns: minmax(120px, .8fr) auto minmax(180px, 1fr) minmax(140px, .8fr) auto; gap: 10px; align-items: center; margin-top: 10px; }
+.relation-row--material { grid-template-columns: minmax(160px, 1fr) repeat(3, minmax(110px, .6fr)) minmax(140px, .8fr) auto; }
+.detail-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.detail-tabs a { padding: 9px 14px; color: var(--text); background: white; border: 1px solid var(--border); border-radius: 8px; text-decoration: none; }
+.detail-tabs a.router-link-active { color: white; background: var(--accent); border-color: var(--accent); }
+.sku-detail-card { display: grid; grid-template-columns: 90px 1fr; gap: 16px; }
+@media (max-width: 800px) { .sku-editor-grid, .sku-detail-card { grid-template-columns: 1fr; } .relation-row, .relation-row--material { grid-template-columns: 1fr; } }
 .dashboard-history { position: relative; width: min(720px, 90vw); max-height: 80vh; min-height: 0; overflow: auto; }
 .dashboard-history > button { position: absolute; top: 14px; right: 14px; width: 36px; height: 36px; border: 0; border-radius: 50%; cursor: pointer; }
 .dashboard-history ol { display: grid; gap: 12px; padding-left: 22px; }

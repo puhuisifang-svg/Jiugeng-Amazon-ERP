@@ -44,12 +44,12 @@ describe('horizontal navigation shell', () => {
     expect(wrapper.get('.mega-panel').text()).toContain('产品与 SKU')
     expect(wrapper.get('.mega-panel').text()).toContain('辅料管理')
     expect(wrapper.get('.mega-panel').text()).not.toContain('辅料库存')
-    expect(wrapper.get('.mega-panel').text()).toContain('导入中心')
-    await wrapper.get('.mega-panel a[href="/imports"]').trigger('click')
+    expect(wrapper.get('.mega-panel').text()).not.toContain('导入')
+    await wrapper.get('.mega-panel a[href="/materials"]').trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.path).toBe('/imports')
+    expect(router.currentRoute.value.path).toBe('/materials')
     expect(wrapper.find('.mega-panel').exists()).toBe(false)
-    expect(wrapper.get('.workspace-tab.is-current').text()).toContain('导入中心')
+    expect(wrapper.get('.workspace-tab.is-current').text()).toContain('辅料管理')
   })
 
   it('never exposes hidden routes or unauthorized groups and removes revoked tabs', async () => {
@@ -77,10 +77,23 @@ describe('horizontal navigation shell', () => {
     expect(wrapper.get('.workspace-tab.is-current').text()).toContain('辅料管理')
   })
 
+  it('shows material child pages as clickable third-level breadcrumbs', async () => {
+    const { wrapper, router } = await setup('/inventory/ledger')
+    const trail = wrapper.get('.page-heading__trail')
+    expect(trail.text()).toContain('商品/辅料管理/库存流水')
+    await trail.get('a[href="/materials"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/materials')
+
+    await router.push('/imports')
+    expect(wrapper.get('.page-heading__trail').text()).toContain('商品/辅料管理/导入')
+    expect(wrapper.get('.workspace-tab.is-current').text()).toContain('辅料管理')
+  })
+
   it('closes an active tab and navigates to another available page', async () => {
     const { wrapper, router } = await setup('/products')
     await router.push('/imports')
-    await wrapper.get('button[aria-label="关闭导入中心页签"]').trigger('click')
+    await wrapper.get('button[aria-label="关闭辅料管理页签"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/products')
     await wrapper.get('button[aria-label="关闭产品与 SKU页签"]').trigger('click')

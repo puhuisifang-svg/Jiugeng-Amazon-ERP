@@ -15,6 +15,8 @@ declare module 'vue-router' {
     group?: string
     icon?: string
     hidden?: boolean
+    parentPath?: string
+    breadcrumbs?: Array<{ title: string; to?: string }>
     capabilities?: Capability[]
   }
 }

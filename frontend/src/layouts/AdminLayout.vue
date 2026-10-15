@@ -25,8 +25,13 @@ const domains = computed(() => definitions.map(domain => ({
 })).filter(domain => domain.rows.length))
 const currentEntry = computed(() => entries.value.find(item => `/${item.path}` === route.path)
   ?? entries.value.filter(item => route.path.startsWith(`/${item.path}/`)).sort((a, b) => b.path.length - a.path.length)[0]
+  ?? entries.value.find(item => `/${item.path}` === route.meta.parentPath)
   ?? (route.path.startsWith('/inventory/') ? entries.value.find(item => item.path === 'materials') : undefined))
 const activeDomain = computed(() => domains.value.find(domain => domain.rows.some(row => row.items.includes(currentEntry.value!)))?.title)
+const breadcrumbs = computed(() => route.meta.breadcrumbs ?? [
+  { title: activeDomain.value ?? '工作台' },
+  { title: String(route.meta.title) },
+])
 const home = computed(() => entries.value.find(item => item.path === 'home'))
 const tabs = computed(() => visited.value.map(path => entries.value.find(item => item.path === path)).filter(item => item !== undefined))
 const expanded = computed(() => domains.value.find(domain => domain.title === openDomain.value))
@@ -205,7 +210,22 @@ onBeforeUnmount(() => {
     </nav>
     <div class="page-heading">
       <div class="page-heading__trail">
-        <span>{{ activeDomain ?? '工作台' }}</span><span aria-hidden="true">/</span><h1>{{ route.meta.title }}</h1>
+        <template
+          v-for="(item, index) in breadcrumbs"
+          :key="`${item.title}-${index}`"
+        >
+          <span
+            v-if="index"
+            aria-hidden="true"
+          >/</span><RouterLink
+            v-if="item.to"
+            :to="item.to"
+          >
+            {{ item.title }}
+          </RouterLink><h1 v-else-if="index === breadcrumbs.length - 1">
+            {{ item.title }}
+          </h1><span v-else>{{ item.title }}</span>
+        </template>
       </div>
       <span class="page-heading__brand">九更亚马逊 ERP</span>
     </div>
@@ -254,6 +274,8 @@ onBeforeUnmount(() => {
 .tabs-hint { padding: 7px 12px; color: #b0bfe4; font-size: 12px; white-space: nowrap; }
 .page-heading { display: flex; align-items: center; justify-content: space-between; min-height: 60px; padding: 12px 24px; background: white; border-bottom: 1px solid #e5e8ef; }
 .page-heading__trail { display: flex; align-items: center; gap: 12px; color: #8992a4; font-size: 13px; }
+.page-heading__trail a { color: #53617a; font-weight: 700; text-decoration: none; }
+.page-heading__trail a:hover { color: #ff8a34; }
 .page-heading h1 { margin: 0; color: #202c43; font-size: 17px; font-weight: 600; }
 .page-heading__brand { color: #8a94a6; font-size: 12px; }
 .erp-content { padding: 20px 24px; outline: none; }

@@ -120,7 +120,10 @@ onMounted(load)
           type="file"
           accept="image/jpeg,image/png,image/webp"
           @change="upload"
-        ></label><label>状态<select v-model="form.status"><option value="ACTIVE">启用</option><option value="DISABLED">停用</option></select></label><label class="form-wide">备注<textarea
+        ></label><label>状态<select
+          v-model="form.status"
+          class="status-select"
+        ><option value="ACTIVE">启用</option><option value="DISABLED">停用</option></select></label><label class="form-wide">备注<textarea
           v-model="form.remark"
           maxlength="500"
         /></label><div
@@ -292,11 +295,13 @@ onMounted(load)
           ×
         </button><AuthenticatedCatalogImage
           v-if="preview.kind === 'asset'"
+          class="supplier-qr-preview"
           :image-id="preview.value"
           variant="original"
           alt="供应商微信二维码"
         /><img
           v-else
+          class="supplier-qr-preview"
           :src="preview.value"
           alt="供应商微信二维码"
           referrerpolicy="no-referrer"

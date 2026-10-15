@@ -11,7 +11,7 @@ vi.mock('@/api/catalog', () => ({ catalogApi: { uploadImage, imageBlob: vi.fn() 
 vi.mock('@/api/domain', () => ({
   domainApi: {
     materials: vi.fn(async () => ({ items: [
-      { id: 'm1', materialCode: 'MAT-1', name: '纸箱', materialType: '包装', specification: '30×20', unit: 'PCS', status: 'ACTIVE' },
+      { id: 'm1', materialCode: 'MAT-1', name: '纸箱', materialType: '包装', specification: '30×20', unit: 'PCS', status: 'ACTIVE', imageUrl: 'https://images.example.com/box.jpg' },
       { id: 'm2', materialCode: 'MAT-2', name: '胶带', materialType: '耗材', unit: 'ROLL', status: 'ACTIVE' },
     ], mockData: false })),
     balances: vi.fn(async () => ({ items: [{ warehouseCode: 'MAIN', materialId: 'm1', materialCode: 'MAT-1',
@@ -66,6 +66,22 @@ describe('MaterialsView merged material management', () => {
 
     expect(transact).toHaveBeenCalledWith(expect.objectContaining({ materialId: 'm2', type: 'INBOUND', quantity: 5, unit: 'ROLL' }))
     expect(wrapper.findAll('tbody tr').find(item => item.text().includes('MAT-2'))!.text()).toContain('5')
+  })
+
+  it('renders a remote material image and opens an enlarged preview', async () => {
+    const wrapper = mount(MaterialsView, { global })
+    await flushPromises()
+
+    const previewButton = wrapper.get('button[aria-label="查看纸箱大图"]')
+    const thumbnail = previewButton.get('img')
+    expect(thumbnail.attributes('src')).toBe('https://images.example.com/box.jpg')
+    expect(thumbnail.attributes('referrerpolicy')).toBe('no-referrer')
+
+    await previewButton.trigger('click')
+    const dialog = wrapper.get('[role="dialog"][aria-label="纸箱图片预览"]')
+    expect(dialog.get('img').attributes('src')).toBe('https://images.example.com/box.jpg')
+    await dialog.get('button[aria-label="关闭图片预览"]').trigger('click')
+    expect(wrapper.find('[aria-label="纸箱图片预览"]').exists()).toBe(false)
   })
 
   it('keeps material and inventory operations exclusive and offers common units', async () => {

@@ -22,6 +22,9 @@ const inventoryForm = reactive<{ materialId: string; materialCode: string; type:
 })
 const safetyValues = ref<Record<string, number>>({})
 const uploading = ref(false); const imageError = ref('')
+const failedRemoteImages = ref<Set<string>>(new Set())
+type MaterialImagePreview = { alt: string; imageUrl: string } | { alt: string; imageAssetId: string }
+const imagePreview = ref<MaterialImagePreview | null>(null)
 const unitOptions = ['件', '个', '套', '盒', '包', '卷', '米', '千克', '克', 'PCS', 'SET', 'BOX', 'PACK', 'ROLL', 'M', 'KG']
 const writable = computed(() => session.canAccess(['materials.write']))
 const formal = computed(() => runtimeConfig.authMode === 'password')
@@ -74,6 +77,11 @@ function addSupplier(event: Event) { const select = event.target as HTMLSelectEl
 function supplierName(id: string) { return supplierOptions.value.find(item => item.id === id)?.name ?? id }
 function makePrimary(id: string) { supplierLinks.value.forEach(item => { item.primary = item.supplierId === id }) }
 function useImageUrl() { if (form.imageUrl?.trim()) form.imageAssetId = '' }
+function markRemoteImageFailed(key: string) { failedRemoteImages.value = new Set(failedRemoteImages.value).add(key) }
+function previewImage(item: MaterialDetailDto) {
+  if (item.imageAssetId) imagePreview.value = { alt: item.name, imageAssetId: item.imageAssetId }
+  else if (item.imageUrl) imagePreview.value = { alt: item.name, imageUrl: item.imageUrl }
+}
 async function uploadImage(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
   if (!file) return
@@ -165,7 +173,7 @@ onMounted(load)
   <section class="page-stack material-management">
     <SyntheticNotice v-if="!formal" />
     <form
-      class="panel material-filters"
+      class="panel filter-panel material-filters"
       @submit.prevent
     >
       <label>关键词<input
@@ -286,7 +294,14 @@ onMounted(load)
           v-if="formal"
           class="form-wide catalog-image-editor material-image-editor"
         >
-          <AuthenticatedCatalogImage
+          <img
+            v-if="form.imageUrl"
+            class="material-image"
+            :src="form.imageUrl"
+            alt="辅料图片预览"
+            referrerpolicy="no-referrer"
+          ><AuthenticatedCatalogImage
+            v-else
             :image-id="form.imageAssetId"
             alt="辅料图片"
           />
@@ -374,19 +389,21 @@ onMounted(load)
             </button>
           </div>
         </section>
-        <button
-          :disabled="saving || uploading"
-          type="submit"
-        >
-          {{ saving ? '保存中…' : editingId ? '保存修改' : '新增辅料' }}
-        </button>
-        <button
-          class="secondary-button"
-          type="button"
-          @click="resetForm"
-        >
-          取消
-        </button>
+        <div class="operation-form__actions">
+          <button
+            class="secondary-button"
+            type="button"
+            @click="resetForm"
+          >
+            取消
+          </button>
+          <button
+            :disabled="saving || uploading"
+            type="submit"
+          >
+            {{ saving ? '保存中…' : editingId ? '保存修改' : '新增辅料' }}
+          </button>
+        </div>
       </form>
     </div>
     <div
@@ -441,19 +458,21 @@ onMounted(load)
           required
           maxlength="500"
         ></label>
-        <button
-          :disabled="saving"
-          type="submit"
-        >
-          {{ saving ? '提交中…' : '提交流水' }}
-        </button>
-        <button
-          class="secondary-button"
-          type="button"
-          @click="showInventoryForm = false"
-        >
-          取消
-        </button>
+        <div class="operation-form__actions">
+          <button
+            class="secondary-button"
+            type="button"
+            @click="showInventoryForm = false"
+          >
+            取消
+          </button>
+          <button
+            :disabled="saving"
+            type="submit"
+          >
+            {{ saving ? '提交中…' : '提交流水' }}
+          </button>
+        </div>
       </form>
     </div>
     <p
@@ -501,20 +520,32 @@ onMounted(load)
               :key="item.id"
             >
               <td>
-                <AuthenticatedCatalogImage
-                  v-if="item.imageAssetId"
-                  :image-id="item.imageAssetId"
-                  :alt="item.name"
-                /><img
-                  v-else-if="item.imageUrl"
-                  class="material-image"
-                  :src="item.imageUrl"
-                  :alt="item.name"
-                ><span
+                <button
+                  v-if="item.imageAssetId || (item.imageUrl && !failedRemoteImages.has(item.id))"
+                  class="material-image-button"
+                  type="button"
+                  :aria-label="`查看${item.name}大图`"
+                  @click="previewImage(item)"
+                >
+                  <AuthenticatedCatalogImage
+                    v-if="item.imageAssetId"
+                    :image-id="item.imageAssetId"
+                    :alt="item.name"
+                  /><img
+                    v-else
+                    class="material-image"
+                    :src="item.imageUrl"
+                    :alt="item.name"
+                    loading="lazy"
+                    referrerpolicy="no-referrer"
+                    @error="markRemoteImageFailed(item.id)"
+                  >
+                </button><span
                   v-else
                   class="material-image material-image--placeholder"
-                  aria-hidden="true"
-                >辅</span>
+                  role="img"
+                  :aria-label="`${item.name}暂无可用图片`"
+                >图</span>
               </td>
               <td><strong>{{ item.materialCode }}</strong></td><td>{{ item.name }}<small>{{ item.materialType }}</small></td><td>{{ item.specification || '—' }}</td>
               <td v-if="inventoryReadable">
@@ -549,36 +580,35 @@ onMounted(load)
                 {{ balanceFor(item) ? (balanceFor(item)?.lowStock ? '低库存' : '正常') : '未初始化' }}
               </td>
               <td>{{ item.status === 'ACTIVE' ? '启用' : '停用' }}</td>
-              <td
-                v-if="writable || inventoryWritable"
-                class="table-actions"
-              >
-                <button
-                  v-if="writable"
-                  type="button"
-                  :disabled="item.status === 'DISABLED' || saving"
-                  @click="edit(item)"
-                >
-                  编辑
-                </button>
-                <button
-                  v-if="inventoryWritable"
-                  class="secondary-button"
-                  type="button"
-                  :disabled="item.status === 'DISABLED' || saving"
-                  @click="openInventory(item)"
-                >
-                  库存
-                </button>
-                <button
-                  v-if="formal && writable"
-                  type="button"
-                  class="danger-button"
-                  :disabled="item.status === 'DISABLED' || saving"
-                  @click="disable(item)"
-                >
-                  停用
-                </button>
+              <td v-if="writable || inventoryWritable">
+                <div class="table-actions">
+                  <button
+                    v-if="writable"
+                    type="button"
+                    :disabled="item.status === 'DISABLED' || saving"
+                    @click="edit(item)"
+                  >
+                    编辑
+                  </button>
+                  <button
+                    v-if="inventoryWritable"
+                    class="secondary-button"
+                    type="button"
+                    :disabled="item.status === 'DISABLED' || saving"
+                    @click="openInventory(item)"
+                  >
+                    库存
+                  </button>
+                  <button
+                    v-if="formal && writable"
+                    type="button"
+                    class="danger-button"
+                    :disabled="item.status === 'DISABLED' || saving"
+                    @click="disable(item)"
+                  >
+                    停用
+                  </button>
+                </div>
               </td>
             </tr>
             <tr v-if="!filteredItems.length">
@@ -593,5 +623,37 @@ onMounted(load)
         共 {{ filteredItems.length }} 条
       </footer>
     </article>
+    <div
+      v-if="imagePreview"
+      class="image-dialog"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="`${imagePreview.alt}图片预览`"
+      @click.self="imagePreview = null"
+      @keydown.esc="imagePreview = null"
+    >
+      <div class="material-preview">
+        <button
+          type="button"
+          aria-label="关闭图片预览"
+          @click="imagePreview = null"
+        >
+          ×
+        </button>
+        <AuthenticatedCatalogImage
+          v-if="'imageAssetId' in imagePreview"
+          :image-id="imagePreview.imageAssetId"
+          variant="original"
+          :alt="imagePreview.alt"
+        /><img
+          v-else
+          class="material-preview__image"
+          :src="imagePreview.imageUrl"
+          :alt="imagePreview.alt"
+          referrerpolicy="no-referrer"
+        >
+        <p>{{ imagePreview.alt }}</p>
+      </div>
+    </div>
   </section>
 </template>

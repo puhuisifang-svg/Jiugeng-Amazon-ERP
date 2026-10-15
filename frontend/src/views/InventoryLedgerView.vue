@@ -52,7 +52,7 @@ onMounted(load)
       </RouterLink>
     </div>
     <form
-      class="panel ledger-filters"
+      class="panel filter-panel ledger-filters"
       aria-label="库存流水筛选"
       @submit.prevent
     >
@@ -88,36 +88,38 @@ onMounted(load)
       v-else
       class="panel table-panel"
     >
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>时间</th><th>辅料</th><th>类型</th><th>变动</th><th>结存</th><th>原因</th><th>操作人</th><th v-if="writable">
-              操作
-            </th>
-          </tr>
-        </thead><tbody>
-          <tr
-            v-for="item in filtered"
-            :key="item.id"
-          >
-            <td>{{ item.occurredAt }}</td><td>{{ item.materialCode }}</td><td>{{ item.type }}</td><td>{{ item.signedQuantity ?? item.quantity }}</td><td>{{ item.balanceAfter ?? '—' }}</td><td>{{ item.reason }}</td><td>{{ item.actorLoginName ?? '—' }}</td><td v-if="writable">
-              <button
-                v-if="item.type !== 'REVERSAL'"
-                :disabled="busy === item.id"
-                type="button"
-                @click="reverse(item)"
-              >
-                冲销
-              </button>
-            </td>
-          </tr>
-          <tr v-if="!filtered.length">
-            <td :colspan="writable ? 8 : 7">
-              暂无库存流水。
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="table-scroll">
+        <table class="data-table inventory-ledger-table">
+          <thead>
+            <tr>
+              <th>时间</th><th>辅料</th><th>类型</th><th>变动</th><th>结存</th><th>原因</th><th>操作人</th><th v-if="writable">
+                操作
+              </th>
+            </tr>
+          </thead><tbody>
+            <tr
+              v-for="item in filtered"
+              :key="item.id"
+            >
+              <td>{{ item.occurredAt }}</td><td>{{ item.materialCode }}</td><td>{{ item.type }}</td><td>{{ item.signedQuantity ?? item.quantity }}</td><td>{{ item.balanceAfter ?? '—' }}</td><td>{{ item.reason }}</td><td>{{ item.actorLoginName ?? '—' }}</td><td v-if="writable">
+                <button
+                  v-if="item.type !== 'REVERSAL'"
+                  :disabled="busy === item.id"
+                  type="button"
+                  @click="reverse(item)"
+                >
+                  冲销
+                </button>
+              </td>
+            </tr>
+            <tr v-if="!filtered.length">
+              <td :colspan="writable ? 8 : 7">
+                暂无库存流水。
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </article>
   </section>
 </template>

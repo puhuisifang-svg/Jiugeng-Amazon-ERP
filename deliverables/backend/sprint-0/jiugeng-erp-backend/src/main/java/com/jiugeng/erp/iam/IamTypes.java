@@ -26,15 +26,17 @@ final class IamTypes {
                     "system.users.manage", "products.read", "products.write", "materials.read", "materials.write",
                     "inventory.read", "inventory.write", "selection.read", "selection.write", "watch.read",
                     "watch.write", "imports.read", "imports.template.download", "imports.validate", "imports.commit",
-                    "imports.cancel", "imports.result.download", "audit.read.all", "audit.read.self");
+                    "imports.cancel", "imports.result.download", "audit.read.all", "audit.read.self", "dashboard.read",
+                    "dashboard.shipments.manage", "dashboard.pending-products.manage");
             case PRODUCT_MATERIAL -> Set.of(
                     "products.read", "products.write", "materials.read", "materials.write", "inventory.read",
                     "inventory.write", "selection.read", "watch.read", "imports.read", "imports.template.download",
                     "imports.validate", "imports.commit", "imports.cancel", "imports.result.download",
-                    "audit.read.self");
+                    "audit.read.self", "dashboard.read", "dashboard.shipments.manage",
+                    "dashboard.pending-products.manage");
             case SELECTION -> Set.of(
                     "products.read", "materials.read", "selection.read", "selection.write", "watch.read",
-                    "watch.write", "audit.read.self");
+                    "watch.write", "audit.read.self", "dashboard.read", "dashboard.pending-products.manage");
         };
     }
 

@@ -26,6 +26,10 @@ server:
   shutdown: graceful
 
 app:
+  dashboard:
+    image-dir: ${ERP_DASHBOARD_IMAGE_DIR:${user.home}/.jiugeng-erp/dashboard-images}
+    image-orphan-hours: ${ERP_DASHBOARD_IMAGE_ORPHAN_HOURS:24}
+    image-cleanup-cron: ${ERP_DASHBOARD_IMAGE_CLEANUP_CRON:0 15 4 * * *}
   imports:
     staging-dir: ${ERP_IMPORT_STAGING_DIR:${java.io.tmpdir}/jiugeng-erp-import-staging}
     retention-days: ${ERP_IMPORT_RETENTION_DAYS:7}

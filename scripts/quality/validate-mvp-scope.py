@@ -35,17 +35,21 @@ capabilities = contract["capabilities"]
 api_resources = contract["apiResourceFamilies"]
 excluded = contract["excludedCurrentMvp"]
 
+require(contract["contractVersion"] == "1.1", "active contract must be ERP-021-003 scope version 1.1")
 require(contract["decision"] == "DEC-012", "active contract must cite DEC-012")
 require(set(import_types) == EXPECTED_IMPORT_TYPES, "active import types must be the five approved types")
 require(len(import_types) == len(set(import_types)), "import types must be unique")
 require("STORE_LISTINGS" in excluded["importTypes"], "STORE_LISTINGS must remain explicitly excluded")
+versions = {item["id"]: item["templateVersion"] for item in contract["importTypes"]}
+require(versions["PRODUCTS"] == versions["VARIANTS"] == "2.0", "catalog templates must be version 2.0")
+require(all(versions[item] == "1.0" for item in EXPECTED_IMPORT_TYPES - {"PRODUCTS", "VARIANTS"}), "non-catalog templates must remain version 1.0")
 
-require(len(capabilities) == 22, "active capability count must be 22")
+require(len(capabilities) == 24, "active capability count must be 24")
 require(len(capabilities) == len(set(capabilities)), "capabilities must be unique")
 require(FORBIDDEN_CAPABILITIES.isdisjoint(capabilities), "Listing/store capabilities must be absent")
 require(FORBIDDEN_CAPABILITIES.issubset(set(excluded["capabilities"])), "excluded capabilities must be explicit")
 
-require(len(api_resources) == 13, "active API resource family count must be 13")
+require(len(api_resources) == 15, "active API resource family count must be 15")
 require(len(api_resources) == len(set(api_resources)), "API resource families must be unique")
 require(FORBIDDEN_API_RESOURCES.isdisjoint(api_resources), "StoreAccount/StoreListing APIs must be absent")
 
@@ -63,4 +67,7 @@ historical_readme = HISTORICAL_CONTRACT_README.read_text(encoding="utf-8")
 require("历史基线说明" in historical_readme, "historical six-type contract must carry a scope warning")
 require("MVP_ACTIVE_SCOPE_CONTRACT.md" in historical_readme, "historical contract must link to the active scope")
 
-print("PASS: 5 import types, 22 capabilities, 3 role mappings, 13 API resource families")
+require({"suppliers.read", "suppliers.write"}.issubset(capabilities), "supplier capabilities must be active")
+require({"/api/v1/suppliers", "/api/v1/catalog-images"}.issubset(api_resources), "catalog API families must be active")
+require(set(contract["roleCapabilities"]["SELECTION"]).isdisjoint({"suppliers.read", "suppliers.write"}), "SELECTION must not receive supplier access")
+print("PASS: 5 import types, 24 capabilities, 3 role mappings, 15 API resource families")

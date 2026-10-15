@@ -2,8 +2,8 @@
 
 | 字段 | 内容 |
 | --- | --- |
-| 任务 | ERP-006 |
-| 版本 | v1.0 |
+| 任务 | ERP-006 / ERP-021-003 |
+| 版本 | v1.1 |
 | 状态 | Approved |
 | 日期 | 2026-10-15 |
 | Owner | PJM / PM / Backend / Frontend / QA |
@@ -26,8 +26,8 @@ Sprint 0 的六类导入契约及其评审记录继续作为审计证据保留�
 | 领域 | 当前实现目标 | 明确后置 |
 | --- | --- | --- |
 | IAM / Audit | 用户、角色、会话、锁定/重置/改密、动作级鉴权、审计事件 | SSO、多租户、组织树、复杂数据权限 |
-| Product | Product、ProductVariant、VariantAttribute、编码与状态 | AmazonCatalogItem、StoreAccount、StoreListing 及五店映射 |
-| Material | AuxiliaryMaterial、ProductAuxiliaryMaterial 单层关系 | 多层 BOM、替代料、成本、采购与生产 |
+| Product | Product、ProductVariant、历史 VariantAttribute、Supplier、CatalogImageAsset、编码与状态 | AmazonCatalogItem、StoreAccount、StoreListing 及五店映射 |
+| Material | AuxiliaryMaterial、ProductAuxiliaryMaterial、AuxiliaryMaterialSupplier 单层关系 | 多层 BOM、替代料、成本、采购与生产 |
 | Inventory | 单一预置 Warehouse、余额、OPENING/INBOUND/OUTBOUND/ADJUSTMENT 流水 | 多仓、库位、批次、效期、调拨与成本 |
 | Selection | Candidate、评估、状态、负责人、标签、评审记录、证据链接 | AI 决策、销量预测、评论分析 |
 | Watch | 一个指定公开店铺、采集运行、快照、基线、新品事件、人工复核 | 公司店铺账号管理、SP-API Listing 同步、实时监控、多站点 |
@@ -47,6 +47,8 @@ Sprint 0 的六类导入契约及其评审记录继续作为审计证据保留�
 
 五类导入统一采用“上传 → 全量校验 → 预览 → 确认提交 → 结果下载”。前四类按业务键幂等写入；期初库存是不可覆盖的一次性幂等记账，余额、OPENING 流水和审计必须整批同事务提交或回滚。
 
+ERP-021-003 起，`PRODUCTS` 与 `VARIANTS` 使用模板 `2.0`；另外三类继续使用 `1.0`。产品 2.0 仅接受统一 `product_name`，SKU 2.0 固定按克并不再接受动态属性、条码、材质、内部规格或重量单位。旧 1.0 产品/SKU 批次不得重新校验或提交；已结束批次及结果文件继续只读保留。
+
 `STORE_LISTINGS` 和 `03_store_listings_v1.0.xlsx` 仅保留为历史契约/模板证据，不进入当前 UI、API、数据库迁移、Worker、测试通过率或试点验收。
 
 ## 4. API 资源边界
@@ -61,12 +63,13 @@ Sprint 0 的六类导入契约及其评审记录继续作为审计证据保留�
 - `/selection/candidates`
 - `/watch/stores`、`/watch/events`
 - `/dashboard`、`/dashboard-maintenance`、`/dashboard-images`
+- `/suppliers`、`/catalog-images`
 
 当前 MVP 不提供 `/store-accounts`、`/store-listings` 或等价的公司店铺与 Listing 映射接口。监控目标只通过 `watch.*` 能力访问。
 
 ## 5. 动作级权限
 
-当前 capability 共 22 个：
+当前 capability 共 24 个：
 
 - `system.users.manage`
 - `products.read`、`products.write`
@@ -77,6 +80,7 @@ Sprint 0 的六类导入契约及其评审记录继续作为审计证据保留�
 - `imports.read`、`imports.template.download`、`imports.validate`、`imports.commit`、`imports.cancel`、`imports.result.download`
 - `audit.read.all`、`audit.read.self`
 - `dashboard.read`、`dashboard.shipments.manage`、`dashboard.pending-products.manage`
+- `suppliers.read`、`suppliers.write`
 
 `listings.read`、`listings.write` 和 `stores.write` 不属于当前 capability 集合。角色映射以 [权限矩阵](../05-security/ACCESS_MATRIX.md) 为准，前端可见性不能替代后端逐接口鉴权。
 

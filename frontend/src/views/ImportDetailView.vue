@@ -64,7 +64,7 @@ onMounted(load)
     <div class="page-heading">
       <div>
         <p class="eyebrow">
-          ERP-017 · 五类导入收口
+          数据导入 · 批次处理
         </p><h1>批次详情</h1><p>逐工作表、行和字段定位问题；已注册类型通过全量校验后整批原子提交。</p>
       </div><RouterLink
         class="primary-link"

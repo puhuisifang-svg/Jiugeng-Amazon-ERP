@@ -1,15 +1,25 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { domainApi, type LedgerEntryDto } from '@/api/domain'
 import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
 
-const entries = ref<LedgerEntryDto[]>([]); const loading = ref(true); const busy = ref(''); const error = ref(''); const filter = ref('')
+const entries = ref<LedgerEntryDto[]>([]); const loading = ref(true); const busy = ref(''); const error = ref('')
+const filters = reactive({ keyword: '', type: '' })
 const mockMode = runtimeConfig.authMode === 'mock'
 const writable = computed(() => !mockMode && session.canAccess(['inventory.write']))
-const filtered = computed(() => entries.value.filter(item => !filter.value || item.materialCode.toLowerCase().includes(filter.value.toLowerCase())))
+const transactionTypes = computed(() => [...new Set(entries.value.map(item => item.type))].sort())
+const filtered = computed(() => {
+  const keyword = filters.keyword.trim().toLowerCase()
+  return entries.value.filter(item => {
+    const keywordMatches = !keyword || [item.materialCode, item.materialName, item.reason, item.actorLoginName, item.referenceTransactionId]
+      .some(value => value?.toLowerCase().includes(keyword))
+    return keywordMatches && (!filters.type || item.type === filters.type)
+  })
+})
+function resetFilters() { Object.assign(filters, { keyword: '', type: '' }) }
 function newRequestId() { return `reverse-${Date.now()}-${Math.random().toString(16).slice(2)}` }
 async function load() { loading.value = true; error.value = ''; try { entries.value = (await domainApi.ledger()).items } catch { error.value = '库存流水加载失败。' } finally { loading.value = false } }
 async function reverse(item: LedgerEntryDto) {
@@ -32,7 +42,7 @@ onMounted(load)
     <div class="page-heading">
       <div>
         <p class="eyebrow">
-          ERP-013 · append-only
+          库存审计 · 只增不改
         </p><h1>库存流水</h1><p>流水不可编辑、不可删除；纠错通过引用原流水的冲销完成。</p>
       </div><RouterLink
         class="primary-link"
@@ -41,12 +51,27 @@ onMounted(load)
         返回库存余额
       </RouterLink>
     </div>
-    <div class="panel inline-actions">
-      <label>筛选辅料编码 <input
-        v-model="filter"
-        placeholder="输入编码"
+    <form
+      class="panel ledger-filters"
+      aria-label="库存流水筛选"
+      @submit.prevent
+    >
+      <label>关键词<input
+        v-model="filters.keyword"
+        placeholder="辅料编码、名称、原因或操作人"
       ></label>
-    </div>
+      <label>流水类型<select v-model="filters.type"><option value="">全部类型</option><option
+        v-for="item in transactionTypes"
+        :key="item"
+        :value="item"
+      >{{ item }}</option></select></label>
+      <button
+        type="button"
+        @click="resetFilters"
+      >
+        重置
+      </button>
+    </form>
     <p
       v-if="error"
       class="data-state data-state--error"

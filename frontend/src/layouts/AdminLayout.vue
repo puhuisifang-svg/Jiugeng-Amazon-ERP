@@ -94,13 +94,15 @@ onBeforeUnmount(() => {
         class="erp-navigation"
         @focusout="onFocusOut"
       >
-        <div
+        <RouterLink
           class="erp-brand"
+          to="/home"
           aria-label="九更亚马逊 ERP"
+          @click="closeMenu()"
         >
           <span class="erp-brand__mark">九</span>
           <span>九更 <strong>ERP</strong></span>
-        </div>
+        </RouterLink>
         <nav
           class="domain-nav"
           aria-label="主菜单"
@@ -221,7 +223,8 @@ onBeforeUnmount(() => {
 .erp-shell { min-height: 100vh; background: #f0f2f7; }
 .erp-header { position: relative; z-index: 12; display: flex; align-items: stretch; justify-content: space-between; min-height: 56px; color: #e4e9f5; background: #101c3b; }
 .erp-navigation { display: flex; min-width: 0; align-items: stretch; }
-.erp-brand { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; padding: 0 24px 0 20px; white-space: nowrap; font-size: 17px; }
+.erp-brand { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; padding: 0 24px 0 20px; color: inherit; white-space: nowrap; font-size: 17px; text-decoration: none; }
+.erp-brand:hover { color: white; background: #192746; }
 .erp-brand strong { font-size: 13px; color: #9eaccb; font-weight: 500; }
 .erp-brand__mark { display: grid; width: 30px; height: 30px; place-items: center; color: #101c3b; background: #ffb448; border-radius: 8px; font-weight: 800; }
 .domain-nav { display: flex; overflow-x: auto; }

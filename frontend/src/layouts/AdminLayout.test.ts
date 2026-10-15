@@ -29,6 +29,15 @@ async function setup(path = '/home', allowed = ref<string[] | null>(null)) {
 }
 
 describe('horizontal navigation shell', () => {
+  it('navigates to the home page from the brand', async () => {
+    const { wrapper, router } = await setup('/products')
+
+    await wrapper.get('a.erp-brand[href="/home"]').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.path).toBe('/home')
+  })
+
   it('groups existing permitted routes and closes the panel after navigating', async () => {
     const { wrapper, router } = await setup()
     await wrapper.get('[data-domain="商品"]').trigger('click')

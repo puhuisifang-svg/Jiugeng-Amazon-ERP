@@ -52,7 +52,7 @@ onMounted(load)
     <div class="page-heading">
       <div>
         <p class="eyebrow">
-          ERP-016 · 五类活跃导入
+          数据导入 · 五类模板
         </p><h1>导入中心</h1><p>上传、校验、预览与批次状态均来自正式导入运行时。</p>
       </div>
     </div>

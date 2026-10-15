@@ -64,7 +64,7 @@ onMounted(load)
     <div class="page-heading">
       <div>
         <p class="eyebrow">
-          ERP-013 · 固定仓
+          库存管理 · 默认仓
         </p><h1>辅料库存</h1><p>余额与不可变流水同事务记账，默认禁止负库存。</p>
       </div>
       <RouterLink

@@ -17,7 +17,7 @@ describe('application routes', () => {
     const shell = appRoutes.find((route) => route.path === '/')
     const groups = new Set(shell?.children?.map((route) => route.meta?.group).filter(Boolean))
 
-    expect(groups).toEqual(new Set(['工作台', '产品管理', '选品管理', '系统管理']))
+    expect(groups).toEqual(new Set(['工作台', '工作台维护', '产品管理', '选品管理', '系统管理']))
   })
 
   it('restricts inventory navigation to the required capability', () => {
@@ -34,6 +34,8 @@ describe('application routes', () => {
       '/home', '/products', '/materials', '/inventory/balances',
       '/inventory/ledger', '/imports', '/selection/candidates', '/watch/stores',
       '/watch/events', '/system/users', '/system/audit',
+      '/dashboard-maintenance/today-shipments', '/dashboard-maintenance/pending-shipments',
+      '/dashboard-maintenance/pending-products',
     ]
 
     expect(expectedPaths.every((path) => paths.has(path))).toBe(true)

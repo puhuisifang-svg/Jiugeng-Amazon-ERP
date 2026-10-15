@@ -6,6 +6,7 @@ export type Capability =
   | 'inventory.read' | 'inventory.write' | 'selection.read' | 'selection.write' | 'watch.read' | 'watch.write'
   | 'imports.read' | 'imports.template.download' | 'imports.validate' | 'imports.commit' | 'imports.cancel'
   | 'imports.result.download' | 'audit.read.all' | 'audit.read.self'
+  | 'dashboard.read' | 'dashboard.shipments.manage' | 'dashboard.pending-products.manage'
 
 declare module 'vue-router' {
   interface RouteMeta {

@@ -144,6 +144,43 @@ a { color: inherit; }
 .attribute-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .attribute-chips span { padding: 6px 10px; background: #f1f3f7; border-radius: 999px; font-size: 13px; }
 
+.dashboard-worklist-panel { min-height: 0; padding: 0; overflow: hidden; }
+.dashboard-tabs { display: flex; gap: 4px; padding: 14px 16px 0; border-bottom: 1px solid var(--line); }
+.dashboard-tabs button { min-height: 44px; padding: 0 18px; color: var(--muted); background: transparent; border: 0; border-bottom: 3px solid transparent; cursor: pointer; }
+.dashboard-tabs button.is-active { color: var(--ink); border-color: var(--accent); font-weight: 800; }
+.dashboard-tabs button span { display: inline-grid; min-width: 24px; height: 24px; margin-left: 5px; place-items: center; color: #8b4a1f; background: var(--accent-soft); border-radius: 999px; font-size: 12px; }
+.dashboard-empty { min-height: 384px; }
+.worklist-viewport { height: 432px; overflow: auto; scrollbar-gutter: stable; }
+.worklist-viewport--static { height: auto; min-height: 72px; }
+.worklist-track--animated { animation: worklist-scroll var(--worklist-duration) linear infinite; }
+.worklist-track--paused { animation-play-state: paused; }
+.worklist-row { display: grid; grid-template-columns: 56px minmax(220px, 2fr) minmax(120px, .8fr) minmax(90px, .6fr) minmax(180px, 1fr) auto; min-height: 72px; align-items: center; gap: 14px; padding: 9px 18px; border-bottom: 1px solid var(--line); }
+.worklist-row__main { display: grid; gap: 3px; min-width: 0; }
+.worklist-row__main small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.worklist-label { display: block; margin-bottom: 4px; color: var(--muted); font-size: 11px; }
+.overdue-badge { padding: 5px 8px; color: #9f2f2f; background: #fff1f1; border-radius: 999px; font-size: 12px; font-weight: 800; }
+.dashboard-worklist-footer { display: flex; min-height: 50px; align-items: center; justify-content: space-between; padding: 10px 18px; color: var(--muted); border-top: 1px solid var(--line); font-size: 13px; }
+.dashboard-worklist-footer a { color: var(--accent); font-weight: 800; text-decoration: none; }
+.dashboard-image { display: block; width: 48px; height: 48px; object-fit: cover; background: #f1f3f7; border-radius: 8px; }
+.dashboard-image--placeholder, .dashboard-image--loading { display: grid; place-items: center; color: #9aa2b2; }
+.image-button { padding: 0; background: transparent; border: 0; cursor: zoom-in; }
+.image-dialog { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; padding: 40px; background: rgba(11, 15, 25, .78); }
+.image-dialog > div { position: relative; max-width: min(900px, 90vw); max-height: 90vh; }
+.image-dialog .dashboard-image { width: auto; max-width: 100%; height: auto; max-height: 84vh; border-radius: 12px; }
+.image-dialog button { position: absolute; z-index: 1; top: 10px; right: 10px; width: 38px; height: 38px; color: white; background: rgba(0, 0, 0, .65); border: 0; border-radius: 50%; font-size: 24px; cursor: pointer; }
+.dashboard-upload-preview { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+.dashboard-form { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.data-table td small { display: block; margin-top: 4px; color: var(--muted); }
+.dashboard-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; gap: 14px; min-height: 0; padding: 20px; }
+.dashboard-filters label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.dashboard-filters input, .dashboard-filters select { min-height: 40px; padding: 0 11px; border: 1px solid var(--line); border-radius: 7px; }
+.dashboard-filters button { min-height: 40px; align-self: end; padding: 0 16px; color: white; background: var(--accent); border: 0; border-radius: 7px; }
+.dashboard-image-preview { display: flex; min-height: 72px; align-items: center; }
+.dashboard-image-preview img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; }
+
+@keyframes worklist-scroll { from { transform: translateY(0); } to { transform: translateY(-50%); } }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+  .worklist-track--animated { animation: none !important; }
 }

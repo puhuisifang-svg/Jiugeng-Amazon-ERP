@@ -18,3 +18,12 @@
 - 备份文件加密，访问和恢复操作可审计。
 - 定期执行恢复演练；只有成功恢复并验证业务数据才算备份有效。
 - 恢复手册记录前置条件、步骤、验证、回切和联系人。
+
+## 本地图片联合备份
+
+- 执行 `scripts/ops/dashboard-backup.sh` 前必须暂停工作台与产品目录写入，并设置 `ERP_DASHBOARD_WRITES_PAUSED=YES`。
+- MySQL、`ERP_DASHBOARD_IMAGE_DIR` 与 `ERP_CATALOG_IMAGE_DIR` 必须作为同一恢复单元，不允许分别选择不同时间点恢复。
+- 联合包 manifest 记录数据库、两类图片归档的 SHA-256、Flyway 版本以及图片元数据计数。
+- V16 升级前可能尚无 `catalog_image_asset` 表或产品目录图片目录；备份脚本将其记录为空归档，保证先备份再升级的流程可执行。
+- 恢复时必须分别提供工作台与产品目录图片目标的精确确认值；旧目录保留为带时间戳的回退副本。
+- 使用 `scripts/qa/verify-mysql-backup-restore.sh` 定期演练数据库、工作台图片和产品目录图片的联合恢复与文件哈希校验。

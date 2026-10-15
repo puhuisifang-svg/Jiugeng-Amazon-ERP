@@ -29,16 +29,18 @@ class ImportService {
     static final long MAX_BYTES = 10L * 1024 * 1024;
     static final String XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     private final ImportRepository repository; private final ImportFileStore files; private final XlsxImportValidator validator;
+    private final ImportTemplateRegistry templates;
     private final AuditTrail audit; private final ProductImportGateway productImports;
     private final MaterialImportGateway materialImports; private final InventoryOpeningImportGateway openingImports;
     private final TransactionTemplate transactions;
     private final int previewHours;
-    ImportService(ImportRepository repository, ImportFileStore files, XlsxImportValidator validator, AuditTrail audit,
+    ImportService(ImportRepository repository, ImportFileStore files, XlsxImportValidator validator,
+            ImportTemplateRegistry templates, AuditTrail audit,
             ProductImportGateway productImports, MaterialImportGateway materialImports,
             InventoryOpeningImportGateway openingImports,
             PlatformTransactionManager transactionManager,
             @Value("${app.imports.preview-hours:24}") int previewHours) {
-        this.repository=repository; this.files=files; this.validator=validator; this.audit=audit;
+        this.repository=repository; this.files=files; this.validator=validator; this.templates=templates; this.audit=audit;
         this.productImports=productImports; this.materialImports=materialImports; this.openingImports=openingImports;
         this.transactions=new TransactionTemplate(transactionManager); this.previewHours=previewHours;
     }
@@ -100,6 +102,7 @@ class ImportService {
     @Transactional
     UploadReceipt revalidate(String id,String idempotencyKey,AuthenticatedActor actor) {
         String key=key(idempotencyKey); var source=repository.batch(id);
+        requireSupportedVersion(source);
         if(source.status()!=Status.VALIDATED || source.previewExpiresAt()==null || source.previewExpiresAt().isAfter(Instant.now()))
             throw new ImportException(409,"IMPORT_REVALIDATION_NOT_ALLOWED","仅过期的已校验批次可重验");
         String payload=hash(("revalidate\u001f"+id+"\u001f"+source.fileHash()).getBytes(StandardCharsets.UTF_8));
@@ -119,6 +122,7 @@ class ImportService {
     BatchView commit(String id,String previewVersion,String fileHash,boolean warningsAccepted,String idempotencyKey,
             AuthenticatedActor actor) {
         String key=key(idempotencyKey); var batch=repository.batch(id);
+        requireSupportedVersion(batch);
         String payload=hash(("commit\u001f"+id+"\u001f"+previewVersion+"\u001f"+fileHash+"\u001f"+warningsAccepted).getBytes(StandardCharsets.UTF_8));
         var replay=repository.operation(actor.userId(),"COMMIT",id,key).orElse(null);
         if(replay!=null){if(!replay.payloadHash().equals(payload))throw conflict();return repository.batch(replay.responseBatchId()).view();}
@@ -232,7 +236,8 @@ class ImportService {
     }
     private void validateUploadMetadata(ImportType type,String version,String fileName,String mime,byte[] bytes) {
         if(type==null) throw new ImportException(400,"IMPORT_REQUEST_INVALID","导入类型必填");
-        if(!"1.0".equals(version)) throw new ImportException(422,"IMPORT_TEMPLATE_VERSION_MISMATCH","仅支持模板 1.0");
+        if(!templates.supports(type,version)) throw new ImportException(422,"IMPORT_TEMPLATE_VERSION_MISMATCH",
+                "模板版本已停用，请下载当前版本后重新上传");
         if(fileName==null || !fileName.toLowerCase(java.util.Locale.ROOT).endsWith(".xlsx"))
             throw new ImportException(415,"IMPORT_FILE_TYPE_UNSUPPORTED","仅支持 .xlsx");
         if(!XLSX_MIME.equals(mime)) throw new ImportException(415,"IMPORT_MIME_UNSUPPORTED","上传 MIME 不受支持");
@@ -243,6 +248,11 @@ class ImportService {
         if(value==null || value.isBlank() || value.length()>128 || value.chars().anyMatch(ch -> Character.isISOControl(ch)))
             throw new ImportException(400,"IMPORT_REQUEST_INVALID","Idempotency-Key 必须为 1..128 位不透明文本");
         return value.trim();
+    }
+    private void requireSupportedVersion(ImportRepository.BatchRow batch) {
+        if (!templates.supports(batch.type(), batch.version())) {
+            throw new ImportException(409,"IMPORT_TEMPLATE_VERSION_RETIRED","该批次模板版本已停用，请取消并使用当前模板重新上传");
+        }
     }
     private ImportException conflict(){return new ImportException(409,"IDEMPOTENCY_KEY_REUSED","幂等键已用于不同载荷");}
     private String failureCode(RuntimeException exception){return exception instanceof ImportException value?value.code():"IMPORT_COMMIT_FAILED";}

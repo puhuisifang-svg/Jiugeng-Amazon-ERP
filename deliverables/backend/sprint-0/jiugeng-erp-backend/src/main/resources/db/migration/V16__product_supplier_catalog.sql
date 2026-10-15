@@ -17,6 +17,7 @@ END
 WHERE package_weight IS NOT NULL;
 ALTER TABLE product_variant ADD COLUMN main_image_asset_id VARCHAR(36) NULL;
 ALTER TABLE product_variant ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE product_variant DROP INDEX uk_product_variant_attribute_signature;
 
 CREATE TABLE product_migration_issue (
     id VARCHAR(36) NOT NULL PRIMARY KEY,

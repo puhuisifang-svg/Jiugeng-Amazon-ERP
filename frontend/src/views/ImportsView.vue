@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { ApiError } from '@/api/client'
-import { activeImportTypes, importsApi, type ImportBatch, type ImportType } from '@/api/imports'
+import { activeImportTypes, importTemplateVersions, importsApi, type ImportBatch, type ImportType } from '@/api/imports'
 import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
@@ -16,7 +16,7 @@ const formal = runtimeConfig.authMode === 'password'
 const canUpload = computed(() => session.canAccess(['imports.validate']))
 
 const labels: Record<ImportType, string> = {
-  PRODUCTS: '产品', VARIANTS: 'SKU 与属性', AUXILIARY_MATERIALS: '辅料主档',
+  PRODUCTS: '产品', VARIANTS: 'SKU', AUXILIARY_MATERIALS: '辅料主档',
   PRODUCT_AUXILIARY_MATERIALS: 'SKU—辅料关系', AUXILIARY_MATERIAL_OPENING_INVENTORY: '辅料期初库存',
 }
 
@@ -74,7 +74,7 @@ onMounted(load)
         :value="item"
       >{{ labels[item] }}</option></select></label>
       <label>模板版本<input
-        value="1.0"
+        :value="importTemplateVersions[type]"
         readonly
       ></label>
       <label>文件（最大 10 MiB）<input

@@ -30,4 +30,13 @@ describe('ImportsView', () => {
     expect(upload).toHaveBeenCalledWith('PRODUCTS', file)
     expect(wrapper.text()).toContain('文件已进入校验队列')
   })
+
+  it('shows the selected type template version', async () => {
+    const wrapper = mount(ImportsView, { global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } } })
+    await flushPromises()
+    const version = wrapper.find('input[readonly]')
+    expect((version.element as HTMLInputElement).value).toBe('2.0')
+    await wrapper.find('select').setValue('AUXILIARY_MATERIALS')
+    expect((version.element as HTMLInputElement).value).toBe('1.0')
+  })
 })

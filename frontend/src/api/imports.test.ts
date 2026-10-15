@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { SESSION_TOKEN_KEY } from './client'
-import { activeImportTypes, importsApi } from './imports'
+import { activeImportTypes, importTemplateFileNames, importTemplateVersions, importsApi } from './imports'
 
 describe('importsApi', () => {
   afterEach(() => {
@@ -27,7 +27,7 @@ describe('importsApi', () => {
       expect(headers.get('Idempotency-Key')).toBe('upload-key')
       const body = init?.body as FormData
       expect(body.get('importType')).toBe('PRODUCTS')
-      expect(body.get('templateVersion')).toBe('1.0')
+      expect(body.get('templateVersion')).toBe('2.0')
       return new Response(JSON.stringify({ batch: { id: 'b1' }, replayed: false }), { status: 202 })
     })
     vi.stubGlobal('fetch', fetchMock)
@@ -35,6 +35,19 @@ describe('importsApi', () => {
     const result = await importsApi.upload('PRODUCTS', new File(['xlsx'], 'products.xlsx'), 'upload-key')
 
     expect(result.batch.id).toBe('b1')
+  })
+
+  it('uses catalog 2.0 and keeps the other three template versions at 1.0', () => {
+    expect(importTemplateVersions).toEqual({
+      PRODUCTS: '2.0', VARIANTS: '2.0', AUXILIARY_MATERIALS: '1.0',
+      PRODUCT_AUXILIARY_MATERIALS: '1.0', AUXILIARY_MATERIAL_OPENING_INVENTORY: '1.0',
+    })
+    expect(importTemplateFileNames).toEqual({
+      PRODUCTS: '01_products_v2.0.xlsx', VARIANTS: '02_variants_v2.0.xlsx',
+      AUXILIARY_MATERIALS: '04_auxiliary_materials_v1.0.xlsx',
+      PRODUCT_AUXILIARY_MATERIALS: '05_sku_auxiliary_materials_v1.0.xlsx',
+      AUXILIARY_MATERIAL_OPENING_INVENTORY: '06_initial_inventory_v1.0.xlsx',
+    })
   })
 
   it('commits a validated snapshot and reads accurate result counts', async () => {
@@ -71,6 +84,20 @@ describe('importsApi', () => {
     expect(createObjectURL).toHaveBeenCalledOnce()
     expect(click).toHaveBeenCalledOnce()
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:result')
+    click.mockRestore()
+  })
+
+  it('downloads the selected template with its registered versioned filename', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('xlsx', { status: 200 })))
+    vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => 'blob:template'), revokeObjectURL: vi.fn() })
+    let downloaded = ''
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      downloaded = this.download
+    })
+
+    await importsApi.downloadTemplate('VARIANTS')
+
+    expect(downloaded).toBe('02_variants_v2.0.xlsx')
     click.mockRestore()
   })
 })

@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
@@ -79,6 +80,28 @@ class ImportControllerTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product",Integer.class)).isEqualTo(productCount);
     }
 
+    @Test void servesExactCatalogV2TemplatesAndKeepsOtherTypesAtV1() throws Exception {
+        assertThat(templates.definition(ImportTypes.ImportType.PRODUCTS).version()).isEqualTo("2.0");
+        assertThat(templates.definition(ImportTypes.ImportType.VARIANTS).version()).isEqualTo("2.0");
+        assertThat(templates.definition(ImportTypes.ImportType.AUXILIARY_MATERIALS).version()).isEqualTo("1.0");
+        assertThat(templates.definition(ImportTypes.ImportType.PRODUCT_AUXILIARY_MATERIALS).version()).isEqualTo("1.0");
+        assertThat(templates.definition(ImportTypes.ImportType.AUXILIARY_MATERIAL_OPENING_INVENTORY).version()).isEqualTo("1.0");
+        assertThat(templates.supports(ImportTypes.ImportType.PRODUCTS,"1.0")).isFalse();
+        assertThat(templates.supports(ImportTypes.ImportType.VARIANTS,"1.0")).isFalse();
+        assertThat(templates.supports(ImportTypes.ImportType.AUXILIARY_MATERIALS,"1.0")).isTrue();
+        try (var products = new XSSFWorkbook(new ByteArrayInputStream(templates.bytes(ImportTypes.ImportType.PRODUCTS)));
+             var variants = new XSSFWorkbook(new ByteArrayInputStream(templates.bytes(ImportTypes.ImportType.VARIANTS)))) {
+            assertThat(headers(products, "导入模板")).containsExactly(
+                    "product_code", "product_name", "product_type", "description", "status");
+            assertThat(headers(variants, "variants_导入模板")).containsExactly(
+                    "sku_code", "product_code", "variant_name", "item_dimensions", "package_dimensions",
+                    "package_weight_grams", "status");
+            assertThat(variants.getSheet("attributes_导入模板")).isNull();
+            assertThat(meta(products, "templateVersion")).isEqualTo("2.0");
+            assertThat(meta(variants, "templateVersion")).isEqualTo("2.0");
+        }
+    }
+
     @Test void productAndVariantHandlersUpsertAtomicallyAndReportCounts() throws Exception {
         String token=user("import-owner","PRODUCT_MATERIAL");
         String productBody=upload(token,"products-1","PRODUCTS",productRows("IMP-P001","导入产品"),202);
@@ -88,14 +111,16 @@ class ImportControllerTest {
         mvc.perform(get("/api/v1/import-batches/{id}/result",productId).header("Authorization",bearer(token)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.createdRows").value(1))
                 .andExpect(jsonPath("$.writtenRows").value(1));
-        assertThat(jdbc.queryForObject("SELECT name_zh FROM product WHERE product_code_normalized='IMP-P001'",String.class)).isEqualTo("导入产品");
+        assertThat(jdbc.queryForObject("SELECT product_name FROM product WHERE product_code_normalized='IMP-P001'",String.class)).isEqualTo("导入产品");
 
         String variantBody=upload(token,"variants-1","VARIANTS",variantRows("IMP-SKU001","IMP-P001","Black"),202);
         String variantBatch=mapper.readTree(variantBody).at("/batch/id").asText();
         commit(token,variantBatch,"variants-commit-1").andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.status").value("SUCCEEDED"));
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product_variant WHERE sku_code_normalized='IMP-SKU001'",Integer.class)).isEqualTo(1);
-        assertThat(jdbc.queryForObject("SELECT attribute_value FROM variant_attribute WHERE attribute_code_normalized='COLOR'",String.class)).isEqualTo("Black");
+        assertThat(jdbc.queryForObject("SELECT package_weight_grams FROM product_variant WHERE sku_code_normalized='IMP-SKU001'",java.math.BigDecimal.class))
+                .isEqualByComparingTo("500");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM variant_attribute WHERE variant_id=(SELECT id FROM product_variant WHERE sku_code_normalized='IMP-SKU001')",Integer.class)).isZero();
 
         String replayBody=upload(token,"variants-2","VARIANTS",variantRows("IMP-SKU001","IMP-P001","Black"),202);
         String replayBatch=mapper.readTree(replayBody).at("/batch/id").asText();
@@ -115,6 +140,20 @@ class ImportControllerTest {
         assertThat(jdbc.queryForObject("SELECT status FROM import_batch WHERE id=?",String.class,variantBatch)).isEqualTo("FAILED");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product_variant WHERE sku_code_normalized='LATE-SKU'",Integer.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT outcome FROM audit_event WHERE action='IMPORT_COMMIT' AND resource_id=?",String.class,variantBatch)).isEqualTo("FAILURE");
+    }
+
+    @Test void importsDifferentSkusWithoutDynamicAttributesAndSupportsDraft() throws Exception {
+        String token=user("attribute-free-owner","PRODUCT_MATERIAL");
+        String productBatch=mapper.readTree(upload(token,"attribute-free-product","PRODUCTS",
+                productRows("ATTRIBUTE-FREE-P","无动态属性产品"),202)).at("/batch/id").asText();
+        commit(token,productBatch,"attribute-free-product-commit").andExpect(status().isAccepted());
+        String variantBatch=mapper.readTree(upload(token,"attribute-free-variants","VARIANTS",
+                variantRowsWithoutAttributes("ATTRIBUTE-FREE-P"),202)).at("/batch/id").asText();
+        commit(token,variantBatch,"attribute-free-variants-commit").andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.status").value("SUCCEEDED"));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product_variant WHERE product_id=(SELECT id FROM product WHERE product_code_normalized='ATTRIBUTE-FREE-P')",Integer.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT lifecycle_status FROM product_variant WHERE sku_code_normalized='ATTRIBUTE-FREE-SKU-2'",String.class)).isEqualTo("DRAFT");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM variant_attribute",Integer.class)).isZero();
     }
 
     @Test void acceptsAndCommitsOneThousandProductRowsWithinGate() {
@@ -345,6 +384,38 @@ class ImportControllerTest {
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("IMPORT_NOT_CANCELLABLE"));
     }
 
+    @Test void rejectsRetiredCatalogBatchButKeepsTerminalResultDownloadable() throws Exception {
+        String token=user("import-version-owner","PRODUCT_MATERIAL");
+        var retiredUpload=new MockMultipartFile("file","products-v1.xlsx",ImportService.XLSX_MIME,
+                templates.bytes(ImportTypes.ImportType.PRODUCTS));
+        mvc.perform(multipart("/api/v1/import-batches").file(retiredUpload).param("importType","PRODUCTS")
+                        .param("templateVersion","1.0").header("Authorization",bearer(token))
+                        .header("Idempotency-Key","retired-upload"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("IMPORT_TEMPLATE_VERSION_MISMATCH"));
+
+        String pending=mapper.readTree(upload(token,"version-pending","PRODUCTS",
+                productRows("VERSION-PENDING","待升级批次"),202)).at("/batch/id").asText();
+        jdbc.update("UPDATE import_batch SET template_version='1.0' WHERE id=?",pending);
+        commit(token,pending,"version-pending-commit").andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("IMPORT_TEMPLATE_VERSION_RETIRED"));
+        assertThat(jdbc.queryForObject("SELECT status FROM import_batch WHERE id=?",String.class,pending)).isEqualTo("VALIDATED");
+        jdbc.update("UPDATE import_batch SET preview_expires_at=DATEADD('HOUR',-1,CURRENT_TIMESTAMP) WHERE id=?",pending);
+        mvc.perform(post("/api/v1/import-batches/{id}/revalidate",pending)
+                        .header("Authorization",bearer(token)).header("Idempotency-Key","retired-revalidate"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("IMPORT_TEMPLATE_VERSION_RETIRED"));
+
+        String completed=mapper.readTree(upload(token,"version-completed","PRODUCTS",
+                productRows("VERSION-COMPLETED","已完成历史批次"),202)).at("/batch/id").asText();
+        commit(token,completed,"version-completed-commit").andExpect(status().isAccepted());
+        jdbc.update("UPDATE import_batch SET template_version='1.0' WHERE id=?",completed);
+        mvc.perform(get("/api/v1/import-batches/{id}/result",completed).header("Authorization",bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.batch.templateVersion").value("1.0"));
+        mvc.perform(get("/api/v1/import-batches/{id}/result-file",completed).header("Authorization",bearer(token)))
+                .andExpect(status().isOk());
+    }
+
     @Test void formulaProducesBlockingRowIssueAndNeverWritesBusinessData() throws Exception {
         int productCount=jdbc.queryForObject("SELECT COUNT(*) FROM product",Integer.class);
         String token=user("import-owner","PRODUCT_MATERIAL"); String body=upload(token,"formula","PRODUCTS",formulaRow(),202);
@@ -382,6 +453,15 @@ class ImportControllerTest {
             return changed;
         }
     }
+    private List<String> headers(XSSFWorkbook workbook,String sheet) {
+        var row=workbook.getSheet(sheet).getRow(0);var values=new java.util.ArrayList<String>();
+        for(int index=0;index<row.getLastCellNum();index++)values.add(row.getCell(index).getStringCellValue());
+        return values;
+    }
+    private String meta(XSSFWorkbook workbook,String key) {
+        for(var row:workbook.getSheet("_meta"))if(key.equals(row.getCell(0).getStringCellValue()))return row.getCell(1).getStringCellValue();
+        throw new AssertionError("missing metadata "+key);
+    }
     private byte[] unsafeZip() throws Exception {try(var output=new ByteArrayOutputStream();var zip=new ZipOutputStream(output)){
         zip.putNextEntry(new ZipEntry("../evil"));zip.write(new byte[]{1});zip.closeEntry();zip.putNextEntry(new ZipEntry("[Content_Types].xml"));zip.write(new byte[]{1});zip.closeEntry();zip.finish();return output.toByteArray();}}
     private byte[] formulaRow() throws Exception {
@@ -394,15 +474,23 @@ class ImportControllerTest {
     private byte[] productRows(String code,String name) throws Exception {
         try(var workbook=new XSSFWorkbook(new ByteArrayInputStream(templates.bytes(ImportTypes.ImportType.PRODUCTS)));
             var output=new ByteArrayOutputStream()){
-            var row=workbook.getSheet("导入模板").createRow(1);row.createCell(0).setCellValue(code);row.createCell(1).setCellValue(name);row.createCell(7).setCellValue("ACTIVE");
+            var row=workbook.getSheet("导入模板").createRow(1);row.createCell(0).setCellValue(code);row.createCell(1).setCellValue(name);row.createCell(4).setCellValue("ACTIVE");
             workbook.write(output);return output.toByteArray();
         }
     }
     private byte[] variantRows(String sku,String product,String color) throws Exception {
         try(var workbook=new XSSFWorkbook(new ByteArrayInputStream(templates.bytes(ImportTypes.ImportType.VARIANTS)));
             var output=new ByteArrayOutputStream()){
-            var variant=workbook.getSheet("variants_导入模板").createRow(1);variant.createCell(0).setCellValue(sku);variant.createCell(1).setCellValue(product);variant.createCell(2).setCellValue("导入规格");variant.createCell(8).setCellValue(0.5);variant.createCell(9).setCellValue("KG");variant.createCell(10).setCellValue("ACTIVE");
-            var attribute=workbook.getSheet("attributes_导入模板").createRow(1);attribute.createCell(0).setCellValue(sku);attribute.createCell(1).setCellValue("color");attribute.createCell(2).setCellValue(color);attribute.createCell(3).setCellValue(1);
+            var variant=workbook.getSheet("variants_导入模板").createRow(1);variant.createCell(0).setCellValue(sku);variant.createCell(1).setCellValue(product);variant.createCell(2).setCellValue("导入规格 "+color);variant.createCell(5).setCellValue(500);variant.createCell(6).setCellValue("ACTIVE");
+            workbook.write(output);return output.toByteArray();
+        }
+    }
+    private byte[] variantRowsWithoutAttributes(String product) throws Exception {
+        try(var workbook=new XSSFWorkbook(new ByteArrayInputStream(templates.bytes(ImportTypes.ImportType.VARIANTS)));
+            var output=new ByteArrayOutputStream()){
+            var sheet=workbook.getSheet("variants_导入模板");
+            var first=sheet.createRow(1);first.createCell(0).setCellValue("ATTRIBUTE-FREE-SKU-1");first.createCell(1).setCellValue(product);first.createCell(2).setCellValue("无属性 SKU 1");first.createCell(6).setCellValue("ACTIVE");
+            var second=sheet.createRow(2);second.createCell(0).setCellValue("ATTRIBUTE-FREE-SKU-2");second.createCell(1).setCellValue(product);second.createCell(2).setCellValue("无属性 SKU 2");second.createCell(6).setCellValue("DRAFT");
             workbook.write(output);return output.toByteArray();
         }
     }
@@ -410,7 +498,7 @@ class ImportControllerTest {
         try(var workbook=new XSSFWorkbook(new ByteArrayInputStream(templates.bytes(ImportTypes.ImportType.PRODUCTS)));
             var output=new ByteArrayOutputStream()){
             var sheet=workbook.getSheet("导入模板");
-            for(int index=1;index<=count;index++){var row=sheet.createRow(index);row.createCell(0).setCellValue("BULK-P-"+index);row.createCell(1).setCellValue("批量产品 "+index);row.createCell(7).setCellValue("ACTIVE");}
+            for(int index=1;index<=count;index++){var row=sheet.createRow(index);row.createCell(0).setCellValue("BULK-P-"+index);row.createCell(1).setCellValue("批量产品 "+index);row.createCell(4).setCellValue("ACTIVE");}
             workbook.write(output);return output.toByteArray();
         }
     }
@@ -472,7 +560,8 @@ class ImportControllerTest {
     }
     private String upload(String token,String key,String type,byte[] bytes,int expectedStatus) throws Exception {
         var file=new MockMultipartFile("file","upload.xlsx",ImportService.XLSX_MIME,bytes);
-        return mvc.perform(multipart("/api/v1/import-batches").file(file).param("importType",type).param("templateVersion","1.0")
+        String version=("PRODUCTS".equals(type)||"VARIANTS".equals(type))?"2.0":"1.0";
+        return mvc.perform(multipart("/api/v1/import-batches").file(file).param("importType",type).param("templateVersion",version)
                         .header("Authorization",bearer(token)).header("Idempotency-Key",key))
                 .andExpect(status().is(expectedStatus)).andReturn().getResponse().getContentAsString();
     }

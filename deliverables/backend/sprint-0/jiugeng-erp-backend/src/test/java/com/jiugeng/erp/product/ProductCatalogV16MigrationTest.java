@@ -43,6 +43,11 @@ class ProductCatalogV16MigrationTest {
                 assertThat(result.next()).isTrue();
                 assertThat(result.getString(1)).isEqualTo("蓝色");
             }
+            statement.executeUpdate("INSERT INTO product_variant (id,product_id,sku_code,sku_code_normalized,variant_name,status,attribute_signature) VALUES ('v3','p1','S3','S3','无动态属性 SKU','ACTIVE','sig-1')");
+            try (var result = statement.executeQuery("SELECT COUNT(*) FROM product_variant WHERE product_id='p1'")) {
+                assertThat(result.next()).isTrue();
+                assertThat(result.getInt(1)).isEqualTo(3);
+            }
         }
     }
 }

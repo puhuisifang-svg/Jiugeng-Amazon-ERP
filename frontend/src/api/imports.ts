@@ -11,6 +11,20 @@ export const activeImportTypes = [
 ] as const
 
 export type ImportType = typeof activeImportTypes[number]
+export const importTemplateVersions: Record<ImportType, string> = {
+  PRODUCTS: '2.0',
+  VARIANTS: '2.0',
+  AUXILIARY_MATERIALS: '1.0',
+  PRODUCT_AUXILIARY_MATERIALS: '1.0',
+  AUXILIARY_MATERIAL_OPENING_INVENTORY: '1.0',
+}
+export const importTemplateFileNames: Record<ImportType, string> = {
+  PRODUCTS: '01_products_v2.0.xlsx',
+  VARIANTS: '02_variants_v2.0.xlsx',
+  AUXILIARY_MATERIALS: '04_auxiliary_materials_v1.0.xlsx',
+  PRODUCT_AUXILIARY_MATERIALS: '05_sku_auxiliary_materials_v1.0.xlsx',
+  AUXILIARY_MATERIAL_OPENING_INVENTORY: '06_initial_inventory_v1.0.xlsx',
+}
 export type ImportStatus = 'QUEUED' | 'VALIDATING' | 'VALIDATED' | 'COMMITTING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'
 
 export interface ImportBatch {
@@ -115,7 +129,7 @@ async function downloadFile(path: string, fileName: string): Promise<void> {
 }
 
 async function downloadTemplate(type: ImportType): Promise<void> {
-  return downloadFile(`/v1/import-templates/${type}`, `${type.toLowerCase()}_v1.0.xlsx`)
+  return downloadFile(`/v1/import-templates/${type}`, importTemplateFileNames[type])
 }
 
 export const importsApi = {
@@ -126,7 +140,7 @@ export const importsApi = {
   upload(type: ImportType, file: File, key = idempotencyKey('upload')) {
     const body = new FormData()
     body.set('importType', type)
-    body.set('templateVersion', '1.0')
+    body.set('templateVersion', importTemplateVersions[type])
     body.set('file', file)
     return multipart<ImportReceipt>('/v1/import-batches', body, key)
   },

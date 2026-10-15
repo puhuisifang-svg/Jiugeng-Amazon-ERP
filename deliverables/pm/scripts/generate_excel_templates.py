@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 from typing import Any
 
@@ -91,12 +92,19 @@ def add_integer_validation(ws, header: str, operator: str, formula1: str) -> Non
     dv.add(f"{col}2:{col}1001")
 
 
-def add_instructions(wb: Workbook, template_name: str, import_order: str, keys: str, caveats: list[str]) -> None:
+def add_instructions(
+    wb: Workbook,
+    template_name: str,
+    import_order: str,
+    keys: str,
+    caveats: list[str],
+    version: str = "1.0",
+) -> None:
     ws = wb.active
     ws.title = "填写说明"
     rows = [
         ["模板", template_name],
-        ["版本", "v1.0 / 2026-09-12"],
+        ["版本", f"v{version} / 2026-10-15"],
         ["用途", "Sprint 0 字段与校验评审；导入实现应以 FIELD_DICTIONARY_V1.md 为准。"],
         ["数据声明", "TEST-* 内容是人工构造的校验测试夹具，不是真实业务样本，不得用于业务验收。"],
         ["导入顺序", import_order],
@@ -126,20 +134,30 @@ def add_enum_sheet(wb: Workbook, groups: dict[str, list[str]]) -> None:
         ws.append([groups[h][row_idx] if row_idx < len(groups[h]) else None for h in headers])
 
 
-def add_machine_metadata(wb: Workbook, import_type: str, max_data_rows: int = 1000) -> None:
+def add_machine_metadata(
+    wb: Workbook,
+    import_type: str,
+    max_data_rows: int = 1000,
+    version: str = "1.0",
+) -> None:
     """Add machine-readable identity used by upload compatibility checks."""
     ws = wb.create_sheet("_meta")
     rows = [
         ["schemaIdentifier", "jiugeng.amazon.erp.import"],
         ["importType", import_type],
-        ["templateVersion", "1.0"],
+        ["templateVersion", version],
         ["maxDataRows", max_data_rows],
     ]
     add_rows(ws, rows)
     ws.sheet_state = "veryHidden"
 
 
-def save_and_check(wb: Workbook, filename: str, required_sheets: list[str]) -> None:
+def save_and_check(
+    wb: Workbook,
+    filename: str,
+    required_sheets: list[str],
+    version: str = "1.0",
+) -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     path = OUTPUT_DIR / filename
     wb.save(path)
@@ -147,7 +165,7 @@ def save_and_check(wb: Workbook, filename: str, required_sheets: list[str]) -> N
     if "_meta" not in checked.sheetnames or checked["_meta"].sheet_state != "veryHidden":
         raise RuntimeError(f"{filename} missing veryHidden _meta sheet")
     metadata = {row[0].value: row[1].value for row in checked["_meta"].iter_rows(min_row=1, max_col=2)}
-    if metadata.get("schemaIdentifier") != "jiugeng.amazon.erp.import" or metadata.get("templateVersion") != "1.0":
+    if metadata.get("schemaIdentifier") != "jiugeng.amazon.erp.import" or metadata.get("templateVersion") != version:
         raise RuntimeError(f"{filename} has invalid machine metadata: {metadata}")
     missing = [name for name in required_sheets if name not in checked.sheetnames]
     if missing:
@@ -246,6 +264,107 @@ def sku_workbook() -> None:
     ])
     add_enum_sheet(wb, {"package_weight_unit": ["G", "KG", "OZ", "LB"], "status": ["ACTIVE", "INACTIVE"]})
     save_and_check(wb, "02_variants_v1.0.xlsx", ["填写说明", "variants_导入模板", "attributes_导入模板", "正确样例_variants", "正确样例_attributes", "错误样例_variants", "错误样例_attributes", "枚举值"])
+
+
+def product_workbook_v2() -> None:
+    wb = Workbook()
+    add_instructions(
+        wb,
+        "01 产品/SPU 导入模板",
+        "本模板 → 02 内部 SKU → 04 辅料 → 05 SKU-辅料",
+        "product_code（大小写不敏感全局唯一）",
+        [
+            "product_code 由业务手工提供，系统不得自动生成。",
+            "产品名称已合并为 product_name；品牌和内部类目不再接受新版导入。",
+            "状态只允许 DRAFT / ACTIVE / DISABLED。",
+        ],
+        version="2.0",
+    )
+    add_machine_metadata(wb, "PRODUCTS", version="2.0")
+    headers = ["product_code", "product_name", "product_type", "description", "status"]
+    comments = {
+        "product_code": "必填；1-64 位；^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$；全局唯一。",
+        "product_name": "必填；去除首尾空格后 1-128 字符。",
+        "status": "可空；默认 DRAFT；允许 DRAFT / ACTIVE / DISABLED。",
+    }
+    ws = wb.create_sheet("导入模板")
+    sheet_setup(ws, headers, comments)
+    add_enum_validation(ws, "status", ["DRAFT", "ACTIVE", "DISABLED"])
+    good = wb.create_sheet("正确样例")
+    sheet_setup(good, headers, comments)
+    add_rows(good, [["TEST-P001", "测试产品一（非业务数据）", "TEST_TYPE", "仅用于校验", "ACTIVE"]])
+    bad = wb.create_sheet("错误样例")
+    sheet_setup(bad, headers + ["_预期错误"])
+    add_rows(bad, [
+        [None, "缺编码", None, None, "ACTIVE", "product_code 必填"],
+        ["测试 产品", "非法编码", None, None, "ACTIVE", "编码含中文/空格"],
+        ["TEST-P001", "重复编码 A", None, None, "ACTIVE", "与下一行大小写不敏感重复"],
+        ["test-p001", "重复编码 B", None, None, "UNKNOWN", "编码重复；status 枚举无效"],
+    ])
+    add_enum_sheet(wb, {"status": ["DRAFT", "ACTIVE", "DISABLED"]})
+    save_and_check(
+        wb,
+        "01_products_v2.0.xlsx",
+        ["填写说明", "导入模板", "正确样例", "错误样例", "枚举值"],
+        version="2.0",
+    )
+
+
+def sku_workbook_v2() -> None:
+    wb = Workbook()
+    add_instructions(
+        wb,
+        "02 内部 SKU 导入模板",
+        "先导入 01 产品；本文件仅包含 variants_导入模板",
+        "sku_code（大小写不敏感全局唯一）",
+        [
+            "动态属性、条码、材质、内部规格和可选重量单位已退出新版导入。",
+            "package_weight_grams 固定解释为克；可空，非空时必须大于 0 且最多 3 位小数。",
+            "状态只允许 DRAFT / ACTIVE / DISABLED。",
+        ],
+        version="2.0",
+    )
+    add_machine_metadata(wb, "VARIANTS", version="2.0")
+    headers = [
+        "sku_code",
+        "product_code",
+        "variant_name",
+        "item_dimensions",
+        "package_dimensions",
+        "package_weight_grams",
+        "status",
+    ]
+    comments = {
+        "sku_code": "必填；业务手工提供；编码规则同产品编码。",
+        "product_code": "必填；引用已存在且未停用 Product。",
+        "variant_name": "必填；1-128 字符。",
+        "package_weight_grams": "单位固定为克；可空；大于 0，最多 3 位小数。",
+        "status": "可空；默认 DRAFT；允许 DRAFT / ACTIVE / DISABLED。",
+    }
+    ws = wb.create_sheet("variants_导入模板")
+    sheet_setup(ws, headers, comments)
+    add_enum_validation(ws, "status", ["DRAFT", "ACTIVE", "DISABLED"])
+    add_decimal_validation(ws, "package_weight_grams", "greaterThan", "0")
+    good = wb.create_sheet("正确样例")
+    sheet_setup(good, headers, comments)
+    add_rows(good, [
+        ["TEST-SKU001", "TEST-P001", "黑色大号测试规格", "10 x 20 x 5 cm", "12 x 22 x 7 cm", 500, "ACTIVE"],
+        ["TEST-SKU002", "TEST-P001", "白色大号测试规格", "10 x 20 x 5 cm", "12 x 22 x 7 cm", None, "DRAFT"],
+    ])
+    bad = wb.create_sheet("错误样例")
+    sheet_setup(bad, headers + ["_预期错误"])
+    add_rows(bad, [
+        ["TEST-SKU-BAD1", "TEST-P-NOT-FOUND", "引用错误", None, None, None, "ACTIVE", "product_code 不存在"],
+        ["TEST-SKU-BAD2", "TEST-P001", "重量错误", None, None, -1, "UNKNOWN", "重量/status 无效"],
+        ["TEST-SKU001", "TEST-P001", "重复 SKU", None, None, None, "ACTIVE", "sku_code 与正确样例重复"],
+    ])
+    add_enum_sheet(wb, {"status": ["DRAFT", "ACTIVE", "DISABLED"]})
+    save_and_check(
+        wb,
+        "02_variants_v2.0.xlsx",
+        ["填写说明", "variants_导入模板", "正确样例", "错误样例", "枚举值"],
+        version="2.0",
+    )
 
 
 def listing_workbook() -> None:
@@ -397,13 +516,27 @@ def inventory_workbook() -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--catalog-v2-only",
+        action="store_true",
+        help="only generate PRODUCTS/VARIANTS 2.0 without rewriting historical 1.0 workbooks",
+    )
+    args = parser.parse_args()
+    if args.catalog_v2_only:
+        product_workbook_v2()
+        sku_workbook_v2()
+        print(f"generated 2 catalog v2 workbooks in {OUTPUT_DIR}")
+        return
     product_workbook()
     sku_workbook()
     listing_workbook()
     material_workbook()
     relation_workbook()
     inventory_workbook()
-    print(f"generated 6 workbooks in {OUTPUT_DIR}")
+    product_workbook_v2()
+    sku_workbook_v2()
+    print(f"generated 6 historical v1 and 2 catalog v2 workbooks in {OUTPUT_DIR}")
 
 
 if __name__ == "__main__":

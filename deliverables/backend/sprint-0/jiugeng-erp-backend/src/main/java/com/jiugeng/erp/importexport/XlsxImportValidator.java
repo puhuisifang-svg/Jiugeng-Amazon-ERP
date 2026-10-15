@@ -129,7 +129,7 @@ class XlsxImportValidator {
         for (Row row : meta) if (row.getCell(0) != null) values.put(formatter.formatCellValue(row.getCell(0)).trim(),
                 row.getCell(1) == null ? "" : formatter.formatCellValue(row.getCell(1)).trim());
         if (!"jiugeng.amazon.erp.import".equals(values.get("schemaIdentifier"))
-                || !type.name().equals(values.get("importType")) || !"1.0".equals(version)
+                || !type.name().equals(values.get("importType")) || !templates.supports(type, version)
                 || !version.equals(values.get("templateVersion")))
             throw invalid("IMPORT_TEMPLATE_VERSION_MISMATCH", "请求、模板类型或版本不一致");
     }

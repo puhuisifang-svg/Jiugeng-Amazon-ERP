@@ -30,7 +30,10 @@
     "/api/v1/import-batches",
     "/api/v1/selection/candidates",
     "/api/v1/watch/stores",
-    "/api/v1/watch/events"
+    "/api/v1/watch/events",
+    "/api/v1/dashboard",
+    "/api/v1/dashboard-maintenance",
+    "/api/v1/dashboard-images"
   ],
   "capabilities": [
     "system.users.manage",
@@ -40,7 +43,8 @@
     "selection.read", "selection.write",
     "watch.read", "watch.write",
     "imports.read", "imports.template.download", "imports.validate", "imports.commit", "imports.cancel", "imports.result.download",
-    "audit.read.all", "audit.read.self"
+    "audit.read.all", "audit.read.self",
+    "dashboard.read", "dashboard.shipments.manage", "dashboard.pending-products.manage"
   ],
   "roleCapabilities": {
     "ADMIN": [
@@ -51,7 +55,8 @@
       "selection.read", "selection.write",
       "watch.read", "watch.write",
       "imports.read", "imports.template.download", "imports.validate", "imports.commit", "imports.cancel", "imports.result.download",
-      "audit.read.all", "audit.read.self"
+      "audit.read.all", "audit.read.self",
+      "dashboard.read", "dashboard.shipments.manage", "dashboard.pending-products.manage"
     ],
     "PRODUCT_MATERIAL": [
       "products.read", "products.write",
@@ -59,13 +64,15 @@
       "inventory.read", "inventory.write",
       "selection.read", "watch.read",
       "imports.read", "imports.template.download", "imports.validate", "imports.commit", "imports.cancel", "imports.result.download",
-      "audit.read.self"
+      "audit.read.self",
+      "dashboard.read", "dashboard.shipments.manage", "dashboard.pending-products.manage"
     ],
     "SELECTION": [
       "products.read", "materials.read",
       "selection.read", "selection.write",
       "watch.read", "watch.write",
-      "audit.read.self"
+      "audit.read.self",
+      "dashboard.read", "dashboard.pending-products.manage"
     ]
   },
   "excludedCurrentMvp": {

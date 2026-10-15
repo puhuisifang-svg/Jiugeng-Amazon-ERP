@@ -60,12 +60,13 @@ Sprint 0 的六类导入契约及其评审记录继续作为审计证据保留�
 - `/import-batches`
 - `/selection/candidates`
 - `/watch/stores`、`/watch/events`
+- `/dashboard`、`/dashboard-maintenance`、`/dashboard-images`
 
 当前 MVP 不提供 `/store-accounts`、`/store-listings` 或等价的公司店铺与 Listing 映射接口。监控目标只通过 `watch.*` 能力访问。
 
 ## 5. 动作级权限
 
-当前 capability 共 19 个：
+当前 capability 共 22 个：
 
 - `system.users.manage`
 - `products.read`、`products.write`
@@ -75,6 +76,7 @@ Sprint 0 的六类导入契约及其评审记录继续作为审计证据保留�
 - `watch.read`、`watch.write`
 - `imports.read`、`imports.template.download`、`imports.validate`、`imports.commit`、`imports.cancel`、`imports.result.download`
 - `audit.read.all`、`audit.read.self`
+- `dashboard.read`、`dashboard.shipments.manage`、`dashboard.pending-products.manage`
 
 `listings.read`、`listings.write` 和 `stores.write` 不属于当前 capability 集合。角色映射以 [权限矩阵](../05-security/ACCESS_MATRIX.md) 为准，前端可见性不能替代后端逐接口鉴权。
 

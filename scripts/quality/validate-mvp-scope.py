@@ -40,12 +40,12 @@ require(set(import_types) == EXPECTED_IMPORT_TYPES, "active import types must be
 require(len(import_types) == len(set(import_types)), "import types must be unique")
 require("STORE_LISTINGS" in excluded["importTypes"], "STORE_LISTINGS must remain explicitly excluded")
 
-require(len(capabilities) == 19, "active capability count must be 19")
+require(len(capabilities) == 22, "active capability count must be 22")
 require(len(capabilities) == len(set(capabilities)), "capabilities must be unique")
 require(FORBIDDEN_CAPABILITIES.isdisjoint(capabilities), "Listing/store capabilities must be absent")
 require(FORBIDDEN_CAPABILITIES.issubset(set(excluded["capabilities"])), "excluded capabilities must be explicit")
 
-require(len(api_resources) == 10, "active API resource family count must be 10")
+require(len(api_resources) == 13, "active API resource family count must be 13")
 require(len(api_resources) == len(set(api_resources)), "API resource families must be unique")
 require(FORBIDDEN_API_RESOURCES.isdisjoint(api_resources), "StoreAccount/StoreListing APIs must be absent")
 
@@ -63,4 +63,4 @@ historical_readme = HISTORICAL_CONTRACT_README.read_text(encoding="utf-8")
 require("历史基线说明" in historical_readme, "historical six-type contract must carry a scope warning")
 require("MVP_ACTIVE_SCOPE_CONTRACT.md" in historical_readme, "historical contract must link to the active scope")
 
-print("PASS: 5 import types, 19 capabilities, 3 role mappings, 10 API resource families")
+print("PASS: 5 import types, 22 capabilities, 3 role mappings, 13 API resource families")

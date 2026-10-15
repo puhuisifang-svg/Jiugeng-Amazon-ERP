@@ -127,6 +127,41 @@ class ProductControllerTest {
     }
 
     @Test
+    void skuImageUrlMustBeHttpsAndCannotBeCombinedWithAnUploadedImage() throws Exception {
+        String token = createUserAndLogin("product-image-owner", "PRODUCT_MATERIAL");
+        Map<String, Object> valid = product("PROD-IMAGE", "图片产品", "SKU-IMAGE", "标准");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> validVariant = (Map<String, Object>) ((List<?>) valid.get("variants")).getFirst();
+        validVariant.put("imageUrl", "https://images.example.test/sku.png");
+        mvc.perform(post("/api/v1/products").header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(valid)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.variants[0].imageUrl").value("https://images.example.test/sku.png"));
+        assertThat(jdbc.queryForObject(
+                "SELECT main_image_url FROM product_variant WHERE sku_code='SKU-IMAGE'", String.class))
+                .isEqualTo("https://images.example.test/sku.png");
+
+        Map<String, Object> insecure = product("PROD-HTTP", "不安全图片", "SKU-HTTP", "标准");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> insecureVariant = (Map<String, Object>) ((List<?>) insecure.get("variants")).getFirst();
+        insecureVariant.put("imageUrl", "http://images.example.test/sku.png");
+        mvc.perform(post("/api/v1/products").header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(insecure)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PRODUCT_IMAGE_URL_INVALID"));
+
+        Map<String, Object> conflicting = product("PROD-CONFLICT", "冲突图片", "SKU-CONFLICT", "标准");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> conflictingVariant = (Map<String, Object>) ((List<?>) conflicting.get("variants")).getFirst();
+        conflictingVariant.put("imageUrl", "https://images.example.test/sku.png");
+        conflictingVariant.put("imageAssetId", java.util.UUID.randomUUID().toString());
+        mvc.perform(post("/api/v1/products").header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(conflicting)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PRODUCT_IMAGE_SOURCE_CONFLICT"));
+    }
+
+    @Test
     void selectionRoleCanReadButCannotWrite() throws Exception {
         String writer = createUserAndLogin("product-owner", "PRODUCT_MATERIAL");
         mvc.perform(post("/api/v1/products").header("Authorization", bearer(writer))

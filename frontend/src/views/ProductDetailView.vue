@@ -17,7 +17,7 @@ const formValue = computed<ProductInput | undefined>(() => product.value ? ({
   description: product.value.description, status: product.value.status, version: product.value.version,
   variants: product.value.variants.map(item => ({ id: item.id, skuCode: item.skuCode, variantName: item.variantName,
     itemDimensions: item.itemDimensions, packageDimensions: item.packageDimensions, packageWeightGrams: item.packageWeightGrams,
-    status: item.status, imageAssetId: item.imageAssetId, version: item.version,
+    status: item.status, imageAssetId: item.imageAssetId, imageUrl: item.imageUrl, version: item.version,
     suppliers: item.suppliers ?? [], materials: item.materials ?? [] })),
 }) : undefined)
 async function load() { loading.value = true; error.value = ''; try { product.value = await domainApi.product(String(route.params.productId)) } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '产品详情加载失败。' } finally { loading.value = false } }
@@ -107,9 +107,22 @@ onMounted(load)
           class="panel compact-panel sku-detail-card"
         >
           <AuthenticatedCatalogImage
+            v-if="variant.imageAssetId"
             :image-id="variant.imageAssetId"
             :alt="`${variant.variantName} 主图`"
-          />
+          /><img
+            v-else-if="variant.imageUrl"
+            class="catalog-image"
+            :src="variant.imageUrl"
+            :alt="`${variant.variantName} 主图`"
+            loading="lazy"
+            referrerpolicy="no-referrer"
+          ><span
+            v-else
+            class="catalog-image catalog-image--placeholder"
+            role="img"
+            :aria-label="`${variant.variantName} 主图（无可用图片）`"
+          >图</span>
           <div>
             <div class="card-heading">
               <div><strong>{{ variant.skuCode }}</strong><h2>{{ variant.variantName }}</h2></div><span>{{ variant.status }}</span>

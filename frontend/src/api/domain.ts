@@ -20,6 +20,7 @@ export interface ProductVariantDto {
   packageWeightUnit?: 'G' | 'KG' | 'OZ' | 'LB'
   packageWeightGrams?: number
   imageAssetId?: string
+  imageUrl?: string
   version?: number
   status: VariantStatus
   attributes: VariantAttributeDto[]
@@ -28,7 +29,7 @@ export interface ProductVariantDto {
 }
 export interface ProductVariantInput {
   id?: string | undefined; skuCode: string; variantName: string; itemDimensions?: string | undefined; packageDimensions?: string | undefined
-  packageWeightGrams?: number | undefined; status: VariantStatus; imageAssetId?: string | undefined; version?: number | undefined
+  packageWeightGrams?: number | undefined; status: VariantStatus; imageAssetId?: string | undefined; imageUrl?: string | undefined; version?: number | undefined
   suppliers: SupplierAssignmentDto[]; materials: MaterialAssignmentDto[]
 }
 export interface ProductDetailDto {

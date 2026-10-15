@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 
 import { ApiError } from '@/api/client'
 import { domainApi, type ProductDetailDto, type ProductInput } from '@/api/domain'
+import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vue'
 import ProductForm from '@/components/ProductForm.vue'
 import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import { runtimeConfig } from '@/config/runtime'
@@ -127,28 +128,52 @@ onMounted(load)
     >
       <h2>暂无产品</h2><p>点击“新增产品”创建 Product 与首个 SKU。</p>
     </article>
-    <div
+    <article
       v-else
-      class="card-list"
+      class="panel table-panel"
     >
-      <RouterLink
-        v-for="product in filtered"
-        :key="product.id"
-        class="panel compact-panel product-card"
-        :to="`/products/${product.id}`"
-      >
-        <div class="card-heading">
-          <div><strong>{{ product.productCode }}</strong><h2>{{ product.productName }}</h2></div><span class="placeholder-badge">{{ product.status }}</span>
-        </div>
-        <p>{{ product.skuCount }} 个内部 SKU · 更新于 {{ product.updatedAt || '—' }}</p>
-        <div
-          v-for="sku in product.variants"
-          :key="sku.id ?? sku.skuCode"
-          class="sku-block"
-        >
-          <strong>{{ sku.skuCode }}</strong> · {{ sku.variantName }}
-        </div>
-      </RouterLink>
-    </div>
+      <div class="table-scroll">
+        <table class="data-table product-table">
+          <thead><tr><th>图片</th><th>产品编码</th><th>产品名称 / 类型</th><th>SKU</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr
+              v-for="product in filtered"
+              :key="product.id"
+            >
+              <td>
+                <AuthenticatedCatalogImage
+                  v-if="product.variants[0]?.imageAssetId"
+                  :image-id="product.variants[0].imageAssetId"
+                  :alt="`${product.productName}主图`"
+                /><img
+                  v-else-if="product.variants[0]?.imageUrl"
+                  class="product-thumbnail"
+                  :src="product.variants[0].imageUrl"
+                  :alt="`${product.productName}主图`"
+                  loading="lazy"
+                  referrerpolicy="no-referrer"
+                ><span
+                  v-else
+                  class="product-thumbnail product-thumbnail--placeholder"
+                  role="img"
+                  :aria-label="`${product.productName}暂无图片`"
+                >图</span>
+              </td><td><strong>{{ product.productCode }}</strong></td><td>{{ product.productName }}<small>{{ product.productType || '未分类' }}</small></td><td><strong>{{ product.skuCount }}</strong> 个<small>{{ product.variants.slice(0, 2).map(item => item.skuCode).join('、') || '暂无 SKU' }}</small></td><td><span :class="['status-badge', `status-badge--${product.status.toLowerCase()}`]">{{ product.status === 'ACTIVE' ? '启用' : product.status === 'DRAFT' ? '待定' : '停用' }}</span></td><td>{{ product.updatedAt || '—' }}</td><td>
+                <div class="table-actions">
+                  <RouterLink
+                    class="primary-link"
+                    :to="`/products/${product.id}`"
+                  >
+                    查看
+                  </RouterLink>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div><footer class="material-table-footer">
+        共 {{ filtered.length }} 条
+      </footer>
+    </article>
   </section>
 </template>

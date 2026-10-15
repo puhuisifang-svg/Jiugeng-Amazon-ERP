@@ -113,6 +113,7 @@ describe('MaterialsView merged material management', () => {
     await qrButton.trigger('click')
     const preview = wrapper.get('[role="dialog"][aria-label="包装供应商微信二维码图片预览"]')
     expect(preview.get('img').classes()).toContain('supplier-qr-preview')
+    expect(wrapper.find('[aria-labelledby="purchase-dialog-title"]').exists()).toBe(true)
   })
 
   it('keeps material and inventory operations exclusive and offers common units', async () => {

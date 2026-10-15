@@ -59,8 +59,8 @@ export interface ProductInput {
   variants: ProductVariantInput[]
 }
 export type SupplierStatus = 'ACTIVE' | 'DISABLED'
-export interface SupplierDto { id: string; name: string; contactPerson?: string; phone?: string; sourceUrl?: string; qrImageId?: string; remark?: string; status: SupplierStatus; version: number; createdAt?: string; updatedAt?: string }
-export interface SupplierInput { name: string; contactPerson?: string | undefined; phone?: string | undefined; sourceUrl?: string | undefined; qrImageId?: string | undefined; remark?: string | undefined; status: SupplierStatus; version?: number | undefined }
+export interface SupplierDto { id: string; name: string; contactPerson?: string; phone?: string; wechatId?: string; sourceUrl?: string; qrImageUrl?: string; qrImageId?: string; remark?: string; status: SupplierStatus; version: number; createdAt?: string; updatedAt?: string }
+export interface SupplierInput { name: string; contactPerson?: string | undefined; phone?: string | undefined; wechatId?: string | undefined; sourceUrl?: string | undefined; qrImageUrl?: string | undefined; qrImageId?: string | undefined; remark?: string | undefined; status: SupplierStatus; version?: number | undefined }
 export interface SupplierLinkDto extends SupplierAssignmentDto { id: string; ownerId: string; supplierName: string; supplierStatus: SupplierStatus; updatedAt?: string }
 export interface PageDto<T> { items: T[]; totalCount: number; page: number; size: number }
 export type MaterialStatus = 'ACTIVE' | 'DISABLED'

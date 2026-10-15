@@ -99,6 +99,40 @@ class SupplierControllerTest {
     }
 
     @Test
+    void savesWechatContactAndHttpsQrUrlAndRejectsConflictingQrSources() throws Exception {
+        String token = createUserAndLogin("supplier-wechat", "PRODUCT_MATERIAL");
+        Map<String, Object> request = supplier("微信供应商", null, null, null);
+        request.put("wechatId", "weixin_supplier_01");
+        request.put("qrImageUrl", "https://images.example.com/wechat-qr.png");
+
+        mvc.perform(post("/api/v1/suppliers").header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.wechatId").value("weixin_supplier_01"))
+                .andExpect(jsonPath("$.qrImageUrl").value("https://images.example.com/wechat-qr.png"));
+
+        mvc.perform(get("/api/v1/suppliers?q=weixin_supplier_01")
+                        .header("Authorization", bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(1));
+
+        Map<String, Object> conflicting = supplier("冲突二维码", null, null, null);
+        conflicting.put("wechatId", "conflict_supplier");
+        conflicting.put("qrImageUrl", "https://images.example.com/wechat-qr.png");
+        conflicting.put("qrImageId", UUID.randomUUID().toString());
+        mvc.perform(post("/api/v1/suppliers").header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(conflicting)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("SUPPLIER_FIELD_INVALID"));
+
+        Map<String, Object> insecure = supplier("非安全二维码", null, null, null);
+        insecure.put("wechatId", "insecure_supplier");
+        insecure.put("qrImageUrl", "http://images.example.com/wechat-qr.png");
+        mvc.perform(post("/api/v1/suppliers").header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(insecure)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void materialMayHaveManySuppliersButOnlyOnePrimary() throws Exception {
         String token = createUserAndLogin("supplier-relations", "PRODUCT_MATERIAL");
         String first = createSupplier(token, "供应商甲", "10001");

@@ -190,6 +190,9 @@ td.table-actions > * + * { margin-left: 8px; }
 .filter-panel button { height: 40px; padding: 0 16px; color: var(--muted); background: #eef0f4; border: 0; border-radius: 7px; cursor: pointer; }
 .ledger-filters { grid-template-columns: minmax(240px, 2fr) minmax(180px, 1fr) auto; }
 .supplier-filters { grid-template-columns: minmax(260px, 2fr) minmax(160px, 1fr) auto; }
+.status-badge { display: inline-flex; min-height: 24px; align-items: center; padding: 0 9px; border-radius: 999px; font-size: 12px; font-weight: 800; white-space: nowrap; }
+.status-badge--active { color: #196b45; background: #e7f6ee; }
+.status-badge--disabled { color: #687386; background: #eef0f4; }
 .product-filters { grid-template-columns: minmax(260px, 2fr) minmax(160px, 1fr); }
 .dashboard-upload-preview { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
 .dashboard-form { grid-template-columns: repeat(4, minmax(0, 1fr)); }

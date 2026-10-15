@@ -33,10 +33,15 @@ describe('SuppliersView', () => {
     expect(wrapper.get('[role="dialog"]').attributes('aria-labelledby')).toBe('supplier-dialog-title')
     await form.get('input[required]').setValue('  包装供应商  ')
     await form.findAll('input')[1]!.setValue('张三')
+    await form.get('input[autocomplete="off"]').setValue('packing_supplier')
+    await form.get('input[placeholder="https://example.com/wechat-qr.png"]').setValue('https://images.example.com/packing-qr.png')
     await form.trigger('submit')
     await flushPromises()
 
-    expect(createSupplier).toHaveBeenCalledWith({ name: '包装供应商', contactPerson: '张三', status: 'ACTIVE' })
+    expect(createSupplier).toHaveBeenCalledWith({
+      name: '包装供应商', contactPerson: '张三', wechatId: 'packing_supplier',
+      qrImageUrl: 'https://images.example.com/packing-qr.png', status: 'ACTIVE',
+    })
     expect(wrapper.get('[role="status"]').text()).toContain('供应商已创建')
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
   })

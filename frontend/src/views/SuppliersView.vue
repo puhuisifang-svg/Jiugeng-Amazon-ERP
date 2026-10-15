@@ -6,20 +6,24 @@ import { domainApi, type SupplierDto, type SupplierInput } from '@/api/domain'
 import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vue'
 import { session } from '@/state/session'
 
-const items = ref<SupplierDto[]>([]); const query = ref(''); const status = ref(''); const loading = ref(true); const saving = ref(false); const error = ref(''); const success = ref(''); const editing = ref<SupplierDto | null>(null); const preview = ref<string>(); const showForm = ref(false)
-const form = reactive<SupplierInput>({ name: '', contactPerson: '', phone: '', sourceUrl: '', qrImageId: '', remark: '', status: 'ACTIVE' })
+type QrPreview = { kind: 'asset'; value: string } | { kind: 'url'; value: string }
+const items = ref<SupplierDto[]>([]); const query = ref(''); const status = ref(''); const loading = ref(true); const saving = ref(false); const error = ref(''); const success = ref(''); const editing = ref<SupplierDto | null>(null); const preview = ref<QrPreview>(); const showForm = ref(false)
+const form = reactive<SupplierInput>({ name: '', contactPerson: '', phone: '', wechatId: '', sourceUrl: '', qrImageUrl: '', qrImageId: '', remark: '', status: 'ACTIVE' })
 const writable = computed(() => session.canAccess(['suppliers.write']))
-function reset() { Object.assign(form, { name: '', contactPerson: '', phone: '', sourceUrl: '', qrImageId: '', remark: '', status: 'ACTIVE', version: undefined }); editing.value = null; showForm.value = false }
+function reset() { Object.assign(form, { name: '', contactPerson: '', phone: '', wechatId: '', sourceUrl: '', qrImageUrl: '', qrImageId: '', remark: '', status: 'ACTIVE', version: undefined }); editing.value = null; showForm.value = false }
 function openCreate() { reset(); showForm.value = true; error.value = ''; success.value = '' }
-function edit(item: SupplierDto) { editing.value = item; Object.assign(form, { name: item.name, contactPerson: item.contactPerson ?? '', phone: item.phone ?? '', sourceUrl: item.sourceUrl ?? '', qrImageId: item.qrImageId ?? '', remark: item.remark ?? '', status: item.status, version: item.version }); showForm.value = true; error.value = ''; success.value = '' }
+function edit(item: SupplierDto) { editing.value = item; Object.assign(form, { name: item.name, contactPerson: item.contactPerson ?? '', phone: item.phone ?? '', wechatId: item.wechatId ?? '', sourceUrl: item.sourceUrl ?? '', qrImageUrl: item.qrImageUrl ?? '', qrImageId: item.qrImageId ?? '', remark: item.remark ?? '', status: item.status, version: item.version }); showForm.value = true; error.value = ''; success.value = '' }
 async function load() { loading.value = true; error.value = ''; try { const result = await domainApi.suppliers({ ...(query.value ? { q: query.value } : {}), ...(status.value ? { status: status.value as 'ACTIVE' | 'DISABLED' } : {}), size: 100 }); items.value = result.items } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '供应商加载失败。' } finally { loading.value = false } }
-async function upload(event: Event) { const file = (event.target as HTMLInputElement).files?.[0]; if (!file) return; saving.value = true; try { form.qrImageId = (await catalogApi.uploadImage('SUPPLIER_QR', file)).id } catch (exception) { error.value = exception instanceof Error ? exception.message : '二维码上传失败。' } finally { saving.value = false } }
+async function upload(event: Event) { const file = (event.target as HTMLInputElement).files?.[0]; if (!file) return; saving.value = true; try { form.qrImageId = (await catalogApi.uploadImage('SUPPLIER_QR', file)).id; form.qrImageUrl = '' } catch (exception) { error.value = exception instanceof Error ? exception.message : '二维码上传失败。' } finally { saving.value = false } }
+function useQrUrl() { if (form.qrImageUrl?.trim()) form.qrImageId = '' }
 function supplierInput(): SupplierInput {
   return {
     name: form.name.trim(), status: form.status,
     ...(form.contactPerson?.trim() ? { contactPerson: form.contactPerson.trim() } : {}),
     ...(form.phone?.trim() ? { phone: form.phone.trim() } : {}),
+    ...(form.wechatId?.trim() ? { wechatId: form.wechatId.trim() } : {}),
     ...(form.sourceUrl?.trim() ? { sourceUrl: form.sourceUrl.trim() } : {}),
+    ...(form.qrImageUrl?.trim() ? { qrImageUrl: form.qrImageUrl.trim() } : {}),
     ...(form.qrImageId ? { qrImageId: form.qrImageId } : {}),
     ...(form.remark?.trim() ? { remark: form.remark.trim() } : {}),
     ...(editing.value ? { version: editing.value.version } : {}),
@@ -40,7 +44,7 @@ onMounted(load)
       <label>搜索<input
         v-model="query"
         type="search"
-        placeholder="名称 / 电话"
+        placeholder="名称 / 电话 / 微信号"
       ></label><label>状态<select
         v-model="status"
       ><option value="">全部</option><option value="ACTIVE">启用</option><option value="DISABLED">停用</option></select></label><button
@@ -97,12 +101,22 @@ onMounted(load)
         ></label><label>电话<input
           v-model="form.phone"
           maxlength="32"
+        ></label><label>微信号<input
+          v-model="form.wechatId"
+          maxlength="100"
+          autocomplete="off"
         ></label><label>1688 链接<input
           v-model="form.sourceUrl"
           type="url"
           maxlength="500"
           placeholder="https://detail.1688.com/..."
-        ></label><label>微信二维码<input
+        ></label><label>微信二维码 URL<input
+          v-model="form.qrImageUrl"
+          type="url"
+          maxlength="500"
+          placeholder="https://example.com/wechat-qr.png"
+          @input="useQrUrl"
+        ></label><label>上传微信二维码<input
           type="file"
           accept="image/jpeg,image/png,image/webp"
           @change="upload"
@@ -116,7 +130,7 @@ onMounted(load)
           <button
             type="button"
             class="image-button"
-            @click="preview = form.qrImageId"
+            @click="preview = { kind: 'asset', value: form.qrImageId! }"
           >
             <AuthenticatedCatalogImage
               :image-id="form.qrImageId"
@@ -128,6 +142,28 @@ onMounted(load)
             @click="form.qrImageId = undefined"
           >
             移除二维码
+          </button>
+        </div><div
+          v-else-if="form.qrImageUrl"
+          class="form-wide catalog-image-editor material-image-editor"
+        >
+          <button
+            type="button"
+            class="image-button"
+            @click="preview = { kind: 'url', value: form.qrImageUrl! }"
+          >
+            <img
+              class="material-image"
+              :src="form.qrImageUrl"
+              alt="供应商微信二维码"
+              referrerpolicy="no-referrer"
+            >
+          </button><button
+            type="button"
+            class="secondary-button"
+            @click="form.qrImageUrl = undefined"
+          >
+            移除二维码 URL
           </button>
         </div><div class="operation-form__actions">
           <button
@@ -172,7 +208,7 @@ onMounted(load)
         <table class="data-table">
           <thead>
             <tr>
-              <th>二维码</th><th>名称</th><th>联系人</th><th>电话</th><th>1688</th><th>状态</th><th v-if="writable">
+              <th>二维码</th><th>名称</th><th>联系人</th><th>电话</th><th>微信号</th><th>1688</th><th>状态</th><th v-if="writable">
                 操作
               </th>
             </tr>
@@ -186,21 +222,33 @@ onMounted(load)
                   v-if="item.qrImageId"
                   type="button"
                   class="image-button"
-                  @click="preview = item.qrImageId"
+                  @click="preview = { kind: 'asset', value: item.qrImageId }"
                 >
                   <AuthenticatedCatalogImage
                     :image-id="item.qrImageId"
                     :alt="`${item.name} 二维码`"
                   />
+                </button><button
+                  v-else-if="item.qrImageUrl"
+                  type="button"
+                  class="image-button"
+                  @click="preview = { kind: 'url', value: item.qrImageUrl }"
+                >
+                  <img
+                    class="material-image"
+                    :src="item.qrImageUrl"
+                    :alt="`${item.name} 二维码`"
+                    referrerpolicy="no-referrer"
+                  >
                 </button><span v-else>—</span>
-              </td><td>{{ item.name }}</td><td>{{ item.contactPerson || '—' }}</td><td>{{ item.phone || '—' }}</td><td>
+              </td><td>{{ item.name }}</td><td>{{ item.contactPerson || '—' }}</td><td>{{ item.phone || '—' }}</td><td>{{ item.wechatId || '—' }}</td><td>
                 <a
                   v-if="item.sourceUrl"
                   :href="item.sourceUrl"
                   target="_blank"
                   rel="noopener noreferrer"
                 >打开</a><span v-else>—</span>
-              </td><td>{{ item.status === 'ACTIVE' ? '启用' : '停用' }}</td><td v-if="writable">
+              </td><td><span :class="['status-badge', `status-badge--${item.status.toLowerCase()}`]">{{ item.status === 'ACTIVE' ? '启用' : '停用' }}</span></td><td v-if="writable">
                 <div class="table-actions">
                   <button
                     type="button"
@@ -243,10 +291,16 @@ onMounted(load)
         >
           ×
         </button><AuthenticatedCatalogImage
-          :image-id="preview"
+          v-if="preview.kind === 'asset'"
+          :image-id="preview.value"
           variant="original"
           alt="供应商微信二维码"
-        />
+        /><img
+          v-else
+          :src="preview.value"
+          alt="供应商微信二维码"
+          referrerpolicy="no-referrer"
+        >
       </div>
     </div>
   </section>

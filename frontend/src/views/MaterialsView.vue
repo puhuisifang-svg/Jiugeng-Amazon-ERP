@@ -681,7 +681,7 @@ onMounted(load)
           class="table-scroll"
         >
           <table class="data-table purchase-table">
-            <thead><tr><th>供应商</th><th>联系人</th><th>电话</th><th>采购链接</th><th>关系</th><th>备注</th></tr></thead>
+            <thead><tr><th>供应商</th><th>联系人</th><th>联系方式</th><th>采购链接</th><th>关系</th><th>备注</th></tr></thead>
             <tbody>
               <tr
                 v-for="item in purchaseSuppliers"
@@ -689,7 +689,7 @@ onMounted(load)
               >
                 <td><strong>{{ item.supplier.name }}</strong><small>{{ item.supplier.status === 'ACTIVE' ? '启用' : '停用' }}</small></td>
                 <td>{{ item.supplier.contactPerson || '—' }}</td>
-                <td>{{ item.supplier.phone || '—' }}</td>
+                <td>{{ item.supplier.phone || '—' }}<small v-if="item.supplier.wechatId">微信：{{ item.supplier.wechatId }}</small></td>
                 <td>
                   <a
                     v-if="item.link.purchaseUrl || item.supplier.sourceUrl"

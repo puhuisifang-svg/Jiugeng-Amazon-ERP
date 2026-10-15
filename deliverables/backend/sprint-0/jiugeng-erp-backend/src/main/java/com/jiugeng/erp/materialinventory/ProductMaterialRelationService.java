@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-class ProductMaterialRelationService {
+class ProductMaterialRelationService implements ProductMaterialAssignmentGateway {
     private final ProductMaterialRelationRepository repository;
     private final AuditTrail auditTrail;
 
@@ -102,6 +102,43 @@ class ProductMaterialRelationService {
         auditTrail.record(operation(actor, "PRODUCT_MATERIAL_APPLY_ALL", productId, null, summary,
                 "将辅料应用到全部启用 SKU；已有独立关系不覆盖"));
         return after;
+    }
+
+    @Override
+    @Transactional
+    public void replaceVariantAssignments(String productId, String variantId,
+            List<ProductMaterialAssignmentGateway.Assignment> assignments, AuthenticatedActor actor) {
+        try {
+            replaceVariantAssignmentsInternal(productId, variantId, assignments, actor);
+        } catch (MaterialException exception) {
+            throw new ProductMaterialAssignmentGateway.AssignmentException(
+                    exception.status(), exception.code(), exception.getMessage());
+        }
+    }
+
+    private void replaceVariantAssignmentsInternal(String productId, String variantId,
+            List<ProductMaterialAssignmentGateway.Assignment> assignments, AuthenticatedActor actor) {
+        List<ProductMaterialAssignmentGateway.Assignment> values = assignments == null ? List.of() : assignments;
+        if (values.size() > 100) throw new MaterialException(400, "PRODUCT_MATERIAL_LIMIT", "单个 SKU 关联辅料不得超过 100 个");
+        Map<String, RelationView> existing = repository.findByVariant(variantId).stream()
+                .collect(java.util.stream.Collectors.toMap(RelationView::materialId, value -> value));
+        java.util.Set<String> retained = new java.util.HashSet<>();
+        for (var value : values) {
+            String materialId = required(value.materialId(), "辅料", 36);
+            if (!retained.add(materialId)) throw new MaterialException(409, "PRODUCT_MATERIAL_EXISTS", "同一 SKU 不可重复关联辅料");
+            String materialUnit = repository.activeMaterialUnit(materialId);
+            if (materialUnit == null) throw new MaterialException(409, "ACTIVE_MATERIAL_REQUIRED", "只能引用启用辅料");
+            String unit = required(value.unit(), "单位", 32);
+            if (!materialUnit.equals(unit)) throw new MaterialException(409, "MATERIAL_UNIT_MISMATCH", "用量单位必须与辅料主档一致");
+            BigDecimal quantity = quantity(value.standardQuantity()); BigDecimal loss = lossRate(value.lossRate());
+            RelationView current = existing.get(materialId);
+            if (current == null) repository.insert(java.util.UUID.randomUUID().toString(), productId, variantId,
+                    materialId, quantity, unit, loss, optional(value.remark(), 1000), actor.userId());
+            else repository.update(current.id(), quantity, unit, loss, optional(value.remark(), 1000),
+                    value.enabled(), actor.userId());
+        }
+        existing.values().stream().filter(value -> !retained.contains(value.materialId()) && value.enabled())
+                .forEach(value -> repository.disable(value.id(), actor.userId()));
     }
 
     private RelationView relation(String id) {

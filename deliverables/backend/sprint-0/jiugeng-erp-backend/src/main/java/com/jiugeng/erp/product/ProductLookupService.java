@@ -13,7 +13,7 @@ class ProductLookupService implements ProductLookup {
     @Override
     @Transactional(readOnly = true)
     public Optional<ProductReference> findById(String productId) {
-        return repository.findById(productId).map(product -> new ProductReference(product.id(), product.productCode(),
-                product.nameZh(), product.status() == ProductTypes.ProductStatus.ACTIVE));
+        return repository.findById(productId, false).map(product -> new ProductReference(product.id(), product.productCode(),
+                product.productName(), product.status() == ProductTypes.ProductStatus.ACTIVE));
     }
 }

@@ -26,6 +26,10 @@ server:
   shutdown: graceful
 
 app:
+  catalog:
+    image-dir: ${ERP_CATALOG_IMAGE_DIR:${user.home}/.jiugeng-erp/catalog-images}
+    image-orphan-hours: ${ERP_CATALOG_IMAGE_ORPHAN_HOURS:24}
+    image-cleanup-cron: ${ERP_CATALOG_IMAGE_CLEANUP_CRON:0 45 4 * * *}
   dashboard:
     image-dir: ${ERP_DASHBOARD_IMAGE_DIR:${user.home}/.jiugeng-erp/dashboard-images}
     image-orphan-hours: ${ERP_DASHBOARD_IMAGE_ORPHAN_HOURS:24}

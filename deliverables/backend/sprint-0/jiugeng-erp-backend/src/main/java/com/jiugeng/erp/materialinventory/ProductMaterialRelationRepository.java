@@ -86,6 +86,11 @@ class ProductMaterialRelationRepository {
                 .param("id", id).param("actorId", actorId).update();
     }
 
+    String activeMaterialUnit(String id) {
+        return jdbc.sql("SELECT unit FROM auxiliary_material WHERE id=:id AND status='ACTIVE'")
+                .param("id", id).query(String.class).optional().orElse(null);
+    }
+
     private boolean count(String sql, String id) {
         return jdbc.sql(sql).param("id", id).query(Integer.class).single() > 0;
     }

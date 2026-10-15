@@ -72,6 +72,7 @@ export interface MaterialDetailDto {
   specification?: string
   unit: string
   imageUrl?: string
+  imageAssetId?: string
   remark?: string
   status: MaterialStatus
   createdAt?: string
@@ -84,6 +85,7 @@ export interface MaterialInput {
   specification?: string
   unit: string
   imageUrl?: string
+  imageAssetId?: string
   remark?: string
 }
 export interface ProductMaterialRelationDto {

@@ -205,7 +205,9 @@ a { color: inherit; }
 .material-toolbar .secondary-button, .material-filters .secondary-button, .material-table .secondary-button { color: var(--ink); background: #eef0f4; }
 .text-link { color: #425d9c; font-weight: 700; text-decoration: none; }
 .material-image { display: grid; width: 46px; height: 46px; place-items: center; object-fit: cover; color: #59647a; background: #f1f3f7; border-radius: 7px; }
+.material-table .catalog-image { width: 46px; height: 46px; border-radius: 7px; }
 .material-image--placeholder { border: 1px solid var(--line); font-weight: 800; }
+.material-image-editor { margin-top: 0; padding-top: 0; border-top: 0; }
 .material-table td small { display: block; margin-top: 4px; color: var(--muted); }
 .safety-editor { display: flex; align-items: center; gap: 6px; }
 .safety-editor input { width: 88px; min-height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; }

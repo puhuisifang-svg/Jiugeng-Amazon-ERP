@@ -61,9 +61,11 @@ class MaterialController {
             @Size(max = 300) String specification,
             @NotBlank @Size(max = 32) String unit,
             @Size(max = 500) String imageUrl,
+            @Size(max = 36) String imageAssetId,
             @Size(max = 1000) String remark) {
         MaterialInput input() {
-            return new MaterialInput(materialCode, name, materialType, specification, unit, imageUrl, remark);
+            return new MaterialInput(materialCode, name, materialType, specification, unit, imageUrl,
+                    imageAssetId, remark);
         }
     }
 }

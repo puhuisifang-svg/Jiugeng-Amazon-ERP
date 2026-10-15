@@ -20,7 +20,7 @@ class MaterialRepository {
 
     List<MaterialView> findAll() {
         return jdbc.sql("""
-                SELECT id, material_code, name, material_type, specification, unit, image_url, remark,
+                SELECT id, material_code, name, material_type, specification, unit, image_url, image_asset_id, remark,
                        status, created_at, updated_at
                 FROM auxiliary_material ORDER BY material_code_normalized
                 """).query(this::map).list();
@@ -28,7 +28,7 @@ class MaterialRepository {
 
     Optional<MaterialView> findById(String id) {
         return jdbc.sql("""
-                SELECT id, material_code, name, material_type, specification, unit, image_url, remark,
+                SELECT id, material_code, name, material_type, specification, unit, image_url, image_asset_id, remark,
                        status, created_at, updated_at
                 FROM auxiliary_material WHERE id = :id
                 """).param("id", id).query(this::map).optional();
@@ -43,25 +43,28 @@ class MaterialRepository {
     }
 
     void insert(String id, String code, String normalizedCode, String name, String type, String specification,
-            String unit, String imageUrl, String remark, String actorId) {
+            String unit, String imageUrl, String imageAssetId, String remark, String actorId) {
         jdbc.sql("""
                 INSERT INTO auxiliary_material (id, material_code, material_code_normalized, name, material_type,
-                    specification, unit, image_url, remark, status, created_by, updated_by)
-                VALUES (:id, :code, :normalizedCode, :name, :type, :specification, :unit, :imageUrl, :remark,
+                    specification, unit, image_url, image_asset_id, remark, status, created_by, updated_by)
+                VALUES (:id, :code, :normalizedCode, :name, :type, :specification, :unit, :imageUrl, :imageAssetId, :remark,
                     'ACTIVE', :actorId, :actorId)
                 """).param("id", id).param("code", code).param("normalizedCode", normalizedCode)
                 .param("name", name).param("type", type).param("specification", specification).param("unit", unit)
-                .param("imageUrl", imageUrl).param("remark", remark).param("actorId", actorId).update();
+                .param("imageUrl", imageUrl).param("imageAssetId", imageAssetId).param("remark", remark)
+                .param("actorId", actorId).update();
     }
 
     void update(String id, String name, String type, String specification, String unit, String imageUrl,
-            String remark, String actorId) {
+            String imageAssetId, String remark, String actorId) {
         jdbc.sql("""
                 UPDATE auxiliary_material SET name = :name, material_type = :type, specification = :specification,
-                    unit = :unit, image_url = :imageUrl, remark = :remark, updated_by = :actorId,
+                    unit = :unit, image_url = :imageUrl, image_asset_id = :imageAssetId, remark = :remark,
+                    updated_by = :actorId,
                     updated_at = CURRENT_TIMESTAMP WHERE id = :id
                 """).param("id", id).param("name", name).param("type", type).param("specification", specification)
-                .param("unit", unit).param("imageUrl", imageUrl).param("remark", remark)
+                .param("unit", unit).param("imageUrl", imageUrl).param("imageAssetId", imageAssetId)
+                .param("remark", remark)
                 .param("actorId", actorId).update();
     }
 
@@ -75,7 +78,8 @@ class MaterialRepository {
     private MaterialView map(ResultSet rs, int rowNum) throws SQLException {
         return new MaterialView(rs.getString("id"), rs.getString("material_code"), rs.getString("name"),
                 rs.getString("material_type"), rs.getString("specification"), rs.getString("unit"),
-                rs.getString("image_url"), rs.getString("remark"), MaterialStatus.valueOf(rs.getString("status")),
+                rs.getString("image_url"), rs.getString("image_asset_id"), rs.getString("remark"),
+                MaterialStatus.valueOf(rs.getString("status")),
                 instant(rs, "created_at"), instant(rs, "updated_at"));
     }
 

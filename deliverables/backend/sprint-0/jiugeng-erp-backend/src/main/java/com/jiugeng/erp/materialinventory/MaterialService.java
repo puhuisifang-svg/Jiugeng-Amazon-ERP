@@ -4,6 +4,7 @@ import static com.jiugeng.erp.materialinventory.MaterialTypes.MaterialInput;
 import static com.jiugeng.erp.materialinventory.MaterialTypes.MaterialStatus;
 import static com.jiugeng.erp.materialinventory.MaterialTypes.MaterialView;
 
+import com.jiugeng.erp.catalogmedia.CatalogImageGateway;
 import com.jiugeng.erp.iam.AuditTrail;
 import com.jiugeng.erp.iam.AuthenticatedActor;
 import java.net.URI;
@@ -18,10 +19,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class MaterialService {
     private final MaterialRepository repository;
+    private final CatalogImageGateway images;
     private final AuditTrail auditTrail;
 
-    MaterialService(MaterialRepository repository, AuditTrail auditTrail) {
+    MaterialService(MaterialRepository repository, CatalogImageGateway images, AuditTrail auditTrail) {
         this.repository = repository;
+        this.images = images;
         this.auditTrail = auditTrail;
     }
 
@@ -37,12 +40,16 @@ class MaterialService {
         String id = UUID.randomUUID().toString();
         try {
             repository.insert(id, valid.code(), valid.normalizedCode(), valid.name(), valid.type(), valid.specification(),
-                    valid.unit(), valid.imageUrl(), valid.remark(), actor.userId());
+                    valid.unit(), valid.imageUrl(), valid.imageAssetId(), valid.remark(), actor.userId());
+            images.attach(valid.imageAssetId(), CatalogImageGateway.Purpose.MATERIAL_IMAGE,
+                    "AUXILIARY_MATERIAL", id, actor);
             MaterialView created = material(id);
             auditTrail.record(operation(actor, "MATERIAL_CREATE", id, null, snapshot(created), "创建辅料主数据"));
             return created;
         } catch (DataIntegrityViolationException exception) {
             throw new MaterialException(409, "MATERIAL_CODE_EXISTS", "辅料编码已存在（忽略大小写）");
+        } catch (CatalogImageGateway.AttachmentException exception) {
+            throw new MaterialException(exception.status(), exception.code(), exception.getMessage());
         }
     }
 
@@ -56,11 +63,19 @@ class MaterialService {
         if (!MaterialRepository.normalize(before.materialCode()).equals(valid.normalizedCode())) {
             throw new MaterialException(409, "MATERIAL_CODE_IMMUTABLE", "已保存的辅料编码不可修改，请停用后新建");
         }
-        repository.update(id, valid.name(), valid.type(), valid.specification(), valid.unit(), valid.imageUrl(),
-                valid.remark(), actor.userId());
-        MaterialView updated = material(id);
-        auditTrail.record(operation(actor, "MATERIAL_UPDATE", id, snapshot(before), snapshot(updated), "更新辅料主数据"));
-        return updated;
+        try {
+            repository.update(id, valid.name(), valid.type(), valid.specification(), valid.unit(), valid.imageUrl(),
+                    valid.imageAssetId(), valid.remark(), actor.userId());
+            images.attach(valid.imageAssetId(), CatalogImageGateway.Purpose.MATERIAL_IMAGE,
+                    "AUXILIARY_MATERIAL", id, actor);
+            images.releaseReplaced(before.imageAssetId(), valid.imageAssetId(), "AUXILIARY_MATERIAL", id);
+            MaterialView updated = material(id);
+            auditTrail.record(operation(actor, "MATERIAL_UPDATE", id, snapshot(before), snapshot(updated),
+                    "更新辅料主数据"));
+            return updated;
+        } catch (CatalogImageGateway.AttachmentException exception) {
+            throw new MaterialException(exception.status(), exception.code(), exception.getMessage());
+        }
     }
 
     @Transactional
@@ -81,9 +96,13 @@ class MaterialService {
         }
         String imageUrl = optional(input.imageUrl(), 500);
         if (imageUrl != null) validateHttpsUrl(imageUrl);
+        String imageAssetId = optional(input.imageAssetId(), 36);
+        if (imageUrl != null && imageAssetId != null) {
+            throw new MaterialException(400, "MATERIAL_IMAGE_SOURCE_CONFLICT", "图片地址与上传图片只能选择一种");
+        }
         return new ValidatedMaterial(code, normalized, required(input.name(), "辅料名称", 200),
                 required(input.materialType(), "辅料类型", 100), optional(input.specification(), 500),
-                required(input.unit(), "单位", 32), imageUrl, optional(input.remark(), 1000));
+                required(input.unit(), "单位", 32), imageUrl, imageAssetId, optional(input.remark(), 1000));
     }
 
     private void validateHttpsUrl(String value) {
@@ -139,5 +158,5 @@ class MaterialService {
     }
 
     private record ValidatedMaterial(String code, String normalizedCode, String name, String type,
-            String specification, String unit, String imageUrl, String remark) {}
+            String specification, String unit, String imageUrl, String imageAssetId, String remark) {}
 }

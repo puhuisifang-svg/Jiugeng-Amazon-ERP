@@ -29,9 +29,9 @@ class CatalogImageService implements CatalogImageGateway {
                 Map.of("id",id,"purpose",purpose,"byteSize",stored.sourceSize(),"sha256",stored.sha256()),"上传受控目录图片"));
         return new Receipt(id,purpose,name,stored.storedMediaType(),stored.sourceSize(),stored.width(),stored.height(),stored.sha256());}
     @Transactional(readOnly=true)
-    Content read(String id,boolean thumbnail,AuthenticatedActor actor,boolean productsRead,boolean suppliersRead)throws IOException{
+    Content read(String id,boolean thumbnail,AuthenticatedActor actor,boolean productsRead,boolean materialsRead,boolean suppliersRead)throws IOException{
         var image=asset(id);if("PENDING".equals(image.status())&&!image.uploadedBy().equals(actor.userId()))throw missing();
-        boolean allowed=image.purpose()==Purpose.SKU_MAIN?productsRead:suppliersRead;if(!allowed)throw missing();
+        boolean allowed=switch(image.purpose()){case SKU_MAIN->productsRead;case MATERIAL_IMAGE->materialsRead;case SUPPLIER_QR->suppliersRead;};if(!allowed)throw missing();
         return new Content(store.read(thumbnail?image.thumbnailKey():image.originalKey()),image.storedMediaType());}
     @Override @Transactional
     public void attach(String imageId,Purpose purpose,String type,String resourceId,AuthenticatedActor actor){if(imageId==null)return;try{var image=asset(imageId);

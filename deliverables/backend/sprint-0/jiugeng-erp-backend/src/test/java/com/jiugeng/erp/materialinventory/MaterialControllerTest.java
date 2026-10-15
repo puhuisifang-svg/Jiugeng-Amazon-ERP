@@ -36,6 +36,7 @@ class MaterialControllerTest {
         jdbc.update("DELETE FROM inventory_balance");
         jdbc.update("DELETE FROM product_auxiliary_material");
         jdbc.update("DELETE FROM auxiliary_material");
+        jdbc.update("DELETE FROM catalog_image_asset");
         jdbc.update("DELETE FROM iam_password_reset_challenge");
         jdbc.update("DELETE FROM audit_event");
         jdbc.update("DELETE FROM iam_session");
@@ -101,6 +102,37 @@ class MaterialControllerTest {
         mvc.perform(post("/api/v1/materials").header("Authorization", bearer(reader))
                         .contentType(MediaType.APPLICATION_JSON).content(json(material("MAT-DENIED", "无权"))))
                 .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("CAPABILITY_DENIED"));
+    }
+
+    @Test
+    void attachesUploadedMaterialImageToCreatedMaterial() throws Exception {
+        String token = createUserAndLogin("material-image-owner", "PRODUCT_MATERIAL");
+        String userId = jdbc.queryForObject("SELECT id FROM iam_user WHERE login_name = ?", String.class,
+                "material-image-owner");
+        String imageId = java.util.UUID.randomUUID().toString();
+        jdbc.update("""
+                INSERT INTO catalog_image_asset
+                    (id, purpose, status, original_storage_key, thumbnail_storage_key, source_file_name,
+                     source_media_type, stored_media_type, byte_size, sha256, pixel_width, pixel_height, uploaded_by)
+                VALUES (?, 'MATERIAL_IMAGE', 'PENDING', ?, ?, 'material.png', 'image/png', 'image/webp', 10,
+                        ?, 1, 1, ?)
+                """, imageId, "original/" + imageId, "thumbnail/" + imageId, "a".repeat(64), userId);
+        Map<String, Object> request = material("MAT-IMAGE", "上传图片辅料");
+        request.remove("imageUrl");
+        request.put("imageAssetId", imageId);
+
+        String response = mvc.perform(post("/api/v1/materials").header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.imageAssetId").value(imageId))
+                .andReturn().getResponse().getContentAsString();
+        String materialId = objectMapper.readTree(response).get("id").asText();
+
+        assertThat(jdbc.queryForMap("SELECT status, attached_resource_type, attached_resource_id "
+                + "FROM catalog_image_asset WHERE id = ?", imageId))
+                .containsEntry("STATUS", "ACTIVE")
+                .containsEntry("ATTACHED_RESOURCE_TYPE", "AUXILIARY_MATERIAL")
+                .containsEntry("ATTACHED_RESOURCE_ID", materialId);
     }
 
     private Map<String, Object> material(String code, String name) {

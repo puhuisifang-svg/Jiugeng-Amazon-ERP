@@ -8,8 +8,9 @@ final class MaterialTypes {
     enum MaterialStatus { ACTIVE, DISABLED }
 
     record MaterialInput(String materialCode, String name, String materialType, String specification, String unit,
-            String imageUrl, String remark) {}
+            String imageUrl, String imageAssetId, String remark) {}
 
     record MaterialView(String id, String materialCode, String name, String materialType, String specification,
-            String unit, String imageUrl, String remark, MaterialStatus status, Instant createdAt, Instant updatedAt) {}
+            String unit, String imageUrl, String imageAssetId, String remark, MaterialStatus status,
+            Instant createdAt, Instant updatedAt) {}
 }

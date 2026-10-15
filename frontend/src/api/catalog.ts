@@ -1,7 +1,7 @@
 import { ApiError, getSessionToken, SESSION_EXPIRED_EVENT } from './client'
 import { runtimeConfig } from '@/config/runtime'
 
-export type CatalogImagePurpose = 'SKU_MAIN' | 'SUPPLIER_QR'
+export type CatalogImagePurpose = 'SKU_MAIN' | 'SUPPLIER_QR' | 'MATERIAL_IMAGE'
 export interface CatalogImageReceipt { id: string; purpose: CatalogImagePurpose; sourceFileName: string; mediaType: string; byteSize: number; width: number; height: number; sha256: string }
 
 async function request(path: string, init: RequestInit) {

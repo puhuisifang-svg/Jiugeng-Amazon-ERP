@@ -3,7 +3,9 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { ApiError } from '@/api/client'
+import { catalogApi } from '@/api/catalog'
 import { domainApi, type InventoryBalanceViewDto, type InventoryCommandType, type MaterialDetailDto, type MaterialInput, type SupplierAssignmentDto, type SupplierDto } from '@/api/domain'
+import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vue'
 import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
@@ -13,18 +15,22 @@ const balances = ref<InventoryBalanceViewDto[]>([])
 const loading = ref(true); const saving = ref(false); const error = ref(''); const success = ref('')
 const editingId = ref<string | null>(null); const showMaterialForm = ref(false); const showInventoryForm = ref(false)
 const supplierOptions = ref<SupplierDto[]>([]); const supplierLinks = ref<SupplierAssignmentDto[]>([])
-const form = reactive<MaterialInput>({ materialCode: '', name: '', materialType: '', specification: '', unit: 'PCS', imageUrl: '', remark: '' })
+const form = reactive({ materialCode: '', name: '', materialType: '', specification: '', unit: '件', imageUrl: '', imageAssetId: '', remark: '' })
 const filters = reactive({ keyword: '', materialType: '', status: '', stock: '' })
 const inventoryForm = reactive<{ materialId: string; materialCode: string; type: InventoryCommandType | 'OPENING' | 'ADJUSTMENT'; quantity: number; reason: string }>({
   materialId: '', materialCode: '', type: 'INBOUND', quantity: 0, reason: '日常库存操作',
 })
 const safetyValues = ref<Record<string, number>>({})
+const uploading = ref(false); const imageError = ref('')
+const unitOptions = ['件', '个', '套', '盒', '包', '卷', '米', '千克', '克', 'PCS', 'SET', 'BOX', 'PACK', 'ROLL', 'M', 'KG']
 const writable = computed(() => session.canAccess(['materials.write']))
 const formal = computed(() => runtimeConfig.authMode === 'password')
 const mockMode = computed(() => runtimeConfig.authMode === 'mock')
 const inventoryReadable = computed(() => session.canAccess(['inventory.read']))
 const inventoryWritable = computed(() => inventoryReadable.value && (mockMode.value || session.canAccess(['inventory.write'])))
 const importReadable = computed(() => session.canAccess(['imports.read']))
+const supplierAccess = computed(() => session.canAccess(['suppliers.read']))
+const supplierWritable = computed(() => writable.value && session.canAccess(['suppliers.read', 'suppliers.write']))
 const activeMaterials = computed(() => items.value.filter(item => item.status === 'ACTIVE'))
 const selectedMaterial = computed(() => items.value.find(item => item.id === inventoryForm.materialId))
 const balanceByMaterial = computed(() => new Map(balances.value.map(item => [item.materialId ?? item.materialCode, item])))
@@ -47,17 +53,19 @@ function balanceFor(item: MaterialDetailDto) {
   return balanceByMaterial.value.get(item.id) ?? balanceByMaterial.value.get(item.materialCode)
 }
 function resetForm() {
-  Object.assign(form, { materialCode: '', name: '', materialType: '', specification: '', unit: 'PCS', imageUrl: '', remark: '' })
+  Object.assign(form, { materialCode: '', name: '', materialType: '', specification: '', unit: '件', imageUrl: '', imageAssetId: '', remark: '' })
   editingId.value = null; supplierLinks.value = []; showMaterialForm.value = false
 }
 function resetFilters() { Object.assign(filters, { keyword: '', materialType: '', status: '', stock: '' }) }
+function openMaterialForm() { resetForm(); showInventoryForm.value = false; showMaterialForm.value = true; success.value = ''; error.value = '' }
 async function edit(item: MaterialDetailDto) {
   Object.assign(form, { materialCode: item.materialCode, name: item.name, materialType: item.materialType,
-    specification: item.specification ?? '', unit: item.unit, imageUrl: item.imageUrl ?? '', remark: item.remark ?? '' })
-  editingId.value = item.id; showMaterialForm.value = true; success.value = ''; error.value = ''
-  if (session.canAccess(['suppliers.read'])) supplierLinks.value = (await domainApi.materialSupplierLinks(item.id)).map(link => ({ supplierId: link.supplierId, purchaseUrl: link.purchaseUrl, remark: link.remark, primary: link.primary }))
+    specification: item.specification ?? '', unit: item.unit, imageUrl: item.imageUrl ?? '', imageAssetId: item.imageAssetId ?? '', remark: item.remark ?? '' })
+  editingId.value = item.id; showInventoryForm.value = false; showMaterialForm.value = true; success.value = ''; error.value = ''
+  if (supplierAccess.value) supplierLinks.value = (await domainApi.materialSupplierLinks(item.id)).map(link => ({ supplierId: link.supplierId, purchaseUrl: link.purchaseUrl, remark: link.remark, primary: link.primary }))
 }
 function openInventory(item?: MaterialDetailDto) {
+  resetForm()
   inventoryForm.materialId = item?.id ?? ''; inventoryForm.materialCode = item?.materialCode ?? ''
   inventoryForm.type = 'INBOUND'; inventoryForm.quantity = 0; inventoryForm.reason = '日常库存操作'
   showInventoryForm.value = true; success.value = ''; error.value = ''
@@ -65,13 +73,22 @@ function openInventory(item?: MaterialDetailDto) {
 function addSupplier(event: Event) { const select = event.target as HTMLSelectElement; const id = select.value; select.value = ''; if (id && !supplierLinks.value.some(item => item.supplierId === id)) supplierLinks.value.push({ supplierId: id, primary: supplierLinks.value.length === 0 }) }
 function supplierName(id: string) { return supplierOptions.value.find(item => item.id === id)?.name ?? id }
 function makePrimary(id: string) { supplierLinks.value.forEach(item => { item.primary = item.supplierId === id }) }
+function useImageUrl() { if (form.imageUrl?.trim()) form.imageAssetId = '' }
+async function uploadImage(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  uploading.value = true; imageError.value = ''
+  try { form.imageAssetId = (await catalogApi.uploadImage('MATERIAL_IMAGE', file)).id; form.imageUrl = '' }
+  catch (exception) { imageError.value = exception instanceof Error ? exception.message : '图片上传失败。' }
+  finally { uploading.value = false }
+}
 function newRequestId() { return `web-${Date.now()}-${Math.random().toString(16).slice(2)}` }
 async function load() {
   loading.value = true; error.value = ''
   try {
     const materialResponse = await domainApi.materials()
     items.value = materialResponse.items
-    if (session.canAccess(['suppliers.read'])) supplierOptions.value = (await domainApi.suppliers({ status: 'ACTIVE', size: 100 })).items
+    if (supplierAccess.value) supplierOptions.value = (await domainApi.suppliers({ status: 'ACTIVE', size: 100 })).items
     if (inventoryReadable.value) {
       try {
         balances.value = (await domainApi.balances()).items
@@ -88,13 +105,15 @@ async function save() {
       materialType: form.materialType.trim() || '模拟辅料', unit: form.unit.trim(),
       ...(form.specification?.trim() ? { specification: form.specification.trim() } : {}),
       ...(form.imageUrl?.trim() ? { imageUrl: form.imageUrl.trim() } : {}),
+      ...(form.imageAssetId ? { imageAssetId: form.imageAssetId } : {}),
       ...(form.remark?.trim() ? { remark: form.remark.trim() } : {}) }
     if (editingId.value) {
       const updated = await domainApi.updateMaterial(editingId.value, input)
-      await domainApi.replaceMaterialSupplierLinks(updated.id, supplierLinks.value)
+      if (supplierWritable.value) await domainApi.replaceMaterialSupplierLinks(updated.id, supplierLinks.value)
       items.value = items.value.map(item => item.id === updated.id ? updated : item); success.value = '辅料及供应商关系已更新。'
     } else {
       const response = await domainApi.createMaterial(input)
+      if (supplierWritable.value) await domainApi.replaceMaterialSupplierLinks(response.item.id, supplierLinks.value)
       items.value.unshift(response.item); success.value = response.mockData ? '模拟辅料已创建。' : '辅料已创建。'
     }
     resetForm()
@@ -176,7 +195,7 @@ onMounted(load)
         <button
           v-if="writable"
           type="button"
-          @click="showMaterialForm = true"
+          @click="openMaterialForm"
         >
           添加辅料
         </button>
@@ -230,25 +249,66 @@ onMounted(load)
         v-model="form.specification"
         maxlength="500"
       ></label>
-      <label>单位<input
+      <label>单位<select
         v-model="form.unit"
         required
-        maxlength="32"
-      ></label>
+      ><option
+        v-for="unit in unitOptions"
+        :key="unit"
+        :value="unit"
+      >{{ unit }}</option></select></label>
       <label>图片 HTTPS 地址<input
         v-model="form.imageUrl"
         maxlength="500"
         type="url"
+        placeholder="也可以直接上传图片"
+        @input="useImageUrl"
       ></label>
+      <section
+        v-if="formal"
+        class="form-wide catalog-image-editor material-image-editor"
+      >
+        <AuthenticatedCatalogImage
+          :image-id="form.imageAssetId"
+          alt="辅料图片"
+        />
+        <label class="secondary-action">{{ uploading ? '上传中…' : '上传辅料图片' }}<input
+          class="sr-only"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          :disabled="uploading"
+          @change="uploadImage"
+        ></label>
+        <button
+          v-if="form.imageAssetId"
+          type="button"
+          class="secondary-button"
+          @click="form.imageAssetId = ''"
+        >
+          移除上传图片
+        </button>
+      </section>
+      <p
+        v-if="imageError"
+        class="form-wide data-state data-state--error"
+        role="alert"
+      >
+        {{ imageError }}
+      </p>
       <label class="form-wide">备注<textarea
         v-model="form.remark"
         maxlength="1000"
       /></label>
       <section
-        v-if="editingId && session.canAccess(['suppliers.read'])"
+        v-if="supplierWritable"
         class="form-wide relation-editor"
       >
         <h3>关联供应商</h3>
+        <p>
+          <RouterLink to="/suppliers">
+            维护或新建供应商档案
+          </RouterLink>；供应商档案独立保存，关联随辅料保存。
+        </p>
         <select
           aria-label="添加辅料供应商"
           value=""
@@ -281,6 +341,11 @@ onMounted(load)
             aria-label="辅料采购链接"
             type="url"
             placeholder="1688 HTTPS 采购链接"
+          ><input
+            v-model="link.remark"
+            aria-label="辅料供应商关系备注"
+            maxlength="500"
+            placeholder="关系备注"
           >
           <button
             type="button"
@@ -292,7 +357,7 @@ onMounted(load)
         </div>
       </section>
       <button
-        :disabled="saving"
+        :disabled="saving || uploading"
         type="submit"
       >
         {{ saving ? '保存中…' : editingId ? '保存修改' : '新增辅料' }}
@@ -398,8 +463,12 @@ onMounted(load)
               :key="item.id"
             >
               <td>
-                <img
-                  v-if="item.imageUrl"
+                <AuthenticatedCatalogImage
+                  v-if="item.imageAssetId"
+                  :image-id="item.imageAssetId"
+                  :alt="item.name"
+                /><img
+                  v-else-if="item.imageUrl"
                   class="material-image"
                   :src="item.imageUrl"
                   :alt="item.name"

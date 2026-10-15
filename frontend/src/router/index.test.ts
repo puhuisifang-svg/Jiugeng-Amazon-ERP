@@ -25,11 +25,15 @@ describe('application routes', () => {
     expect(groups).toEqual(new Set(['工作台', '工作台维护', '产品管理', '选品管理', '系统管理']))
   })
 
-  it('restricts inventory navigation to the required capability', () => {
+  it('merges inventory into material management while preserving the legacy route guard', () => {
     const shell = appRoutes.find((route) => route.path === '/')
     const inventory = shell?.children?.find((route) => route.name === 'inventory-balances')
+    const materials = shell?.children?.find((route) => route.name === 'materials')
 
     expect(inventory?.meta?.capabilities).toEqual(['inventory.read'])
+    expect(inventory?.meta?.hidden).toBe(true)
+    expect(inventory?.redirect).toBe('/materials')
+    expect(materials?.meta?.title).toBe('辅料管理')
   })
 
   it('matches the reviewed UI IA module routes', () => {

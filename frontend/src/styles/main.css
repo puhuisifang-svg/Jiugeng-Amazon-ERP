@@ -195,6 +195,26 @@ a { color: inherit; }
 .dashboard-history ol { display: grid; gap: 12px; padding-left: 22px; }
 .dashboard-history li span { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
 
+.material-filters { display: grid; grid-template-columns: minmax(220px, 1.5fr) repeat(3, minmax(150px, 1fr)) auto; gap: 12px; min-height: 0; padding: 18px 20px; }
+.material-filters label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.material-filters input, .material-filters select { min-height: 40px; padding: 0 11px; color: var(--ink); background: white; border: 1px solid var(--line); border-radius: 7px; }
+.material-filters button { min-height: 40px; align-self: end; padding: 0 16px; border: 0; border-radius: 7px; cursor: pointer; }
+.material-toolbar { display: flex; min-height: 0; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; }
+.material-toolbar > div { display: flex; flex-wrap: wrap; gap: 10px; }
+.material-toolbar button { min-height: 40px; padding: 0 16px; color: white; background: var(--accent); border: 0; border-radius: 7px; font-weight: 700; cursor: pointer; }
+.material-toolbar .secondary-button, .material-filters .secondary-button, .material-table .secondary-button { color: var(--ink); background: #eef0f4; }
+.text-link { color: #425d9c; font-weight: 700; text-decoration: none; }
+.material-image { display: grid; width: 46px; height: 46px; place-items: center; object-fit: cover; color: #59647a; background: #f1f3f7; border-radius: 7px; }
+.material-image--placeholder { border: 1px solid var(--line); font-weight: 800; }
+.material-table td small { display: block; margin-top: 4px; color: var(--muted); }
+.safety-editor { display: flex; align-items: center; gap: 6px; }
+.safety-editor input { width: 88px; min-height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; }
+.safety-editor button { min-height: 32px; padding-inline: 10px; }
+.material-table-footer { padding: 14px 18px; color: var(--muted); border-top: 1px solid var(--line); text-align: right; font-size: 13px; }
+
+@media (max-width: 1000px) { .material-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .material-filters { grid-template-columns: 1fr; } .material-toolbar { align-items: flex-start; flex-direction: column; } }
+
 @keyframes worklist-scroll { from { transform: translateY(0); } to { transform: translateY(-50%); } }
 
 @media (prefers-reduced-motion: reduce) {

@@ -33,6 +33,8 @@ describe('horizontal navigation shell', () => {
     const { wrapper, router } = await setup()
     await wrapper.get('[data-domain="商品"]').trigger('click')
     expect(wrapper.get('.mega-panel').text()).toContain('产品与 SKU')
+    expect(wrapper.get('.mega-panel').text()).toContain('辅料管理')
+    expect(wrapper.get('.mega-panel').text()).not.toContain('辅料库存')
     expect(wrapper.get('.mega-panel').text()).toContain('导入中心')
     await wrapper.get('.mega-panel a[href="/imports"]').trigger('click')
     await flushPromises()
@@ -63,7 +65,7 @@ describe('horizontal navigation shell', () => {
     await router.push('/products')
     expect(wrapper.findAll('.workspace-tab')).toHaveLength(2)
     await router.push('/inventory/ledger')
-    expect(wrapper.get('.workspace-tab.is-current').text()).toContain('辅料库存')
+    expect(wrapper.get('.workspace-tab.is-current').text()).toContain('辅料管理')
   })
 
   it('closes an active tab and navigates to another available page', async () => {

@@ -25,7 +25,7 @@ const domains = computed(() => definitions.map(domain => ({
 })).filter(domain => domain.rows.length))
 const currentEntry = computed(() => entries.value.find(item => `/${item.path}` === route.path)
   ?? entries.value.filter(item => route.path.startsWith(`/${item.path}/`)).sort((a, b) => b.path.length - a.path.length)[0]
-  ?? (route.path.startsWith('/inventory/') ? entries.value.find(item => item.path === 'inventory/balances') : undefined))
+  ?? (route.path.startsWith('/inventory/') ? entries.value.find(item => item.path === 'materials') : undefined))
 const activeDomain = computed(() => domains.value.find(domain => domain.rows.some(row => row.items.includes(currentEntry.value!)))?.title)
 const home = computed(() => entries.value.find(item => item.path === 'home'))
 const tabs = computed(() => visited.value.map(path => entries.value.find(item => item.path === path)).filter(item => item !== undefined))

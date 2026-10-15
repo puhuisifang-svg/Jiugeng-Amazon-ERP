@@ -23,7 +23,7 @@ const inventoryForm = reactive<{ materialId: string; materialCode: string; type:
 const safetyValues = ref<Record<string, number>>({})
 const uploading = ref(false); const imageError = ref('')
 const failedRemoteImages = ref<Set<string>>(new Set())
-type MaterialImagePreview = { alt: string; imageUrl: string } | { alt: string; imageAssetId: string }
+type MaterialImagePreview = ({ alt: string; imageUrl: string } | { alt: string; imageAssetId: string }) & { kind?: 'material' | 'supplier-qr' }
 const imagePreview = ref<MaterialImagePreview | null>(null)
 const purchaseMaterial = ref<MaterialDetailDto | null>(null)
 const purchaseLoading = ref(false)
@@ -83,8 +83,13 @@ function makePrimary(id: string) { supplierLinks.value.forEach(item => { item.pr
 function useImageUrl() { if (form.imageUrl?.trim()) form.imageAssetId = '' }
 function markRemoteImageFailed(key: string) { failedRemoteImages.value = new Set(failedRemoteImages.value).add(key) }
 function previewImage(item: MaterialDetailDto) {
-  if (item.imageAssetId) imagePreview.value = { alt: item.name, imageAssetId: item.imageAssetId }
-  else if (item.imageUrl) imagePreview.value = { alt: item.name, imageUrl: item.imageUrl }
+  if (item.imageAssetId) imagePreview.value = { alt: item.name, imageAssetId: item.imageAssetId, kind: 'material' }
+  else if (item.imageUrl) imagePreview.value = { alt: item.name, imageUrl: item.imageUrl, kind: 'material' }
+}
+function previewSupplierQr(supplier: SupplierDto) {
+  const alt = `${supplier.name}微信二维码`
+  if (supplier.qrImageId) imagePreview.value = { alt, imageAssetId: supplier.qrImageId, kind: 'supplier-qr' }
+  else if (supplier.qrImageUrl) imagePreview.value = { alt, imageUrl: supplier.qrImageUrl, kind: 'supplier-qr' }
 }
 async function openPurchase(item: MaterialDetailDto) {
   purchaseMaterial.value = item; purchaseSuppliers.value = []; purchaseLoading.value = true; error.value = ''
@@ -459,7 +464,7 @@ onMounted(load)
           :key="item.id"
           :value="item.id"
         >{{ item.materialCode }} · {{ item.name }}</option></select></label>
-        <label>类型<select v-model="inventoryForm.type"><template v-if="mockMode"><option>OPENING</option><option>INBOUND</option><option>OUTBOUND</option><option>ADJUSTMENT</option></template><template v-else><option>INBOUND</option><option>OUTBOUND</option><option>ADJUST_IN</option><option>ADJUST_OUT</option></template></select></label>
+        <label>类型<select v-model="inventoryForm.type"><template v-if="mockMode"><option value="OPENING">期初入库</option><option value="INBOUND">入库</option><option value="OUTBOUND">出库</option><option value="ADJUSTMENT">库存调整</option></template><template v-else><option value="INBOUND">入库</option><option value="OUTBOUND">出库</option><option value="ADJUST_IN">盘盈调整</option><option value="ADJUST_OUT">盘亏调整</option></template></select></label>
         <label>数量<input
           v-model.number="inventoryForm.quantity"
           required
@@ -683,7 +688,7 @@ onMounted(load)
           class="table-scroll"
         >
           <table class="data-table purchase-table">
-            <thead><tr><th>供应商</th><th>联系人</th><th>联系方式</th><th>采购链接</th><th>关系</th><th>备注</th></tr></thead>
+            <thead><tr><th>供应商</th><th>联系人</th><th>电话</th><th>微信号</th><th>微信二维码</th><th>采购链接</th><th>关系</th><th>备注</th></tr></thead>
             <tbody>
               <tr
                 v-for="item in purchaseSuppliers"
@@ -691,7 +696,31 @@ onMounted(load)
               >
                 <td><strong>{{ item.supplier.name }}</strong><small>{{ item.supplier.status === 'ACTIVE' ? '启用' : '停用' }}</small></td>
                 <td>{{ item.supplier.contactPerson || '—' }}</td>
-                <td>{{ item.supplier.phone || '—' }}<small v-if="item.supplier.wechatId">微信：{{ item.supplier.wechatId }}</small></td>
+                <td>{{ item.supplier.phone || '—' }}</td>
+                <td>{{ item.supplier.wechatId || '—' }}</td>
+                <td>
+                  <button
+                    v-if="item.supplier.qrImageId || item.supplier.qrImageUrl"
+                    class="image-button"
+                    type="button"
+                    :aria-label="`查看${item.supplier.name}微信二维码`"
+                    @click="previewSupplierQr(item.supplier)"
+                  >
+                    <AuthenticatedCatalogImage
+                      v-if="item.supplier.qrImageId"
+                      class="supplier-qr-thumbnail"
+                      :image-id="item.supplier.qrImageId"
+                      :alt="`${item.supplier.name}微信二维码`"
+                    /><img
+                      v-else
+                      class="supplier-qr-thumbnail"
+                      :src="item.supplier.qrImageUrl"
+                      :alt="`${item.supplier.name}微信二维码`"
+                      loading="lazy"
+                      referrerpolicy="no-referrer"
+                    >
+                  </button><span v-else>—</span>
+                </td>
                 <td>
                   <a
                     v-if="item.link.purchaseUrl || item.supplier.sourceUrl"
@@ -727,12 +756,13 @@ onMounted(load)
         </button>
         <AuthenticatedCatalogImage
           v-if="'imageAssetId' in imagePreview"
+          :class="{ 'supplier-qr-preview': imagePreview.kind === 'supplier-qr' }"
           :image-id="imagePreview.imageAssetId"
           variant="original"
           :alt="imagePreview.alt"
         /><img
           v-else
-          class="material-preview__image"
+          :class="imagePreview.kind === 'supplier-qr' ? 'supplier-qr-preview' : 'material-preview__image'"
           :src="imagePreview.imageUrl"
           :alt="imagePreview.alt"
           referrerpolicy="no-referrer"

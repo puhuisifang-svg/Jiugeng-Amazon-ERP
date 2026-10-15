@@ -21,4 +21,10 @@ describe('ProductForm', () => {
     expect(wrapper.findAll('.variant-editor')).toHaveLength(2)
     expect(wrapper.findAll('select[aria-label="添加辅料"]')).toHaveLength(2)
   })
+
+  it('offers a cancel action when embedded in a dialog', async () => {
+    const wrapper = mount(ProductForm, { props: { submitLabel: '创建产品', showCancel: true } })
+    await wrapper.findAll('button').find(button => button.text() === '取消')!.trigger('click')
+    expect(wrapper.emitted('cancel')).toHaveLength(1)
+  })
 })

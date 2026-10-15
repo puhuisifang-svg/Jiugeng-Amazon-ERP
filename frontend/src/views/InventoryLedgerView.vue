@@ -5,6 +5,7 @@ import { domainApi, type LedgerEntryDto } from '@/api/domain'
 import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
+import { inventoryTransactionTypeLabel } from '@/ui/inventory'
 
 const entries = ref<LedgerEntryDto[]>([]); const loading = ref(true); const busy = ref(''); const error = ref('')
 const reversalTarget = ref<LedgerEntryDto | null>(null); const reversalReason = ref(''); const reversalError = ref('')
@@ -12,6 +13,9 @@ const filters = reactive({ keyword: '', type: '' })
 const mockMode = runtimeConfig.authMode === 'mock'
 const writable = computed(() => !mockMode && session.canAccess(['inventory.write']))
 const transactionTypes = computed(() => [...new Set(entries.value.map(item => item.type))].sort())
+const reversedTransactionIds = computed(() => new Set(entries.value
+  .filter(item => item.type === 'REVERSAL' && item.referenceTransactionId)
+  .map(item => item.referenceTransactionId as string)))
 const filtered = computed(() => {
   const keyword = filters.keyword.trim().toLowerCase()
   return entries.value.filter(item => {
@@ -23,7 +27,11 @@ const filtered = computed(() => {
 function resetFilters() { Object.assign(filters, { keyword: '', type: '' }) }
 function newRequestId() { return `reverse-${Date.now()}-${Math.random().toString(16).slice(2)}` }
 async function load() { loading.value = true; error.value = ''; try { entries.value = (await domainApi.ledger()).items } catch { error.value = '库存流水加载失败。' } finally { loading.value = false } }
-function openReversal(item: LedgerEntryDto) { reversalTarget.value = item; reversalReason.value = ''; reversalError.value = '' }
+function isReversed(item: LedgerEntryDto) { return reversedTransactionIds.value.has(item.id) }
+function openReversal(item: LedgerEntryDto) {
+  if (item.type === 'REVERSAL' || isReversed(item)) return
+  reversalTarget.value = item; reversalReason.value = ''; reversalError.value = ''
+}
 function closeReversal() { if (busy.value) return; reversalTarget.value = null; reversalReason.value = ''; reversalError.value = '' }
 async function confirmReversal() {
   const item = reversalTarget.value; const reason = reversalReason.value.trim()
@@ -72,7 +80,7 @@ onMounted(load)
         v-for="item in transactionTypes"
         :key="item"
         :value="item"
-      >{{ item }}</option></select></label>
+      >{{ inventoryTransactionTypeLabel(item) }}</option></select></label>
       <button
         type="button"
         @click="resetFilters"
@@ -109,14 +117,14 @@ onMounted(load)
               v-for="item in filtered"
               :key="item.id"
             >
-              <td>{{ item.occurredAt }}</td><td>{{ item.materialCode }}</td><td>{{ item.type }}</td><td>{{ item.signedQuantity ?? item.quantity }}</td><td>{{ item.balanceAfter ?? '—' }}</td><td>{{ item.reason }}</td><td>{{ item.actorLoginName ?? '—' }}</td><td v-if="writable">
+              <td>{{ item.occurredAt }}</td><td>{{ item.materialCode }}</td><td>{{ inventoryTransactionTypeLabel(item.type) }}</td><td>{{ item.signedQuantity ?? item.quantity }}</td><td>{{ item.balanceAfter ?? '—' }}</td><td>{{ item.reason }}</td><td>{{ item.actorLoginName ?? '—' }}</td><td v-if="writable">
                 <button
                   v-if="item.type !== 'REVERSAL'"
-                  :disabled="busy === item.id"
+                  :disabled="busy === item.id || isReversed(item)"
                   type="button"
                   @click="openReversal(item)"
                 >
-                  冲销
+                  {{ isReversed(item) ? '已冲销' : '冲销' }}
                 </button>
               </td>
             </tr>
@@ -153,7 +161,7 @@ onMounted(load)
         </button><h2 id="reversal-dialog-title">
           确认冲销库存流水
         </h2><p class="form-wide reversal-summary">
-          将冲销 {{ reversalTarget.materialCode }} 的 {{ reversalTarget.type }} 流水（{{ reversalTarget.id }}）。该操作会新增一条反向流水，原流水不会被删除。
+          将冲销 {{ reversalTarget.materialCode }} 的 {{ inventoryTransactionTypeLabel(reversalTarget.type) }}流水（{{ reversalTarget.id }}）。该操作会新增一条反向流水，原流水不会被删除。
         </p><label class="form-wide">冲销原因<textarea
           v-model="reversalReason"
           required

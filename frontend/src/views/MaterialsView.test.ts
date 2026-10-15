@@ -90,7 +90,8 @@ describe('MaterialsView merged material management', () => {
 
   it('opens purchasing suppliers from a material row', async () => {
     materialSupplierLinks.mockResolvedValue([{ id: 'l1', ownerId: 'm1', supplierId: 's1', supplierName: '包装供应商', supplierStatus: 'ACTIVE', purchaseUrl: 'https://detail.1688.com/offer/1.html', primary: true, remark: '月结' }])
-    supplier.mockResolvedValue({ id: 's1', name: '包装供应商', contactPerson: '张三', phone: '13800000000', status: 'ACTIVE', version: 0 })
+    supplier.mockResolvedValue({ id: 's1', name: '包装供应商', contactPerson: '张三', phone: '13800000000', wechatId: 'packaging-zhang',
+      qrImageUrl: 'https://images.example.com/wechat-qr.png', status: 'ACTIVE', version: 0 })
     const wrapper = mount(MaterialsView, { global })
     await flushPromises()
 
@@ -104,7 +105,14 @@ describe('MaterialsView merged material management', () => {
     expect(dialog.text()).toContain('包装供应商')
     expect(dialog.text()).toContain('张三')
     expect(dialog.text()).toContain('13800000000')
+    expect(dialog.text()).toContain('packaging-zhang')
+    const qrButton = dialog.get('button[aria-label="查看包装供应商微信二维码"]')
+    expect(qrButton.get('img').attributes('src')).toBe('https://images.example.com/wechat-qr.png')
     expect(dialog.get('a').attributes('href')).toBe('https://detail.1688.com/offer/1.html')
+
+    await qrButton.trigger('click')
+    const preview = wrapper.get('[role="dialog"][aria-label="包装供应商微信二维码图片预览"]')
+    expect(preview.get('img').classes()).toContain('supplier-qr-preview')
   })
 
   it('keeps material and inventory operations exclusive and offers common units', async () => {
@@ -129,6 +137,10 @@ describe('MaterialsView merged material management', () => {
     expect(wrapper.find('.material-table').exists()).toBe(true)
     expect(wrapper.text()).not.toContain('新增辅料')
     expect(wrapper.text()).toContain('提交正式库存命令')
+    const inventoryForm = wrapper.findAll('form').find(item => item.text().includes('提交正式库存命令'))!
+    expect(inventoryForm.text()).toContain('入库')
+    expect(inventoryForm.text()).toContain('出库')
+    expect(inventoryForm.text()).not.toContain('INBOUND')
   })
 
   it('closes each operation independently without hiding the material list', async () => {

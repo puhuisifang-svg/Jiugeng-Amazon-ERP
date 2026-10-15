@@ -7,8 +7,8 @@ import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vu
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
 
-const props = defineProps<{ initial?: ProductInput; busy?: boolean; submitLabel: string }>()
-const emit = defineEmits<{ submit: [value: ProductInput] }>()
+const props = defineProps<{ initial?: ProductInput; busy?: boolean; submitLabel: string; showCancel?: boolean }>()
+const emit = defineEmits<{ submit: [value: ProductInput]; cancel: [] }>()
 const suppliers = ref<SupplierDto[]>([]); const materials = ref<MaterialDetailDto[]>([])
 const balances = ref<InventoryBalanceViewDto[]>([]); const inventoryFailed = ref(false)
 const loadingReferences = ref(false); const imageError = ref(''); const uploading = ref<number | null>(null)
@@ -247,12 +247,22 @@ onMounted(loadReferences)
         @click="addVariant"
       >
         新增 SKU
-      </button><button
-        type="submit"
-        :disabled="busy || uploading !== null"
-      >
-        {{ busy ? '保存中…' : submitLabel }}
-      </button>
+      </button><div class="form-footer__actions">
+        <button
+          v-if="showCancel"
+          type="button"
+          class="secondary-action"
+          :disabled="busy"
+          @click="emit('cancel')"
+        >
+          取消
+        </button><button
+          type="submit"
+          :disabled="busy || uploading !== null"
+        >
+          {{ busy ? '保存中…' : submitLabel }}
+        </button>
+      </div>
     </div>
   </form>
 </template>

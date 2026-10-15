@@ -2,14 +2,16 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
-import { domainApi, type ProductDetailDto } from '@/api/domain'
+import { ApiError } from '@/api/client'
+import { domainApi, type ProductDetailDto, type ProductInput } from '@/api/domain'
+import ProductForm from '@/components/ProductForm.vue'
 import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
 
 const items = ref<ProductDetailDto[]>([])
-const loading = ref(true)
-const error = ref('')
+const loading = ref(true); const saving = ref(false)
+const error = ref(''); const success = ref(''); const showCreateForm = ref(false)
 const query = ref(''); const status = ref('')
 const writable = computed(() => session.canAccess(['products.write']))
 const filtered = computed(() => items.value.filter(item => (!status.value || item.status === status.value)
@@ -20,6 +22,18 @@ async function load() {
   try { items.value = (await domainApi.products()).items }
   catch { error.value = runtimeConfig.authMode === 'mock' ? '产品模拟数据加载失败。' : '产品数据加载失败。' }
   finally { loading.value = false }
+}
+function openCreate() { showCreateForm.value = true; error.value = ''; success.value = '' }
+function closeCreate() { if (!saving.value) showCreateForm.value = false }
+async function create(input: ProductInput) {
+  saving.value = true; error.value = ''; success.value = ''
+  try {
+    const response = await domainApi.createProduct(input)
+    items.value.unshift(response.item)
+    showCreateForm.value = false
+    success.value = '产品及首个 SKU 已创建。'
+  } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '产品创建失败，请检查输入。' }
+  finally { saving.value = false }
 }
 onMounted(load)
 </script>
@@ -39,18 +53,63 @@ onMounted(load)
       aria-label="产品管理操作"
     >
       <div>
-        <RouterLink
+        <button
           v-if="writable"
-          class="primary-link"
-          to="/products/new"
+          type="button"
+          @click="openCreate"
         >
           新增产品
-        </RouterLink>
+        </button>
       </div>
       <span class="toolbar-hint">{{ runtimeConfig.authMode === 'mock' ? '当前展示模拟产品。' : '产品与内部 SKU 主档。' }}</span>
     </section>
+    <div
+      v-if="showCreateForm"
+      class="operation-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="product-create-dialog-title"
+      @click.self="closeCreate"
+      @keydown.esc="closeCreate"
+    >
+      <section class="panel operation-dialog__card product-create-dialog">
+        <button
+          class="operation-dialog__close"
+          type="button"
+          aria-label="关闭新增产品"
+          :disabled="saving"
+          @click="closeCreate"
+        >
+          ×
+        </button><h2 id="product-create-dialog-title">
+          新增产品
+        </h2><p>创建产品主档，并在同一窗口维护首个或多个内部 SKU。</p>
+        <p
+          v-if="error"
+          class="data-state data-state--error"
+          role="alert"
+        >
+          {{ error }}
+        </p>
+        <ProductForm
+          class="product-create-form"
+          :busy="saving"
+          submit-label="创建产品"
+          show-cancel
+          @cancel="closeCreate"
+          @submit="create"
+        />
+      </section>
+    </div>
     <p
-      v-if="error"
+      v-if="success"
+      class="data-state data-state--success"
+      role="status"
+    >
+      {{ success }}
+    </p>
+    <p
+      v-if="error && !showCreateForm"
       class="data-state data-state--error"
       role="alert"
     >

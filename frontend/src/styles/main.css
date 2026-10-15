@@ -150,6 +150,7 @@ td.table-actions > * + * { margin-left: 8px; }
 .attribute-row button, .secondary-action { min-height: 40px; padding: 0 14px; border: 0; border-radius: 7px; cursor: pointer; }
 .secondary-action, .attribute-row .secondary-button { color: var(--muted); background: #eef0f4; }
 .form-footer { display: flex; justify-content: space-between; gap: 12px; }
+.form-footer__actions { display: flex; gap: 10px; }
 .danger-link { color: #9f2f2f; background: transparent; border: 0; cursor: pointer; }
 .danger-button { background: #b63b3b !important; }
 .attribute-chips { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -217,7 +218,8 @@ select:disabled { color: #8a93a5; background-color: #f3f5f8; cursor: not-allowed
 .catalog-image-editor { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .sku-editor-grid { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 20px; align-items: start; }
 .relation-editor { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
-.relation-editor > select { min-width: min(100%, 360px); }
+.relation-editor > select { width: min(100%, 360px); min-height: 40px; padding: 0 11px; color: var(--ink); background-color: white; border: 1px solid var(--line); border-radius: 7px; }
+.relation-row input:not([type="radio"]):not([type="checkbox"]) { width: 100%; min-height: 40px; padding: 0 11px; color: var(--ink); background: white; border: 1px solid var(--line); border-radius: 7px; }
 .relation-row { display: grid; grid-template-columns: minmax(120px, .8fr) auto minmax(180px, 1fr) minmax(140px, .8fr) auto; gap: 10px; align-items: center; margin-top: 10px; }
 .relation-row--material { grid-template-columns: minmax(160px, 1fr) repeat(3, minmax(110px, .6fr)) minmax(140px, .8fr) auto; }
 .detail-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -261,6 +263,12 @@ select:disabled { color: #8a93a5; background-color: #f3f5f8; cursor: not-allowed
 .purchase-dialog { display: grid; width: min(1000px, 100%); min-height: 0; gap: 18px; padding: 24px; }
 .purchase-dialog h2 { margin: 0; padding-right: 48px; font-size: 19px; }
 .purchase-table { min-width: 860px; }
+.supplier-qr-thumbnail { display: block; width: 48px; height: 48px; object-fit: contain; background: white; border: 1px solid var(--line); border-radius: 8px; }
+.product-create-dialog { display: grid; width: min(1180px, 100%); min-height: 0; gap: 12px; padding: 24px; }
+.product-create-dialog > h2 { margin: 0; padding-right: 48px; font-size: 19px; }
+.product-create-dialog > p { margin: 0; color: var(--muted); }
+.product-create-form { gap: 14px; }
+.product-create-form > .panel { border-color: #edf0f5; box-shadow: none; }
 .toolbar-hint { color: var(--muted); font-size: 13px; }
 .material-table-footer { padding: 14px 18px; color: var(--muted); border-top: 1px solid var(--line); text-align: right; font-size: 13px; }
 

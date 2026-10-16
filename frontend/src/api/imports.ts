@@ -13,14 +13,14 @@ export const activeImportTypes = [
 export type ImportType = typeof activeImportTypes[number]
 export const importTemplateVersions: Record<ImportType, string> = {
   PRODUCTS: '2.0',
-  VARIANTS: '2.0',
+  VARIANTS: '2.1',
   AUXILIARY_MATERIALS: '1.0',
   PRODUCT_AUXILIARY_MATERIALS: '1.0',
   AUXILIARY_MATERIAL_OPENING_INVENTORY: '1.0',
 }
 export const importTemplateFileNames: Record<ImportType, string> = {
   PRODUCTS: '01_products_v2.0.xlsx',
-  VARIANTS: '02_variants_v2.0.xlsx',
+  VARIANTS: '02_variants_v2.1.xlsx',
   AUXILIARY_MATERIALS: '04_auxiliary_materials_v1.0.xlsx',
   PRODUCT_AUXILIARY_MATERIALS: '05_sku_auxiliary_materials_v1.0.xlsx',
   AUXILIARY_MATERIAL_OPENING_INVENTORY: '06_initial_inventory_v1.0.xlsx',

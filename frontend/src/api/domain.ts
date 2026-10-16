@@ -1,4 +1,4 @@
-import { apiRequest, assertSyntheticEnvelope } from './client'
+import { ApiError, SESSION_EXPIRED_EVENT, SESSION_TOKEN_KEY, apiRequest, assertSyntheticEnvelope } from './client'
 import type { CandidateDetailDto, InventoryBalanceDto, MaterialDto, ProductDto, SelectionCandidateDto, SyntheticList, WatchEventDto, WatchStoreDto } from './resources'
 import { runtimeConfig } from '@/config/runtime'
 
@@ -16,6 +16,12 @@ export interface ProductVariantDto {
   specification?: string
   itemDimensions?: string
   packageDimensions?: string
+  itemLengthCm?: number
+  itemWidthCm?: number
+  itemHeightCm?: number
+  packageLengthCm?: number
+  packageWidthCm?: number
+  packageHeightCm?: number
   packageWeight?: number
   packageWeightUnit?: 'G' | 'KG' | 'OZ' | 'LB'
   packageWeightGrams?: number
@@ -29,9 +35,15 @@ export interface ProductVariantDto {
 }
 export interface ProductVariantInput {
   id?: string | undefined; skuCode: string; variantName: string; itemDimensions?: string | undefined; packageDimensions?: string | undefined
+  itemLengthCm?: number | undefined; itemWidthCm?: number | undefined; itemHeightCm?: number | undefined
+  packageLengthCm?: number | undefined; packageWidthCm?: number | undefined; packageHeightCm?: number | undefined
   packageWeightGrams?: number | undefined; status: VariantStatus; imageAssetId?: string | undefined; imageUrl?: string | undefined; version?: number | undefined
   suppliers: SupplierAssignmentDto[]; materials: MaterialAssignmentDto[]
 }
+export interface SkuListItemDto { productId: string; productCode: string; productName: string; productStatus: ProductStatus; productType?: string; variant: ProductVariantDto; businessAvailable: boolean; updatedAt?: string }
+export interface SkuPageDto { items: SkuListItemDto[]; totalCount: number; page: number; size: number }
+export interface ProductHistoryDto { id: string; action: string; actorLoginName: string; actorDisplayName?: string; detail?: string; occurredAt: string }
+export interface BatchVariantPatchInput { productId: string; variantId: string; productVersion: number; variantVersion: number; status?: VariantStatus | undefined; statusSelected: boolean; itemLengthCm?: number | undefined; itemWidthCm?: number | undefined; itemHeightCm?: number | undefined; itemDimensionsSelected: boolean; packageLengthCm?: number | undefined; packageWidthCm?: number | undefined; packageHeightCm?: number | undefined; packageDimensionsSelected: boolean; packageWeightGrams?: number | undefined; packageWeightSelected: boolean }
 export interface ProductDetailDto {
   id: string
   productCode: string
@@ -207,6 +219,25 @@ async function product(id: string): Promise<ProductDetailDto> {
   return apiRequest<ProductDetailDto>(`/v1/products/${id}`)
 }
 
+async function exportSkus(filters: { field?: string | undefined; q?: string | undefined; exact?: boolean | undefined; status?: VariantStatus | undefined; productStatus?: ProductStatus | undefined; hasImage?: boolean | undefined; hasSupplier?: boolean | undefined; hasMaterial?: boolean | undefined; variantIds?: string[] | undefined }): Promise<void> {
+  if (runtimeConfig.authMode === 'mock') throw new Error('模拟模式不提供正式导出')
+  const search = new URLSearchParams()
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value === undefined || value === '' || (Array.isArray(value) && !value.length)) return
+    if (Array.isArray(value)) value.forEach(item => search.append(key, item)); else search.set(key, String(value))
+  })
+  const headers = new Headers(); const token = window.localStorage.getItem(SESSION_TOKEN_KEY) ?? window.sessionStorage.getItem(SESSION_TOKEN_KEY)
+  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const response = await fetch(`${runtimeConfig.apiBaseUrl}/v1/products/skus/export?${search}`, { headers })
+  if (!response.ok) {
+    const problem = await response.json().catch(() => null) as { code?: string; detail?: string } | null
+    if (response.status === 401) window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))
+    throw new ApiError(response.status, problem?.code ?? 'REQUEST_FAILED', problem?.detail ?? `请求失败（${response.status}）`)
+  }
+  const url = URL.createObjectURL(await response.blob()); const anchor = document.createElement('a')
+  anchor.href = url; anchor.download = `产品SKU_${new Date().toISOString().slice(0, 10)}.xlsx`; anchor.click(); URL.revokeObjectURL(url)
+}
+
 type LegacyProductInput = { productCode: string; name: string; skuCodes: string[] }
 
 async function createProduct(input: ProductInput | LegacyProductInput): Promise<{ item: ProductDetailDto; mockData: boolean }> {
@@ -258,7 +289,18 @@ async function createMaterial(input: MaterialInput | { materialCode: string; nam
 
 export const domainApi = {
   products,
+  skus: async (filters: { field?: string | undefined; q?: string | undefined; exact?: boolean | undefined; status?: VariantStatus | undefined; productStatus?: ProductStatus | undefined; hasImage?: boolean | undefined; hasSupplier?: boolean | undefined; hasMaterial?: boolean | undefined; sort?: string | undefined; direction?: string | undefined; page?: number | undefined; size?: number | undefined } = {}) => {
+    if (runtimeConfig.authMode === 'mock') {
+      const response = await products(); const values = response.items.flatMap(product => product.variants.map(variant => ({ productId: product.id, productCode: product.productCode, productName: product.productName, productStatus: product.status, productType: product.productType, variant, businessAvailable: product.status === 'ACTIVE' && variant.status === 'ACTIVE', updatedAt: product.updatedAt })))
+      return { items: values, totalCount: values.length, page: 0, size: values.length || 20 } as SkuPageDto
+    }
+    const search = new URLSearchParams()
+    Object.entries(filters).forEach(([key, value]) => { if (value !== undefined && value !== '') search.set(key, String(value)) })
+    return apiRequest<SkuPageDto>(`/v1/products/skus?${search}`)
+  },
   product,
+  productHistory: (id: string) => runtimeConfig.authMode === 'mock' ? Promise.resolve([] as ProductHistoryDto[]) : apiRequest<ProductHistoryDto[]>(`/v1/products/${id}/history`),
+  exportSkus,
   createProduct,
   updateProduct: async (id: string, input: ProductInput) => {
     if (runtimeConfig.authMode === 'mock') throw new Error('Mock products cannot be edited')
@@ -269,6 +311,7 @@ export const domainApi = {
     const current = await product(id)
     return apiRequest<ProductDetailDto>(`/v1/products/${id}/disable`, { method: 'POST', body: JSON.stringify({ version: current.version }) })
   },
+  batchUpdateSkus: (items: BatchVariantPatchInput[]) => apiRequest<ProductDetailDto[]>('/v1/products/skus/batch', { method: 'POST', body: JSON.stringify({ items }) }),
   suppliers: async (filters: { q?: string; status?: SupplierStatus; page?: number; size?: number } = {}) => {
     if (runtimeConfig.authMode === 'mock') return { items: [], totalCount: 0, page: 0, size: filters.size ?? 100 } as PageDto<SupplierDto>
     const search = new URLSearchParams()

@@ -82,12 +82,12 @@ class ImportControllerTest {
 
     @Test void servesExactCatalogV2TemplatesAndKeepsOtherTypesAtV1() throws Exception {
         assertThat(templates.definition(ImportTypes.ImportType.PRODUCTS).version()).isEqualTo("2.0");
-        assertThat(templates.definition(ImportTypes.ImportType.VARIANTS).version()).isEqualTo("2.0");
+        assertThat(templates.definition(ImportTypes.ImportType.VARIANTS).version()).isEqualTo("2.1");
         assertThat(templates.definition(ImportTypes.ImportType.AUXILIARY_MATERIALS).version()).isEqualTo("1.0");
         assertThat(templates.definition(ImportTypes.ImportType.PRODUCT_AUXILIARY_MATERIALS).version()).isEqualTo("1.0");
         assertThat(templates.definition(ImportTypes.ImportType.AUXILIARY_MATERIAL_OPENING_INVENTORY).version()).isEqualTo("1.0");
         assertThat(templates.supports(ImportTypes.ImportType.PRODUCTS,"1.0")).isFalse();
-        assertThat(templates.supports(ImportTypes.ImportType.VARIANTS,"1.0")).isFalse();
+        assertThat(templates.supports(ImportTypes.ImportType.VARIANTS,"2.0")).isTrue();
         assertThat(templates.supports(ImportTypes.ImportType.AUXILIARY_MATERIALS,"1.0")).isTrue();
         try (var products = new XSSFWorkbook(new ByteArrayInputStream(templates.bytes(ImportTypes.ImportType.PRODUCTS)));
              var variants = new XSSFWorkbook(new ByteArrayInputStream(templates.bytes(ImportTypes.ImportType.VARIANTS)))) {
@@ -95,10 +95,11 @@ class ImportControllerTest {
                     "product_code", "product_name", "product_type", "description", "status");
             assertThat(headers(variants, "variants_导入模板")).containsExactly(
                     "sku_code", "product_code", "variant_name", "item_dimensions", "package_dimensions",
-                    "package_weight_grams", "status");
+                    "item_length_cm", "item_width_cm", "item_height_cm", "package_length_cm",
+                    "package_width_cm", "package_height_cm", "package_weight_grams", "status");
             assertThat(variants.getSheet("attributes_导入模板")).isNull();
             assertThat(meta(products, "templateVersion")).isEqualTo("2.0");
-            assertThat(meta(variants, "templateVersion")).isEqualTo("2.0");
+            assertThat(meta(variants, "templateVersion")).isEqualTo("2.1");
         }
     }
 
@@ -127,6 +128,20 @@ class ImportControllerTest {
         commit(token,replayBatch,"variants-commit-2").andExpect(status().isAccepted());
         mvc.perform(get("/api/v1/import-batches/{id}/result",replayBatch).header("Authorization",bearer(token)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.unchangedRows").value(1));
+    }
+
+    @Test void variantV21PersistsStructuredDimensionsAndV20UpdatePreservesThem() throws Exception {
+        String token=user("variant-compat-owner","PRODUCT_MATERIAL");
+        seedProductAndVariants("DIM-P");
+        String batch=mapper.readTree(upload(token,"variant-v21","VARIANTS",structuredVariantRows("DIM-SKU","DIM-P"),202)).at("/batch/id").asText();
+        commit(token,batch,"variant-v21-commit").andExpect(status().isAccepted());
+        assertThat(jdbc.queryForObject("SELECT item_length_cm FROM product_variant WHERE sku_code_normalized='DIM-SKU'",java.math.BigDecimal.class)).isEqualByComparingTo("10");
+        assertThat(jdbc.queryForObject("SELECT package_height_cm FROM product_variant WHERE sku_code_normalized='DIM-SKU'",java.math.BigDecimal.class)).isEqualByComparingTo("7");
+
+        String legacy=uploadVersion(token,"variant-v20","VARIANTS","2.0",legacyVariantRows("DIM-SKU","DIM-P"),202);
+        String legacyBatch=mapper.readTree(legacy).at("/batch/id").asText();
+        commit(token,legacyBatch,"variant-v20-commit").andExpect(status().isAccepted());
+        assertThat(jdbc.queryForObject("SELECT item_length_cm FROM product_variant WHERE sku_code_normalized='DIM-SKU'",java.math.BigDecimal.class)).isEqualByComparingTo("10");
     }
 
     @Test void lateReferenceChangeFailsWholeVariantBatchWithoutPartialWrites() throws Exception {
@@ -481,7 +496,7 @@ class ImportControllerTest {
     private byte[] variantRows(String sku,String product,String color) throws Exception {
         try(var workbook=new XSSFWorkbook(new ByteArrayInputStream(templates.bytes(ImportTypes.ImportType.VARIANTS)));
             var output=new ByteArrayOutputStream()){
-            var variant=workbook.getSheet("variants_导入模板").createRow(1);variant.createCell(0).setCellValue(sku);variant.createCell(1).setCellValue(product);variant.createCell(2).setCellValue("导入规格 "+color);variant.createCell(5).setCellValue(500);variant.createCell(6).setCellValue("ACTIVE");
+            var variant=workbook.getSheet("variants_导入模板").createRow(1);variant.createCell(0).setCellValue(sku);variant.createCell(1).setCellValue(product);variant.createCell(2).setCellValue("导入规格 "+color);variant.createCell(11).setCellValue(500);variant.createCell(12).setCellValue("ACTIVE");
             workbook.write(output);return output.toByteArray();
         }
     }
@@ -489,8 +504,28 @@ class ImportControllerTest {
         try(var workbook=new XSSFWorkbook(new ByteArrayInputStream(templates.bytes(ImportTypes.ImportType.VARIANTS)));
             var output=new ByteArrayOutputStream()){
             var sheet=workbook.getSheet("variants_导入模板");
-            var first=sheet.createRow(1);first.createCell(0).setCellValue("ATTRIBUTE-FREE-SKU-1");first.createCell(1).setCellValue(product);first.createCell(2).setCellValue("无属性 SKU 1");first.createCell(6).setCellValue("ACTIVE");
-            var second=sheet.createRow(2);second.createCell(0).setCellValue("ATTRIBUTE-FREE-SKU-2");second.createCell(1).setCellValue(product);second.createCell(2).setCellValue("无属性 SKU 2");second.createCell(6).setCellValue("DRAFT");
+            var first=sheet.createRow(1);first.createCell(0).setCellValue("ATTRIBUTE-FREE-SKU-1");first.createCell(1).setCellValue(product);first.createCell(2).setCellValue("无属性 SKU 1");first.createCell(12).setCellValue("ACTIVE");
+            var second=sheet.createRow(2);second.createCell(0).setCellValue("ATTRIBUTE-FREE-SKU-2");second.createCell(1).setCellValue(product);second.createCell(2).setCellValue("无属性 SKU 2");second.createCell(12).setCellValue("DRAFT");
+            workbook.write(output);return output.toByteArray();
+        }
+    }
+    private byte[] structuredVariantRows(String sku,String product) throws Exception {
+        try(var workbook=new XSSFWorkbook(new ByteArrayInputStream(templates.bytes(ImportTypes.ImportType.VARIANTS)));
+            var output=new ByteArrayOutputStream()){
+            var row=workbook.getSheet("variants_导入模板").createRow(1);
+            row.createCell(0).setCellValue(sku);row.createCell(1).setCellValue(product);row.createCell(2).setCellValue("结构化规格");
+            row.createCell(5).setCellValue(10);row.createCell(6).setCellValue(20);row.createCell(7).setCellValue(5);
+            row.createCell(8).setCellValue(12);row.createCell(9).setCellValue(22);row.createCell(10).setCellValue(7);
+            row.createCell(11).setCellValue(500);row.createCell(12).setCellValue("ACTIVE");
+            workbook.write(output);return output.toByteArray();
+        }
+    }
+    private byte[] legacyVariantRows(String sku,String product) throws Exception {
+        try(var workbook=new XSSFWorkbook(new ByteArrayInputStream(templates.bytes(ImportTypes.ImportType.VARIANTS,"2.0")));
+            var output=new ByteArrayOutputStream()){
+            var row=workbook.getSheet("variants_导入模板").createRow(1);
+            row.createCell(0).setCellValue(sku);row.createCell(1).setCellValue(product);row.createCell(2).setCellValue("旧模板更新");
+            row.createCell(5).setCellValue(600);row.createCell(6).setCellValue("ACTIVE");
             workbook.write(output);return output.toByteArray();
         }
     }
@@ -559,8 +594,11 @@ class ImportControllerTest {
                 .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(Map.of("previewVersion",value.get("previewVersion").asText(),"fileHash",value.get("fileHash").asText(),"warningsAccepted",true))));
     }
     private String upload(String token,String key,String type,byte[] bytes,int expectedStatus) throws Exception {
+        String version="VARIANTS".equals(type)?"2.1":"PRODUCTS".equals(type)?"2.0":"1.0";
+        return uploadVersion(token,key,type,version,bytes,expectedStatus);
+    }
+    private String uploadVersion(String token,String key,String type,String version,byte[] bytes,int expectedStatus) throws Exception {
         var file=new MockMultipartFile("file","upload.xlsx",ImportService.XLSX_MIME,bytes);
-        String version=("PRODUCTS".equals(type)||"VARIANTS".equals(type))?"2.0":"1.0";
         return mvc.perform(multipart("/api/v1/import-batches").file(file).param("importType",type).param("templateVersion",version)
                         .header("Authorization",bearer(token)).header("Idempotency-Key",key))
                 .andExpect(status().is(expectedStatus)).andReturn().getResponse().getContentAsString();

@@ -43,10 +43,10 @@ class XlsxImportValidator {
         ZipSecureFile.setMinInflateRatio(0.01d);
         ZipSecureFile.setMaxEntrySize(MAX_EXPANDED);
         try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes));
-             XSSFWorkbook expected = new XSSFWorkbook(new ByteArrayInputStream(templates.bytes(type)))) {
+             XSSFWorkbook expected = new XSSFWorkbook(new ByteArrayInputStream(templates.bytes(type, version)))) {
             verifyMetadata(workbook, type, version);
             var issues = new ArrayList<IssueInput>(); var previews = new ArrayList<PreviewInput>(); int total = 0;
-            for (String name : templates.definition(type).dataSheets()) {
+            for (String name : templates.definition(type, version).dataSheets()) {
                 Sheet sheet = workbook.getSheet(name); Sheet expectedSheet = expected.getSheet(name);
                 if (sheet == null) throw invalid("IMPORT_SHEET_MISSING", "缺少工作表：" + name);
                 List<String> headers = headers(sheet); List<String> expectedHeaders = headers(expectedSheet);

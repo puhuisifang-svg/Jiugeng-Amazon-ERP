@@ -36,6 +36,8 @@ describe('ImportsView', () => {
     await flushPromises()
     const version = wrapper.find('input[readonly]')
     expect((version.element as HTMLInputElement).value).toBe('2.0')
+    await wrapper.find('select').setValue('VARIANTS')
+    expect((version.element as HTMLInputElement).value).toBe('2.1')
     await wrapper.find('select').setValue('AUXILIARY_MATERIALS')
     expect((version.element as HTMLInputElement).value).toBe('1.0')
   })

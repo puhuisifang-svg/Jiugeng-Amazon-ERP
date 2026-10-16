@@ -7,14 +7,17 @@ import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vu
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
 
-const props = defineProps<{ initial?: ProductInput; busy?: boolean; submitLabel: string; showCancel?: boolean }>()
+const props = defineProps<{ initial?: ProductInput; busy?: boolean; submitLabel: string; showCancel?: boolean; focusVariantId?: string | undefined }>()
 const emit = defineEmits<{ submit: [value: ProductInput]; cancel: [] }>()
 const suppliers = ref<SupplierDto[]>([]); const materials = ref<MaterialDetailDto[]>([])
 const balances = ref<InventoryBalanceViewDto[]>([]); const inventoryFailed = ref(false)
 const loadingReferences = ref(false); const imageError = ref(''); const uploading = ref<number | null>(null)
+const activeTabs = ref<Record<number, 'basic' | 'purchase' | 'specs' | 'materials' | 'image'>>({})
+function activeTab(index: number) { return activeTabs.value[index] ?? 'basic' }
+function setTab(index: number, value: 'basic' | 'purchase' | 'specs' | 'materials' | 'image') { activeTabs.value[index] = value }
 const supplierAccess = computed(() => session.canAccess(['suppliers.read']))
-function blankVariant(): ProductVariantInput { return { skuCode: '', variantName: '', status: 'ACTIVE', suppliers: [], materials: [] } }
-const model = reactive<ProductInput>(structuredClone(props.initial ?? { productCode: '', productName: '', status: 'ACTIVE', variants: [blankVariant()] }))
+function blankVariant(): ProductVariantInput { return { skuCode: '', variantName: '', status: 'DRAFT', suppliers: [], materials: [] } }
+const model = reactive<ProductInput>(structuredClone(props.initial ?? { productCode: '', productName: '', status: 'DRAFT', variants: [blankVariant()] }))
 function addVariant() { model.variants.push(blankVariant()) }
 function removeVariant(index: number) { if (model.variants.length > 1) model.variants.splice(index, 1) }
 function supplierName(id: string) { return suppliers.value.find(item => item.id === id)?.name ?? id }
@@ -68,6 +71,7 @@ onMounted(loadReferences)
       </p>
       <section
         v-for="(variant, variantIndex) in model.variants"
+        v-show="!focusVariantId || (focusVariantId === '__NEW__' ? !variant.id : variant.id === focusVariantId)"
         :key="variant.id ?? variantIndex"
         class="panel compact-panel variant-editor"
       >
@@ -81,8 +85,52 @@ onMounted(loadReferences)
             移除 SKU
           </button>
         </div>
+        <nav
+          class="product-editor-tabs"
+          :aria-label="`SKU ${variantIndex + 1} 资料页签`"
+        >
+          <button
+            type="button"
+            :class="{ active: activeTab(variantIndex) === 'basic' }"
+            @click="setTab(variantIndex, 'basic')"
+          >
+            基础信息
+          </button>
+          <button
+            v-if="supplierAccess"
+            type="button"
+            :class="{ active: activeTab(variantIndex) === 'purchase' }"
+            @click="setTab(variantIndex, 'purchase')"
+          >
+            采购信息
+          </button>
+          <button
+            type="button"
+            :class="{ active: activeTab(variantIndex) === 'specs' }"
+            @click="setTab(variantIndex, 'specs')"
+          >
+            规格信息
+          </button>
+          <button
+            type="button"
+            :class="{ active: activeTab(variantIndex) === 'materials' }"
+            @click="setTab(variantIndex, 'materials')"
+          >
+            关联辅料
+          </button>
+          <button
+            type="button"
+            :class="{ active: activeTab(variantIndex) === 'image' }"
+            @click="setTab(variantIndex, 'image')"
+          >
+            图片管理
+          </button>
+        </nav>
         <div class="sku-editor-grid">
-          <div class="catalog-image-editor sku-image-editor">
+          <div
+            v-show="activeTab(variantIndex) === 'image'"
+            class="catalog-image-editor sku-image-editor product-tab-panel product-tab-panel--wide"
+          >
             <AuthenticatedCatalogImage
               v-if="variant.imageAssetId"
               :image-id="variant.imageAssetId"
@@ -124,7 +172,10 @@ onMounted(loadReferences)
               移除图片
             </button>
           </div>
-          <div class="operation-form nested-form">
+          <div
+            v-show="activeTab(variantIndex) === 'basic'"
+            class="operation-form nested-form product-tab-panel--wide"
+          >
             <label>SKU 编码<input
               v-model="variant.skuCode"
               required
@@ -135,13 +186,55 @@ onMounted(loadReferences)
               required
               maxlength="128"
             ></label>
-            <label>产品尺寸<input
-              v-model="variant.itemDimensions"
-              maxlength="200"
+            <label>状态<select v-model="variant.status"><option value="ACTIVE">启用</option><option value="DRAFT">待定</option><option value="DISABLED">停用</option></select></label>
+          </div>
+          <section
+            v-show="activeTab(variantIndex) === 'specs'"
+            class="operation-form nested-form structured-dimensions product-tab-panel--wide"
+          >
+            <h3>产品规格（cm）</h3><span />
+            <label>长<input
+              v-model.number="variant.itemLengthCm"
+              type="number"
+              min="0.001"
+              max="999999.999"
+              step="0.001"
             ></label>
-            <label>包装尺寸<input
-              v-model="variant.packageDimensions"
-              maxlength="200"
+            <label>宽<input
+              v-model.number="variant.itemWidthCm"
+              type="number"
+              min="0.001"
+              max="999999.999"
+              step="0.001"
+            ></label>
+            <label>高<input
+              v-model.number="variant.itemHeightCm"
+              type="number"
+              min="0.001"
+              max="999999.999"
+              step="0.001"
+            ></label><span />
+            <h3>包装规格（cm）</h3><span />
+            <label>包装长<input
+              v-model.number="variant.packageLengthCm"
+              type="number"
+              min="0.001"
+              max="999999.999"
+              step="0.001"
+            ></label>
+            <label>包装宽<input
+              v-model.number="variant.packageWidthCm"
+              type="number"
+              min="0.001"
+              max="999999.999"
+              step="0.001"
+            ></label>
+            <label>包装高<input
+              v-model.number="variant.packageHeightCm"
+              type="number"
+              min="0.001"
+              max="999999.999"
+              step="0.001"
             ></label>
             <label>包装重量（克）<input
               v-model.number="variant.packageWeightGrams"
@@ -150,12 +243,18 @@ onMounted(loadReferences)
               max="999999999.999"
               step="0.001"
             ></label>
-            <label>状态<select v-model="variant.status"><option value="ACTIVE">启用</option><option value="DRAFT">待定</option><option value="DISABLED">停用</option></select></label>
-          </div>
+            <p
+              v-if="variant.itemDimensions || variant.packageDimensions"
+              class="legacy-dimensions"
+            >
+              旧规格（只读）：{{ variant.itemDimensions || '—' }} / {{ variant.packageDimensions || '—' }}
+            </p>
+          </section>
         </div>
         <section
           v-if="supplierAccess"
-          class="relation-editor"
+          v-show="activeTab(variantIndex) === 'purchase'"
+          class="relation-editor product-tab-panel"
         >
           <h3>关联供应商</h3>
           <p>
@@ -210,7 +309,10 @@ onMounted(loadReferences)
             </button>
           </div>
         </section>
-        <section class="relation-editor">
+        <section
+          v-show="activeTab(variantIndex) === 'materials'"
+          class="relation-editor product-tab-panel"
+        >
           <h3>关联辅料</h3>
           <select
             aria-label="添加辅料"

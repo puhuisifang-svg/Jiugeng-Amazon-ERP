@@ -37,13 +37,13 @@ describe('importsApi', () => {
     expect(result.batch.id).toBe('b1')
   })
 
-  it('uses catalog 2.0 and keeps the other three template versions at 1.0', () => {
+  it('uses product 2.0 and variant 2.1 while keeping the other templates at 1.0', () => {
     expect(importTemplateVersions).toEqual({
-      PRODUCTS: '2.0', VARIANTS: '2.0', AUXILIARY_MATERIALS: '1.0',
+      PRODUCTS: '2.0', VARIANTS: '2.1', AUXILIARY_MATERIALS: '1.0',
       PRODUCT_AUXILIARY_MATERIALS: '1.0', AUXILIARY_MATERIAL_OPENING_INVENTORY: '1.0',
     })
     expect(importTemplateFileNames).toEqual({
-      PRODUCTS: '01_products_v2.0.xlsx', VARIANTS: '02_variants_v2.0.xlsx',
+      PRODUCTS: '01_products_v2.0.xlsx', VARIANTS: '02_variants_v2.1.xlsx',
       AUXILIARY_MATERIALS: '04_auxiliary_materials_v1.0.xlsx',
       PRODUCT_AUXILIARY_MATERIALS: '05_sku_auxiliary_materials_v1.0.xlsx',
       AUXILIARY_MATERIAL_OPENING_INVENTORY: '06_initial_inventory_v1.0.xlsx',
@@ -97,7 +97,7 @@ describe('importsApi', () => {
 
     await importsApi.downloadTemplate('VARIANTS')
 
-    expect(downloaded).toBe('02_variants_v2.0.xlsx')
+    expect(downloaded).toBe('02_variants_v2.1.xlsx')
     click.mockRestore()
   })
 })

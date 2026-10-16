@@ -10,10 +10,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jiugeng.erp.iam.AuthenticatedActor;
+import java.io.ByteArrayInputStream;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -219,6 +222,94 @@ class ProductControllerTest {
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM product WHERE product_code_normalized='PROD-ROLLBACK'", Integer.class))
                 .isZero();
+    }
+
+    @Test
+    void skuListFiltersStructuredDimensionsAndBatchUpdateAreSupported() throws Exception {
+        String token = createUserAndLogin("sku-list-owner", "PRODUCT_MATERIAL");
+        Map<String, Object> input = product("PROD-SKU-LIST", "收纳产品", "SKU-LIST-001", "蓝色");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> variant = (Map<String, Object>) ((List<?>) input.get("variants")).getFirst();
+        variant.put("itemLengthCm", "12.500");
+        variant.put("itemWidthCm", "8.000");
+        variant.put("itemHeightCm", "3.250");
+        String body = mvc.perform(post("/api/v1/products").header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(input)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.variants[0].itemLengthCm").value(12.5))
+                .andReturn().getResponse().getContentAsString();
+        JsonNode created = objectMapper.readTree(body);
+
+        mvc.perform(get("/api/v1/products/skus").header("Authorization", bearer(token))
+                        .param("field", "SKU").param("q", "SKU-LIST-001").param("status", "DRAFT")
+                        .param("page", "0").param("size", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount").value(1))
+                .andExpect(jsonPath("$.items[0].variant.skuCode").value("SKU-LIST-001"))
+                .andExpect(jsonPath("$.items[0].businessAvailable").value(false));
+
+        Map<String, Object> patch = new java.util.LinkedHashMap<>();
+        patch.put("productId", created.get("id").asText());
+        patch.put("variantId", created.at("/variants/0/id").asText());
+        patch.put("productVersion", created.get("version").asLong());
+        patch.put("variantVersion", created.at("/variants/0/version").asLong());
+        patch.put("statusSelected", true);
+        patch.put("status", "ACTIVE");
+        patch.put("itemDimensionsSelected", false);
+        patch.put("packageDimensionsSelected", true);
+        patch.put("packageLengthCm", "20.000");
+        patch.put("packageWidthCm", "10.000");
+        patch.put("packageHeightCm", "4.000");
+        patch.put("packageWeightSelected", true);
+        patch.put("packageWeightGrams", "250.500");
+        mvc.perform(post("/api/v1/products/skus/batch").header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("items", List.of(patch)))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].variants[0].status").value("ACTIVE"))
+                .andExpect(jsonPath("$[0].variants[0].packageLengthCm").value(20.0))
+                .andExpect(jsonPath("$[0].variants[0].packageWeightGrams").value(250.5));
+
+        byte[] export = mvc.perform(get("/api/v1/products/skus/export").header("Authorization", bearer(token))
+                        .param("field", "SKU").param("q", "SKU-LIST-001"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+        try (var workbook = new XSSFWorkbook(new ByteArrayInputStream(export))) {
+            assertThat(workbook.getSheet("产品SKU").getRow(1).getCell(0).getStringCellValue())
+                    .isEqualTo("SKU-LIST-001");
+            assertThat(workbook.getSheet("产品SKU").getRow(1).getCell(12).getNumericCellValue())
+                    .isEqualTo(4.0);
+        }
+        mvc.perform(get("/api/v1/products/{id}/history", created.get("id").asText())
+                        .header("Authorization", bearer(token)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].action").exists());
+    }
+
+    @Test
+    void batchUpdateRejectsPartialDimensionsAndRollsBack() throws Exception {
+        String token = createUserAndLogin("sku-batch-owner", "PRODUCT_MATERIAL");
+        String body = mvc.perform(post("/api/v1/products").header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(product("PROD-BATCH", "批量产品", "SKU-BATCH", "标准"))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        JsonNode created = objectMapper.readTree(body);
+        Map<String, Object> patch = new java.util.LinkedHashMap<>();
+        patch.put("productId", created.get("id").asText());
+        patch.put("variantId", created.at("/variants/0/id").asText());
+        patch.put("productVersion", created.get("version").asLong());
+        patch.put("variantVersion", created.at("/variants/0/version").asLong());
+        patch.put("statusSelected", false);
+        patch.put("itemDimensionsSelected", true);
+        patch.put("itemLengthCm", "5.000");
+        patch.put("packageDimensionsSelected", false);
+        patch.put("packageWeightSelected", false);
+        mvc.perform(post("/api/v1/products/skus/batch").header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("items", List.of(patch)))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PRODUCT_FIELD_INVALID"));
+        assertThat(jdbc.queryForObject(
+                "SELECT item_length_cm FROM product_variant WHERE sku_code='SKU-BATCH'", BigDecimal.class))
+                .isNull();
     }
 
     private String createUserAndLogin(String loginName, String role) throws Exception {

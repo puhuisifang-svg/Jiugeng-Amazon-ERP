@@ -58,6 +58,8 @@
 
 ## 店铺边界
 
+ERP-030 独立产品监控：ADMIN、PRODUCT_MATERIAL、SELECTION 均可读写共享目标和观测；仅要求有效登录，不使用 watch.read/watch.write 岗位限制。个人关注及列配置按会话用户隔离。该模块不新增人员操作日志或修改人历史，其他模块既有审计不变。未登录和失效会话拒绝访问。
+
 - DEC-012 已将公司 `StoreAccount`、`StoreListing` 和五店 Listing 映射移出当前 MVP。
 - 当前不提供 `/system/stores`、StoreAccount/StoreListing API，也不定义 `listings.read`、`listings.write` 或 `stores.write`。
 - `WatchStore` 仅表示一个公开上新监控目标，通过 `watch.read` / `watch.write` 控制；它不保存公司店铺账号、Seller ID 或凭据。

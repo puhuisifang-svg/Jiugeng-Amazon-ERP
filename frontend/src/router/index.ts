@@ -27,6 +27,8 @@ export const appRoutes: RouteRecordRaw[] = [
     component: AdminLayout,
     redirect: '/home',
     children: [
+      { path: 'product-monitoring', name: 'product-monitoring', component: () => import('@/views/ProductMonitoringView.vue'), meta: { title: '产品监控', group: '产品监控', icon: '◎' } },
+      { path: 'product-monitoring/:id', name: 'product-monitoring-detail', component: () => import('@/views/ProductMonitoringView.vue'), meta: { title: '监控详情', hidden: true, parentPath: '/product-monitoring' } },
       { path: 'home', name: 'home', component: () => import('@/views/DashboardView.vue'), meta: { title: '首页', group: '工作台', icon: '⌂', capabilities: ['dashboard.read'] } },
       { path: 'dashboard-maintenance/today-shipments', name: 'dashboard-today-shipments', component: () => import('@/views/DashboardMaintenanceView.vue'), props: { kind: 'today-shipments' }, meta: { title: '今日发货管理', group: '工作台维护', icon: '今', capabilities: ['dashboard.shipments.manage'] } },
       { path: 'dashboard-maintenance/pending-shipments', name: 'dashboard-pending-shipments', component: () => import('@/views/DashboardMaintenanceView.vue'), props: { kind: 'pending-shipments' }, meta: { title: '待发货管理', group: '工作台维护', icon: '待', capabilities: ['dashboard.shipments.manage'] } },

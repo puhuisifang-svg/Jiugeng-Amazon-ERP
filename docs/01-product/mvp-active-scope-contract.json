@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://jiugeng.example/contracts/mvp-active-scope-v1.json",
-  "contractVersion": "1.2",
+  "contractVersion": "1.3",
   "decision": "DEC-012",
   "status": "APPROVED",
   "roles": ["ADMIN", "PRODUCT_MATERIAL", "SELECTION"],
@@ -12,7 +12,8 @@
     "selection": ["SelectionCandidate", "CandidateNote", "CandidateEvidence"],
     "watch": ["WatchStore", "CollectorRun", "StoreSnapshot", "StoreSnapshotItem", "NewListingEvent"],
     "importExport": ["ImportBatch", "ImportIssue", "ImportPreview", "ImportResultFile"],
-    "purchase": ["PurchaseOrder", "PurchaseOrderLine", "PurchaseReceipt", "PurchaseReceiptLine"]
+    "purchase": ["PurchaseOrder", "PurchaseOrderLine", "PurchaseReceipt", "PurchaseReceiptLine"],
+    "monitoring": ["MonitorTarget", "MonitorSnapshot", "MonitorPreference"]
   },
   "importTypes": [
     {"id": "PRODUCTS", "resource": "products", "templateVersion": "2.0", "dependsOn": []},
@@ -37,7 +38,8 @@
     "/api/v1/dashboard-images",
     "/api/v1/suppliers",
     "/api/v1/catalog-images",
-    "/api/v1/purchases"
+    "/api/v1/purchases",
+    "/api/v1/product-monitoring"
   ],
   "capabilities": [
     "system.users.manage",
@@ -94,6 +96,8 @@
   },
   "historicalContracts": ["DEL-017", "DEL-025"],
   "invariants": [
+    "ERP-030 monitoring is independent, authenticated for all roles, without personnel operation audit",
+    "ERP-030 P0 observations are MANUAL or SYNTHETIC; no automatic collection",
     "WatchStore is a public monitoring target and is not StoreAccount",
     "NewListingEvent does not authorize StoreListing mapping",
     "historical six-type import contracts are audit evidence rather than the current implementation scope",

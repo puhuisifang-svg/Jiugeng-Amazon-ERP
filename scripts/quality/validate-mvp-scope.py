@@ -35,7 +35,7 @@ capabilities = contract["capabilities"]
 api_resources = contract["apiResourceFamilies"]
 excluded = contract["excludedCurrentMvp"]
 
-require(contract["contractVersion"] == "1.2", "active contract must be ERP-029 scope version 1.2")
+require(contract["contractVersion"] == "1.3", "active contract must be ERP-030 scope version 1.3")
 require(contract["decision"] == "DEC-012", "active contract must cite DEC-012")
 require(set(import_types) == EXPECTED_IMPORT_TYPES, "active import types must be the five approved types")
 require(len(import_types) == len(set(import_types)), "import types must be unique")
@@ -49,7 +49,9 @@ require(len(capabilities) == len(set(capabilities)), "capabilities must be uniqu
 require(FORBIDDEN_CAPABILITIES.isdisjoint(capabilities), "Listing/store capabilities must be absent")
 require(FORBIDDEN_CAPABILITIES.issubset(set(excluded["capabilities"])), "excluded capabilities must be explicit")
 
-require(len(api_resources) == 16, "active API resource family count must be 16")
+require(len(api_resources) == 17, "active API resource family count must be 17")
+require("/api/v1/product-monitoring" in api_resources, "independent product monitoring API must be active")
+require("monitoring" in contract["domains"], "independent monitoring domain must be active")
 require(len(api_resources) == len(set(api_resources)), "API resource families must be unique")
 require(FORBIDDEN_API_RESOURCES.isdisjoint(api_resources), "StoreAccount/StoreListing APIs must be absent")
 
@@ -73,4 +75,4 @@ require(set(contract["roleCapabilities"]["SELECTION"]).isdisjoint({"suppliers.re
 require({"purchases.read", "purchases.write", "purchases.receive"}.issubset(capabilities), "purchase capabilities must be active")
 require("/api/v1/purchases" in api_resources, "purchase API family must be active")
 require(set(contract["roleCapabilities"]["SELECTION"]).isdisjoint({"purchases.read", "purchases.write", "purchases.receive"}), "SELECTION must not receive purchase access")
-print("PASS: 5 import types, 27 capabilities, 3 role mappings, 16 API resource families")
+print("PASS: 5 import types, 27 capabilities, 3 role mappings, 17 API resource families")

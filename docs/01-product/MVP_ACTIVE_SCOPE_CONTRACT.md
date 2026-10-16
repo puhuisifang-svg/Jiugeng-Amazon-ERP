@@ -12,6 +12,8 @@
 
 ## 1. 目的与优先级
 
+ERP-030 用户于 2026-10-16 授权独立产品监控：新增 monitoring 领域和 `/api/v1/product-monitoring`，所有有效登录用户均可操作，不依赖岗位 capability，不建设人员操作追溯；保留商品观测历史。首期仅美国站人工/合成观测，真实自动采集后置。此范围不改变现有 Watch 店铺上新边界。实施基线见 [ERP-030 PRD](../../deliverables/pjm/ERP-030_PRODUCT_MONITORING_PRD.md)。
+
 本文件是 DEC-012 后当前 MVP 实施、测试和验收的范围覆盖层。出现范围冲突时，按以下顺序解释：
 
 1. DEC-012 及其后批准的范围变更；

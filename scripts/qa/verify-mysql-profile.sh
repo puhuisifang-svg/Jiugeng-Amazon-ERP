@@ -129,6 +129,10 @@ query_scalar() {
 wait_for_mysql
 start_backend
 
+ERP_BACKEND_URL="http://127.0.0.1:$backend_port" ERP_TEST_MYSQL_CONTAINER="$mysql_container" \
+  ERP_TEST_MYSQL_DATABASE=jiugeng_erp_verify ERP_TEST_MYSQL_CONFIG="$work_dir/mysql-client.cnf" \
+  ERP_MONITOR_STATE="$work_dir/monitor-state.json" node "$repo_root/scripts/qa/verify-monitoring-http.mjs"
+
 baseline_count=$(query_scalar "SELECT COUNT(*) FROM schema_baseline WHERE module_name='modular-monolith' AND baseline_version='sprint-0'")
 [ "$baseline_count" = "1" ]
 
@@ -192,6 +196,10 @@ watch_probe_count=$(query_scalar "SELECT COUNT(*) FROM watch_store s JOIN watch_
 [ "$watch_probe_count" = "1" ]
 purchase_probe_count=$(query_scalar "SELECT COUNT(*) FROM purchase_order o JOIN purchase_order_line l ON l.order_id=o.id JOIN purchase_receipt r ON r.order_id=o.id JOIN purchase_receipt_line rl ON rl.receipt_id=r.id WHERE o.order_no='PO-ERP-029-PROBE' AND o.status='PARTIALLY_RECEIVED' AND o.version=2 AND l.received_quantity=4.0000 AND r.request_id='ERP-029-RECEIPT-PROBE' AND rl.quantity=4.0000")
 [ "$purchase_probe_count" = "1" ]
+
+ERP_BACKEND_URL="http://127.0.0.1:$backend_port" ERP_TEST_MYSQL_CONTAINER="$mysql_container" \
+  ERP_TEST_MYSQL_DATABASE=jiugeng_erp_verify ERP_TEST_MYSQL_CONFIG="$work_dir/mysql-client.cnf" \
+  ERP_MONITOR_STATE="$work_dir/monitor-state.json" node "$repo_root/scripts/qa/verify-monitoring-http.mjs" --verify-restart
 
 ERP_BACKEND_URL="http://127.0.0.1:$backend_port" "$repo_root/scripts/dev/smoke-local-mysql-backend.sh"
 

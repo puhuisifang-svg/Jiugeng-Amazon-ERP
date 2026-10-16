@@ -29,6 +29,11 @@ async function setup(path = '/home', allowed = ref<string[] | null>(null)) {
 }
 
 describe('horizontal navigation shell', () => {
+  it('exposes independent product monitoring even without role capabilities', async () => {
+    const { wrapper } = await setup('/product-monitoring', ref([]))
+    await wrapper.get('[data-domain="产品监控"]').trigger('click')
+    expect(wrapper.get('.mega-panel a[href="/product-monitoring"]').text()).toBe('产品监控')
+  })
   it('navigates to the home page from the brand', async () => {
     const { wrapper, router } = await setup('/products')
 

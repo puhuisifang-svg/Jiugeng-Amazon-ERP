@@ -13,4 +13,12 @@ describe('purchaseApi', () => {
     expect(fetchMock.mock.calls[1]?.[0]).toContain('/v1/purchases/orders/po-1/receipts')
     expect((fetchMock.mock.calls[0]?.[1]?.headers as Headers).get('Authorization')).toBe('Bearer token')
   })
+  it('loads supplier-scoped references and order detail', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    await purchaseApi.references('PRODUCT', 'supplier 1')
+    await purchaseApi.detail('po-1')
+    expect(fetchMock.mock.calls[0]?.[0]).toContain('/v1/purchases/references?orderType=PRODUCT&supplierId=supplier%201')
+    expect(fetchMock.mock.calls[1]?.[0]).toContain('/v1/purchases/orders/po-1/detail')
+  })
 })

@@ -23,6 +23,7 @@ vi.mock('@/api/purchases', () => ({
     submit: vi.fn(),
     cancel: vi.fn(),
     receive: vi.fn(),
+    references: vi.fn(),
   },
 }))
 
@@ -37,6 +38,7 @@ function prepare() {
   vi.mocked(purchaseApi.orders).mockResolvedValue([order])
   vi.mocked(purchaseApi.receipts).mockResolvedValue([])
   vi.mocked(purchaseApi.dashboard).mockResolvedValue({ draft: 1, pendingReceipt: 2, partial: 3, completed: 4, recent: [order] })
+  vi.mocked(purchaseApi.references).mockResolvedValue([])
   vi.mocked(domainApi.suppliers).mockResolvedValue({ items: [], page: 0, size: 100, totalCount: 0 })
   vi.mocked(domainApi.skus).mockResolvedValue({ items: [], page: 0, size: 100, totalCount: 0 })
   vi.mocked(domainApi.materials).mockResolvedValue({ items: [], mockData: false })
@@ -48,7 +50,7 @@ describe('PurchasesView', () => {
   it('renders the dashboard counts and recent purchase orders', async () => {
     prepare()
     vi.spyOn(session, 'canAccess').mockReturnValue(true)
-    const wrapper = mount(PurchasesView, { props: { mode: 'dashboard' } })
+    const wrapper = mount(PurchasesView, { props: { mode: 'dashboard' }, global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } } })
     await flushPromises()
 
     expect(wrapper.get('[aria-label="采购统计"]').text()).toContain('1草稿')
@@ -60,7 +62,7 @@ describe('PurchasesView', () => {
   it('keeps write and receipt actions hidden without their capabilities', async () => {
     prepare()
     vi.spyOn(session, 'canAccess').mockReturnValue(false)
-    const wrapper = mount(PurchasesView, { props: { mode: 'orders' } })
+    const wrapper = mount(PurchasesView, { props: { mode: 'orders' }, global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } } })
     await flushPromises()
 
     expect(wrapper.text()).toContain('PO-20261016-ABC123')

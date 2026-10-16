@@ -38,6 +38,7 @@ export const appRoutes: RouteRecordRaw[] = [
       { path: 'suppliers', name: 'suppliers', component: () => import('@/views/SuppliersView.vue'), meta: { title: '供应商管理', group: '产品管理', icon: '供', capabilities: ['suppliers.read'] } },
       { path: 'purchases', name: 'purchase-dashboard', component: () => import('@/views/PurchasesView.vue'), props: { mode: 'dashboard' }, meta: { title: '采购看板', group: '采购管理', icon: '购', capabilities: ['purchases.read'] } },
       { path: 'purchases/orders', name: 'purchase-orders', component: () => import('@/views/PurchasesView.vue'), props: { mode: 'orders' }, meta: { title: '采购单', group: '采购管理', icon: '单', capabilities: ['purchases.read'] } },
+      { path: 'purchases/orders/:orderId', name: 'purchase-order-detail', component: () => import('@/views/PurchaseOrderDetailView.vue'), meta: { title: '采购单详情', hidden: true, parentPath: '/purchases/orders', capabilities: ['purchases.read'] } },
       { path: 'purchases/receipts', name: 'purchase-receipts', component: () => import('@/views/PurchasesView.vue'), props: { mode: 'receipts' }, meta: { title: '收货记录', group: '采购管理', icon: '收', capabilities: ['purchases.read'] } },
       { path: 'inventory', redirect: '/inventory/balances', meta: { title: '辅料库存', hidden: true, capabilities: ['inventory.read'] } },
       { path: 'inventory/balances', name: 'inventory-balances', redirect: '/materials', meta: { title: '辅料库存', hidden: true, capabilities: ['inventory.read'] } },

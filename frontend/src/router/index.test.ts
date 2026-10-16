@@ -62,7 +62,7 @@ describe('application routes', () => {
   it('protects all purchase workspaces and keeps selection users out', () => {
     const shell = appRoutes.find((route) => route.path === '/')
     const purchases = shell?.children?.filter((route) => String(route.path).startsWith('purchases')) ?? []
-    expect(purchases).toHaveLength(3)
+    expect(purchases).toHaveLength(4)
     expect(purchases.every((route) => route.meta?.capabilities?.includes('purchases.read'))).toBe(true)
     expect(capabilitiesForRole('ADMIN')).toEqual(expect.arrayContaining(['purchases.read', 'purchases.write', 'purchases.receive']))
     expect(capabilitiesForRole('PRODUCT_MATERIAL')).toEqual(expect.arrayContaining(['purchases.read', 'purchases.write', 'purchases.receive']))

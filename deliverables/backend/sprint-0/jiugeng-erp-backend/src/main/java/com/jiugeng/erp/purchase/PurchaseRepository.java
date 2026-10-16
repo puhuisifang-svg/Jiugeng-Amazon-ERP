@@ -22,18 +22,43 @@ class PurchaseRepository {
                 .orElseThrow(() -> new PurchaseException(409, "ACTIVE_SUPPLIER_REQUIRED", "采购单必须选择启用供应商"));
     }
 
-    ItemRef activeItem(OrderType type, String id) {
+    ItemRef activeItem(OrderType type, String supplierId, String id) {
         String sql = type == OrderType.PRODUCT ? """
                 SELECT v.id, v.sku_code AS code, v.variant_name AS name, '套' AS unit
                 FROM product_variant v JOIN product p ON p.id=v.product_id
-                WHERE v.id=:id AND v.status<>'DISABLED' AND p.status<>'DISABLED'
+                JOIN product_variant_supplier link ON link.variant_id=v.id AND link.supplier_id=:supplierId
+                WHERE v.id=:id AND v.status='ACTIVE' AND p.status='ACTIVE'
                 """ : """
-                SELECT id, material_code AS code, name, unit FROM auxiliary_material
-                WHERE id=:id AND status='ACTIVE'
+                SELECT m.id, m.material_code AS code, m.name, m.unit FROM auxiliary_material m
+                JOIN auxiliary_material_supplier link ON link.auxiliary_material_id=m.id AND link.supplier_id=:supplierId
+                WHERE m.id=:id AND m.status='ACTIVE'
                 """;
-        return jdbc.sql(sql).param("id", id).query((rs, row) -> new ItemRef(rs.getString("id"),
+        return jdbc.sql(sql).param("id", id).param("supplierId", supplierId).query((rs, row) -> new ItemRef(rs.getString("id"),
                 rs.getString("code"), rs.getString("name"), rs.getString("unit"))).optional()
-                .orElseThrow(() -> new PurchaseException(409, "ACTIVE_PURCHASE_ITEM_REQUIRED", "采购明细只能引用可用商品或辅料"));
+                .orElseThrow(() -> new PurchaseException(409, "SUPPLIER_ITEM_LINK_REQUIRED", "该供应商未关联所选商品或辅料"));
+    }
+
+    List<ReferenceItem> referenceItems(OrderType type, String supplierId) {
+        activeSupplier(supplierId);
+        String sql = type == OrderType.PRODUCT ? """
+                SELECT v.id,v.sku_code AS code,v.variant_name AS name,'套' AS unit,
+                       CASE WHEN link.primary_slot='PRIMARY' THEN TRUE ELSE FALSE END AS primary_supplier
+                FROM product_variant_supplier link
+                JOIN product_variant v ON v.id=link.variant_id
+                JOIN product p ON p.id=v.product_id
+                WHERE link.supplier_id=:supplierId AND v.status='ACTIVE' AND p.status='ACTIVE'
+                ORDER BY primary_supplier DESC,v.sku_code
+                """ : """
+                SELECT m.id,m.material_code AS code,m.name,m.unit,
+                       CASE WHEN link.primary_slot='PRIMARY' THEN TRUE ELSE FALSE END AS primary_supplier
+                FROM auxiliary_material_supplier link
+                JOIN auxiliary_material m ON m.id=link.auxiliary_material_id
+                WHERE link.supplier_id=:supplierId AND m.status='ACTIVE'
+                ORDER BY primary_supplier DESC,m.material_code
+                """;
+        return jdbc.sql(sql).param("supplierId", supplierId).query((rs, row) -> new ReferenceItem(
+                rs.getString("id"), rs.getString("code"), rs.getString("name"), rs.getString("unit"),
+                rs.getBoolean("primary_supplier"))).list();
     }
 
     boolean orderNoExists(String orderNo) {

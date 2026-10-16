@@ -3,6 +3,7 @@ package com.jiugeng.erp.purchase;
 import static com.jiugeng.erp.purchase.PurchaseTypes.*;
 
 import com.jiugeng.erp.iam.AuditTrail;
+import com.jiugeng.erp.iam.AuditHistoryLookup;
 import com.jiugeng.erp.iam.AuthenticatedActor;
 import com.jiugeng.erp.materialinventory.InventoryInboundGateway;
 import java.math.BigDecimal;
@@ -32,15 +33,27 @@ class PurchaseService {
     private final PurchaseRepository repository;
     private final InventoryInboundGateway inventory;
     private final AuditTrail audit;
+    private final AuditHistoryLookup history;
 
-    PurchaseService(PurchaseRepository repository, InventoryInboundGateway inventory, AuditTrail audit) {
-        this.repository = repository; this.inventory = inventory; this.audit = audit;
+    PurchaseService(PurchaseRepository repository, InventoryInboundGateway inventory, AuditTrail audit,
+            AuditHistoryLookup history) {
+        this.repository = repository; this.inventory = inventory; this.audit = audit; this.history = history;
     }
 
     @Transactional(readOnly = true)
     List<OrderView> orders(Status status) { return repository.list(status); }
     @Transactional(readOnly = true)
     OrderView order(String id) { return repository.find(id, false).orElseThrow(() -> missing(id)); }
+    @Transactional(readOnly = true)
+    OrderDetail detail(String id) {
+        OrderView value = order(id);
+        return new OrderDetail(value, repository.receipts(id), history.find("PURCHASE", id));
+    }
+    @Transactional(readOnly = true)
+    List<ReferenceItem> references(OrderType type, String supplierId) {
+        if (type == null) throw invalid("采购类型不能为空");
+        return repository.referenceItems(type, required(supplierId, "供应商", 36));
+    }
     @Transactional(readOnly = true)
     List<ReceiptView> receipts(String orderId) { return repository.receipts(orderId); }
     @Transactional(readOnly = true)
@@ -133,7 +146,7 @@ class PurchaseService {
         boolean complete = repository.lines(orderId).stream().allMatch(line -> line.remainingQuantity().signum() == 0);
         repository.setReceiptStatus(orderId, complete ? Status.COMPLETED : Status.PARTIALLY_RECEIVED, actor.userId());
         ReceiptView receipt = repository.receipt(receiptId, false);
-        audit(actor,"PURCHASE_RECEIPT_CREATE",receiptId,null,Map.of("orderId",orderId,"requestId",input.requestId(),
+        audit(actor,"PURCHASE_RECEIPT_CREATE",orderId,null,Map.of("receiptId",receiptId,"orderId",orderId,"requestId",input.requestId(),
                 "lineCount",input.lines().size(),"completed",complete));
         return receipt;
     }
@@ -154,7 +167,7 @@ class PurchaseService {
             if (line == null) throw invalid("采购明细不能为空");
             String itemId = required(line.itemId(), "采购对象", 36);
             if (!items.add(itemId)) throw invalid("同一采购对象不可重复");
-            PurchaseRepository.ItemRef item = repository.activeItem(raw.orderType(), itemId);
+            PurchaseRepository.ItemRef item = repository.activeItem(raw.orderType(), supplierId, itemId);
             lines.add(new PurchaseRepository.ResolvedLine(UUID.randomUUID().toString(), number++, item,
                     positive(line.quantity(), "采购数量"), nonNegative(line.unitPrice(), "采购单价")));
         }

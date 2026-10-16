@@ -18,6 +18,9 @@ class PurchaseController {
     @GetMapping("/dashboard") @PreAuthorize("hasAuthority('purchases.read')") Dashboard dashboard(){return service.dashboard();}
     @GetMapping("/orders") @PreAuthorize("hasAuthority('purchases.read')") List<OrderView> orders(@RequestParam(required=false)Status status){return service.orders(status);}
     @GetMapping("/orders/{id}") @PreAuthorize("hasAuthority('purchases.read')") OrderView order(@PathVariable String id){return service.order(id);}
+    @GetMapping("/orders/{id}/detail") @PreAuthorize("hasAuthority('purchases.read')") OrderDetail detail(@PathVariable String id){return service.detail(id);}
+    @GetMapping("/references") @PreAuthorize("hasAuthority('purchases.write')") List<ReferenceItem> references(
+            @RequestParam OrderType orderType,@RequestParam String supplierId){return service.references(orderType,supplierId);}
     @PostMapping("/orders") @PreAuthorize("hasAuthority('purchases.write')") OrderView create(@RequestBody OrderRequest request,@AuthenticationPrincipal AuthenticatedActor actor){return service.create(request.input(),actor);}
     @PutMapping("/orders/{id}") @PreAuthorize("hasAuthority('purchases.write')") OrderView update(@PathVariable String id,@RequestBody OrderRequest request,@AuthenticationPrincipal AuthenticatedActor actor){return service.update(id,request.input(),actor);}
     @PostMapping("/orders/{id}/submit") @PreAuthorize("hasAuthority('purchases.write')") OrderView submit(@PathVariable String id,@RequestBody VersionRequest request,@AuthenticationPrincipal AuthenticatedActor actor){return service.submit(id,request.version(),actor);}

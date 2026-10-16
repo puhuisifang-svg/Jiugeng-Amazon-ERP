@@ -40,6 +40,8 @@ class PurchaseControllerTest {
         String productCode="PUR-PROD-"+suffix,skuCode="PUR-SKU-"+suffix;
         jdbc.update("INSERT INTO product(id,product_code,product_code_normalized,name_zh,status,created_by,updated_by) VALUES(?,?,?,?, 'ACTIVE','test','test')",productId,productCode,productCode,"采购产品");
         jdbc.update("INSERT INTO product_variant(id,product_id,sku_code,sku_code_normalized,variant_name,status,attribute_signature) VALUES(?,?,?,?, '采购SKU','ACTIVE',?)",variantId,productId,skuCode,skuCode,"a".repeat(64));
+        jdbc.update("INSERT INTO product_variant_supplier(id,variant_id,supplier_id,primary_slot,created_by,updated_by) VALUES(?,?,?,'PRIMARY','test','test')",UUID.randomUUID().toString(),variantId,supplierId);
+        jdbc.update("INSERT INTO auxiliary_material_supplier(id,auxiliary_material_id,supplier_id,primary_slot,created_by,updated_by) VALUES(?,?,?,'PRIMARY','test','test')",UUID.randomUUID().toString(),materialId,supplierId);
     }
     @AfterEach void cleanup(){cleanupPurchases();}
 
@@ -75,6 +77,18 @@ class PurchaseControllerTest {
         mvc.perform(get("/api/v1/purchases/orders").header("Authorization",bearer(token))).andExpect(status().isForbidden());
         mvc.perform(post("/api/v1/purchases/orders").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test void referencesOnlyExposeItemsLinkedToTheSelectedSupplierAndDetailIncludesHistory() throws Exception {
+        String token=login("reference-buyer","PRODUCT_MATERIAL");
+        mvc.perform(get("/api/v1/purchases/references").param("orderType","PRODUCT").param("supplierId",supplierId)
+                .header("Authorization",bearer(token))).andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(variantId)).andExpect(jsonPath("$[0].primarySupplier").value(true));
+        JsonNode order=createOrder(token,"PRODUCT",variantId,"2","18");
+        mvc.perform(get("/api/v1/purchases/orders/{id}/detail",order.get("id").asText())
+                .header("Authorization",bearer(token))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.order.orderNo").value(order.get("orderNo").asText()))
+                .andExpect(jsonPath("$.receipts").isArray()).andExpect(jsonPath("$.history[0].action").value("PURCHASE_ORDER_CREATE"));
     }
 
     private JsonNode createOrder(String token,String type,String itemId,String quantity,String price)throws Exception{

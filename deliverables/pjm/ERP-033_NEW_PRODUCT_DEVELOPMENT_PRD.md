@@ -1,5 +1,7 @@
 # ERP-033 新品开发 PRD v1.0
 
+后续范围更新：ERP-034 已获用户授权，新增手动添加新品需求；本历史 PRD 的“仅候选来源”与“手工建需求后置”条款由 [ERP-034 增量方案](ERP-034_MANUAL_DEVELOPMENT_PLAN.md) 覆盖，其余候选联动与流程规则不变。
+
 状态：2026-10-16 用户授权编写 PRD 并自主实施；PJM 分配 ERP-033 及独占开发/部署窗口。基线 main `433e5581d46ac3a57cf1102a9844a20c5ed05a67`，分支 `feature/ERP-033-new-product-development`。
 
 ## 1. 目标与参考

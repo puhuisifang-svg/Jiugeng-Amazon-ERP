@@ -67,6 +67,8 @@ ERP-030 独立产品监控：ADMIN、PRODUCT_MATERIAL、SELECTION 均可读写�
 
 ## 鉴权边界
 
+- ERP-034 手动创建新品需求使用 `products.write`，来源由服务端固定为 MANUAL；SELECTION 无创建权限。幂等重放同时核对创建者与请求内容，不能通过复用他人的请求号获取创建结果。
+
 - ERP-033 新品开发读取使用 `products.read`，维护和状态流转使用 `products.write`；SELECTION 审核通过候选时由同事务事件创建开发草稿，不因此获得开发资料写权限。开发详情的领域操作历史沿用业务记录查询，不暴露全局审计。
 
 - 前端隐藏/禁用仅改善体验，不构成安全控制；后端必须按 capability 独立鉴权。

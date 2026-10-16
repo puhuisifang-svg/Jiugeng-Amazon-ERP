@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://jiugeng.example/contracts/mvp-active-scope-v1.json",
-  "contractVersion": "1.4",
+  "contractVersion": "1.5",
   "decision": "DEC-012",
   "status": "APPROVED",
   "roles": ["ADMIN", "PRODUCT_MATERIAL", "SELECTION"],
@@ -98,6 +98,7 @@
   },
   "historicalContracts": ["DEL-017", "DEL-025"],
   "invariants": [
+    "ERP-034 manual development creation requires products.write, has no candidate snapshot and is idempotent per actor and request",
     "ERP-033 approval and development draft creation are atomic, with one development per candidate",
     "ERP-033 development reuses products.read/write and never creates catalog products automatically",
     "ERP-030 monitoring is independent, authenticated for all roles, without personnel operation audit",

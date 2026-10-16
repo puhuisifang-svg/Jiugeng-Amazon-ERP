@@ -25,6 +25,10 @@ class DevelopmentController {
     }
     @GetMapping("/{id}") @PreAuthorize("hasAuthority('products.read')")
     Detail detail(@PathVariable String id) { return service.detail(id); }
+    @PostMapping @PreAuthorize("hasAuthority('products.write')")
+    View create(@RequestBody Create input,@AuthenticationPrincipal AuthenticatedActor actor) {
+        return service.create(input,actor);
+    }
     @PutMapping("/{id}") @PreAuthorize("hasAuthority('products.write')")
     View update(@PathVariable String id,@RequestBody Update input,@AuthenticationPrincipal AuthenticatedActor actor) {
         return service.update(id,input,actor);

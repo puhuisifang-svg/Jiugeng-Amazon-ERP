@@ -30,7 +30,7 @@ function jar(group, name) {
 const cp = [jar('org/springframework/security', 'spring-security-crypto'), jar('org/springframework', 'spring-jcl')].join(':')
 const password = `T-${randomBytes(24).toString('hex')}`
 const hash = execFileSync('java', ['--class-path', cp, resolve(root, 'scripts/qa/MonitoringPasswordHash.java')], { input: password, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] })
-const userIds = [], candidateIds = []
+const userIds = [], candidateIds = [], manualIds = []
 const stateFile = process.env.ERP_DEVELOPMENT_STATE
 const verification = process.argv.includes('--verify-restart')
 let productId = randomUUID(), retained = false
@@ -52,13 +52,18 @@ try {
   if (verification) {
     assert(stateFile, 'State path required')
     const saved = JSON.parse(readFileSync(stateFile, 'utf8'))
-    assert([...saved.candidateIds, saved.productId].every(id => /^[0-9a-f-]{36}$/.test(id)), 'Invalid fixture identifiers')
-    candidateIds.push(...saved.candidateIds); productId = saved.productId
+    assert([...saved.candidateIds, ...saved.manualIds, saved.productId].every(id => /^[0-9a-f-]{36}$/.test(id)), 'Invalid fixture identifiers')
+    candidateIds.push(...saved.candidateIds); manualIds.push(...saved.manualIds); productId = saved.productId
     const detail = await api(base + '/' + candidateIds[0], selector)
     assert.equal(detail.item.status, 'COMPLETED')
     assert.equal(detail.item.fields.purchaseCost, 12.3456)
     assert.equal(detail.product.id, productId)
     assert(detail.history.some(event => event.action === 'DEVELOPMENT_COMPLETED'))
+    const manual = await api(base + '/' + manualIds[0], selector)
+    assert.equal(manual.item.sourceType, 'MANUAL'); assert.equal(manual.item.source, null)
+    assert.equal(manual.item.status, 'COMPLETED'); assert.equal(manual.product.id, productId)
+    assert.equal((await api(base + '/' + manualIds[1], selector)).item.status, 'VOID')
+    assert(manual.history.some(event => event.action === 'DEVELOPMENT_MANUAL_CREATE'))
     console.log('PASS: development snapshot, fields, linked product and history persist across MySQL/backend restart')
   } else {
     const asin = 'Z' + randomBytes(5).toString('hex').slice(0, 9).toUpperCase()
@@ -87,13 +92,32 @@ try {
     assert.equal(detail.product.id, productId)
     assert.equal(detail.item.source.title, '合成新品开发验收')
     console.log('PASS: real MySQL candidate approval, one draft, role restrictions, validation, optimistic locking and completion')
+    const input = { requestId: randomUUID(), fields: { ...fields, name: '合成手动新品验收' } }
+    await api(base, null, 'POST', input, 401)
+    await api(base, selector, 'POST', input, 403)
+    await api(base, writer, 'POST', { ...input, fields: { name: ' ' } }, 400)
+    const [first, replay] = await Promise.all([api(base, writer, 'POST', input), api(base, writer, 'POST', input)])
+    manualIds.push(first.id)
+    assert.equal(first.id, replay.id); assert.equal(first.sourceType, 'MANUAL'); assert.equal(first.source, null)
+    assert.match(first.number, /^ND-M-\d{8,}$/)
+    await api(base, admin, 'POST', input, 409)
+    await api(base, writer, 'POST', { ...input, fields: { ...input.fields, name: '变更请求' } }, 409)
+    assert.equal((await api(base + '/' + first.id, selector)).history.filter(event => event.action === 'DEVELOPMENT_MANUAL_CREATE').length, 1)
+    await api(base + '/' + first.id + '/transition', writer, 'POST', { version: 0, target: 'IN_PROGRESS' })
+    await api(base + '/' + first.id + '/transition', writer, 'POST', { version: 1, target: 'COMPLETED' })
+    const second = await api(base, admin, 'POST', { requestId: randomUUID(), fields: { name: '合成手动草稿' } })
+    manualIds.push(second.id); assert.notEqual(first.number, second.number)
+    await api(base + '/' + second.id + '/transition', admin, 'POST', { version: 0, target: 'IN_PROGRESS' }, 400)
+    await api(base + '/' + second.id + '/transition', admin, 'POST', { version: 0, target: 'VOID', reason: '合成验收结束' })
+    console.log('PASS: manual create permissions, null candidate source, concurrent idempotency, numbering, completion and void')
     if (stateFile) {
-      writeFileSync(stateFile, JSON.stringify({ candidateIds, productId }), { mode: 0o600 })
+      writeFileSync(stateFile, JSON.stringify({ candidateIds, manualIds, productId }), { mode: 0o600 })
       retained = true
     }
   }
 } finally {
   if (!retained) {
+    for (const id of manualIds) sql("DELETE FROM product_development WHERE id='" + id + "' AND source_type='MANUAL';")
     for (const id of candidateIds) sql("DELETE FROM product_development WHERE candidate_id='" + id + "'; DELETE FROM selection_candidate WHERE id='" + id + "';")
     sql("DELETE FROM product WHERE id='" + productId + "';")
   }

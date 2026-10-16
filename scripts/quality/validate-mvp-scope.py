@@ -35,7 +35,7 @@ capabilities = contract["capabilities"]
 api_resources = contract["apiResourceFamilies"]
 excluded = contract["excludedCurrentMvp"]
 
-require(contract["contractVersion"] == "1.4", "active contract must be ERP-033 scope version 1.4")
+require(contract["contractVersion"] == "1.5", "active contract must be ERP-034 scope version 1.5")
 require(contract["decision"] == "DEC-012", "active contract must cite DEC-012")
 require(set(import_types) == EXPECTED_IMPORT_TYPES, "active import types must be the five approved types")
 require(len(import_types) == len(set(import_types)), "import types must be unique")

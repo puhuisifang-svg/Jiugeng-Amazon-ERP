@@ -12,7 +12,6 @@ import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
-import java.util.Map;
 import java.util.Set;
 import org.springframework.context.annotation.Profile;
 import org.springframework.context.event.EventListener;
@@ -74,6 +73,36 @@ class DevelopmentService {
     }
 
     @Transactional
+    View create(Create input,AuthenticatedActor actor) {
+        if(input.requestId()==null || !input.requestId().matches("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"))
+            throw invalid("创建请求号必须为 UUID");
+        String request=input.requestId().toLowerCase(java.util.Locale.ROOT);
+        Fields fields=validate(input.fields(),false); String payload=json(fields); String hash;
+        try { hash=java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                .digest(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8))); }
+        catch(java.security.NoSuchAlgorithmException error){throw new IllegalStateException(error);}
+        long next=jdbc.sql("SELECT next_number FROM product_development_create_lock WHERE id=1 FOR UPDATE").query(Long.class).single();
+        var previous=jdbc.sql("SELECT id,manual_actor_id,manual_payload_hash FROM product_development WHERE manual_request_id=:request FOR UPDATE")
+                .param("request",request).query((rs,row)->new String[]{rs.getString(1),rs.getString(2),rs.getString(3)}).optional();
+        if(previous.isPresent()) {
+            String[] prior=previous.get();
+            if(!prior[1].equals(actor.userId())||!prior[2].equals(hash))throw conflict("请求号已使用，请勿以不同内容重复提交");
+            return get(prior[0],true);
+        }
+        String id=java.util.UUID.randomUUID().toString();
+        if(fields.linkedProductId()!=null)activeProduct(fields.linkedProductId());
+        jdbc.sql("""
+                INSERT INTO product_development(id,number,name,developer,fields_json,source_type,
+                    manual_request_id,manual_actor_id,manual_payload_hash)
+                VALUES(:id,:number,:name,:developer,:fields,'MANUAL',:request,:actor,:hash)
+                """).param("id",id).param("number",String.format(java.util.Locale.ROOT,"ND-M-%08d",next))
+                .param("name",fields.name()).param("developer",fields.developer()).param("fields",payload)
+                .param("request",request).param("actor",actor.userId()).param("hash",hash).update();
+        jdbc.sql("UPDATE product_development_create_lock SET next_number=next_number+1 WHERE id=1").update();
+        View result=get(id,false); record(actor,"DEVELOPMENT_MANUAL_CREATE",result,"手动添加新品需求"); return result;
+    }
+
+    @Transactional
     View update(String id,Update input,AuthenticatedActor actor) {
         View before=get(id,true); version(input.version(),before);
         if(before.status()==Status.COMPLETED||before.status()==Status.VOID) throw conflict("已完成或已作废的需求不可修改");
@@ -111,10 +140,11 @@ class DevelopmentService {
     private View get(String id,boolean lock) {
         return jdbc.sql("SELECT * FROM product_development WHERE id=:id"+(lock?" FOR UPDATE":""))
                 .param("id",id).query(this::map).optional()
-                .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"新品开发不存在；仅审核通过的候选可进入"));
+                .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"新品开发不存在，请返回列表核对"));
     }
     private View map(ResultSet rs,int row) throws SQLException {
-        Source source=new Source(rs.getString("candidate_id"),rs.getString("source_asin"),rs.getString("source_title"),
+        SourceType sourceType=SourceType.valueOf(rs.getString("source_type"));
+        Source source=sourceType==SourceType.MANUAL ? null : new Source(rs.getString("candidate_id"),rs.getString("source_asin"),rs.getString("source_title"),
                 rs.getString("source_category"),rs.getInt("source_score"),rs.getBigDecimal("source_price"),
                 rs.getString("source_url"),rs.getString("source_reason"));
         Fields fields;
@@ -125,9 +155,12 @@ class DevelopmentService {
                     : mapper.readValue(data,Fields.class);
         } catch(JsonProcessingException error){throw new IllegalStateException("Invalid persisted development data",error);}
         return new View(rs.getString("id"),rs.getString("number"),Status.valueOf(rs.getString("status")),rs.getLong("version"),
-                source,fields,rs.getString("void_reason"),rs.getTimestamp("created_at").toInstant(),rs.getTimestamp("updated_at").toInstant());
+                sourceType,source,fields,rs.getString("void_reason"),rs.getTimestamp("created_at").toInstant(),rs.getTimestamp("updated_at").toInstant());
     }
     private Fields validate(Fields f) {
+        return validate(f,true);
+    }
+    private Fields validate(Fields f,boolean checkProduct) {
         if(f==null)throw invalid("开发资料不能为空");
         String name=text(f.name(),300); if(name==null)throw invalid("需求名称必填");
         int stars=f.stars()==null?0:f.stars(); if(stars<0||stars>5)throw invalid("推荐星级为 0 至 5");
@@ -135,7 +168,7 @@ class DevelopmentService {
             if(date!=null&&(date.getYear()<2000||date.getYear()>9999))throw invalid("日期超出有效范围");
         if(f.startDate()!=null&&f.endDate()!=null&&f.endDate().isBefore(f.startDate()))throw invalid("开发结束日期不能早于开始日期");
         if(f.endDate()!=null&&f.launchDate()!=null&&f.launchDate().isBefore(f.endDate()))throw invalid("开售日期不能早于开发结束日期");
-        String productId=text(f.linkedProductId(),36); if(productId!=null)activeProduct(productId);
+        String productId=text(f.linkedProductId(),36); if(checkProduct&&productId!=null)activeProduct(productId);
         return new Fields(name,text(f.developer(),100),text(f.buyer(),100),stars,f.startDate(),f.endDate(),f.launchDate(),
                 text(f.productName(),300),text(f.brand(),100),text(f.category(),100),text(f.plannedSku(),100),
                 text(f.material(),200),number(f.purchaseCost()),number(f.weight()),number(f.length()),number(f.width()),number(f.height()),
@@ -168,9 +201,11 @@ class DevelopmentService {
         try{return mapper.writeValueAsString(fields);}catch(JsonProcessingException error){throw new IllegalStateException(error);}
     }
     private void record(AuthenticatedActor actor,String action,View item,String detail) {
+        var snapshot=new java.util.LinkedHashMap<String,Object>();
+        snapshot.put("status",item.status()); snapshot.put("version",item.version()); snapshot.put("sourceType",item.sourceType());
+        if(item.source()!=null)snapshot.put("candidateId",item.source().candidateId());
         audit.record(new AuditTrail.BusinessOperation(actor.userId(),actor.loginName(),actor.displayName(),action,
-                "PRODUCT_DEVELOPMENT",item.id(),true,null,Map.of("status",item.status(),"version",item.version(),
-                "candidateId",item.source().candidateId()),detail));
+                "PRODUCT_DEVELOPMENT",item.id(),true,null,snapshot,detail));
     }
     private ResponseStatusException invalid(String message){return new ResponseStatusException(HttpStatus.BAD_REQUEST,message);}
     private ResponseStatusException conflict(String message){return new ResponseStatusException(HttpStatus.CONFLICT,message);}

@@ -3,7 +3,7 @@
 | 字段 | 内容 |
 | --- | --- |
 | 任务 | ERP-006 / ERP-021-003 |
-| 版本 | v1.4（ERP-033） |
+| 版本 | v1.5（ERP-034） |
 | 状态 | Approved |
 | 日期 | 2026-10-15 |
 | Owner | PJM / PM / Backend / Frontend / QA |
@@ -11,6 +11,8 @@
 | 机器可读副本 | [mvp-active-scope-contract.json](mvp-active-scope-contract.json) |
 
 ## 1. 目的与优先级
+
+ERP-034 用户授权新品开发支持手动来源，在原资源族上新增 POST 创建草稿，权限 products.write；不要求/伪造候选、ASIN 或选品分数。独立编号和请求幂等保护，已有候选联动与状态规则不变。详见 [ERP-034 方案](../../deliverables/pjm/ERP-034_MANUAL_DEVELOPMENT_PLAN.md)。
 
 ERP-033 用户于 2026-10-16 授权新品开发：商品 / 产品管理新增新品开发，审核通过候选同事务创建唯一开发草稿，历史已通过候选迁移补建。复用 products.read/write；开发完成须关联已启用产品，不自动建档。详见 [ERP-033 PRD](../../deliverables/pjm/ERP-033_NEW_PRODUCT_DEVELOPMENT_PRD.md)。
 

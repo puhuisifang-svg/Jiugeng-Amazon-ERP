@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
-import { RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
+import { RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
 import { developmentApi, type DevelopmentDetail, type DevelopmentFields, type DevelopmentPage, type DevelopmentStatus } from '@/api/development'
 import { domainApi, type ProductDetailDto } from '@/api/domain'
@@ -8,17 +8,26 @@ import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
 
 const route = useRoute()
-const id = computed(() => String(route.params.id || ''))
+const router = useRouter()
+const id = computed(() => route.name === 'product-development-new' ? 'new' : String(route.params.id || ''))
+const creating = computed(() => id.value === 'new')
+function emptyFields(): DevelopmentFields {
+  return { name: '', developer: null, buyer: null, stars: 0, startDate: null, endDate: null, launchDate: null,
+    productName: null, brand: null, category: null, plannedSku: null, material: null, purchaseCost: null,
+    weight: null, length: null, width: null, height: null, supplyNotes: null, sampleNotes: null, researchNotes: null, remark: null, linkedProductId: null }
+}
+let requestId = ''; let createdNavigation = false
+const pendingCreate = ref<DevelopmentFields | null>(null)
 const result = ref<DevelopmentPage>({ items: [], total: 0, page: 0, size: 20 })
 const detail = ref<DevelopmentDetail>(); const form = ref<DevelopmentFields>(); const products = ref<ProductDetailDto[]>([])
 const q = ref(''); const status = ref<DevelopmentStatus | ''>(''); const page = ref(0); const size = ref(20)
 const loading = ref(false); const saving = ref(false); const error = ref(''); const success = ref(''); const productError = ref('')
 const showVoid = ref(false); const voidReason = ref('')
 const writable = computed(() => session.canAccess(['products.write']))
-const editable = computed(() => writable.value && !!detail.value && ['DRAFT', 'IN_PROGRESS'].includes(detail.value.item.status))
-const dirty = computed(() => !!form.value && !!detail.value && JSON.stringify(form.value) !== JSON.stringify(detail.value.item.fields))
+const editable = computed(() => writable.value && (creating.value || (!!detail.value && ['DRAFT', 'IN_PROGRESS'].includes(detail.value.item.status))))
+const dirty = computed(() => !!form.value && JSON.stringify(form.value) !== JSON.stringify(creating.value ? emptyFields() : detail.value?.item.fields))
 const labels: Record<DevelopmentStatus, string> = { DRAFT: '草稿', IN_PROGRESS: '进行中', COMPLETED: '已完成', VOID: '已作废' }
-const actions: Record<string, string> = { DEVELOPMENT_CREATE: '候选通过，创建开发草稿', DEVELOPMENT_UPDATE: '保存开发资料', DEVELOPMENT_IN_PROGRESS: '开始开发', DEVELOPMENT_COMPLETED: '完成开发', DEVELOPMENT_VOID: '作废需求' }
+const actions: Record<string, string> = { DEVELOPMENT_MANUAL_CREATE: '手动添加新品需求', DEVELOPMENT_CREATE: '候选通过，创建开发草稿', DEVELOPMENT_UPDATE: '保存开发资料', DEVELOPMENT_IN_PROGRESS: '开始开发', DEVELOPMENT_COMPLETED: '完成开发', DEVELOPMENT_VOID: '作废需求' }
 const numericFields = [
   { key: 'purchaseCost', label: '采购成本（CNY）' }, { key: 'weight', label: '商品重量（g）' },
   { key: 'length', label: '长（cm）' }, { key: 'width', label: '宽（cm）' }, { key: 'height', label: '高（cm）' },
@@ -36,7 +45,10 @@ async function load(force = false) {
   const request = ++sequence; loading.value = true; error.value = ''
   if (runtimeConfig.authMode === 'mock') { loading.value = false; error.value = '新品开发需要正式持久化模式，模拟候选不会创建开发需求。'; return }
   try {
-    if (id.value) {
+    if (creating.value) {
+      if (!writable.value) { error.value = '当前账号无权添加新品需求。'; return }
+      form.value = emptyFields(); requestId = crypto.randomUUID(); pendingCreate.value = null
+    } else if (id.value) {
       const data = await developmentApi.detail(id.value)
       if (request !== sequence) return
       detail.value = data; form.value = JSON.parse(JSON.stringify(data.item.fields))
@@ -48,17 +60,28 @@ async function load(force = false) {
   finally { if (request === sequence) loading.value = false }
 }
 async function save() {
-  if (!form.value || !detail.value || saving.value || !editable.value) return
+  if (!form.value || (!creating.value && !detail.value) || saving.value || !editable.value) return
   saving.value = true; error.value = ''; success.value = ''
   const payload = JSON.parse(JSON.stringify(form.value)) as DevelopmentFields
   for (const { key } of numericFields) { const value = payload[key] as number | ''; payload[key] = value === '' || value === null ? null : Number(value) }
   for (const key of ['startDate', 'endDate', 'launchDate', 'linkedProductId'] as const) payload[key] ||= null
   try {
-    const item = await developmentApi.update(id.value, detail.value.item.version, payload)
-    detail.value.item = item; form.value = JSON.parse(JSON.stringify(item.fields)); success.value = '开发资料已保存。'
-    await load(true)
-  } catch (exception) { error.value = message(exception) }
-  finally { saving.value = false }
+    if (creating.value) {
+      pendingCreate.value ??= payload
+      const item = await developmentApi.create(requestId, pendingCreate.value)
+      createdNavigation = true; pendingCreate.value = null; form.value = undefined
+      await router.replace(`/product-development/${item.id}`)
+      success.value = '新品需求已添加，当前为草稿。'
+    } else if (detail.value) {
+      const item = await developmentApi.update(id.value, detail.value.item.version, payload)
+      detail.value.item = item; form.value = JSON.parse(JSON.stringify(item.fields)); success.value = '开发资料已保存。'
+      await load(true)
+    }
+  } catch (exception) {
+    if (exception instanceof ApiError && exception.status >= 400 && exception.status < 500) pendingCreate.value = null
+    error.value = message(exception)
+  }
+  finally { saving.value = false; createdNavigation = false }
 }
 async function transition(target: DevelopmentStatus) {
   if (!detail.value || dirty.value || saving.value || !editable.value) return
@@ -73,13 +96,13 @@ function search() { page.value = 0; void load() }
 function reset() { q.value = ''; status.value = ''; search() }
 function changePage(value: number) { page.value = value; void load() }
 function changeStatus(value: DevelopmentStatus | '') { status.value = value; search() }
-function mayLeave() { return !saving.value && (!dirty.value || window.confirm('开发资料尚未保存，确定离开？')) }
+function mayLeave() { return createdNavigation || (!saving.value && (!dirty.value || window.confirm('开发资料尚未保存，确定离开？'))) }
 function beforeUnload(event: BeforeUnloadEvent) { if (dirty.value || saving.value) { event.preventDefault(); event.returnValue = '' } }
 onMounted(() => window.addEventListener('beforeunload', beforeUnload))
 onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
 onBeforeRouteLeave(mayLeave); onBeforeRouteUpdate(mayLeave)
 watch(id, () => {
-  detail.value = undefined; form.value = undefined; success.value = ''; showVoid.value = false; page.value = 0
+  detail.value = undefined; form.value = undefined; success.value = ''; showVoid.value = false; page.value = 0; pendingCreate.value = null
   void load(true)
   if (id.value && writable.value && runtimeConfig.authMode !== 'mock') void loadProducts()
 }, { immediate: true })
@@ -91,10 +114,18 @@ watch(id, () => {
       <div>
         <p class="eyebrow">
           NEW PRODUCT DEVELOPMENT
-        </p><h1>{{ id ? detail?.item.number || '新品开发详情' : '新品开发' }}</h1><p>承接审核通过的候选，跟进商品方案、打样与开发交付。</p>
+        </p><h1>{{ creating ? '添加新品需求' : id ? detail?.item.number || '新品开发详情' : '新品开发' }}</h1><p>支持候选池转入和手动添加，跟进商品方案、打样与开发交付。</p>
       </div>
       <div class="development-actions">
+        <RouterLink
+          v-if="!id && writable && runtimeConfig.authMode !== 'mock'"
+          class="primary-link"
+          to="/product-development/new"
+        >
+          添加新品需求
+        </RouterLink>
         <button
+          v-if="!creating"
           type="button"
           class="secondary-action"
           :disabled="loading || saving"
@@ -178,7 +209,7 @@ watch(id, () => {
           v-else-if="!result.items.length"
           class="empty-state"
         >
-          <span class="empty-state__icon">新</span><h2>暂无符合条件的新品需求</h2><p>候选审核通过后将自动生成草稿，历史已通过候选也会进入此列表。</p><RouterLink
+          <span class="empty-state__icon">新</span><h2>暂无符合条件的新品需求</h2><p>可手动添加新品需求；候选审核通过后也会自动生成草稿。</p><RouterLink
             class="text-link"
             to="/selection/candidates"
           >
@@ -190,7 +221,7 @@ watch(id, () => {
           class="table-scroll"
         >
           <table class="data-table">
-            <thead><tr><th>需求编号 / 名称</th><th>来源 ASIN</th><th>开发员</th><th>推荐星级</th><th>开发周期</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead><tbody>
+            <thead><tr><th>需求编号 / 名称</th><th>需求来源 / ASIN</th><th>开发员</th><th>推荐星级</th><th>开发周期</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead><tbody>
               <tr
                 v-for="item in result.items"
                 :key="item.id"
@@ -202,7 +233,7 @@ watch(id, () => {
                   >
                     <strong>{{ item.number }}</strong>
                   </RouterLink><small>{{ item.fields.name }}</small>
-                </td><td>{{ item.source.asin }}</td><td>{{ item.fields.developer || '未分配' }}</td><td>{{ item.fields.stars ? '★'.repeat(item.fields.stars) : '未评定' }}</td><td>{{ item.fields.startDate || '待定' }}<small>至 {{ item.fields.endDate || '待定' }}</small></td><td>
+                </td><td>{{ item.sourceType === 'MANUAL' ? '手动创建' : '候选池' }}<small v-if="item.source">{{ item.source.asin }}</small></td><td>{{ item.fields.developer || '未分配' }}</td><td>{{ item.fields.stars ? '★'.repeat(item.fields.stars) : '未评定' }}</td><td>{{ item.fields.startDate || '待定' }}<small>至 {{ item.fields.endDate || '待定' }}</small></td><td>
                   <span
                     class="development-status"
                     :data-status="item.status"
@@ -254,8 +285,11 @@ watch(id, () => {
     >
       正在加载开发资料…
     </p>
-    <template v-else-if="detail && form">
-      <section class="panel development-source">
+    <template v-else-if="(detail || creating) && form">
+      <section
+        v-if="detail?.item.source"
+        class="panel development-source"
+      >
         <div class="development-section-heading">
           <h2>来源候选 · {{ detail.item.source.asin }}</h2><span
             class="development-status"
@@ -279,6 +313,32 @@ watch(id, () => {
           作废原因：{{ detail.item.voidReason }}
         </p>
       </section>
+      <section
+        v-else
+        class="panel development-source"
+      >
+        <div class="development-section-heading">
+          <h2>需求来源 · 手动创建</h2><span
+            v-if="detail"
+            class="development-status"
+            :data-status="detail.item.status"
+          >{{ labels[detail.item.status] }}</span>
+        </div>
+        <p>无需候选或 ASIN。填写需求名称即可保存草稿，开发资料可后续补充；不会自动创建候选、商品或采购单。</p>
+        <p
+          v-if="detail?.item.voidReason"
+          class="data-state"
+        >
+          作废原因：{{ detail.item.voidReason }}
+        </p>
+      </section>
+      <p
+        v-if="pendingCreate && !saving"
+        class="data-state"
+        role="status"
+      >
+        上次创建结果尚未确认。请点击“重试创建”核对结果，不会重复生成需求。
+      </p>
       <p
         v-if="!writable"
         class="data-state"
@@ -289,7 +349,7 @@ watch(id, () => {
         class="development-editor"
         @submit.prevent="save"
       >
-        <fieldset :disabled="!editable || saving">
+        <fieldset :disabled="!editable || saving || !!pendingCreate">
           <section class="panel">
             <h2>基本信息</h2><div class="development-fields">
               <label class="development-wide">需求名称<input
@@ -385,7 +445,7 @@ watch(id, () => {
               :key="product.id"
               :value="product.id"
             >{{ product.productCode }} · {{ product.productName }}</option></select></label>
-            <p v-if="detail.product">
+            <p v-if="detail?.product">
               当前关联：<RouterLink
                 class="text-link"
                 :to="`/products/${detail.product.id}/variants`"
@@ -421,25 +481,26 @@ watch(id, () => {
             type="submit"
             :disabled="saving || !dirty"
           >
-            {{ saving ? '保存中…' : '保存资料' }}
+            {{ saving ? '保存中…' : creating ? pendingCreate ? '重试创建' : '保存新品需求' : '保存资料' }}
           </button><span
-            v-if="dirty"
+            v-if="dirty && !creating"
             class="development-hint"
           >资料已修改，请先保存再流转状态。</span><button
-            v-if="detail.item.status === 'DRAFT'"
+            v-if="!creating && detail?.item.status === 'DRAFT'"
             type="button"
             :disabled="saving || dirty"
             @click="transition('IN_PROGRESS')"
           >
             开始开发
           </button><button
-            v-if="detail.item.status === 'IN_PROGRESS'"
+            v-if="!creating && detail?.item.status === 'IN_PROGRESS'"
             type="button"
             :disabled="saving || dirty"
             @click="transition('COMPLETED')"
           >
             完成开发
           </button><button
+            v-if="!creating"
             type="button"
             :disabled="saving || dirty"
             @click="showVoid = true; voidReason = ''"
@@ -448,7 +509,10 @@ watch(id, () => {
           </button>
         </footer>
       </form>
-      <section class="panel">
+      <section
+        v-if="detail"
+        class="panel"
+      >
         <h2>操作历史</h2><p
           v-if="!detail.history.length"
           class="development-hint"

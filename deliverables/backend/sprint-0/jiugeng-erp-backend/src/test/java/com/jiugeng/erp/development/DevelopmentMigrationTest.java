@@ -17,6 +17,7 @@ class DevelopmentMigrationTest {
         try(var c=DriverManager.getConnection(url,"sa","");var s=c.createStatement();var r=s.executeQuery("SELECT * FROM product_development")) {
             assertThat(r.next()).isTrue();assertThat(r.getString("candidate_id")).isEqualTo("APPROVED");
             assertThat(r.getString("status")).isEqualTo("DRAFT");assertThat(r.getString("source_title")).isEqualTo("历史候选");
+            assertThat(r.getString("source_type")).isEqualTo("CANDIDATE");assertThat(r.getString("manual_request_id")).isNull();
             assertThat(r.getInt("source_score")).isEqualTo(88);assertThat(r.next()).isFalse();
         }
     }

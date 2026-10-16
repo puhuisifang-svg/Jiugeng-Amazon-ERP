@@ -157,6 +157,7 @@ query_scalar "INSERT INTO watch_snapshot_asin (run_id, asin) VALUES ('00000000-0
 query_scalar "INSERT INTO watch_baseline_asin (store_id, asin, source_run_id) VALUES ('00000000-0000-0000-0000-000000000023', 'B0ERP019001', '00000000-0000-0000-0000-000000000024')" >/dev/null
 query_scalar "INSERT INTO watch_new_product_event (id, event_key, store_id, detected_run_id, asin, title, status, candidate_id, first_detected_at, confirmed_at, confirmed_by) VALUES ('00000000-0000-0000-0000-000000000025', 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', '00000000-0000-0000-0000-000000000023', '00000000-0000-0000-0000-000000000024', 'B0ERP018001', 'ERP-019 事件', 'CONFIRMED', '00000000-0000-0000-0000-000000000020', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'system')" >/dev/null
 
+query_scalar "INSERT INTO sku_document (id,variant_id,kind,file_name,byte_size,content,uploaded_by) VALUES ('00000000-0000-0000-0000-000000000026','00000000-0000-0000-0000-000000000011','MANUAL','synthetic-manual.txt',4,UNHEX('74657374'),'system')" >/dev/null
 stop_backend
 docker restart "$mysql_container" >/dev/null
 wait_for_mysql
@@ -166,6 +167,8 @@ probe_count=$(query_scalar "SELECT COUNT(*) FROM schema_baseline WHERE module_na
 [ "$probe_count" = "1" ]
 product_probe_count=$(query_scalar "SELECT COUNT(*) FROM product p JOIN product_variant v ON v.product_id=p.id JOIN variant_attribute a ON a.variant_id=v.id WHERE p.product_code='ERP-010-PROBE' AND v.sku_code='ERP-010-SKU' AND a.attribute_value='Black'")
 [ "$product_probe_count" = "1" ]
+document_probe_count=$(query_scalar "SELECT COUNT(*) FROM sku_document WHERE id='00000000-0000-0000-0000-000000000026' AND kind='MANUAL' AND byte_size=4 AND HEX(content)='74657374'")
+[ "$document_probe_count" = "1" ]
 material_probe_count=$(query_scalar "SELECT COUNT(*) FROM auxiliary_material WHERE material_code='ERP-011-PROBE' AND material_type='包装' AND CHAR_LENGTH(specification)=400 AND status='ACTIVE'")
 [ "$material_probe_count" = "1" ]
 relation_probe_count=$(query_scalar "SELECT COUNT(*) FROM product_auxiliary_material WHERE variant_id='00000000-0000-0000-0000-000000000011' AND auxiliary_material_id='00000000-0000-0000-0000-000000000012' AND standard_quantity=2.0000 AND enabled=TRUE")

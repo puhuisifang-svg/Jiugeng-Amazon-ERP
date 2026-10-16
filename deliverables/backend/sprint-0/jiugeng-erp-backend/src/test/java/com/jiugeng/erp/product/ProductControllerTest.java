@@ -312,6 +312,94 @@ class ProductControllerTest {
                 .isNull();
     }
 
+    @Test
+    void skuDocumentsRoundTripWithKindIsolationOwnershipAndPermissions() throws Exception {
+        String token = createUserAndLogin("document-owner", "PRODUCT_MATERIAL");
+        String reader = createUserAndLogin("document-reader", "SELECTION");
+        JsonNode created = objectMapper.readTree(mvc.perform(post("/api/v1/products")
+            .header("Authorization", bearer(token)).contentType(MediaType.APPLICATION_JSON)
+            .content(json(product("DOC-P", "文件测试产品", "DOC-SKU", "蓝色"))))
+            .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        String path = "/api/v1/products/" + created.get("id").asText() + "/skus/" + created.at("/variants/0/id").asText() + "/documents";
+        byte[] content = "%PDF-1.4\nSynthetic manual".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        var file = new org.springframework.mock.web.MockMultipartFile("file", "说明书.pdf", "application/pdf", content);
+        JsonNode uploaded = objectMapper.readTree(mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(path)
+            .file(file).param("kind", "MANUAL").header("Authorization", bearer(token)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.fileName").value("说明书.pdf"))
+            .andReturn().getResponse().getContentAsString());
+        String download = path + "/" + uploaded.get("id").asText() + "/download";
+        mvc.perform(get(path).param("kind", "MANUAL").header("Authorization", bearer(reader)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1));
+        mvc.perform(get(path).param("kind", "LABEL").header("Authorization", bearer(reader)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(0));
+        var result = mvc.perform(get(download).header("Authorization", bearer(reader)))
+            .andExpect(status().isOk()).andReturn().getResponse();
+        assertThat(result.getContentAsByteArray()).isEqualTo(content);
+        assertThat(result.getHeader("Content-Disposition")).contains("attachment");
+        assertThat(result.getHeader("X-Content-Type-Options")).isEqualTo("nosniff");
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(path)
+            .file(file).param("kind", "LABEL").header("Authorization", bearer(reader))).andExpect(status().isForbidden());
+        mvc.perform(get(download)).andExpect(status().isUnauthorized());
+        mvc.perform(get(download.replace(created.get("id").asText(), "wrong-product"))
+            .header("Authorization", bearer(token))).andExpect(status().isNotFound());
+        mvc.perform(get(path + "/missing/download").header("Authorization", bearer(token))).andExpect(status().isNotFound());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(path)
+            .file(new org.springframework.mock.web.MockMultipartFile("file", "label.zpl", "text/plain", "^XA^FO10,10^FDTEST^FS^XZ".getBytes()))
+            .param("kind", "LABEL").header("Authorization", bearer(token))).andExpect(status().isOk());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE action='SKU_DOCUMENT_UPLOAD'", Integer.class)).isEqualTo(2);
+        // Editing the aggregate must preserve the SKU's stored documents.
+        mvc.perform(put("/api/v1/products/" + created.get("id").asText()).header("Authorization", bearer(token))
+            .contentType(MediaType.APPLICATION_JSON).content(created.toString())).andExpect(status().isOk());
+        mvc.perform(get(download).header("Authorization", bearer(token))).andExpect(status().isOk());
+    }
+
+    @Test
+    void skuDocumentsRejectInvalidSizeFormatNameAndKind() throws Exception {
+        String token = createUserAndLogin("document-validation", "PRODUCT_MATERIAL");
+        JsonNode created = objectMapper.readTree(mvc.perform(post("/api/v1/products")
+            .header("Authorization", bearer(token)).contentType(MediaType.APPLICATION_JSON)
+            .content(json(product("DOC-V", "文件校验", "DOC-V-SKU", "标准"))))
+            .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        String path = "/api/v1/products/" + created.get("id").asText() + "/skus/" + created.at("/variants/0/id").asText() + "/documents";
+        for (var file : List.of(
+            new org.springframework.mock.web.MockMultipartFile("file", "empty.pdf", "application/pdf", new byte[0]),
+            new org.springframework.mock.web.MockMultipartFile("file", "large.pdf", "application/pdf", new byte[10 * 1024 * 1024 + 1]),
+            new org.springframework.mock.web.MockMultipartFile("file", "invalid.pdf", "application/pdf", "not pdf".getBytes()),
+            new org.springframework.mock.web.MockMultipartFile("file", "invalid.docx", "application/zip", "PK fake".getBytes()),
+            new org.springframework.mock.web.MockMultipartFile("file", "../manual.txt", "text/plain", "text".getBytes()),
+            new org.springframework.mock.web.MockMultipartFile("file", "script.html", "text/html", "<script/>".getBytes())
+        )) {
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(path)
+                .file(file).param("kind", "MANUAL").header("Authorization", bearer(token)))
+                .andExpect(status().isBadRequest());
+        }
+        mvc.perform(get(path).param("kind", "INVALID").header("Authorization", bearer(token))).andExpect(status().isBadRequest());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM sku_document", Integer.class)).isZero();
+    }
+
+    @Test
+    void keywordAndTypeFiltersMatchSpecificationsForListAndExport() throws Exception {
+        String token = createUserAndLogin("keyword-owner", "PRODUCT_MATERIAL");
+        Map<String, Object> input = product("KEY-P", "收纳箱", "KEY-SKU", "标准");
+        input.put("productType", "家居");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> variant = (Map<String, Object>) ((List<?>) input.get("variants")).getFirst();
+        variant.put("itemDimensions", "40x30x20cm");
+        mvc.perform(post("/api/v1/products").header("Authorization", bearer(token))
+            .contentType(MediaType.APPLICATION_JSON).content(json(input))).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/products/skus").param("field", "KEYWORD").param("exact", "false").param("q", "40x30")
+            .param("productType", "家居").header("Authorization", bearer(token)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(1));
+        mvc.perform(get("/api/v1/products/skus").param("productType", "电子").header("Authorization", bearer(token)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(0));
+        byte[] exported = mvc.perform(get("/api/v1/products/skus/export").param("field", "KEYWORD").param("exact", "false")
+            .param("q", "40x30").param("productType", "家居").header("Authorization", bearer(token)))
+            .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        try (var workbook = new XSSFWorkbook(new ByteArrayInputStream(exported))) {
+            assertThat(workbook.getSheetAt(0).getPhysicalNumberOfRows()).isEqualTo(2);
+        }
+    }
+
     private String createUserAndLogin(String loginName, String role) throws Exception {
         String id = java.util.UUID.randomUUID().toString();
         var encoder = new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder();

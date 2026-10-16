@@ -1,23 +1,24 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, toRaw } from 'vue'
+import { computed, onMounted, reactive, ref, toRaw, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { ApiError } from '@/api/client'
 import { domainApi, type BatchVariantPatchInput, type ProductDetailDto, type ProductHistoryDto, type ProductInput, type ProductVariantDto, type SkuListItemDto, type VariantStatus } from '@/api/domain'
 import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vue'
+import SkuDocumentsPanel from '@/components/SkuDocumentsPanel.vue'
 import ProductForm from '@/components/ProductForm.vue'
 import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
 
-type ColumnKey = 'image' | 'sku' | 'name' | 'product' | 'status' | 'dimensions' | 'weight' | 'supplier' | 'material' | 'updated'
+type ColumnKey = 'image' | 'sku' | 'name' | 'product' | 'status' | 'dimensions' | 'weight' | 'supplier' | 'material' | 'updated' | 'stock'
 const columns: Array<{ key: ColumnKey; label: string }> = [
   { key: 'image', label: '图片' }, { key: 'sku', label: 'SKU' }, { key: 'name', label: '品名' },
-  { key: 'product', label: '产品信息' }, { key: 'status', label: '状态' }, { key: 'dimensions', label: '规格' },
-  { key: 'weight', label: '包装重量' }, { key: 'supplier', label: '供应商' }, { key: 'material', label: '辅料' }, { key: 'updated', label: '更新时间' },
+  { key: 'product', label: '产品类型' }, { key: 'status', label: '状态' }, { key: 'dimensions', label: '规格' },
+  { key: 'weight', label: '包装重量' }, { key: 'supplier', label: '供应商' }, { key: 'material', label: '辅料' }, { key: 'updated', label: '更新时间' }, { key: 'stock', label: '库存状态' },
 ]
-const defaultColumns: ColumnKey[] = columns.map(item => item.key)
-const storageKey = computed(() => `jiugeng.product-sku.columns.${session.user.value?.id ?? 'current'}`)
+const defaultColumns: ColumnKey[] = ['sku', 'image', 'name', 'product', 'status', 'stock', 'dimensions', 'weight']
+const storageKey = computed(() => `jiugeng.product-management.columns.v2.${session.user.value?.id ?? 'current'}`)
 function restoredColumns(): ColumnKey[] {
   try {
     const values = JSON.parse(localStorage.getItem(storageKey.value) ?? '[]') as ColumnKey[]
@@ -28,19 +29,19 @@ function restoredColumns(): ColumnKey[] {
 
 const rows = ref<SkuListItemDto[]>([]); const products = ref<ProductDetailDto[]>([])
 const total = ref(0); const page = ref(0); const size = ref(20); const loading = ref(true); const saving = ref(false)
-const error = ref(''); const success = ref(''); const selected = ref<string[]>([]); const showAdvanced = ref(false)
+const error = ref(''); const success = ref(''); const selected = ref<string[]>([])
 const expanded = ref<string[]>([])
-const appliedFilters = ref({ field: 'SKU', q: '', exact: true, status: '', productStatus: '', hasImage: '', hasSupplier: '', hasMaterial: '', sort: 'updatedAt', direction: 'desc' })
+const appliedFilters = ref({ field: 'KEYWORD', q: '', exact: false, status: '', productStatus: '', productType: '', stock: '', hasImage: '', hasSupplier: '', hasMaterial: '', sort: 'updatedAt', direction: 'desc' })
 const showCreate = ref(false); const showColumns = ref(false); const showBatch = ref(false); const showDetail = ref(false); const showEdit = ref(false); const showExport = ref(false)
 const showAddSku = ref(false); const addSkuProductId = ref('')
 const showBatchSearch = ref(false); const batchSearchText = ref('')
 const exportScope = ref<'FILTERED' | 'SELECTED'>('FILTERED')
 const detailRow = ref<SkuListItemDto | null>(null); const editProduct = ref<ProductDetailDto | null>(null); const focusVariantId = ref<string>()
-const detailTab = ref<'basic' | 'purchase' | 'specs' | 'materials' | 'image' | 'history'>('basic'); const detailHistory = ref<ProductHistoryDto[]>([])
+const detailTab = ref<'basic' | 'purchase' | 'specs' | 'materials' | 'image' | 'history' | 'manual' | 'label'>('basic'); const detailHistory = ref<ProductHistoryDto[]>([])
 const visibleColumns = ref<ColumnKey[]>(restoredColumns())
 const columnDraft = ref<ColumnKey[]>([...visibleColumns.value])
 const columnSearch = ref(''); const filteredColumns = computed(() => columns.filter(column => column.label.includes(columnSearch.value.trim()) && (column.key !== 'supplier' || session.canAccess(['suppliers.read']))))
-const filters = reactive({ field: 'SKU', q: '', exact: true, status: '', productStatus: '', hasImage: '', hasSupplier: '', hasMaterial: '', sort: 'updatedAt', direction: 'desc' })
+const filters = reactive({ field: 'KEYWORD', q: '', exact: false, status: '', productStatus: '', productType: '', stock: '', hasImage: '', hasSupplier: '', hasMaterial: '', sort: 'updatedAt', direction: 'desc' })
 const batch = reactive({ statusSelected: false, status: 'ACTIVE' as VariantStatus, itemDimensionsSelected: false, itemDimensionsMode: 'SET' as 'SET' | 'CLEAR', itemLengthCm: undefined as number | undefined, itemWidthCm: undefined as number | undefined, itemHeightCm: undefined as number | undefined, packageDimensionsSelected: false, packageDimensionsMode: 'SET' as 'SET' | 'CLEAR', packageLengthCm: undefined as number | undefined, packageWidthCm: undefined as number | undefined, packageHeightCm: undefined as number | undefined, packageWeightSelected: false, packageWeightMode: 'SET' as 'SET' | 'CLEAR', packageWeightGrams: undefined as number | undefined })
 const writable = computed(() => session.canAccess(['products.write']))
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / size.value)))
@@ -63,16 +64,19 @@ function toInput(product: ProductDetailDto): ProductInput {
 function apiMessage(exception: unknown, fallback: string) { return exception instanceof ApiError || exception instanceof Error ? exception.message : fallback }
 let loadSequence = 0
 const displayedColumns = computed(() => visibleColumns.value.filter(key => hasColumn(key)))
+const productTypes = computed(() => [...new Set(products.value.map(product => product.productType).filter((value): value is string => Boolean(value)))].sort())
 const groups = computed(() => {
   const f = appliedFilters.value
   const needles = f.q.trim().toLocaleUpperCase().split(/\r?\n/).filter(Boolean)
   const matches = (product: ProductDetailDto, variant?: ProductVariantDto) => {
+    if (f.productType && product.productType !== f.productType) return false
+    if (f.stock && f.stock !== 'UNINITIALIZED') return false
     if (f.productStatus && product.status !== f.productStatus) return false
     if (f.status && variant?.status !== f.status) return false
     if (f.hasImage && Boolean(variant?.imageAssetId || variant?.imageUrl) !== (f.hasImage === 'true')) return false
     if (f.hasSupplier && Boolean(variant?.suppliers.length) !== (f.hasSupplier === 'true')) return false
     if (f.hasMaterial && Boolean(variant?.materials.length) !== (f.hasMaterial === 'true')) return false
-    const value = ({ SKU: variant?.skuCode, NAME: variant?.variantName, PRODUCT_CODE: product.productCode, PRODUCT_NAME: product.productName } as Record<string, string | undefined>)[f.field]?.toLocaleUpperCase() ?? ''
+    const value = ({ KEYWORD: [product.productCode, product.productName, variant?.skuCode, variant?.variantName, variant?.specification, variant?.itemDimensions, variant?.packageDimensions, variant ? dimensionLabel(variant) : '', [variant?.packageLengthCm, variant?.packageWidthCm, variant?.packageHeightCm].filter(value => value != null).join('×')].filter(Boolean).join(' '), SKU: variant?.skuCode, NAME: variant?.variantName, PRODUCT_CODE: product.productCode, PRODUCT_NAME: product.productName } as Record<string, string | undefined>)[f.field]?.toLocaleUpperCase() ?? ''
     return !needles.length || needles.some(needle => f.exact ? value === needle : value.includes(needle))
   }
   return products.value.map(product => ({
@@ -116,11 +120,13 @@ async function load() {
     rows.value = groups.value.flatMap(group => group.children)
     selected.value = selected.value.filter(id => rows.value.some(row => row.variant.id === id))
     if (filters.q || filters.status || filters.hasImage || filters.hasSupplier || filters.hasMaterial) expanded.value = groups.value.map(group => group.product.id)
-  } catch (exception) { if (sequence === loadSequence) error.value = apiMessage(exception, '产品与 SKU 数据加载失败。') }
+  } catch (exception) { if (sequence === loadSequence) error.value = apiMessage(exception, '产品管理 数据加载失败。') }
   finally { if (sequence === loadSequence) loading.value = false }
 }
-function search() { page.value = 0; selected.value = []; void load() }
-function reset() { Object.assign(filters, { field: 'SKU', q: '', exact: true, status: '', productStatus: '', hasImage: '', hasSupplier: '', hasMaterial: '', sort: 'updatedAt', direction: 'desc' }); page.value = 0; selected.value = []; expanded.value = []; void load() }
+function applyFilters() { appliedFilters.value = { ...filters }; total.value = groups.value.length; page.value = Math.min(page.value, totalPages.value - 1); rows.value = groups.value.flatMap(group => group.children); if (filters.q) expanded.value = groups.value.map(group => group.product.id) }
+function search() { page.value = 0; selected.value = []; applyFilters() }
+watch(() => [filters.q, filters.productType, filters.productStatus, filters.stock], search)
+function reset() { Object.assign(filters, { field: 'KEYWORD', q: '', exact: false, status: '', productStatus: '', productType: '', stock: '', hasImage: '', hasSupplier: '', hasMaterial: '', sort: 'updatedAt', direction: 'desc' }); page.value = 0; selected.value = []; expanded.value = []; void load() }
 function applyBatchSearch() { const unique = [...new Set(batchSearchText.value.split(/\r?\n/).map(value => value.trim()).filter(Boolean))]; if (unique.length > 100) { error.value = '批量搜索最多输入 100 个 SKU 编码。'; return } filters.field = 'SKU'; filters.exact = true; filters.q = unique.join('\n'); showBatchSearch.value = false; search() }
 function toggleSort(field: 'sku' | 'updatedAt') { if (filters.sort === field) filters.direction = filters.direction === 'asc' ? 'desc' : 'asc'; else { filters.sort = field; filters.direction = field === 'sku' ? 'asc' : 'desc' } page.value = 0; void load() }
 function toggleAll() { selected.value = allSelected.value ? [] : pageRows.value.map(row => row.variant.id).filter((id): id is string => Boolean(id)) }
@@ -184,7 +190,7 @@ async function exportRows() {
   const filters = appliedFilters.value
   saving.value = true; error.value = ''
   try {
-    await domainApi.exportSkus({ field: filters.field, q: filters.q.trim(), exact: filters.exact, status: filters.status as VariantStatus || undefined, productStatus: filters.productStatus as 'DRAFT' | 'ACTIVE' | 'DISABLED' || undefined, hasImage: filters.hasImage === '' ? undefined : filters.hasImage === 'true', hasSupplier: filters.hasSupplier === '' ? undefined : filters.hasSupplier === 'true', hasMaterial: filters.hasMaterial === '' ? undefined : filters.hasMaterial === 'true', variantIds: exportScope.value === 'SELECTED' ? selected.value : undefined })
+    await domainApi.exportSkus({ productType: filters.productType || undefined, field: filters.field, q: filters.q.trim(), exact: filters.exact, status: filters.status as VariantStatus || undefined, productStatus: filters.productStatus as 'DRAFT' | 'ACTIVE' | 'DISABLED' || undefined, hasImage: filters.hasImage === '' ? undefined : filters.hasImage === 'true', hasSupplier: filters.hasSupplier === '' ? undefined : filters.hasSupplier === 'true', hasMaterial: filters.hasMaterial === '' ? undefined : filters.hasMaterial === 'true', variantIds: exportScope.value === 'SELECTED' ? selected.value : undefined })
     showExport.value = false; success.value = 'SKU 导出文件已生成。'
   } catch (exception) { error.value = apiMessage(exception, 'SKU 导出失败。') } finally { saving.value = false }
 }
@@ -195,64 +201,31 @@ onMounted(load)
 <template>
   <section class="page-stack product-sku-page">
     <SyntheticNotice v-if="runtimeConfig.authMode === 'mock'" />
-    <section class="panel filter-panel sku-filter-card">
-      <div class="sku-filter-grid">
-        <label>SKU 状态<select v-model="filters.status"><option value="">全部状态</option><option value="ACTIVE">启用</option><option value="DRAFT">待定</option><option value="DISABLED">停用</option></select></label>
-        <label>产品状态<select v-model="filters.productStatus"><option value="">全部状态</option><option value="ACTIVE">启用</option><option value="DRAFT">待定</option><option value="DISABLED">停用</option></select></label>
-        <label v-if="showAdvanced">图片<select v-model="filters.hasImage"><option value="">不限</option><option value="true">有图片</option><option value="false">无图片</option></select></label>
-        <label v-if="showAdvanced && session.canAccess(['suppliers.read'])">供应商<select v-model="filters.hasSupplier"><option value="">不限</option><option value="true">已关联</option><option value="false">未关联</option></select></label>
-        <label v-if="showAdvanced">辅料<select v-model="filters.hasMaterial"><option value="">不限</option><option value="true">已关联</option><option value="false">未关联</option></select></label>
-      </div>
-      <div class="sku-search-row">
-        <select
-          v-model="filters.field"
-          aria-label="搜索字段"
-          @change="filters.exact = filters.field === 'SKU' || filters.field === 'PRODUCT_CODE'"
-        >
-          <option value="SKU">
-            SKU
-          </option><option value="NAME">
-            品名
-          </option><option value="PRODUCT_CODE">
-            产品编码
-          </option><option value="PRODUCT_NAME">
-            产品名称
-          </option>
-        </select><input
-          v-model="filters.q"
-          type="search"
-          placeholder="请输入搜索内容；双击可批量输入 SKU"
-          @keyup.enter="search"
-          @dblclick="batchSearchText = filters.q; showBatchSearch = true"
-        ><label class="exact-search"><input
-          v-model="filters.exact"
-          type="checkbox"
-        >精确</label><button
-          class="secondary-button"
-          type="button"
-          @click="batchSearchText = filters.q; showBatchSearch = true"
-        >
-          批量输入
-        </button><button
-          type="button"
-          @click="search"
-        >
-          搜索
-        </button><button
-          class="secondary-button"
-          type="button"
-          @click="showAdvanced = !showAdvanced"
-        >
-          {{ showAdvanced ? '收起筛选' : '展开筛选' }}
-        </button><button
-          class="secondary-button"
-          type="button"
-          @click="reset"
-        >
-          重置
-        </button>
-      </div>
-    </section>
+    <form
+      class="panel filter-panel material-filters product-management-filters"
+      @submit.prevent="search"
+    >
+      <label>关键词<input
+        v-model="filters.q"
+        type="search"
+        placeholder="SKU、品名或规格模糊搜索"
+        @input="filters.field = 'KEYWORD'; filters.exact = false"
+      ></label>
+      <label>产品类型<select v-model="filters.productType"><option value="">全部类型</option><option
+        v-for="type in productTypes"
+        :key="type"
+        :value="type"
+      >{{ type }}</option></select></label>
+      <label>产品状态<select v-model="filters.productStatus"><option value="">全部状态</option><option value="ACTIVE">启用</option><option value="DRAFT">待定</option><option value="DISABLED">停用</option></select></label>
+      <label>库存状态<select v-model="filters.stock"><option value="">全部库存</option><option value="UNINITIALIZED">未建账</option></select></label>
+      <button
+        type="button"
+        class="secondary-button"
+        @click="reset"
+      >
+        重置
+      </button>
+    </form>
 
     <section
       class="panel material-toolbar sku-toolbar"
@@ -369,7 +342,7 @@ onMounted(load)
                   type="button"
                   @click="toggleSort(key === 'sku' ? 'sku' : 'updatedAt')"
                 >
-                  {{ key === 'sku' ? '父体编码 / 子体 SKU' : '更新时间' }} {{ filters.sort === (key === 'sku' ? 'sku' : 'updatedAt') ? (filters.direction === 'asc' ? '↑' : '↓') : '' }}
+                  {{ key === 'sku' ? '产品编码 / SKU' : '更新时间' }} {{ filters.sort === (key === 'sku' ? 'sku' : 'updatedAt') ? (filters.direction === 'asc' ? '↑' : '↓') : '' }}
                 </button><template v-else>
                   {{ columns.find(column => column.key === key)?.label }}
                 </template>
@@ -399,6 +372,7 @@ onMounted(load)
                 <td
                   v-for="key in displayedColumns"
                   :key="key"
+                  :class="{ 'hierarchy-cell': key === 'sku' }"
                 >
                   <button
                     v-if="key === 'sku'"
@@ -420,7 +394,10 @@ onMounted(load)
                     :class="['status-badge', `status-badge--${group.product.status.toLowerCase()}`]"
                   >{{ labelStatus(group.product.status) }}</span>
                   <span v-else-if="key === 'updated'">{{ group.product.updatedAt ? new Date(group.product.updatedAt).toLocaleString('zh-CN') : '—' }}</span>
-                  <span v-else>—</span>
+                  <span
+                    v-else-if="key === 'stock'"
+                    class="stock-uninitialized"
+                  >未建账</span><span v-else>—</span>
                 </td>
                 <td
                   class="sticky-action"
@@ -471,6 +448,7 @@ onMounted(load)
                   <td
                     v-for="key in displayedColumns"
                     :key="key"
+                    :class="{ 'hierarchy-cell': key === 'sku' }"
                   >
                     <template v-if="key === 'image'">
                       <AuthenticatedCatalogImage
@@ -497,11 +475,14 @@ onMounted(load)
                     >
                       ↳ {{ row.variant.skuCode }}
                     </button>
-                    <template v-else-if="key === 'name'">
+                    <span
+                      v-else-if="key === 'stock'"
+                      class="stock-uninitialized"
+                    >未建账</span><template v-else-if="key === 'name'">
                       {{ row.variant.variantName }}
                     </template>
                     <template v-else-if="key === 'product'">
-                      {{ row.productName }}<small>{{ row.productCode }}</small>
+                      {{ row.productType || '—' }}
                     </template>
                     <template v-else-if="key === 'status'">
                       <span :class="['status-badge', `status-badge--${row.variant.status.toLowerCase()}`]">{{ labelStatus(row.variant.status) }}</span><small v-if="!row.businessAvailable">业务不可用</small>
@@ -786,7 +767,7 @@ onMounted(load)
           </div>
         </header><nav class="product-editor-tabs">
           <button
-            v-for="tab in ([['basic','基础信息'],['purchase','采购信息'],['specs','规格信息'],['materials','关联辅料'],['image','图片管理'],['history','操作日志']] as const)"
+            v-for="tab in ([['basic','基础信息'],['purchase','采购信息'],['specs','规格信息'],['materials','关联辅料'],['image','图片管理'],['manual','说明书管理'],['label','商品标签管理'],['history','操作日志']] as const)"
             :key="tab[0]"
             type="button"
             :class="{ active: detailTab === tab[0] }"
@@ -854,6 +835,13 @@ onMounted(load)
             暂无图片。
           </p>
         </div>
+        <SkuDocumentsPanel
+          v-else-if="(detailTab === 'manual' || detailTab === 'label') && detailVariant?.id"
+          :key="`${detailVariant.id}-${detailTab}`"
+          :product-id="detailRow.productId"
+          :variant-id="detailVariant.id"
+          :kind="detailTab === 'manual' ? 'MANUAL' : 'LABEL'"
+        />
         <div
           v-else
           class="detail-list operation-history"

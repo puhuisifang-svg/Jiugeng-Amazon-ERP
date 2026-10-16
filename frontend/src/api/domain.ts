@@ -219,7 +219,7 @@ async function product(id: string): Promise<ProductDetailDto> {
   return apiRequest<ProductDetailDto>(`/v1/products/${id}`)
 }
 
-async function exportSkus(filters: { field?: string | undefined; q?: string | undefined; exact?: boolean | undefined; status?: VariantStatus | undefined; productStatus?: ProductStatus | undefined; hasImage?: boolean | undefined; hasSupplier?: boolean | undefined; hasMaterial?: boolean | undefined; variantIds?: string[] | undefined }): Promise<void> {
+async function exportSkus(filters: { productType?: string | undefined; field?: string | undefined; q?: string | undefined; exact?: boolean | undefined; status?: VariantStatus | undefined; productStatus?: ProductStatus | undefined; hasImage?: boolean | undefined; hasSupplier?: boolean | undefined; hasMaterial?: boolean | undefined; variantIds?: string[] | undefined }): Promise<void> {
   if (runtimeConfig.authMode === 'mock') throw new Error('模拟模式不提供正式导出')
   const search = new URLSearchParams()
   Object.entries(filters).forEach(([key, value]) => {

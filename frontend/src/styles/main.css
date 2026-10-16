@@ -302,8 +302,18 @@ select:disabled { color: #8a93a5; background-color: #f3f5f8; cursor: not-allowed
 .product-sku-page .sku-master-table .sort-button, .product-sku-page .sku-master-table .sku-code-button, .product-sku-page .sku-master-table .parent-toggle { padding: 0; min-height: 32px; color: #425d9c; background: transparent; text-align: left; }
 .product-sku-page .sku-master-table .sort-button { color: var(--muted); }
 .product-sku-page .product-parent-row, .product-sku-page .product-parent-row .sticky-action { background: #f4f6fa; cursor: pointer; }
-.product-sku-page .product-child-row td { background: white; }
-.product-sku-page .sku-master-table { min-width: 1180px; }
+.product-sku-page .sku-master-table { min-width: 1050px; }
+.product-sku-page .product-parent-row .hierarchy-cell { min-width: 220px; padding-left: 16px; }
+.product-sku-page .product-child-row .hierarchy-cell { min-width: 220px; padding-left: 56px; border-left: 3px solid #dce3ef; }
+.product-sku-page .product-child-row .hierarchy-cell .sku-code-button { font-weight: 600; }
+.product-sku-page .product-child-row td { background: #fcfdff; }
+.product-sku-page .stock-uninitialized { color: var(--muted); font-size: 12px; }
+.product-management-filters { align-items: end; }
+.sku-documents { padding-top: 16px; min-height: 200px; }
+.sku-documents .material-toolbar { padding: 0; }
+.sku-documents h3 { margin: 0; font-size: 16px; }
+.document-hint { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.sku-documents .data-table .document-name { max-width: 340px; white-space: normal; overflow-wrap: anywhere; }
 .product-sku-page .sku-master-table .sticky-action { min-width: 260px; }
 .product-sku-page .dialog-footer .secondary-action { color: var(--ink); background: #eef0f4; }
 .product-sku-page button:disabled { opacity: .5; cursor: not-allowed; }

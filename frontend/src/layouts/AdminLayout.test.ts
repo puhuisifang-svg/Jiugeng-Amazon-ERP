@@ -41,7 +41,7 @@ describe('horizontal navigation shell', () => {
   it('groups existing permitted routes and closes the panel after navigating', async () => {
     const { wrapper, router } = await setup()
     await wrapper.get('[data-domain="商品"]').trigger('click')
-    expect(wrapper.get('.mega-panel').text()).toContain('产品与 SKU')
+    expect(wrapper.get('.mega-panel').text()).toContain('产品管理')
     expect(wrapper.get('.mega-panel').text()).toContain('辅料管理')
     expect(wrapper.get('.mega-panel').text()).not.toContain('辅料库存')
     expect(wrapper.get('.mega-panel').text()).not.toContain('导入')
@@ -69,7 +69,7 @@ describe('horizontal navigation shell', () => {
   it('maps detail pages to their parent and keeps tabs unique', async () => {
     const { wrapper, router } = await setup('/products/example/variants')
     expect(wrapper.get('[data-domain="商品"]').classes()).toContain('is-active')
-    expect(wrapper.get('.workspace-tab.is-current').text()).toContain('产品与 SKU')
+    expect(wrapper.get('.workspace-tab.is-current').text()).toContain('产品管理')
     await router.push('/imports')
     await router.push('/products')
     expect(wrapper.findAll('.workspace-tab')).toHaveLength(2)
@@ -96,7 +96,7 @@ describe('horizontal navigation shell', () => {
     await wrapper.get('button[aria-label="关闭辅料管理页签"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/products')
-    await wrapper.get('button[aria-label="关闭产品与 SKU页签"]').trigger('click')
+    await wrapper.get('button[aria-label="关闭产品管理页签"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/home')
     expect(wrapper.findAll('.workspace-tab')).toHaveLength(0)

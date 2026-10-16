@@ -6,7 +6,7 @@ const product = { id: 'p1', productCode: 'P-1', productName: '测试产品', pro
 
 vi.mock('@/config/runtime', () => ({ runtimeConfig: { authMode: 'password' } }))
 vi.mock('@/state/session', () => ({ session: { user: { value: { id: 'user-1' } }, canAccess: () => true } }))
-vi.mock('@/api/catalog', () => ({ catalogApi: { uploadImage: vi.fn(), imageBlob: vi.fn() } }))
+vi.mock('@/api/catalog', () => ({ catalogApi: { uploadImage: vi.fn(), imageBlob: vi.fn(), documents: vi.fn(async () => []) } }))
 vi.mock('@/api/domain', () => ({
   domainApi: {
     products: vi.fn(async () => ({ items: [product], mockData: false })),
@@ -40,15 +40,15 @@ describe('ProductsView', () => {
     const wrapper = mount(ProductsView, { global: { stubs: { RouterLink } } })
     await flushPromises()
 
-    expect(wrapper.get('.sku-filter-card').text()).toContain('产品状态')
-    expect(wrapper.get('.sku-filter-card').text()).toContain('SKU 状态')
+    expect(wrapper.get('.product-management-filters').text()).toContain('产品状态')
+    expect(wrapper.get('.product-management-filters').text()).toContain('库存状态')
     expect(wrapper.get('.material-toolbar').text()).toContain('新增产品')
     expect(wrapper.get('.material-toolbar').text()).toContain('列设置')
     expect(wrapper.find('.product-child-row').exists()).toBe(false)
     await wrapper.get('.parent-toggle').trigger('click')
     const row = wrapper.get('.product-child-row')
-    expect(row.text()).toContain('SKU-1')
-    expect(row.text()).toContain('测试产品')
+    expect(row.get('.hierarchy-cell').text()).toContain('SKU-1')
+    expect(row.text()).toContain('家居')
     expect(row.text()).toContain('详情')
     expect(row.get('img').attributes('src')).toBe('https://images.example.com/sku-1.png')
   })
@@ -87,7 +87,7 @@ describe('ProductsView', () => {
     const imageColumn = dialog.findAll('input[type="checkbox"]')[0]!
     await imageColumn.setValue(false)
     await dialog.findAll('button').find(button => button.text() === '保存')!.trigger('click')
-    expect(localStorage.getItem('jiugeng.product-sku.columns.user-1')).not.toContain('image')
+    expect(localStorage.getItem('jiugeng.product-management.columns.v2.user-1')).not.toContain('image')
   })
 
   it('opens and saves a reactive SKU without losing sibling or dimension data', async () => {
@@ -120,12 +120,10 @@ describe('ProductsView', () => {
   it('filters child SKU and automatically expands its matching parent', async () => {
     const wrapper = mount(ProductsView, { global: { stubs: { RouterLink } } })
     await flushPromises()
-    await wrapper.get('.sku-search-row input[type="search"]').setValue('SKU-1')
-    await wrapper.get('.sku-search-row').findAll('button').find(button => button.text() === '搜索')!.trigger('click')
+    await wrapper.get('.product-management-filters input[type="search"]').setValue('SKU-1')
     await flushPromises()
     expect(wrapper.get('.product-child-row').text()).toContain('SKU-1')
-    await wrapper.get('.sku-search-row input[type="search"]').setValue('missing')
-    await wrapper.get('.sku-search-row').findAll('button').find(button => button.text() === '搜索')!.trigger('click')
+    await wrapper.get('.product-management-filters input[type="search"]').setValue('missing')
     await flushPromises()
     expect(wrapper.text()).toContain('暂无匹配的产品')
   })
@@ -152,10 +150,10 @@ describe('ProductsView', () => {
   })
 
   it('applies saved column order to the real table', async () => {
-    localStorage.setItem('jiugeng.product-sku.columns.user-1', JSON.stringify(['name', 'sku', 'status']))
+    localStorage.setItem('jiugeng.product-management.columns.v2.user-1', JSON.stringify(['name', 'sku', 'status']))
     const wrapper = mount(ProductsView, { global: { stubs: { RouterLink } } })
     await flushPromises()
-    expect(wrapper.findAll('thead th').map(cell => cell.text())).toEqual(['', '品名', '父体编码 / 子体 SKU', '状态', '操作'])
+    expect(wrapper.findAll('thead th').map(cell => cell.text())).toEqual(['', '品名', '产品编码 / SKU', '状态', '操作'])
   })
 
   it('adds a child from its parent without changing existing siblings', async () => {
@@ -183,13 +181,53 @@ describe('ProductsView', () => {
     expect(wrapper.findAll('.product-child-row')).toHaveLength(2)
   })
 
-  it('exports applied filters rather than unsubmitted search text', async () => {
+  it('filters keywords across names and specifications, types and product status', async () => {
+    vi.mocked(domainApi.products).mockResolvedValueOnce({ items: [
+      { ...product, variants: [{ ...product.variants[0], specification: '蓝色大号' }] },
+      { ...product, id: 'p2', productCode: 'P-2', productType: '电子', status: 'DRAFT', variants: [{ ...product.variants[0], id: 'v2', skuCode: 'SKU-2' }] },
+    ], mockData: false } as never)
     const wrapper = mount(ProductsView, { global: { stubs: { RouterLink } } })
     await flushPromises()
-    await wrapper.get('.sku-search-row input[type="search"]').setValue('not-applied')
+    const input = wrapper.get('.product-management-filters input[type="search"]')
+    await input.setValue('蓝色')
+    expect(wrapper.findAll('.product-child-row')).toHaveLength(1)
+    await input.setValue('测试')
+    expect(wrapper.findAll('.product-parent-row')).toHaveLength(2)
+    await input.setValue('')
+    const selects = wrapper.findAll('.product-management-filters select')
+    await selects[0]!.setValue('电子')
+    expect(wrapper.findAll('.product-parent-row')).toHaveLength(1)
+    await selects[1]!.setValue('ACTIVE')
+    expect(wrapper.findAll('.product-parent-row')).toHaveLength(0)
+    await selects[1]!.setValue('DRAFT')
+    await selects[2]!.setValue('UNINITIALIZED')
+    expect(wrapper.get('.product-parent-row').text()).toContain('P-2')
+    await wrapper.get('.product-management-filters button').trigger('click')
+    await flushPromises()
+    expect((input.element as HTMLInputElement).value).toBe('')
+    expect((selects[0]!.element as HTMLSelectElement).value).toBe('')
+  })
+
+  it('opens the separate manual and label tabs for the selected child', async () => {
+    const wrapper = mount(ProductsView, { global: { stubs: { RouterLink } } })
+    await flushPromises()
+    await wrapper.get('.parent-toggle').trigger('click')
+    await wrapper.get('.product-child-row .sku-code-button').trigger('click')
+    await flushPromises()
+    for (const title of ['说明书管理', '商品标签管理']) {
+      await wrapper.findAll('button').find(button => button.text() === title)!.trigger('click')
+      await flushPromises()
+      expect(wrapper.get('.sku-documents h3').text()).toBe(title)
+    }
+  })
+
+  it('exports the current live keyword filters', async () => {
+    const wrapper = mount(ProductsView, { global: { stubs: { RouterLink } } })
+    await flushPromises()
+    await wrapper.get('.product-management-filters input[type="search"]').setValue('SKU')
     await wrapper.findAll('button').find(button => button.text() === '导出')!.trigger('click')
     await wrapper.get('.batch-dialog').trigger('submit')
     await flushPromises()
-    expect(domainApi.exportSkus).toHaveBeenCalledWith(expect.objectContaining({ q: '' }))
+    expect(domainApi.exportSkus).toHaveBeenCalledWith(expect.objectContaining({ q: 'SKU', field: 'KEYWORD', exact: false }))
   })
 })

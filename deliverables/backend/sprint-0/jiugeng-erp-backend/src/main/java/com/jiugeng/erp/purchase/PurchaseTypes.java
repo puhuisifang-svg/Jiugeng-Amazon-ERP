@@ -3,6 +3,7 @@ package com.jiugeng.erp.purchase;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import com.jiugeng.erp.iam.AuditHistoryLookup;
 
 final class PurchaseTypes {
     private PurchaseTypes() {}
@@ -25,4 +26,7 @@ final class PurchaseTypes {
                        String remark, String actorLoginName, List<ReceiptLineView> lines, Instant createdAt,
                        boolean replayed) {}
     record Dashboard(long draft, long pendingReceipt, long partial, long completed, List<OrderView> recent) {}
+    record ReferenceItem(String id, String code, String name, String unit, boolean primarySupplier) {}
+    record OrderDetail(OrderView order, List<ReceiptView> receipts,
+                       List<AuditHistoryLookup.HistoryEvent> history) {}
 }

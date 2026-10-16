@@ -7,12 +7,17 @@ export interface PurchaseOrder { id: string; orderNo: string; orderType: Purchas
 export interface PurchaseReceiptLine { orderLineId: string; itemCode: string; itemName: string; quantity: number; inventoryTransactionId?: string }
 export interface PurchaseReceipt { id: string; orderId: string; orderNo: string; requestId: string; receivedAt: string; remark?: string; actorLoginName: string; lines: PurchaseReceiptLine[]; createdAt: string; replayed: boolean }
 export interface PurchaseDashboard { draft: number; pendingReceipt: number; partial: number; completed: number; recent: PurchaseOrder[] }
+export interface PurchaseReferenceItem { id: string; code: string; name: string; unit: string; primarySupplier: boolean }
+export interface PurchaseHistoryEvent { id: string; action: string; actorLoginName: string; actorDisplayName?: string; detail?: string; occurredAt: string }
+export interface PurchaseOrderDetail { order: PurchaseOrder; receipts: PurchaseReceipt[]; history: PurchaseHistoryEvent[] }
 export interface PurchaseOrderInput { orderType: PurchaseOrderType; supplierId: string; currency: string; remark?: string; version?: number; lines: Array<{ itemId: string; quantity: number; unitPrice: number }> }
 
 export const purchaseApi = {
   dashboard: () => apiRequest<PurchaseDashboard>('/v1/purchases/dashboard'),
   orders: (status?: PurchaseStatus) => apiRequest<PurchaseOrder[]>(`/v1/purchases/orders${status ? `?status=${status}` : ''}`),
   order: (id: string) => apiRequest<PurchaseOrder>(`/v1/purchases/orders/${id}`),
+  detail: (id: string) => apiRequest<PurchaseOrderDetail>(`/v1/purchases/orders/${id}/detail`),
+  references: (orderType: PurchaseOrderType, supplierId: string) => apiRequest<PurchaseReferenceItem[]>(`/v1/purchases/references?orderType=${orderType}&supplierId=${encodeURIComponent(supplierId)}`),
   create: (input: PurchaseOrderInput) => apiRequest<PurchaseOrder>('/v1/purchases/orders', { method: 'POST', body: JSON.stringify(input) }),
   update: (id: string, input: PurchaseOrderInput) => apiRequest<PurchaseOrder>(`/v1/purchases/orders/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
   submit: (id: string, version: number) => apiRequest<PurchaseOrder>(`/v1/purchases/orders/${id}/submit`, { method: 'POST', body: JSON.stringify({ version }) }),

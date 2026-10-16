@@ -265,6 +265,14 @@ select:disabled { color: #8a93a5; background-color: #f3f5f8; cursor: not-allowed
 .material-preview .catalog-image, .material-preview__image { width: auto; max-width: min(1200px, 86vw); height: auto; max-height: 80vh; object-fit: contain; background: white; border-radius: 10px; }
 .material-preview p { max-width: 80vw; margin: 0; overflow: hidden; color: white; text-overflow: ellipsis; white-space: nowrap; }
 .inventory-ledger-table { min-width: 920px; }
+.inventory-ledger-table tbody tr { height: 69px; }
+.ledger-action-placeholder { display: inline-flex; min-height: 40px; align-items: center; }
+.list-pagination { flex-wrap: wrap; }
+.list-pagination label { display: inline-flex; align-items: center; gap: 8px; }
+.list-pagination select { min-height: 40px; padding: 0 11px; color: var(--ink); background-color: white; border: 1px solid var(--line); border-radius: 7px; }
+.data-table .selection-cell { width: 48px; min-width: 48px; padding-inline: 12px; text-align: center; }
+.data-table .selection-cell input { width: 16px; height: 16px; min-height: 16px; padding: 0; cursor: pointer; }
+.inventory-stock-hint { margin: 0; color: var(--muted); }
 .purchase-dialog { display: grid; width: min(1000px, 100%); min-height: 0; gap: 18px; padding: 24px; }
 .purchase-dialog h2 { margin: 0; padding-right: 48px; font-size: 19px; }
 .purchase-table { min-width: 860px; }

@@ -44,6 +44,21 @@ describe('InventoryLedgerView', () => {
     expect(wrapper.text()).toContain('MAT-2')
   })
 
+  it('paginates results without losing reversal references on other pages', async () => {
+    const items = Array.from({ length: 21 }, (_, index) => ({ id: `t${index}`, materialCode: `PAGE-${index}`,
+      type: 'INBOUND', reason: '入库', quantity: 1, unit: '件' }))
+    ledger.mockResolvedValueOnce({ items: [...items, { id: 'reversal', materialCode: 'PAGE-0', type: 'REVERSAL', referenceTransactionId: 't0' }] })
+    const wrapper = mount(InventoryLedgerView, { global: { stubs: { RouterLink } } })
+    await flushPromises()
+    expect(wrapper.findAll('tbody tr')).toHaveLength(20)
+    expect(wrapper.get('tbody tr button').text()).toBe('已冲销')
+    await wrapper.get('.list-pagination').findAll('button')[1]!.trigger('click')
+    expect(wrapper.findAll('tbody tr')).toHaveLength(2)
+    await wrapper.get('input').setValue('PAGE-20')
+    expect(wrapper.findAll('tbody tr')).toHaveLength(1)
+    expect(wrapper.get('.list-pagination').text()).toContain('1 / 1')
+  })
+
   it('requires a reason in a confirmation dialog before reversing a ledger entry', async () => {
     const wrapper = mount(InventoryLedgerView, { global: { stubs: { RouterLink } } })
     await flushPromises()

@@ -115,6 +115,26 @@ class MaterialService {
                 required(input.unit(), "单位", 32), imageUrl, imageAssetId, optional(input.remark(), 1000));
     }
 
+    @Transactional
+    void delete(List<String> ids, AuthenticatedActor actor) {
+        List<MaterialView> targets = ids.stream().distinct().sorted().map(this::material).toList();
+        for (MaterialView target : targets) {
+            if (repository.isReferenced(target.id())) {
+                throw new MaterialException(409, "MATERIAL_IN_USE", target.materialCode()
+                        + " 已有库存流水、库存或产品/采购关联，不能删除；可使用停用功能。本次未删除任何辅料。");
+            }
+        }
+        try {
+            for (MaterialView target : targets) {
+                repository.delete(target.id());
+                images.releaseReplaced(target.imageAssetId(), null, "AUXILIARY_MATERIAL", target.id());
+                auditTrail.record(operation(actor, "MATERIAL_DELETE", target.id(), snapshot(target), null, "删除未使用辅料"));
+            }
+        } catch (DataIntegrityViolationException exception) {
+            throw new MaterialException(409, "MATERIAL_IN_USE", "所选辅料已被引用，本次未删除任何辅料。请刷新后重试。");
+        }
+    }
+
     private void validateHttpsUrl(String value) {
         try {
             URI uri = URI.create(value);

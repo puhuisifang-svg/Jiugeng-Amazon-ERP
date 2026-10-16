@@ -92,6 +92,36 @@ class MaterialControllerTest {
     }
 
     @Test
+    void batchDeleteIsAuthorizedAtomicAndAudited() throws Exception {
+        String token = createUserAndLogin("delete-owner", "PRODUCT_MATERIAL");
+        var ids = new java.util.ArrayList<String>();
+        for (String code : java.util.List.of("DELETE-1", "DELETE-2")) {
+            String body = mvc.perform(post("/api/v1/materials").header("Authorization", bearer(token))
+                    .contentType(MediaType.APPLICATION_JSON).content(json(material(code, code))))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            ids.add(objectMapper.readTree(body).get("id").asText());
+        }
+        String reader = createUserAndLogin("delete-reader", "SELECTION");
+        mvc.perform(post("/api/v1/materials/batch-delete").header("Authorization", bearer(reader))
+                .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("ids", ids))))
+                .andExpect(status().isForbidden());
+        jdbc.update("INSERT INTO inventory_balance(warehouse_id,auxiliary_material_id,quantity,unit) VALUES ('00000000-0000-0000-0000-000000000001',?,2,'PCS')", ids.get(1));
+        mvc.perform(post("/api/v1/materials/batch-delete").header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("ids", ids))))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("MATERIAL_IN_USE"));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM auxiliary_material", Integer.class)).isEqualTo(2);
+        jdbc.update("UPDATE inventory_balance SET quantity=0 WHERE auxiliary_material_id=?", ids.get(1));
+        mvc.perform(post("/api/v1/materials/batch-delete").header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("ids", ids))))
+                .andExpect(status().isOk());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM auxiliary_material", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE action='MATERIAL_DELETE'", Integer.class)).isEqualTo(2);
+        mvc.perform(post("/api/v1/materials/batch-delete").header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("ids", java.util.List.of()))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void validatesExternalImageUrlAndCapabilities() throws Exception {
         String writer = createUserAndLogin("material-owner", "PRODUCT_MATERIAL");
         Map<String, Object> invalid = material("MAT-BAD", "纸箱");

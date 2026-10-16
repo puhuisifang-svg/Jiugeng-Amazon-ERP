@@ -82,6 +82,22 @@ class MaterialRepository {
                 """).param("id", id).param("actorId", actorId).update();
     }
 
+    boolean isReferenced(String id) {
+        return jdbc.sql("""
+                SELECT (SELECT COUNT(*) FROM inventory_transaction WHERE auxiliary_material_id=:id)
+                     + (SELECT COUNT(*) FROM inventory_balance WHERE auxiliary_material_id=:id AND quantity<>0)
+                     + (SELECT COUNT(*) FROM product_auxiliary_material WHERE auxiliary_material_id=:id)
+                     + (SELECT COUNT(*) FROM purchase_order_line l JOIN purchase_order p ON p.id=l.order_id
+                        WHERE p.order_type='MATERIAL' AND l.item_id=:id)
+                """).param("id", id).query(Long.class).single() > 0;
+    }
+
+    void delete(String id) {
+        jdbc.sql("DELETE FROM auxiliary_material_supplier WHERE auxiliary_material_id=:id").param("id", id).update();
+        jdbc.sql("DELETE FROM inventory_balance WHERE auxiliary_material_id=:id AND quantity=0").param("id", id).update();
+        jdbc.sql("DELETE FROM auxiliary_material WHERE id=:id").param("id", id).update();
+    }
+
     private MaterialView map(ResultSet rs, int rowNum) throws SQLException {
         return new MaterialView(rs.getString("id"), rs.getString("material_code"), rs.getString("name"),
                 rs.getString("material_type"), rs.getString("specification"), rs.getString("unit"),

@@ -1,5 +1,8 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '@/api/client'
+
+const { deleteMaterials } = vi.hoisted(() => ({ deleteMaterials: vi.fn() }))
 
 const { createMaterial, disableMaterial, enableMaterial, materialSupplierLinks, replaceMaterialSupplierLinks, supplier, transact, updateSafetyStock, uploadImage } = vi.hoisted(() => ({
   createMaterial: vi.fn(), disableMaterial: vi.fn(), enableMaterial: vi.fn(), materialSupplierLinks: vi.fn(), replaceMaterialSupplierLinks: vi.fn(), supplier: vi.fn(), transact: vi.fn(), updateSafetyStock: vi.fn(), uploadImage: vi.fn(),
@@ -10,6 +13,7 @@ vi.mock('@/state/session', () => ({ session: { canAccess: () => true } }))
 vi.mock('@/api/catalog', () => ({ catalogApi: { uploadImage, imageBlob: vi.fn() } }))
 vi.mock('@/api/domain', () => ({
   domainApi: {
+    deleteMaterials,
     materials: vi.fn(async () => ({ items: [
       { id: 'm1', materialCode: 'MAT-1', name: '纸箱', materialType: '包装', specification: '30×20', unit: 'PCS', status: 'ACTIVE', imageUrl: 'https://images.example.com/box.jpg' },
       { id: 'm2', materialCode: 'MAT-2', name: '胶带', materialType: '耗材', unit: 'ROLL', status: 'ACTIVE' },
@@ -30,6 +34,7 @@ vi.mock('@/api/domain', () => ({
 }))
 
 import MaterialsView from './MaterialsView.vue'
+import { domainApi } from '@/api/domain'
 
 const RouterLink = { props: ['to'], template: '<a :href="to"><slot /></a>' }
 const AuthenticatedCatalogImage = { props: ['imageId', 'alt'], template: '<span class="image-stub">{{ imageId || alt }}</span>' }
@@ -37,7 +42,57 @@ const global = { stubs: { RouterLink, AuthenticatedCatalogImage } }
 
 describe('MaterialsView merged material management', () => {
   beforeEach(() => {
+    deleteMaterials.mockReset().mockResolvedValue(undefined)
     createMaterial.mockReset(); disableMaterial.mockReset(); enableMaterial.mockReset(); materialSupplierLinks.mockReset().mockResolvedValue([]); replaceMaterialSupplierLinks.mockReset(); supplier.mockReset(); transact.mockReset(); updateSafetyStock.mockReset(); uploadImage.mockReset()
+  })
+
+  it('paginates materials and clears selection when changing pages', async () => {
+    vi.mocked(domainApi.materials).mockResolvedValueOnce({ mockData: false, items: Array.from({ length: 21 }, (_, index) => ({
+      id: `page-${index}`, materialCode: `PAGE-${index}`, name: `分页辅料${index}`, materialType: '包装', unit: '件', status: 'ACTIVE',
+    })) })
+    const wrapper = mount(MaterialsView, { global })
+    await flushPromises()
+    expect(wrapper.findAll('tbody tr')).toHaveLength(20)
+    await wrapper.get('[aria-label="选择本页全部辅料"]').setValue(true)
+    expect(wrapper.get('.material-toolbar').text()).toContain('删除（20）')
+    await wrapper.get('.list-pagination').findAll('button')[1]!.trigger('click')
+    expect(wrapper.findAll('tbody tr')).toHaveLength(1)
+    expect(wrapper.get('.material-toolbar').text()).not.toContain('删除')
+    await wrapper.get('[aria-label="每页条数"]').setValue(50)
+    expect(wrapper.findAll('tbody tr')).toHaveLength(21)
+  })
+
+  it('requires selection and confirmation and preserves rows on deletion failure', async () => {
+    const wrapper = mount(MaterialsView, { global })
+    await flushPromises()
+    expect(wrapper.get('.material-toolbar').text()).not.toContain('导入')
+    expect(wrapper.get('.material-toolbar').text()).not.toContain('删除')
+    await wrapper.get('[aria-label="选择辅料 MAT-2"]').setValue(true)
+    await wrapper.get('.material-toolbar .danger-button').trigger('click')
+    expect(deleteMaterials).not.toHaveBeenCalled()
+    deleteMaterials.mockRejectedValueOnce(new ApiError(409, 'MATERIAL_IN_USE', '该辅料已有流水，不能删除'))
+    const dialog = wrapper.get('[aria-labelledby="delete-material-title"]')
+    await dialog.get('.danger-button').trigger('click'); await flushPromises()
+    expect(dialog.get('[role="alert"]').text()).toContain('不能删除')
+    expect(wrapper.text()).toContain('MAT-2')
+    await dialog.get('.danger-button').trigger('click'); await flushPromises()
+    expect(deleteMaterials).toHaveBeenLastCalledWith(['m2'])
+    expect(wrapper.get('.material-table').text()).not.toContain('MAT-2')
+    expect(wrapper.get('.material-toolbar').text()).not.toContain('删除')
+  })
+
+  it('explains insufficient stock inside the inventory dialog without submitting', async () => {
+    const wrapper = mount(MaterialsView, { global })
+    await flushPromises()
+    const row = wrapper.findAll('tbody tr').find(item => item.text().includes('MAT-1'))!
+    await row.findAll('button').find(button => button.text() === '库存')!.trigger('click')
+    const dialog = wrapper.get('[aria-labelledby="inventory-dialog-title"]')
+    await dialog.findAll('select')[1]!.setValue('OUTBOUND')
+    await dialog.get('input[type="number"]').setValue(5)
+    await dialog.get('form').trigger('submit'); await flushPromises()
+    expect(dialog.get('[role="alert"]').text()).toContain('当前可用 2 PCS')
+    expect(dialog.get('[role="alert"]').text()).toContain('本次需要 5 PCS')
+    expect(transact).not.toHaveBeenCalled()
   })
 
   it('shows master data and inventory in one filterable table', async () => {

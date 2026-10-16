@@ -327,6 +327,7 @@ export const domainApi = {
   materialSupplierLinks: (id: string) => apiRequest<SupplierLinkDto[]>(`/v1/suppliers/material/${id}`),
   replaceMaterialSupplierLinks: (id: string, links: SupplierAssignmentDto[]) => apiRequest<SupplierLinkDto[]>(`/v1/suppliers/material/${id}`, { method: 'PUT', body: JSON.stringify({ links }) }),
   materials,
+  deleteMaterials: (ids: string[]) => apiRequest<void>('/v1/materials/batch-delete', { method: 'POST', body: JSON.stringify({ ids }) }),
   createMaterial,
   material: async (id: string) => {
     if (runtimeConfig.authMode !== 'mock') return apiRequest<MaterialDetailDto>(`/v1/materials/${id}`)

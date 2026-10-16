@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { domainApi, type LedgerEntryDto } from '@/api/domain'
 import SyntheticNotice from '@/components/SyntheticNotice.vue'
+import ListPagination from '@/components/ListPagination.vue'
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
 import { inventoryTransactionTypeLabel } from '@/ui/inventory'
@@ -10,6 +11,7 @@ import { inventoryTransactionTypeLabel } from '@/ui/inventory'
 const entries = ref<LedgerEntryDto[]>([]); const loading = ref(true); const busy = ref(''); const error = ref('')
 const reversalTarget = ref<LedgerEntryDto | null>(null); const reversalReason = ref(''); const reversalError = ref('')
 const filters = reactive({ keyword: '', type: '' })
+const page = ref(1); const pageSize = ref(20)
 const mockMode = runtimeConfig.authMode === 'mock'
 const writable = computed(() => !mockMode && session.canAccess(['inventory.write']))
 const transactionTypes = computed(() => [...new Set(entries.value.map(item => item.type))].sort())
@@ -25,6 +27,9 @@ const filtered = computed(() => {
   })
 })
 function resetFilters() { Object.assign(filters, { keyword: '', type: '' }) }
+const pageEntries = computed(() => filtered.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
+watch(filters, () => { page.value = 1 })
+watch(() => filtered.value.length, total => { page.value = Math.min(page.value, Math.max(1, Math.ceil(total / pageSize.value))) })
 function newRequestId() { return `reverse-${Date.now()}-${Math.random().toString(16).slice(2)}` }
 async function load() { loading.value = true; error.value = ''; try { entries.value = (await domainApi.ledger()).items } catch { error.value = '库存流水加载失败。' } finally { loading.value = false } }
 function isReversed(item: LedgerEntryDto) { return reversedTransactionIds.value.has(item.id) }
@@ -114,7 +119,7 @@ onMounted(load)
             </tr>
           </thead><tbody>
             <tr
-              v-for="item in filtered"
+              v-for="item in pageEntries"
               :key="item.id"
             >
               <td>{{ item.occurredAt }}</td><td>{{ item.materialCode }}</td><td>{{ inventoryTransactionTypeLabel(item.type) }}</td><td>{{ item.signedQuantity ?? item.quantity }}</td><td>{{ item.balanceAfter ?? '—' }}</td><td>{{ item.reason }}</td><td>{{ item.actorLoginName ?? '—' }}</td><td v-if="writable">
@@ -125,7 +130,10 @@ onMounted(load)
                   @click="openReversal(item)"
                 >
                   {{ isReversed(item) ? '已冲销' : '冲销' }}
-                </button>
+                </button><span
+                  v-else
+                  class="ledger-action-placeholder"
+                >—</span>
               </td>
             </tr>
             <tr v-if="!filtered.length">
@@ -136,6 +144,11 @@ onMounted(load)
           </tbody>
         </table>
       </div>
+      <ListPagination
+        v-model:page="page"
+        v-model:page-size="pageSize"
+        :total="filtered.length"
+      />
     </article>
     <div
       v-if="reversalTarget"

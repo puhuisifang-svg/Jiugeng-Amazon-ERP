@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { ApiError } from '@/api/client'
@@ -7,6 +7,7 @@ import { catalogApi } from '@/api/catalog'
 import { domainApi, type InventoryBalanceViewDto, type InventoryCommandType, type MaterialDetailDto, type MaterialInput, type SupplierAssignmentDto, type SupplierDto, type SupplierLinkDto } from '@/api/domain'
 import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vue'
 import SyntheticNotice from '@/components/SyntheticNotice.vue'
+import ListPagination from '@/components/ListPagination.vue'
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
 
@@ -34,7 +35,8 @@ const formal = computed(() => runtimeConfig.authMode === 'password')
 const mockMode = computed(() => runtimeConfig.authMode === 'mock')
 const inventoryReadable = computed(() => session.canAccess(['inventory.read']))
 const inventoryWritable = computed(() => inventoryReadable.value && (mockMode.value || session.canAccess(['inventory.write'])))
-const importReadable = computed(() => session.canAccess(['imports.read']))
+const selectedIds = ref<string[]>([]); const deleteOpen = ref(false); const deleteError = ref('')
+const page = ref(1); const pageSize = ref(20); const inventoryError = ref('')
 const supplierAccess = computed(() => session.canAccess(['suppliers.read']))
 const supplierWritable = computed(() => writable.value && session.canAccess(['suppliers.read', 'suppliers.write']))
 const rowActionsAvailable = computed(() => writable.value || inventoryWritable.value || (formal.value && supplierAccess.value))
@@ -59,6 +61,23 @@ const filteredItems = computed(() => {
 function balanceFor(item: MaterialDetailDto) {
   return balanceByMaterial.value.get(item.id) ?? balanceByMaterial.value.get(item.materialCode)
 }
+const pageItems = computed(() => filteredItems.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
+watch(filters, () => { page.value = 1; selectedIds.value = [] })
+watch([page, pageSize], () => { selectedIds.value = [] })
+watch(() => filteredItems.value.length, total => { page.value = Math.min(page.value, Math.max(1, Math.ceil(total / pageSize.value))) })
+const allPageSelected = computed(() => pageItems.value.length > 0 && pageItems.value.every(item => selectedIds.value.includes(item.id)))
+function selectPage(event: Event) { selectedIds.value = (event.target as HTMLInputElement).checked ? pageItems.value.map(item => item.id) : [] }
+async function deleteSelected() {
+  if (saving.value || !selectedIds.value.length) return
+  saving.value = true; deleteError.value = ''
+  const ids = [...selectedIds.value]
+  try {
+    await domainApi.deleteMaterials(ids)
+    items.value = items.value.filter(item => !ids.includes(item.id)); selectedIds.value = []
+    deleteOpen.value = false; success.value = `已删除 ${ids.length} 条辅料。`
+  } catch (exception) { deleteError.value = exception instanceof ApiError ? exception.message : '删除失败，请稍后重试。所选记录已保留。' }
+  finally { saving.value = false }
+}
 function resetForm() {
   Object.assign(form, { materialCode: '', name: '', materialType: '', specification: '', unit: '件', imageUrl: '', imageAssetId: '', remark: '' })
   editingId.value = null; supplierLinks.value = []; showMaterialForm.value = false
@@ -72,6 +91,7 @@ async function edit(item: MaterialDetailDto) {
   if (supplierAccess.value) supplierLinks.value = (await domainApi.materialSupplierLinks(item.id)).map(link => ({ supplierId: link.supplierId, purchaseUrl: link.purchaseUrl, remark: link.remark, primary: link.primary }))
 }
 function openInventory(item?: MaterialDetailDto) {
+  inventoryError.value = ''
   resetForm()
   inventoryForm.materialId = item?.id ?? ''; inventoryForm.materialCode = item?.materialCode ?? ''
   inventoryForm.type = 'INBOUND'; inventoryForm.quantity = 0; inventoryForm.reason = '日常库存操作'
@@ -146,6 +166,13 @@ async function save() {
   finally { saving.value = false }
 }
 async function submitInventory() {
+  if (saving.value) return
+  inventoryError.value = ''
+  const balance = selectedMaterial.value ? balanceFor(selectedMaterial.value) : undefined
+  if (!mockMode.value && ['OUTBOUND', 'ADJUST_OUT'].includes(inventoryForm.type) && balance && inventoryForm.quantity > balance.quantity) {
+    inventoryError.value = `库存不足：当前可用 ${balance.quantity} ${balance.unit}，本次需要 ${inventoryForm.quantity} ${balance.unit}。请减少数量或先办理入库。`
+    return
+  }
   saving.value = true; error.value = ''; success.value = ''
   try {
     const response = await domainApi.transact(mockMode.value
@@ -159,7 +186,13 @@ async function submitInventory() {
     if (balance.materialId) safetyValues.value[balance.materialId] = balance.safetyStock ?? 0
     success.value = response.replayed ? '请求已幂等复用。' : `${mockMode.value ? '模拟' : '正式'}库存流水已提交。`
     showInventoryForm.value = false
-  } catch { error.value = '提交失败：请检查数量、启用状态和负库存约束。' }
+  } catch (exception) {
+    inventoryError.value = exception instanceof ApiError
+      ? exception.code === 'NEGATIVE_INVENTORY'
+        ? '库存不足，无法完成本次出库。库存可能已被其他操作更新，请减少数量或关闭弹窗刷新库存后重试。'
+        : exception.message
+      : '库存操作未成功，请检查网络后重试。填写的内容已保留。'
+  }
   finally { saving.value = false }
 }
 async function saveSafety(item: MaterialDetailDto) {
@@ -234,13 +267,15 @@ onMounted(load)
         >
           库存操作
         </button>
-        <RouterLink
-          v-if="importReadable"
-          class="secondary-action"
-          to="/imports"
+        <button
+          v-if="formal && writable && selectedIds.length"
+          type="button"
+          class="danger-button"
+          :disabled="saving"
+          @click="deleteError = ''; deleteOpen = true"
         >
-          导入
-        </RouterLink>
+          删除（{{ selectedIds.length }}）
+        </button>
       </div>
       <RouterLink
         v-if="inventoryReadable"
@@ -472,11 +507,24 @@ onMounted(load)
           type="number"
           step="0.0001"
         ></label>
+        <p
+          v-if="selectedMaterial && balanceFor(selectedMaterial)"
+          class="form-wide inventory-stock-hint"
+        >
+          当前可用库存：{{ balanceFor(selectedMaterial)?.quantity }} {{ selectedMaterial.unit }}
+        </p>
         <label class="form-wide">原因<input
           v-model="inventoryForm.reason"
           required
           maxlength="500"
         ></label>
+        <p
+          v-if="inventoryError"
+          class="form-wide data-state data-state--error"
+          role="alert"
+        >
+          {{ inventoryError }}
+        </p>
         <div class="operation-form__actions">
           <button
             class="secondary-button"
@@ -522,6 +570,18 @@ onMounted(load)
         <table class="data-table material-table">
           <thead>
             <tr>
+              <th
+                v-if="formal && writable"
+                class="selection-cell"
+              >
+                <input
+                  type="checkbox"
+                  aria-label="选择本页全部辅料"
+                  :checked="allPageSelected"
+                  :disabled="saving"
+                  @change="selectPage"
+                >
+              </th>
               <th>图片</th><th>辅料编码</th><th>品名 / 类型</th><th>规格</th><th v-if="inventoryReadable">
                 现存量
               </th><th v-if="inventoryReadable">
@@ -535,9 +595,21 @@ onMounted(load)
           </thead>
           <tbody>
             <tr
-              v-for="item in filteredItems"
+              v-for="item in pageItems"
               :key="item.id"
             >
+              <td
+                v-if="formal && writable"
+                class="selection-cell"
+              >
+                <input
+                  v-model="selectedIds"
+                  type="checkbox"
+                  :value="item.id"
+                  :aria-label="`选择辅料 ${item.materialCode}`"
+                  :disabled="saving"
+                >
+              </td>
               <td>
                 <button
                   v-if="item.imageAssetId || (item.imageUrl && !failedRemoteImages.has(item.id))"
@@ -639,17 +711,60 @@ onMounted(load)
               </td>
             </tr>
             <tr v-if="!filteredItems.length">
-              <td :colspan="6 + (inventoryReadable ? 3 : 0) + (rowActionsAvailable ? 1 : 0)">
+              <td :colspan="6 + (inventoryReadable ? 3 : 0) + (rowActionsAvailable ? 1 : 0) + (formal && writable ? 1 : 0)">
                 没有符合条件的辅料。
               </td>
             </tr>
           </tbody>
         </table>
       </div>
-      <footer class="material-table-footer">
-        共 {{ filteredItems.length }} 条
-      </footer>
+      <ListPagination
+        v-model:page="page"
+        v-model:page-size="pageSize"
+        :total="filteredItems.length"
+      />
     </article>
+    <div
+      v-if="deleteOpen"
+      class="operation-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-material-title"
+      @keydown.esc="!saving && (deleteOpen = false)"
+    >
+      <section class="panel operation-dialog__card operation-dialog__card--compact operation-form">
+        <h2 id="delete-material-title">
+          删除所选辅料
+        </h2>
+        <p class="form-wide">
+          确认删除已勾选的 {{ selectedIds.length }} 条辅料？删除后不可恢复。已有库存流水、库存或产品/采购关联的辅料不能删除，可使用停用功能。
+        </p>
+        <p
+          v-if="deleteError"
+          class="form-wide data-state data-state--error"
+          role="alert"
+        >
+          {{ deleteError }}
+        </p>
+        <div class="operation-form__actions">
+          <button
+            type="button"
+            class="secondary-button"
+            :disabled="saving"
+            @click="deleteOpen = false"
+          >
+            取消
+          </button><button
+            type="button"
+            class="danger-button"
+            :disabled="saving"
+            @click="deleteSelected"
+          >
+            {{ saving ? '删除中…' : '确认删除' }}
+          </button>
+        </div>
+      </section>
+    </div>
     <div
       v-if="purchaseMaterial"
       class="operation-dialog"

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SuccessToast from "@/components/SuccessToast.vue"
+import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import { ApiError } from '@/api/client'
@@ -49,6 +51,7 @@ function openReceipt() {
 function closeReceipt() { if (!saving.value) showReceipt.value = false }
 async function receive() {
   if (!detail.value || saving.value) return
+  success.value = ''
   receiptError.value = ''
   if (!pendingReceipt.value) {
     const available = detail.value.order.lines.filter(line => line.remainingQuantity > 0)
@@ -106,13 +109,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
       role="alert"
     >
       {{ error }}
-    </p><p
-      v-if="success"
-      class="success-message"
-      role="status"
-    >
-      {{ success }}
-    </p><p v-if="loading">
+    </p><SuccessToast :message="success" /><p v-if="loading">
       正在加载…
     </p>
     <template v-else-if="detail">
@@ -149,16 +146,18 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
       </section>
       <section class="panel">
         <h2>采购明细</h2><div class="table-scroll">
-          <table>
-            <thead><tr><th>项目</th><th>单位</th><th>采购数量</th><th>已收</th><th>{{ detail.order.status === 'CANCELLED' ? '已关闭余量' : '待收' }}</th><th>单价</th><th>金额</th></tr></thead><tbody>
-              <tr
-                v-for="line in detail.order.lines"
-                :key="line.id"
-              >
-                <td><strong>{{ line.itemCode }}</strong><small>{{ line.itemName }}</small></td><td>{{ line.unit }}</td><td>{{ line.orderedQuantity }}</td><td>{{ line.receivedQuantity }}</td><td>{{ line.remainingQuantity }}</td><td>{{ detail.order.currency }} {{ line.unitPrice.toFixed(2) }}</td><td>{{ detail.order.currency }} {{ (line.orderedQuantity * line.unitPrice).toFixed(2) }}</td>
-              </tr>
-            </tbody>
-          </table>
+          <TableViewport>
+            <table>
+              <thead><tr><th>项目</th><th>单位</th><th>采购数量</th><th>已收</th><th>{{ detail.order.status === 'CANCELLED' ? '已关闭余量' : '待收' }}</th><th>单价</th><th>金额</th></tr></thead><tbody>
+                <tr
+                  v-for="line in detail.order.lines"
+                  :key="line.id"
+                >
+                  <td><strong>{{ line.itemCode }}</strong><small>{{ line.itemName }}</small></td><td>{{ line.unit }}</td><td>{{ line.orderedQuantity }}</td><td>{{ line.receivedQuantity }}</td><td>{{ line.remainingQuantity }}</td><td>{{ detail.order.currency }} {{ line.unitPrice.toFixed(2) }}</td><td>{{ detail.order.currency }} {{ (line.orderedQuantity * line.unitPrice).toFixed(2) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </TableViewport>
         </div>
       </section>
       <section class="purchase-detail-grid">

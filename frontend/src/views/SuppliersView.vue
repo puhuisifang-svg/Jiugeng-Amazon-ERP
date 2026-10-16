@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SuccessToast from "@/components/SuccessToast.vue"
+import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, reactive, ref } from 'vue'
 import { catalogApi } from '@/api/catalog'
 import { ApiError } from '@/api/client'
@@ -185,13 +187,7 @@ onMounted(load)
         </div>
       </form>
     </div>
-    <p
-      v-if="success"
-      class="data-state data-state--success"
-      role="status"
-    >
-      {{ success }}
-    </p><p
+    <SuccessToast :message="success" /><p
       v-if="error"
       class="data-state data-state--error"
       role="alert"
@@ -208,69 +204,71 @@ onMounted(load)
       class="panel table-panel"
     >
       <div class="table-scroll">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>二维码</th><th>名称</th><th>联系人</th><th>电话</th><th>微信号</th><th>1688</th><th>状态</th><th v-if="writable">
-                操作
-              </th>
-            </tr>
-          </thead><tbody>
-            <tr
-              v-for="item in items"
-              :key="item.id"
-            >
-              <td>
-                <button
-                  v-if="item.qrImageId"
-                  type="button"
-                  class="image-button"
-                  @click="preview = { kind: 'asset', value: item.qrImageId }"
-                >
-                  <AuthenticatedCatalogImage
-                    :image-id="item.qrImageId"
-                    :alt="`${item.name} 二维码`"
-                  />
-                </button><button
-                  v-else-if="item.qrImageUrl"
-                  type="button"
-                  class="image-button"
-                  @click="preview = { kind: 'url', value: item.qrImageUrl }"
-                >
-                  <img
-                    class="material-image"
-                    :src="item.qrImageUrl"
-                    :alt="`${item.name} 二维码`"
-                    referrerpolicy="no-referrer"
-                  >
-                </button><span v-else>—</span>
-              </td><td>{{ item.name }}</td><td>{{ item.contactPerson || '—' }}</td><td>{{ item.phone || '—' }}</td><td>{{ item.wechatId || '—' }}</td><td>
-                <a
-                  v-if="item.sourceUrl"
-                  :href="item.sourceUrl"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >打开</a><span v-else>—</span>
-              </td><td><span :class="['status-badge', `status-badge--${item.status.toLowerCase()}`]">{{ item.status === 'ACTIVE' ? '启用' : '停用' }}</span></td><td v-if="writable">
-                <div class="table-actions">
+        <TableViewport>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>二维码</th><th>名称</th><th>联系人</th><th>电话</th><th>微信号</th><th>1688</th><th>状态</th><th v-if="writable">
+                  操作
+                </th>
+              </tr>
+            </thead><tbody>
+              <tr
+                v-for="item in items"
+                :key="item.id"
+              >
+                <td>
                   <button
+                    v-if="item.qrImageId"
                     type="button"
-                    @click="edit(item)"
+                    class="image-button"
+                    @click="preview = { kind: 'asset', value: item.qrImageId }"
                   >
-                    编辑
+                    <AuthenticatedCatalogImage
+                      :image-id="item.qrImageId"
+                      :alt="`${item.name} 二维码`"
+                    />
                   </button><button
+                    v-else-if="item.qrImageUrl"
                     type="button"
-                    class="danger-button"
-                    :disabled="item.status === 'DISABLED'"
-                    @click="disable(item)"
+                    class="image-button"
+                    @click="preview = { kind: 'url', value: item.qrImageUrl }"
                   >
-                    停用
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+                    <img
+                      class="material-image"
+                      :src="item.qrImageUrl"
+                      :alt="`${item.name} 二维码`"
+                      referrerpolicy="no-referrer"
+                    >
+                  </button><span v-else>—</span>
+                </td><td>{{ item.name }}</td><td>{{ item.contactPerson || '—' }}</td><td>{{ item.phone || '—' }}</td><td>{{ item.wechatId || '—' }}</td><td>
+                  <a
+                    v-if="item.sourceUrl"
+                    :href="item.sourceUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >打开</a><span v-else>—</span>
+                </td><td><span :class="['status-badge', `status-badge--${item.status.toLowerCase()}`]">{{ item.status === 'ACTIVE' ? '启用' : '停用' }}</span></td><td v-if="writable">
+                  <div class="table-actions">
+                    <button
+                      type="button"
+                      @click="edit(item)"
+                    >
+                      编辑
+                    </button><button
+                      type="button"
+                      class="danger-button"
+                      :disabled="item.status === 'DISABLED'"
+                      @click="disable(item)"
+                    >
+                      停用
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </TableViewport>
       </div><p
         v-if="!items.length"
         class="data-state"

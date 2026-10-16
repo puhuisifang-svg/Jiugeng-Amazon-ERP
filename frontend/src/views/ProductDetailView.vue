@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SuccessToast from "@/components/SuccessToast.vue"
+import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { ApiError } from '@/api/client'
@@ -37,13 +39,7 @@ onMounted(load)
       role="alert"
     >
       {{ error }}
-    </p><p
-      v-if="success"
-      class="data-state data-state--success"
-      role="status"
-    >
-      {{ success }}
-    </p><p
+    </p><SuccessToast :message="success" /><p
       v-if="loading"
       class="data-state"
     >
@@ -149,21 +145,23 @@ onMounted(load)
         v-else-if="section === 'materials'"
         class="panel table-panel"
       >
-        <h2>关联辅料汇总</h2><table class="data-table">
-          <thead><tr><th>SKU</th><th>辅料</th><th>标准用量</th><th>损耗率</th><th>状态</th></tr></thead><tbody>
-            <template
-              v-for="variant in product.variants"
-              :key="variant.id"
-            >
-              <tr
-                v-for="material in variant.materials"
-                :key="material.materialId"
+        <h2>关联辅料汇总</h2><TableViewport>
+          <table class="data-table">
+            <thead><tr><th>SKU</th><th>辅料</th><th>标准用量</th><th>损耗率</th><th>状态</th></tr></thead><tbody>
+              <template
+                v-for="variant in product.variants"
+                :key="variant.id"
               >
-                <td>{{ variant.skuCode }}</td><td>{{ material.materialId }}</td><td>{{ material.standardQuantity }} {{ material.unit }}</td><td>{{ material.lossRate }}</td><td>{{ material.enabled ? '启用' : '停用' }}</td>
-              </tr>
-            </template>
-          </tbody>
-        </table><p
+                <tr
+                  v-for="material in variant.materials"
+                  :key="material.materialId"
+                >
+                  <td>{{ variant.skuCode }}</td><td>{{ material.materialId }}</td><td>{{ material.standardQuantity }} {{ material.unit }}</td><td>{{ material.lossRate }}</td><td>{{ material.enabled ? '启用' : '停用' }}</td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </TableViewport><p
           v-if="product.variants.every(item => !item.materials.length)"
           class="data-state"
         >

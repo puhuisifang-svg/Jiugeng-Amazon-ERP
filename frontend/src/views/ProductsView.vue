@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SuccessToast from "@/components/SuccessToast.vue"
+import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, reactive, ref, toRaw, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
@@ -11,6 +13,7 @@ import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
 
+const imagePreview = ref<{ imageAssetId?: string | undefined; imageUrl?: string | undefined; variantName: string } | null>(null)
 type ColumnKey = 'image' | 'sku' | 'name' | 'product' | 'status' | 'dimensions' | 'weight' | 'supplier' | 'material' | 'updated' | 'stock'
 const columns: Array<{ key: ColumnKey; label: string }> = [
   { key: 'image', label: '图片' }, { key: 'sku', label: 'SKU' }, { key: 'name', label: '品名' },
@@ -284,13 +287,7 @@ onMounted(load)
         </button>
       </div>
     </section>
-    <p
-      v-if="success"
-      class="data-state data-state--success"
-      role="status"
-    >
-      {{ success }}
-    </p>
+    <SuccessToast :message="success" />
     <p
       v-if="error"
       class="data-state data-state--error"
@@ -321,128 +318,53 @@ onMounted(load)
       class="panel table-panel sku-table-panel"
     >
       <div class="table-scroll">
-        <table class="data-table material-table sku-master-table">
-          <thead>
-            <tr>
-              <th>
-                <input
-                  type="checkbox"
-                  aria-label="全选本页"
-                  :checked="allSelected"
-                  @change="toggleAll"
-                >
-              </th>
-              <th
-                v-for="key in displayedColumns"
-                :key="key"
-              >
-                <button
-                  v-if="key === 'sku' || key === 'updated'"
-                  class="sort-button"
-                  type="button"
-                  @click="toggleSort(key === 'sku' ? 'sku' : 'updatedAt')"
-                >
-                  {{ key === 'sku' ? '产品编码 / SKU' : '更新时间' }} {{ filters.sort === (key === 'sku' ? 'sku' : 'updatedAt') ? (filters.direction === 'asc' ? '↑' : '↓') : '' }}
-                </button><template v-else>
-                  {{ columns.find(column => column.key === key)?.label }}
-                </template>
-              </th><th class="sticky-action">
-                操作
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <template
-              v-for="group in pageGroups"
-              :key="group.product.id"
-            >
-              <tr
-                class="product-parent-row"
-                @click="toggleParent(group.product.id)"
-              >
-                <td @click.stop>
+        <TableViewport>
+          <table class="data-table material-table sku-master-table">
+            <thead>
+              <tr>
+                <th>
                   <input
                     type="checkbox"
-                    :aria-label="`选择父体 ${group.product.productCode}`"
-                    :checked="group.children.length > 0 && group.children.every(row => selected.includes(row.variant.id ?? ''))"
-                    :disabled="!group.children.length"
-                    @change="toggleGroup(group.children)"
+                    aria-label="全选本页"
+                    :checked="allSelected"
+                    @change="toggleAll"
                   >
-                </td>
-                <td
+                </th>
+                <th
                   v-for="key in displayedColumns"
                   :key="key"
-                  :class="{ 'hierarchy-cell': key === 'sku' }"
                 >
                   <button
-                    v-if="key === 'sku'"
+                    v-if="key === 'sku' || key === 'updated'"
+                    class="sort-button"
                     type="button"
-                    class="parent-toggle"
-                    :aria-expanded="expanded.includes(group.product.id)"
-                    @click.stop="toggleParent(group.product.id)"
+                    @click="toggleSort(key === 'sku' ? 'sku' : 'updatedAt')"
                   >
-                    {{ expanded.includes(group.product.id) ? '▾' : '▸' }} {{ group.product.productCode }}<small>父体 · {{ group.children.length }} 个子体</small>
-                  </button>
-                  <span
-                    v-else-if="key === 'image'"
-                    class="product-thumbnail"
-                  >父</span>
-                  <strong v-else-if="key === 'name'">{{ group.product.productName }}</strong>
-                  <span v-else-if="key === 'product'">{{ group.product.productType || '—' }}</span>
-                  <span
-                    v-else-if="key === 'status'"
-                    :class="['status-badge', `status-badge--${group.product.status.toLowerCase()}`]"
-                  >{{ labelStatus(group.product.status) }}</span>
-                  <span v-else-if="key === 'updated'">{{ group.product.updatedAt ? new Date(group.product.updatedAt).toLocaleString('zh-CN') : '—' }}</span>
-                  <span
-                    v-else-if="key === 'stock'"
-                    class="stock-uninitialized"
-                  >未建账</span><span v-else>—</span>
-                </td>
-                <td
-                  class="sticky-action"
-                  @click.stop
-                >
-                  <div class="table-actions">
-                    <button
-                      type="button"
-                      class="secondary-button"
-                      @click="toggleParent(group.product.id)"
-                    >
-                      {{ expanded.includes(group.product.id) ? '收起子体' : '展开子体' }}
-                    </button>
-                    <button
-                      v-if="writable"
-                      type="button"
-                      :disabled="saving"
-                      @click="editParent(group.product)"
-                    >
-                      编辑父体
-                    </button>
-                    <button
-                      v-if="writable"
-                      type="button"
-                      class="secondary-button"
-                      :disabled="saving"
-                      @click="addSkuProductId = group.product.id; addSkuToProduct()"
-                    >
-                      添加子体
-                    </button>
-                  </div>
-                </td>
+                    {{ key === 'sku' ? '产品编码 / SKU' : '更新时间' }} {{ filters.sort === (key === 'sku' ? 'sku' : 'updatedAt') ? (filters.direction === 'asc' ? '↑' : '↓') : '' }}
+                  </button><template v-else>
+                    {{ columns.find(column => column.key === key)?.label }}
+                  </template>
+                </th><th class="sticky-action">
+                  操作
+                </th>
               </tr>
-              <template v-if="expanded.includes(group.product.id)">
+            </thead>
+            <tbody>
+              <template
+                v-for="group in pageGroups"
+                :key="group.product.id"
+              >
                 <tr
-                  v-for="row in group.children"
-                  :key="row.variant.id ?? row.variant.skuCode"
-                  class="product-child-row"
+                  class="product-parent-row"
+                  @click="toggleParent(group.product.id)"
                 >
-                  <td>
+                  <td @click.stop>
                     <input
                       type="checkbox"
-                      :aria-label="`选择 ${row.variant.skuCode}`"
-                      :checked="selected.includes(row.variant.id ?? '')"
-                      @change="toggle(row.variant.id)"
+                      :aria-label="`选择父体 ${group.product.productCode}`"
+                      :checked="group.children.length > 0 && group.children.every(row => selected.includes(row.variant.id ?? ''))"
+                      :disabled="!group.children.length"
+                      @change="toggleGroup(group.children)"
                     >
                   </td>
                   <td
@@ -450,97 +372,182 @@ onMounted(load)
                     :key="key"
                     :class="{ 'hierarchy-cell': key === 'sku' }"
                   >
-                    <template v-if="key === 'image'">
-                      <AuthenticatedCatalogImage
-                        v-if="row.variant.imageAssetId"
-                        :image-id="row.variant.imageAssetId"
-                        :alt="`${row.variant.variantName}主图`"
-                      />
-                      <img
-                        v-else-if="row.variant.imageUrl"
-                        class="product-thumbnail"
-                        :src="row.variant.imageUrl"
-                        :alt="`${row.variant.variantName}主图`"
-                      >
-                      <span
-                        v-else
-                        class="product-thumbnail"
-                      >图</span>
-                    </template>
                     <button
-                      v-else-if="key === 'sku'"
-                      class="sku-code-button"
+                      v-if="key === 'sku'"
                       type="button"
-                      @click="openDetail(row)"
+                      class="parent-toggle"
+                      :aria-expanded="expanded.includes(group.product.id)"
+                      @click.stop="toggleParent(group.product.id)"
                     >
-                      ↳ {{ row.variant.skuCode }}
+                      {{ expanded.includes(group.product.id) ? '▾' : '▸' }} {{ group.product.productCode }}<small>父体 · {{ group.children.length }} 个子体</small>
                     </button>
+                    <span
+                      v-else-if="key === 'image'"
+                      class="product-thumbnail"
+                    >父</span>
+                    <strong v-else-if="key === 'name'">{{ group.product.productName }}</strong>
+                    <span v-else-if="key === 'product'">{{ group.product.productType || '—' }}</span>
+                    <span
+                      v-else-if="key === 'status'"
+                      :class="['status-badge', `status-badge--${group.product.status.toLowerCase()}`]"
+                    >{{ labelStatus(group.product.status) }}</span>
+                    <span v-else-if="key === 'updated'">{{ group.product.updatedAt ? new Date(group.product.updatedAt).toLocaleString('zh-CN') : '—' }}</span>
                     <span
                       v-else-if="key === 'stock'"
                       class="stock-uninitialized"
-                    >未建账</span><template v-else-if="key === 'name'">
-                      {{ row.variant.variantName }}
-                    </template>
-                    <template v-else-if="key === 'product'">
-                      {{ row.productType || '—' }}
-                    </template>
-                    <template v-else-if="key === 'status'">
-                      <span :class="['status-badge', `status-badge--${row.variant.status.toLowerCase()}`]">{{ labelStatus(row.variant.status) }}</span><small v-if="!row.businessAvailable">业务不可用</small>
-                    </template>
-                    <template v-else-if="key === 'dimensions'">
-                      {{ dimensionLabel(row.variant) }}
-                    </template>
-                    <template v-else-if="key === 'weight'">
-                      {{ row.variant.packageWeightGrams != null ? `${row.variant.packageWeightGrams} g` : '—' }}
-                    </template>
-                    <template v-else-if="key === 'supplier'">
-                      {{ row.variant.suppliers.length }} 个
-                    </template>
-                    <template v-else-if="key === 'material'">
-                      {{ row.variant.materials.length }} 个
-                    </template>
-                    <template v-else-if="key === 'updated'">
-                      {{ row.updatedAt ? new Date(row.updatedAt).toLocaleString('zh-CN') : '—' }}
-                    </template>
+                    >未建账</span><span v-else>—</span>
                   </td>
-                  <td class="sticky-action">
+                  <td
+                    class="sticky-action"
+                    @click.stop
+                  >
                     <div class="table-actions">
                       <button
                         type="button"
                         class="secondary-button"
-                        @click="openDetail(row)"
+                        @click="toggleParent(group.product.id)"
                       >
-                        详情
+                        {{ expanded.includes(group.product.id) ? '收起子体' : '展开子体' }}
                       </button>
                       <button
                         v-if="writable"
                         type="button"
                         :disabled="saving"
-                        @click="openEdit(row)"
+                        @click="editParent(group.product)"
                       >
-                        编辑
+                        编辑父体
                       </button>
                       <button
                         v-if="writable"
                         type="button"
                         class="secondary-button"
                         :disabled="saving"
-                        @click="copySku(row)"
+                        @click="addSkuProductId = group.product.id; addSkuToProduct()"
                       >
-                        复制
+                        添加子体
                       </button>
                     </div>
                   </td>
                 </tr>
-                <tr v-if="!group.children.length">
-                  <td :colspan="displayedColumns.length + 2">
-                    暂无子体，可点击“添加子体”创建。
-                  </td>
-                </tr>
+                <template v-if="expanded.includes(group.product.id)">
+                  <tr
+                    v-for="row in group.children"
+                    :key="row.variant.id ?? row.variant.skuCode"
+                    class="product-child-row"
+                  >
+                    <td>
+                      <input
+                        type="checkbox"
+                        :aria-label="`选择 ${row.variant.skuCode}`"
+                        :checked="selected.includes(row.variant.id ?? '')"
+                        @change="toggle(row.variant.id)"
+                      >
+                    </td>
+                    <td
+                      v-for="key in displayedColumns"
+                      :key="key"
+                      :class="{ 'hierarchy-cell': key === 'sku' }"
+                    >
+                      <template v-if="key === 'image'">
+                        <button
+                          v-if="row.variant.imageAssetId || row.variant.imageUrl"
+                          type="button"
+                          class="material-image-button"
+                          :aria-label="`查看${row.variant.variantName}大图`"
+                          @click="imagePreview = row.variant"
+                        >
+                          <AuthenticatedCatalogImage
+                            v-if="row.variant.imageAssetId"
+                            :image-id="row.variant.imageAssetId"
+                            :alt="`${row.variant.variantName}主图`"
+                          />
+                          <img
+                            v-else-if="row.variant.imageUrl"
+                            class="product-thumbnail"
+                            :src="row.variant.imageUrl"
+                            :alt="`${row.variant.variantName}主图`"
+                          >
+                        </button>
+                        <span
+                          v-else
+                          class="product-thumbnail"
+                        >图</span>
+                      </template>
+                      <button
+                        v-else-if="key === 'sku'"
+                        class="sku-code-button"
+                        type="button"
+                        @click="openDetail(row)"
+                      >
+                        ↳ {{ row.variant.skuCode }}
+                      </button>
+                      <span
+                        v-else-if="key === 'stock'"
+                        class="stock-uninitialized"
+                      >未建账</span><template v-else-if="key === 'name'">
+                        {{ row.variant.variantName }}
+                      </template>
+                      <template v-else-if="key === 'product'">
+                        {{ row.productType || '—' }}
+                      </template>
+                      <template v-else-if="key === 'status'">
+                        <span :class="['status-badge', `status-badge--${row.variant.status.toLowerCase()}`]">{{ labelStatus(row.variant.status) }}</span><small v-if="!row.businessAvailable">业务不可用</small>
+                      </template>
+                      <template v-else-if="key === 'dimensions'">
+                        {{ dimensionLabel(row.variant) }}
+                      </template>
+                      <template v-else-if="key === 'weight'">
+                        {{ row.variant.packageWeightGrams != null ? `${row.variant.packageWeightGrams} g` : '—' }}
+                      </template>
+                      <template v-else-if="key === 'supplier'">
+                        {{ row.variant.suppliers.length }} 个
+                      </template>
+                      <template v-else-if="key === 'material'">
+                        {{ row.variant.materials.length }} 个
+                      </template>
+                      <template v-else-if="key === 'updated'">
+                        {{ row.updatedAt ? new Date(row.updatedAt).toLocaleString('zh-CN') : '—' }}
+                      </template>
+                    </td>
+                    <td class="sticky-action">
+                      <div class="table-actions">
+                        <button
+                          type="button"
+                          class="secondary-button"
+                          @click="openDetail(row)"
+                        >
+                          详情
+                        </button>
+                        <button
+                          v-if="writable"
+                          type="button"
+                          :disabled="saving"
+                          @click="openEdit(row)"
+                        >
+                          编辑
+                        </button>
+                        <button
+                          v-if="writable"
+                          type="button"
+                          class="secondary-button"
+                          :disabled="saving"
+                          @click="copySku(row)"
+                        >
+                          复制
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr v-if="!group.children.length">
+                    <td :colspan="displayedColumns.length + 2">
+                      暂无子体，可点击“添加子体”创建。
+                    </td>
+                  </tr>
+                </template>
               </template>
-            </template>
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </TableViewport>
       </div>
       <footer class="sku-pagination">
         <span>已选 {{ selected.length }} 个 SKU，共 {{ total }} 个父体 / {{ matchingSkuCount }} 个子体</span><div>
@@ -855,19 +862,18 @@ onMounted(load)
           </p><p v-else-if="!detailHistory.length">
             暂无可见操作日志。
           </p>
-          <table
-            v-else
-            class="data-table"
-          >
-            <thead><tr><th>操作时间</th><th>操作人</th><th>操作类型</th><th>操作内容</th></tr></thead><tbody>
-              <tr
-                v-for="event in detailHistory"
-                :key="event.id"
-              >
-                <td>{{ event.occurredAt }}</td><td>{{ event.actorDisplayName || event.actorLoginName }}</td><td>{{ event.action }}</td><td>{{ event.detail || '—' }}</td>
-              </tr>
-            </tbody>
-          </table>
+          <TableViewport v-else>
+            <table class="data-table">
+              <thead><tr><th>操作时间</th><th>操作人</th><th>操作类型</th><th>操作内容</th></tr></thead><tbody>
+                <tr
+                  v-for="event in detailHistory"
+                  :key="event.id"
+                >
+                  <td>{{ event.occurredAt }}</td><td>{{ event.actorDisplayName || event.actorLoginName }}</td><td>{{ event.action }}</td><td>{{ event.detail || '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </TableViewport>
         </div>
         <footer class="dialog-footer">
           <RouterLink :to="`/products/${detailRow.productId}`">
@@ -1159,6 +1165,40 @@ onMounted(load)
           </button>
         </footer>
       </form>
+    </div>
+    <div
+      v-if="imagePreview"
+      class="image-dialog"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="`${imagePreview.variantName}图片预览`"
+      tabindex="-1"
+      @click.self="imagePreview = null"
+      @keydown.esc="imagePreview = null"
+    >
+      <div class="material-preview">
+        <button
+          type="button"
+          aria-label="关闭图片预览"
+          @click="imagePreview = null"
+        >
+          ×
+        </button>
+        <AuthenticatedCatalogImage
+          v-if="imagePreview.imageAssetId"
+          :image-id="imagePreview.imageAssetId"
+          variant="original"
+          :alt="imagePreview.variantName"
+        />
+        <img
+          v-else
+          class="material-preview__image"
+          :src="imagePreview.imageUrl"
+          :alt="imagePreview.variantName"
+          referrerpolicy="no-referrer"
+        >
+        <p>{{ imagePreview.variantName }}</p>
+      </div>
     </div>
   </section>
 </template>

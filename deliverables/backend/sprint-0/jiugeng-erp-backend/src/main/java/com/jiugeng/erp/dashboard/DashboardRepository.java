@@ -55,6 +55,14 @@ class DashboardRepository {
                 """).param("target", targetId).param("at", at).param("id", id).param("source", sourceId).update();
     }
 
+    int transferTodayImage(String id, String sourceId, String targetId, Instant at) {
+        return jdbc.sql("""
+                UPDATE dashboard_image_asset SET attached_resource_type='PENDING_SHIPMENT',attached_resource_id=:target,
+                    attached_at=:at WHERE id=:id AND status='ACTIVE' AND purpose='SHIPMENT'
+                    AND attached_resource_type='TODAY_SHIPMENT' AND attached_resource_id=:source
+                """).param("target",targetId).param("at",at).param("id",id).param("source",sourceId).update();
+    }
+
     void releaseImage(String id, String resourceType, String resourceId, Instant at) {
         if (id == null) return;
         jdbc.sql("""
@@ -133,6 +141,7 @@ class DashboardRepository {
                                                 int page, int size) {
         Query query = filters(pendingShipmentSelect(), "planned_ship_date", keyword,
                 status == null ? null : status.name(), from, to);
+        if(status==null)query.sql.append(" AND status<>'ARCHIVED'");
         long total = count(query, "dashboard_pending_shipment");
         query.sql.append(" ORDER BY planned_ship_date,latest_ship_at,product_code_snapshot,id LIMIT :limit OFFSET :offset");
         query.params.put("limit", size); query.params.put("offset", page * size);
@@ -156,6 +165,21 @@ class DashboardRepository {
 
     Optional<TodayShipment> today(String id) {
         return jdbc.sql(todaySelect()+" WHERE id=:id").param("id",id).query(this::mapToday).optional();
+    }
+    Optional<TodayShipment> todayByPending(String id) {
+        return jdbc.sql(todaySelect()+" WHERE source_pending_shipment_id=:id").param("id",id).query(this::mapToday).optional();
+    }
+    int reopenToday(String id,long version) {
+        return jdbc.sql("UPDATE dashboard_today_shipment SET status='ACTIVE',archived_by=NULL,archived_at=NULL,archive_reason=NULL WHERE id=:id AND version=:version AND status='ARCHIVED'")
+                .param("id",id).param("version",version).update();
+    }
+    int reopenPending(String id,long version) {
+        return jdbc.sql("UPDATE dashboard_pending_shipment SET status='PENDING',archived_by=NULL,archived_at=NULL,archive_reason=NULL WHERE id=:id AND version=:version AND status IN ('TRANSFERRED_TO_TODAY','ARCHIVED')")
+                .param("id",id).param("version",version).update();
+    }
+    void linkTodayToPending(String id,String pendingId) {
+        jdbc.sql("UPDATE dashboard_today_shipment SET source_pending_shipment_id=:pending WHERE id=:id AND source_pending_shipment_id IS NULL")
+                .param("pending",pendingId).param("id",id).update();
     }
     Optional<PendingShipment> pendingShipment(String id) {
         return jdbc.sql(pendingShipmentSelect()+" WHERE id=:id").param("id",id).query(this::mapPendingShipment).optional();
@@ -233,7 +257,7 @@ class DashboardRepository {
         return jdbc.sql("""
                 UPDATE dashboard_pending_shipment SET status='ARCHIVED',archived_by=:actor,archived_at=:now,
                     archive_reason=:reason,updated_by=:actor,updated_at=:now,version=version+1
-                WHERE id=:id AND version=:version AND status='PENDING'
+                WHERE id=:id AND version=:version AND status IN ('PENDING','TRANSFERRED_TO_TODAY')
                 """).param("actor",actorId).param("now",now).param("reason",reason).param("id",id)
                 .param("version",version).update();
     }

@@ -95,6 +95,31 @@ describe('MaterialsView merged material management', () => {
     expect(transact).not.toHaveBeenCalled()
   })
 
+  it('only accepts whole numbers for inventory quantity and safety stock', async () => {
+    const wrapper = mount(MaterialsView, { global })
+    await flushPromises()
+
+    const row = wrapper.findAll('tbody tr').find(item => item.text().includes('MAT-1'))!
+    await row.findAll('button').find(button => button.text() === '库存')!.trigger('click')
+    const dialog = wrapper.get('[aria-labelledby="inventory-dialog-title"]')
+    const quantity = dialog.get('input[type="number"]')
+    expect(quantity.attributes('min')).toBe('1')
+    expect(quantity.attributes('step')).toBe('1')
+    await quantity.setValue('1.5')
+    await dialog.get('form').trigger('submit')
+    expect(dialog.get('[role="alert"]').text()).toContain('数量必须是大于 0 的整数')
+    expect(transact).not.toHaveBeenCalled()
+
+    await dialog.get('button[aria-label="关闭库存操作"]').trigger('click')
+    const safety = wrapper.get('input[aria-label="MAT-1安全库存"]')
+    expect(safety.attributes('min')).toBe('0')
+    expect(safety.attributes('step')).toBe('1')
+    await safety.setValue('2.5')
+    await row.findAll('button').find(button => button.text() === '保存')!.trigger('click')
+    expect(wrapper.get('[role="alert"]').text()).toContain('安全库存必须是大于或等于 0 的整数')
+    expect(updateSafetyStock).not.toHaveBeenCalled()
+  })
+
   it('shows master data and inventory in one filterable table', async () => {
     const wrapper = mount(MaterialsView, { global })
     await flushPromises()

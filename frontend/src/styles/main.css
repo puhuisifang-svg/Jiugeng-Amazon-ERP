@@ -58,6 +58,13 @@ a { color: inherit; }
 .table-panel { min-height: 0; padding: 0; overflow-x: auto; overflow-y: hidden; }
 .table-title { margin: 0; padding: 18px 16px 8px; font-size: 17px; }
 .table-scroll { overflow-x: auto; }
+/* ERP-042: a single scroll owner keeps wide-table columns and headers aligned. */
+.table-viewport { min-width: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.table-viewport:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.table-viewport > table { width: 100%; border-collapse: separate; border-spacing: 0; }
+.table-viewport > table > thead { position: sticky; top: 0; z-index: 4; background: #f8f9fb; }
+.table-viewport > table > thead th { background: #f8f9fb; box-shadow: inset 0 -1px var(--line); }
+.table-scroll:has(> .table-viewport), .monitor-table-wrap:has(> .table-viewport) { overflow: visible; }
 .data-table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 14px; }
 .data-table th, .data-table td { padding: 14px 16px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
 .data-table th { color: var(--muted); background: #f8f9fb; font-size: 12px; letter-spacing: .03em; }
@@ -65,6 +72,14 @@ a { color: inherit; }
 .data-table input, .data-table select { min-height: 34px; padding: 0 9px; color: var(--ink); background: white; border: 1px solid var(--line); border-radius: 7px; }
 .data-table tbody tr:last-child td { border-bottom: 0; }
 .data-table tbody tr:hover { background: #fffaf6; }
+.data-table .shipment-date-cell { vertical-align: middle; color: var(--ink); background: #fbfcfe; font-weight: 700; }
+.operation-form.shipment-transfer-dialog { padding: 28px; gap: 20px; }
+.shipment-transfer-dialog h2 { padding-right: 40px; }
+.shipment-transfer-summary { margin: 0; padding: 12px 14px; color: var(--muted); background: #f5f7fa; border-radius: 7px; }
+.shipment-transfer-dialog .form-footer { margin-top: 4px; padding-top: 18px; border-top: 1px solid var(--line); }
+.data-table .shipment-remark { min-width: 180px; max-width: 300px; white-space: normal; overflow-wrap: anywhere; }
+.data-table .shipment-history-button { color: #64748b; background: #eef1f5; }
+.shipment-history-change { margin: 6px 0; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
 .empty-state { display: grid; place-content: center; justify-items: center; text-align: center; }
 .empty-state h2 { margin: 14px 0 8px; font-size: 19px; }
 .empty-state p { max-width: 600px; margin: 0; color: var(--muted); line-height: 1.7; }
@@ -432,5 +447,70 @@ select:disabled { color: #8a93a5; background-color: #f3f5f8; cursor: not-allowed
 .purchase-timeline li { padding-left: 6px; }
 .purchase-timeline span, .purchase-timeline small { display: block; margin-top: 4px; color: var(--muted); }
 .empty-state--compact { min-height: 120px; }
+/* Compact, persistent search controls; editing forms keep their original spacing. */
+.erp-content .page-stack { gap: 12px; }
+.erp-content :is(.filter-panel, .audit-filters, .dashboard-filters, .monitor-filters, .sku-filter-card) {
+  position: sticky; top: 0; z-index: 6;
+  min-height: 0; padding: 10px 14px; gap: 8px 12px;
+  background: white; box-shadow: 0 2px 6px #23395808;
+}
+.erp-content :is(.filter-panel, .audit-filters, .dashboard-filters, .monitor-filters, .sku-filter-card) label { gap: 4px; font-size: 12px; }
+.erp-content :is(.filter-panel, .audit-filters, .dashboard-filters, .monitor-filters, .sku-filter-card) :is(input:not([type="checkbox"]), select, button) { height: 32px; min-height: 32px; }
+.erp-content .monitor-search { width: auto; flex: 1 1 360px; }
+.erp-content .material-toolbar { padding: 10px 14px; }
+@media (max-width: 640px) {
+  .erp-content :is(.filter-panel, .audit-filters, .dashboard-filters) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .erp-content :is(.filter-panel, .audit-filters, .dashboard-filters, .monitor-filters, .sku-filter-card) { max-height: 35dvh; overflow: auto; }
+}
 @media (max-width: 760px) { .purchase-header { align-items: flex-start; flex-direction: column; } .purchase-line { grid-template-columns: 1fr; } }
 @media (max-width: 760px) { .purchase-summary, .purchase-detail-grid { grid-template-columns: 1fr; } .purchase-summary dl { grid-template-columns: 1fr 1fr; } }
+.dashboard-shipment-table { min-width: 1160px; }
+.dashboard-shipment-table th { white-space: nowrap; }
+.dashboard-shipment-table td { padding: 16px 12px; vertical-align: middle; }
+.data-table .image-button, .operation-form .image-button { min-height: 0; padding: 0; background: transparent; cursor: zoom-in; }
+.dashboard-shipment-table .catalog-image { width: 56px; height: 56px; }
+.dashboard-shipment-table .shipment-remark { min-width: 140px; }
+.dashboard-shipment-table .shipment-files { min-width: 115px; }
+.shipment-files { white-space: normal; }
+.dashboard-shipment-table tbody tr:nth-child(even) { background: #f8fafc; }
+.dashboard-shipment-table tbody tr:hover { background: #f0f6ff; }
+.shipment-product-cell { min-width: 160px; max-width: 240px; white-space: normal !important; overflow-wrap: anywhere; }
+.shipment-product-cell strong { display: block; color: var(--ink); margin-bottom: 6px; }
+.shipment-quantity { font-size: 19px; font-weight: 650; white-space: nowrap; }
+.data-table .shipment-quantity small { display: inline; font-size: 12px; font-weight: 400; }
+.shipment-files { display: flex; flex-direction: column; gap: 8px; min-width: 140px; max-width: 240px; }
+.shipment-files .shipment-file-link { color: #2563a6; background: #edf4fd; text-align: left; white-space: normal; overflow-wrap: anywhere; line-height: 1.5; border: 0; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
+.shipment-upload { display: block; position: relative; color: #2563a6; cursor: pointer; border: 1px dashed #a8bed8; border-radius: 6px; padding: 6px 8px; font-size: 12px; }
+.shipment-upload input { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }
+.shipment-upload:focus-within { outline: 2px solid #2563a6; }
+.shipment-files small, .shipment-files .muted { font-size: 12px; color: #728196; }
+.shipment-file-error { color: #b42318; font-size: 12px; margin: 0; }
+.shipment-file-error button { min-height: 24px; padding: 2px 6px; color: #2563a6; background: #edf4fd; font-size: 12px; }
+.data-table td .shipment-deadline { color: #c52c2c; font-weight: 700; font-size: inherit; }
+.data-table .shipment-row--selected { background: #fff3e6; }
+.data-table input:is([type="radio"], [type="checkbox"]) { min-height: 0; width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; }
+.shipment-export-preview { width: min(1100px, 95vw); max-height: 90vh; overflow: auto; padding: 24px; }
+.shipment-export-preview img { display: block; width: 100%; height: auto; margin-top: 16px; border: 1px solid var(--line); }
+.shipment-export-preview h2 { margin: 0 auto 0 0; font-size: 20px; }
+.shipment-home-footer { gap: 16px; flex-wrap: wrap; }
+.shipment-home-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
+.shipment-home-actions button:disabled { opacity: .5; cursor: not-allowed; }
+.dashboard-shipment-table .shipment-select-cell { width: 48px; min-width: 48px; padding: 14px 12px; text-align: center; vertical-align: middle; }
+.dashboard-shipment-table .shipment-select-cell input { display: block; margin: 0 auto; padding: 0; }
+.shipment-home-actions .shipment-export-button.is-selected { color: white; background: #21834a; }
+.shipment-home-actions .shipment-export-button.is-selected:not(:disabled):hover { background: #196c3b; }
+.dispatch-breakdowns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.shipment-statistics .dashboard-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
+.shipment-statistics .dashboard-filters label { flex: 0 1 160px; }
+.shipment-statistics .dashboard-filters label:first-child { flex-basis: 240px; }
+.shipment-statistics .dashboard-filters button { flex: 0 0 auto; }
+.shipment-statistics .dispatch-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.shipment-statistics .summary-card { padding: 16px; gap: 8px; }
+.shipment-statistics .summary-card strong { font-size: 28px; }
+.shipment-statistics .summary-card small { font-size: 12px; }
+.shipment-statistics .table-panel h2 { margin: 0; padding: 16px; font-size: 16px; }
+.shipment-statistics h2 small { color: var(--muted); font-weight: 400; }
+.dispatch-breakdowns .data-table { min-width: 420px; }
+.dispatch-breakdowns .table-viewport { max-height: 280px !important; }
+@media(max-width: 1000px) { .dispatch-breakdowns { grid-template-columns: 1fr; } }
+@media(max-width: 700px) { .shipment-statistics .dispatch-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

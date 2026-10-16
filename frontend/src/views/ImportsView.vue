@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SuccessToast from "@/components/SuccessToast.vue"
+import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
@@ -97,13 +99,7 @@ onMounted(load)
         下载当前模板
       </button>
     </form>
-    <p
-      v-if="success"
-      class="data-state data-state--success"
-      role="status"
-    >
-      {{ success }}
-    </p>
+    <SuccessToast :message="success" />
     <p
       v-if="error"
       class="data-state data-state--error"
@@ -121,26 +117,28 @@ onMounted(load)
       v-else-if="formal"
       class="panel table-panel"
     >
-      <table class="data-table">
-        <thead><tr><th>创建时间</th><th>类型</th><th>状态</th><th>进度</th><th>错误/警告</th><th>详情</th></tr></thead>
-        <tbody>
-          <tr
-            v-for="item in batches"
-            :key="item.id"
-          >
-            <td>{{ new Date(item.createdAt).toLocaleString() }}</td><td>{{ labels[item.importType] }}</td><td>{{ item.status }}</td><td>{{ item.percent }}%</td><td>{{ item.errorCount }} / {{ item.warningCount }}</td><td>
-              <RouterLink :to="`/imports/${item.id}`">
-                查看
-              </RouterLink>
-            </td>
-          </tr>
-          <tr v-if="!batches.length">
-            <td colspan="6">
-              暂无导入批次。
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <TableViewport>
+        <table class="data-table">
+          <thead><tr><th>创建时间</th><th>类型</th><th>状态</th><th>进度</th><th>错误/警告</th><th>详情</th></tr></thead>
+          <tbody>
+            <tr
+              v-for="item in batches"
+              :key="item.id"
+            >
+              <td>{{ new Date(item.createdAt).toLocaleString() }}</td><td>{{ labels[item.importType] }}</td><td>{{ item.status }}</td><td>{{ item.percent }}%</td><td>{{ item.errorCount }} / {{ item.warningCount }}</td><td>
+                <RouterLink :to="`/imports/${item.id}`">
+                  查看
+                </RouterLink>
+              </td>
+            </tr>
+            <tr v-if="!batches.length">
+              <td colspan="6">
+                暂无导入批次。
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </TableViewport>
     </article>
   </section>
 </template>

@@ -9,7 +9,7 @@ final class DashboardTypes {
 
     enum ImagePurpose { SHIPMENT, PENDING_PRODUCT }
     enum ImageStatus { PENDING, ACTIVE }
-    enum TodayStatus { ACTIVE, ARCHIVED }
+    enum TodayStatus { ACTIVE, ARCHIVED, SHIPPED }
     enum PendingShipmentStatus { PENDING, TRANSFERRED_TO_TODAY, ARCHIVED }
     enum PendingProductStatus { PENDING, COMPLETED, ARCHIVED }
 

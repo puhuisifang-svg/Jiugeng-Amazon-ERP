@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SuccessToast from "@/components/SuccessToast.vue"
+import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, ref } from 'vue'
 
 import { changePassword, securitySettingsApi, usersApi, type AppUser } from '@/api/auth'
@@ -128,7 +130,7 @@ onMounted(initialize)
     </div>
     <template v-else>
       <p v-if="errorMessage" class="data-state data-state--error" role="alert">{{ errorMessage }}</p>
-      <p v-if="successMessage" class="data-state data-state--success" role="status">{{ successMessage }}</p>
+      <SuccessToast :message="successMessage" />
 
       <form class="panel operation-form" @submit.prevent="savePassword">
         <h2>修改本人密码</h2>
@@ -157,23 +159,25 @@ onMounted(initialize)
       <div v-if="isAdmin" class="panel table-panel">
         <h2 class="table-title">账号锁定与恢复</h2>
         <div class="table-scroll">
-          <table class="data-table">
-            <thead><tr><th>登录名</th><th>显示名称</th><th>角色</th><th>状态</th><th>操作</th></tr></thead>
-            <tbody>
-              <tr v-for="user in users" :key="user.id">
-                <td>{{ user.loginName }}</td>
-                <td>{{ user.displayName }}</td>
-                <td>{{ user.role }}</td>
-                <td>{{ user.lockedAt ? '已锁定' : user.status === 'ENABLED' ? '正常' : '已停用' }}</td>
-                <td class="table-actions">
-                  <button v-if="user.status === 'ENABLED' && user.id !== session.user.value?.id" :disabled="loading" type="button" @click="changeLock(user)">
-                    {{ user.lockedAt ? '恢复账号' : '锁定账号' }}
-                  </button>
-                  <button v-if="user.id !== session.user.value?.id" :disabled="loading" type="button" @click="resetTarget = user; temporaryPassword = ''">重置密码</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <TableViewport>
+            <table class="data-table">
+              <thead><tr><th>登录名</th><th>显示名称</th><th>角色</th><th>状态</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr v-for="user in users" :key="user.id">
+                  <td>{{ user.loginName }}</td>
+                  <td>{{ user.displayName }}</td>
+                  <td>{{ user.role }}</td>
+                  <td>{{ user.lockedAt ? '已锁定' : user.status === 'ENABLED' ? '正常' : '已停用' }}</td>
+                  <td class="table-actions">
+                    <button v-if="user.status === 'ENABLED' && user.id !== session.user.value?.id" :disabled="loading" type="button" @click="changeLock(user)">
+                      {{ user.lockedAt ? '恢复账号' : '锁定账号' }}
+                    </button>
+                    <button v-if="user.id !== session.user.value?.id" :disabled="loading" type="button" @click="resetTarget = user; temporaryPassword = ''">重置密码</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </TableViewport>
         </div>
       </div>
     </template>

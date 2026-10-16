@@ -12,6 +12,13 @@ class ProductLookupService implements ProductLookup {
 
     @Override
     @Transactional(readOnly = true)
+    public java.util.List<String> skuCodes(String productId) {
+        return repository.findById(productId,false).map(product -> product.variants().stream()
+                .map(ProductTypes.VariantView::skuCode).toList()).orElse(java.util.List.of());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<ProductReference> findById(String productId) {
         return repository.findById(productId, false).map(product -> new ProductReference(product.id(), product.productCode(),
                 product.productName(), product.status() == ProductTypes.ProductStatus.ACTIVE));

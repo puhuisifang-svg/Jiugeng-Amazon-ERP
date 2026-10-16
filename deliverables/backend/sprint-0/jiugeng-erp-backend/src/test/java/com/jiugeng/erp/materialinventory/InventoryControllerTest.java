@@ -116,6 +116,20 @@ class InventoryControllerTest {
     }
 
     @Test
+    void rejectsFractionalInventoryQuantitiesAndSafetyStockFromTheMaterialManagementApi() throws Exception {
+        String token = createUserAndLogin("integer-inventory-owner", "PRODUCT_MATERIAL");
+        Map<String, Object> fractional = command("req-fractional", "INBOUND", 1, null);
+        fractional.put("quantity", new BigDecimal("1.5"));
+        transact(token, fractional, 400);
+        mvc.perform(put("/api/v1/inventory/balances/{id}/safety-stock", MATERIAL_ID)
+                        .header("Authorization", bearer(token)).contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("safetyStock", new BigDecimal("2.5")))))
+                .andExpect(status().isBadRequest());
+
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM inventory_transaction", Integer.class)).isZero();
+    }
+
+    @Test
     void warehouseLockPreventsConcurrentNegativeStockAndOpeningIsSafe() throws Exception {
         AuthenticatedActor actor = actor();
         openingService.postOpening(new OpeningCommand("opening-1", MATERIAL_ID, BigDecimal.TEN, "PCS",

@@ -475,6 +475,9 @@ final class MockErpData {
         if (quantity == null) {
             throw badRequest("INVALID_QUANTITY", "quantity is required");
         }
+        if (quantity.stripTrailingZeros().scale() > 0) {
+            throw badRequest("INVALID_QUANTITY", "quantity must be an integer");
+        }
         switch (type) {
             case OPENING -> {
                 if (quantity.signum() < 0) {

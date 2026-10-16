@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import TableViewport from "@/components/TableViewport.vue"
 import { onMounted, ref } from 'vue'
 
 import { loadResource, type ResourceDto } from '@/api/resources'
@@ -65,31 +66,33 @@ onMounted(async () => {
         v-else
         class="table-scroll"
       >
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th
-                v-for="column in columns"
-                :key="column.key"
+        <TableViewport>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th
+                  v-for="column in columns"
+                  :key="column.key"
+                >
+                  {{ column.label }}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="(item, index) in items"
+                :key="String(('id' in item && item.id) || index)"
               >
-                {{ column.label }}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="(item, index) in items"
-              :key="String(('id' in item && item.id) || index)"
-            >
-              <td
-                v-for="column in columns"
-                :key="column.key"
-              >
-                {{ cell(item, column.key) }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+                <td
+                  v-for="column in columns"
+                  :key="column.key"
+                >
+                  {{ cell(item, column.key) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </TableViewport>
       </div>
     </article>
   </section>

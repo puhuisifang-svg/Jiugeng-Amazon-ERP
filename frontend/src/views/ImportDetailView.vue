@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SuccessToast from "@/components/SuccessToast.vue"
+import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
@@ -132,30 +134,26 @@ onMounted(load)
           下载逐行结果
         </button>
       </article>
-      <p
-        v-if="success"
-        class="data-state data-state--success"
-        role="status"
-      >
-        {{ success }}
-      </p>
+      <SuccessToast :message="success" />
       <article class="panel table-panel">
         <h2 class="table-title">
           校验问题
-        </h2><table class="data-table">
-          <thead><tr><th>级别</th><th>位置</th><th>代码</th><th>原因</th><th>建议</th></tr></thead><tbody>
-            <tr
-              v-for="item in issues"
-              :key="item.id"
-            >
-              <td>{{ item.severity }}</td><td>{{ item.sheet || '全局' }}{{ item.row ? ` / ${item.row}` : '' }}{{ item.field ? ` / ${item.field}` : '' }}</td><td>{{ item.code }}</td><td>{{ item.reason }}</td><td>{{ item.suggestion || '—' }}</td>
-            </tr><tr v-if="!issues.length">
-              <td colspan="5">
-                没有校验问题。
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        </h2><TableViewport>
+          <table class="data-table">
+            <thead><tr><th>级别</th><th>位置</th><th>代码</th><th>原因</th><th>建议</th></tr></thead><tbody>
+              <tr
+                v-for="item in issues"
+                :key="item.id"
+              >
+                <td>{{ item.severity }}</td><td>{{ item.sheet || '全局' }}{{ item.row ? ` / ${item.row}` : '' }}{{ item.field ? ` / ${item.field}` : '' }}</td><td>{{ item.code }}</td><td>{{ item.reason }}</td><td>{{ item.suggestion || '—' }}</td>
+              </tr><tr v-if="!issues.length">
+                <td colspan="5">
+                  没有校验问题。
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </TableViewport>
       </article>
       <article
         v-if="preview"
@@ -163,20 +161,22 @@ onMounted(load)
       >
         <h2 class="table-title">
           预览（{{ preview.summary.inputRows ?? preview.rows.length }} 行）
-        </h2><table class="data-table">
-          <thead><tr><th>工作表</th><th>行</th><th>业务键</th><th>数据</th></tr></thead><tbody>
-            <tr
-              v-for="item in preview.rows"
-              :key="item.id"
-            >
-              <td>{{ item.sheet }}</td><td>{{ item.row }}</td><td>{{ item.businessKey }}</td><td>{{ JSON.stringify(item.data) }}</td>
-            </tr><tr v-if="!preview.rows.length">
-              <td colspan="4">
-                模板中没有数据行。
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        </h2><TableViewport>
+          <table class="data-table">
+            <thead><tr><th>工作表</th><th>行</th><th>业务键</th><th>数据</th></tr></thead><tbody>
+              <tr
+                v-for="item in preview.rows"
+                :key="item.id"
+              >
+                <td>{{ item.sheet }}</td><td>{{ item.row }}</td><td>{{ item.businessKey }}</td><td>{{ JSON.stringify(item.data) }}</td>
+              </tr><tr v-if="!preview.rows.length">
+                <td colspan="4">
+                  模板中没有数据行。
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </TableViewport>
       </article>
     </template>
     <p

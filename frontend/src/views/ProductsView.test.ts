@@ -30,6 +30,16 @@ import ProductForm from '@/components/ProductForm.vue'
 const RouterLink = { props: ['to'], template: '<a :href="to"><slot /></a>' }
 
 describe('ProductsView', () => {
+  it('opens a product image at full size and closes the preview', async () => {
+    const wrapper = mount(ProductsView, { global: { stubs: { RouterLink } } })
+    await flushPromises()
+    await wrapper.get('.parent-toggle').trigger('click')
+    await wrapper.get('[aria-label="查看标准款大图"]').trigger('click')
+    const preview = wrapper.get('[aria-label="标准款图片预览"]')
+    expect(preview.get('img').attributes('src')).toBe(product.variants[0]!.imageUrl)
+    await preview.get('[aria-label="关闭图片预览"]').trigger('click')
+    expect(wrapper.find('[aria-label="标准款图片预览"]').exists()).toBe(false)
+  })
   beforeEach(() => {
     localStorage.clear()
     skus.mockReset().mockResolvedValue({ items: [{ productId: 'p1', productCode: 'P-1', productName: '测试产品', productType: '家居', productStatus: 'ACTIVE', businessAvailable: true, updatedAt: '2026-10-15', variant: product.variants[0] }], totalCount: 1, page: 0, size: 20 })

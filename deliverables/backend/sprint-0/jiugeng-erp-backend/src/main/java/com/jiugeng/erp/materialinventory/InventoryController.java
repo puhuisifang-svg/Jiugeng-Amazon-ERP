@@ -9,6 +9,7 @@ import static com.jiugeng.erp.materialinventory.InventoryTypes.TransactionView;
 import com.jiugeng.erp.iam.AuthenticatedActor;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -61,7 +62,7 @@ class InventoryController {
     record TransactionRequest(@NotBlank @Size(max = 100) String requestId,
             @NotBlank @Size(max = 36) String materialId,
             @NotNull TransactionType type,
-            BigDecimal quantity,
+            @Digits(integer = 15, fraction = 0) BigDecimal quantity,
             @NotBlank @Size(max = 32) String unit,
             @NotBlank @Size(max = 500) String reason,
             @Size(max = 36) String referenceTransactionId) {
@@ -71,5 +72,5 @@ class InventoryController {
         }
     }
 
-    record SafetyStockRequest(@NotNull @DecimalMin("0") BigDecimal safetyStock) {}
+    record SafetyStockRequest(@NotNull @DecimalMin("0") @Digits(integer = 15, fraction = 0) BigDecimal safetyStock) {}
 }

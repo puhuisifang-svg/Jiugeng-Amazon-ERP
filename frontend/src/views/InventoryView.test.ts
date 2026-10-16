@@ -37,4 +37,24 @@ describe('InventoryView formal mode', () => {
     expect(transact).toHaveBeenCalledWith(expect.objectContaining({ materialId: 'm1', type: 'INBOUND', quantity: 5,
       unit: 'PCS' }))
   })
+
+  it('keeps the legacy inventory controls integer-only', async () => {
+    const wrapper = mount(InventoryView, { global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } } })
+    await flushPromises()
+    await wrapper.find('select').setValue('m1')
+    const quantity = wrapper.find('form').get('input[type="number"]')
+    expect(quantity.attributes('min')).toBe('1')
+    expect(quantity.attributes('step')).toBe('1')
+    await quantity.setValue('1.5')
+    await wrapper.find('form').trigger('submit')
+    expect(wrapper.get('[role="alert"]').text()).toContain('数量必须是大于 0 的整数')
+    expect(transact).not.toHaveBeenCalled()
+
+    const safety = wrapper.get('input[type="number"][min="0"]')
+    expect(safety.attributes('step')).toBe('1')
+    await safety.setValue('2.5')
+    await wrapper.findAll('button').find(button => button.text() === '保存阈值')!.trigger('click')
+    expect(wrapper.get('[role="alert"]').text()).toContain('安全库存必须是大于或等于 0 的整数')
+    expect(updateSafetyStock).not.toHaveBeenCalled()
+  })
 })

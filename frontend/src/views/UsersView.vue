@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SuccessToast from "@/components/SuccessToast.vue"
+import TableViewport from "@/components/TableViewport.vue"
 import { onMounted, ref } from 'vue'
 
 import { usersApi, type AppUser } from '@/api/auth'
@@ -155,7 +157,7 @@ onMounted(load)
         <button :disabled="loading" type="submit">创建账号</button>
       </form>
       <p v-if="errorMessage" class="data-state data-state--error" role="alert">{{ errorMessage }}</p>
-      <p v-if="successMessage" class="data-state data-state--success" role="status">{{ successMessage }}</p>
+      <SuccessToast :message="successMessage" />
       <form v-if="resetTarget" class="panel operation-form" @submit.prevent="resetPassword">
         <h2>重置 {{ resetTarget.loginName }} 的密码</h2>
         <div class="form-wide"><label for="temporary-password">临时密码</label><PasswordField id="temporary-password" v-model="resetPasswordValue" autocomplete="new-password" :minlength="6" pattern="(?=.*[A-Za-z])(?=.*\\d).{6,128}" required /></div>
@@ -174,31 +176,33 @@ onMounted(load)
         <h2 class="table-title">账号列表</h2>
         <p v-if="loading && !users.length" class="data-state">正在加载…</p>
         <div v-else class="table-scroll">
-          <table class="data-table">
-            <thead><tr><th>登录名</th><th>显示名称</th><th>找回方式</th><th>角色</th><th>状态</th><th>首次改密</th><th>操作</th></tr></thead>
-            <tbody>
-              <tr v-for="user in users" :key="user.id">
-                <td>{{ user.loginName }}</td><td>{{ user.displayName }}</td>
-                <td>{{ [user.email, user.phone].filter(Boolean).join(' / ') || '未设置' }}</td>
-                <td>
-                  <select :value="user.role" aria-label="角色" @change="changeRole(user, $event)">
-                    <option value="ADMIN">管理员</option>
-                    <option value="PRODUCT_MATERIAL">产品与辅料</option>
-                    <option value="SELECTION">选品</option>
-                  </select>
-                </td>
-                <td>{{ user.lockedAt ? '已锁定' : user.status === 'ENABLED' ? '启用' : '停用' }}</td>
-                <td>{{ user.mustChangePassword ? '是' : '否' }}</td>
-                <td class="table-actions">
-                  <button v-if="user.status === 'ENABLED'" type="button" @click="update('disable', user)">停用</button>
-                  <button v-else type="button" @click="update('enable', user)">启用</button>
-                  <button v-if="user.lockedAt" type="button" @click="update('unlock', user)">解锁</button>
-                  <button type="button" @click="beginResetPassword(user)">重置密码</button>
-                  <button type="button" @click="beginRecoveryContacts(user)">联系方式</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <TableViewport>
+            <table class="data-table">
+              <thead><tr><th>登录名</th><th>显示名称</th><th>找回方式</th><th>角色</th><th>状态</th><th>首次改密</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr v-for="user in users" :key="user.id">
+                  <td>{{ user.loginName }}</td><td>{{ user.displayName }}</td>
+                  <td>{{ [user.email, user.phone].filter(Boolean).join(' / ') || '未设置' }}</td>
+                  <td>
+                    <select :value="user.role" aria-label="角色" @change="changeRole(user, $event)">
+                      <option value="ADMIN">管理员</option>
+                      <option value="PRODUCT_MATERIAL">产品与辅料</option>
+                      <option value="SELECTION">选品</option>
+                    </select>
+                  </td>
+                  <td>{{ user.lockedAt ? '已锁定' : user.status === 'ENABLED' ? '启用' : '停用' }}</td>
+                  <td>{{ user.mustChangePassword ? '是' : '否' }}</td>
+                  <td class="table-actions">
+                    <button v-if="user.status === 'ENABLED'" type="button" @click="update('disable', user)">停用</button>
+                    <button v-else type="button" @click="update('enable', user)">启用</button>
+                    <button v-if="user.lockedAt" type="button" @click="update('unlock', user)">解锁</button>
+                    <button type="button" @click="beginResetPassword(user)">重置密码</button>
+                    <button type="button" @click="beginRecoveryContacts(user)">联系方式</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </TableViewport>
         </div>
       </div>
     </template>

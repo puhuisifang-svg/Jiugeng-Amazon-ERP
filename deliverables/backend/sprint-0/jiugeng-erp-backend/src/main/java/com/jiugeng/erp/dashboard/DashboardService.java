@@ -99,8 +99,36 @@ class DashboardService {
     }
 
     @Transactional
+    PendingShipment transferToPending(String id,long version,String reason,String key,AuthenticatedActor actor){
+        String cleaned=required(reason,"转为待发货原因",500);
+        String hash=hash(new StateCommand(id,version,cleaned));
+        var prior=command(actor,"TODAY_TRANSFER_PENDING",key,hash);
+        if(prior!=null)return pendingShipment(prior.resourceId());
+        TodayShipment source=today(id);
+        if(source.status()!=TodayStatus.ACTIVE)throw state();
+        // The optimistic update and insert share one transaction: a stale click cannot duplicate a shipment.
+        if(repository.archiveToday(id,version,cleaned,actor.userId(),clock.instant())!=1)throw conflict();
+        var previous=source.sourcePendingShipmentId()==null?null:pendingShipment(source.sourcePendingShipmentId());
+        String targetId=previous==null?UUID.randomUUID().toString():previous.id();
+        var input=new ShipmentInput(previous==null?source.shipDate():previous.plannedShipDate(),source.productId(),source.imageId(),source.quantity(),
+                source.boxCount(),source.remark(),previous==null?source.latestShipAt():previous.latestShipAt());
+        if(previous==null){
+            repository.insertPendingShipment(targetId,input,source.productCode(),source.productName(),actor.userId());
+            repository.linkTodayToPending(id,targetId);
+        }else{
+            if(repository.reopenPending(targetId,previous.version())!=1)throw conflict();
+            if(repository.updatePendingShipment(targetId,input,source.productCode(),source.productName(),previous.version(),actor.userId())!=1)throw conflict();
+        }
+        if(source.imageId()!=null&&repository.transferTodayImage(source.imageId(),id,targetId,clock.instant())!=1)throw conflict();
+        var target=pendingShipment(targetId);
+        record(actor,"DASHBOARD_TODAY_TRANSFER_PENDING","TODAY_SHIPMENT",id,snapshot(source),snapshot(today(id)),"转为待发货："+cleaned+"；目标记录："+targetId);
+        record(actor,previous==null?"DASHBOARD_PENDING_SHIPMENT_CREATE":"DASHBOARD_PENDING_SHIPMENT_RETURN","PENDING_SHIPMENT",targetId,previous==null?null:snapshot(previous),snapshot(target),"转回待发货；原因："+cleaned);
+        saveCommand(actor,"TODAY_TRANSFER_PENDING",key,hash,"PENDING_SHIPMENT",targetId);return target;
+    }
+
+    @Transactional
     PendingShipment createPendingShipment(ShipmentInput raw,String key,AuthenticatedActor actor){
-        ShipmentInput input=shipment(raw);String hash=hash(input);var prior=command(actor,"PENDING_SHIPMENT_CREATE",key,hash);
+        ShipmentInput input=shipment(raw,true);String hash=hash(input);var prior=command(actor,"PENDING_SHIPMENT_CREATE",key,hash);
         if(prior!=null)return pendingShipment(prior.resourceId());
         var product=product(input.productId());String id=UUID.randomUUID().toString();
         repository.insertPendingShipment(id,input,product.productCode(),product.name(),actor.userId());
@@ -112,7 +140,7 @@ class DashboardService {
     @Transactional
     PendingShipment updatePendingShipment(String id,ShipmentInput raw,long version,AuthenticatedActor actor){
         PendingShipment before=pendingShipment(id);if(before.status()!=PendingShipmentStatus.PENDING)throw state();
-        ShipmentInput input=shipment(raw);var product=product(input.productId());
+        ShipmentInput input=shipment(raw,true);var product=product(input.productId());
         if(repository.updatePendingShipment(id,input,product.productCode(),product.name(),version,actor.userId())!=1)throw conflict();
         attach(input.imageId(),ImagePurpose.SHIPMENT,"PENDING_SHIPMENT",id,actor);
         releaseReplaced(before.imageId(),input.imageId(),"PENDING_SHIPMENT",id);
@@ -139,10 +167,17 @@ class DashboardService {
         if(source.status()!=PendingShipmentStatus.PENDING)throw state();
         ShipmentInput input=shipment(new ShipmentInput(raw.date(),source.productId(),raw.imageId()==null?source.imageId():raw.imageId(),
                 raw.quantity(),raw.boxCount(),raw.remark(),raw.latestShipAt()));
-        String todayId=UUID.randomUUID().toString();repository.insertToday(todayId,input,source.productCode(),source.productName(),id,actor.userId());
+        var previousToday=repository.todayByPending(id).orElse(null);
+        String todayId=previousToday==null?UUID.randomUUID().toString():previousToday.id();
+        if(previousToday==null)repository.insertToday(todayId,input,source.productCode(),source.productName(),id,actor.userId());
+        else{
+            if(repository.reopenToday(todayId,previousToday.version())!=1)throw conflict();
+            if(repository.updateToday(todayId,input,source.productCode(),source.productName(),previousToday.version(),actor.userId())!=1)throw conflict();
+        }
         if(repository.markTransferred(id,version,actor.userId(),clock.instant())!=1)throw conflict();
         attachTransferred(input.imageId(),todayId,id,actor);
         var today=today(todayId);record(actor,"DASHBOARD_PENDING_SHIPMENT_TRANSFER","PENDING_SHIPMENT",id,snapshot(source),snapshot(today),"转入当日发货安排");
+        record(actor,"DASHBOARD_TODAY_RECEIVE","TODAY_SHIPMENT",todayId,previousToday==null?null:snapshot(previousToday),snapshot(today),"由待发货转入");
         saveCommand(actor,"PENDING_SHIPMENT_TRANSFER",key,hash,"TODAY_SHIPMENT",todayId);return today;
     }
 
@@ -220,9 +255,11 @@ class DashboardService {
 
     record ImageContent(byte[] bytes,String mediaType){}
 
-    private ShipmentInput shipment(ShipmentInput input){if(input==null||input.date()==null||input.latestShipAt()==null)throw invalid("发货日期和最晚发货时间必填");
+    private ShipmentInput shipment(ShipmentInput input){return shipment(input,false);}
+    private ShipmentInput shipment(ShipmentInput input,boolean pending){if(input==null||input.date()==null||input.latestShipAt()==null)throw invalid("发货日期和最晚发货时间必填");
         String productId=required(input.productId(),"产品",36);if(input.quantity()<=0||input.boxCount()<=0)throw invalid("数量和箱数必须大于 0");
-        LocalDate latestDate=input.latestShipAt().atZone(BUSINESS_ZONE).toLocalDate();if(!latestDate.equals(input.date()))throw invalid("最晚发货时间必须落在发货日期当天");
+        LocalDate latestDate=input.latestShipAt().atZone(BUSINESS_ZONE).toLocalDate();
+        if(pending ? latestDate.isBefore(input.date()) : !latestDate.equals(input.date()))throw invalid(pending ? "最晚发货日期不能早于计划发货日期" : "最晚发货时间必须落在发货日期当天");
         return new ShipmentInput(input.date(),productId,blank(input.imageId()),input.quantity(),input.boxCount(),text(input.remark(),500),input.latestShipAt());}
     private PendingProductInput pendingProductInput(PendingProductInput input){if(input==null||input.expectedCompletionDate()==null||input.expectedQuantity()<=0)throw invalid("预计数量必须大于 0且预计完成日期必填");
         return new PendingProductInput(required(input.productName(),"产品名称",128),blank(input.imageId()),input.expectedQuantity(),text(input.remark(),500),input.expectedCompletionDate());}

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, ref } from 'vue'
 
 import { auditApi, type AuditEvent, type AuditOutcome, type AuditPage } from '@/api/audit'
@@ -123,26 +124,28 @@ onMounted(() => load())
         <p v-if="loading" class="data-state">正在加载…</p>
         <p v-else-if="!result.items.length" class="data-state">没有符合条件的审计记录。</p>
         <div v-else class="table-scroll">
-          <table class="data-table audit-table">
-            <thead><tr><th>时间</th><th>操作人</th><th>动作</th><th>资源</th><th>结果</th><th>详情</th></tr></thead>
-            <tbody>
-              <tr v-for="event in result.items" :key="event.id">
-                <td>{{ formatTime(event.occurredAt) }}</td>
-                <td>{{ event.actorDisplayName || event.actorLoginName }}<small>{{ event.actorLoginName }}</small></td>
-                <td><span class="audit-category">{{ event.category }}</span>{{ event.action }}</td>
-                <td>{{ event.resourceType }}<small>{{ event.resourceId || '—' }}</small></td>
-                <td><span :class="event.outcome === 'SUCCESS' ? 'status-success' : 'status-failure'">{{ event.outcome === 'SUCCESS' ? '成功' : '失败' }}</span></td>
-                <td>
-                  <details>
-                    <summary>查看</summary>
-                    <p v-if="event.detail">{{ event.detail }}</p>
-                    <strong>变更前</strong><pre>{{ snapshot(event.beforeValue) }}</pre>
-                    <strong>变更后</strong><pre>{{ snapshot(event.afterValue) }}</pre>
-                  </details>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <TableViewport>
+            <table class="data-table audit-table">
+              <thead><tr><th>时间</th><th>操作人</th><th>动作</th><th>资源</th><th>结果</th><th>详情</th></tr></thead>
+              <tbody>
+                <tr v-for="event in result.items" :key="event.id">
+                  <td>{{ formatTime(event.occurredAt) }}</td>
+                  <td>{{ event.actorDisplayName || event.actorLoginName }}<small>{{ event.actorLoginName }}</small></td>
+                  <td><span class="audit-category">{{ event.category }}</span>{{ event.action }}</td>
+                  <td>{{ event.resourceType }}<small>{{ event.resourceId || '—' }}</small></td>
+                  <td><span :class="event.outcome === 'SUCCESS' ? 'status-success' : 'status-failure'">{{ event.outcome === 'SUCCESS' ? '成功' : '失败' }}</span></td>
+                  <td>
+                    <details>
+                      <summary>查看</summary>
+                      <p v-if="event.detail">{{ event.detail }}</p>
+                      <strong>变更前</strong><pre>{{ snapshot(event.beforeValue) }}</pre>
+                      <strong>变更后</strong><pre>{{ snapshot(event.afterValue) }}</pre>
+                    </details>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </TableViewport>
         </div>
         <div v-if="result.totalPages > 1" class="pagination">
           <button :disabled="loading || result.page === 0" type="button" @click="load(result.page - 1)">上一页</button>

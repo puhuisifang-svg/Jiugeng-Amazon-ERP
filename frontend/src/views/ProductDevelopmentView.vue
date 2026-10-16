@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SuccessToast from "@/components/SuccessToast.vue"
+import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
@@ -146,13 +148,7 @@ watch(id, () => {
       role="alert"
     >
       {{ error }}
-    </p><p
-      v-if="success"
-      class="data-state data-state--success"
-      role="status"
-    >
-      {{ success }}
-    </p>
+    </p><SuccessToast :message="success" />
     <template v-if="!id">
       <div
         class="development-tabs"
@@ -220,35 +216,37 @@ watch(id, () => {
           v-else
           class="table-scroll"
         >
-          <table class="data-table">
-            <thead><tr><th>需求编号 / 名称</th><th>需求来源 / ASIN</th><th>开发员</th><th>推荐星级</th><th>开发周期</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead><tbody>
-              <tr
-                v-for="item in result.items"
-                :key="item.id"
-              >
-                <td>
-                  <RouterLink
-                    class="text-link"
-                    :to="`/product-development/${item.id}`"
-                  >
-                    <strong>{{ item.number }}</strong>
-                  </RouterLink><small>{{ item.fields.name }}</small>
-                </td><td>{{ item.sourceType === 'MANUAL' ? '手动创建' : '候选池' }}<small v-if="item.source">{{ item.source.asin }}</small></td><td>{{ item.fields.developer || '未分配' }}</td><td>{{ item.fields.stars ? '★'.repeat(item.fields.stars) : '未评定' }}</td><td>{{ item.fields.startDate || '待定' }}<small>至 {{ item.fields.endDate || '待定' }}</small></td><td>
-                  <span
-                    class="development-status"
-                    :data-status="item.status"
-                  >{{ labels[item.status] }}</span>
-                </td><td>{{ new Date(item.updatedAt).toLocaleString('zh-CN') }}</td><td>
-                  <RouterLink
-                    class="text-link"
-                    :to="`/product-development/${item.id}`"
-                  >
-                    查看需求
-                  </RouterLink>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <TableViewport>
+            <table class="data-table">
+              <thead><tr><th>需求编号 / 名称</th><th>需求来源 / ASIN</th><th>开发员</th><th>推荐星级</th><th>开发周期</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead><tbody>
+                <tr
+                  v-for="item in result.items"
+                  :key="item.id"
+                >
+                  <td>
+                    <RouterLink
+                      class="text-link"
+                      :to="`/product-development/${item.id}`"
+                    >
+                      <strong>{{ item.number }}</strong>
+                    </RouterLink><small>{{ item.fields.name }}</small>
+                  </td><td>{{ item.sourceType === 'MANUAL' ? '手动创建' : '候选池' }}<small v-if="item.source">{{ item.source.asin }}</small></td><td>{{ item.fields.developer || '未分配' }}</td><td>{{ item.fields.stars ? '★'.repeat(item.fields.stars) : '未评定' }}</td><td>{{ item.fields.startDate || '待定' }}<small>至 {{ item.fields.endDate || '待定' }}</small></td><td>
+                    <span
+                      class="development-status"
+                      :data-status="item.status"
+                    >{{ labels[item.status] }}</span>
+                  </td><td>{{ new Date(item.updatedAt).toLocaleString('zh-CN') }}</td><td>
+                    <RouterLink
+                      class="text-link"
+                      :to="`/product-development/${item.id}`"
+                    >
+                      查看需求
+                    </RouterLink>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </TableViewport>
         </div>
         <footer class="development-pagination">
           <span>共 {{ result.total }} 条</span><select

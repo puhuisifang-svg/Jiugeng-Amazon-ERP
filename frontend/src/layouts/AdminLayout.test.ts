@@ -29,6 +29,18 @@ async function setup(path = '/home', allowed = ref<string[] | null>(null)) {
 }
 
 describe('horizontal navigation shell', () => {
+  it('groups shipment management and statistics under shipping with permission gating', async () => {
+    const allowed = ref<string[] | null>(['dashboard.read', 'dashboard.shipments.manage'])
+    const { wrapper } = await setup('/shipping/statistics', allowed)
+    expect(wrapper.get('[data-domain="发货"]').classes()).toContain('is-active')
+    await wrapper.get('[data-domain="发货"]').trigger('click')
+    expect(wrapper.get('.mega-panel').text()).toContain('发货管理')
+    expect(wrapper.get('.mega-panel').text()).toContain('今日发货管理')
+    expect(wrapper.get('.mega-panel').text()).toContain('待发货管理')
+    expect(wrapper.get('.mega-panel').text()).toContain('发货统计')
+    allowed.value = ['dashboard.read']; await nextTick()
+    expect(wrapper.find('[data-domain="发货"]').exists()).toBe(false)
+  })
   it.each(['/product-monitoring', '/product-monitoring/example'])('groups monitoring under selection without granting other selection access: %s', async path => {
     const { wrapper, router } = await setup(path, ref([]))
     expect(wrapper.find('[data-domain="产品监控"]').exists()).toBe(false)

@@ -239,6 +239,17 @@ class MockErpControllerTest {
     }
 
     @Test
+    void rejectsFractionalInventoryQuantityInMockMode() throws Exception {
+        mockMvc.perform(post("/api/inventory/transactions")
+                        .header(AUTHORIZATION, bearer("mock-session-product-material"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"requestId":"REQ-FRACTIONAL","materialCode":"MAT-001","type":"INBOUND","quantity":1.5,"reason":"整数约束"}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void transitionsCandidatesAndRequiresRejectionReason() throws Exception {
         String selectionRole = bearer("mock-session-selection");
 

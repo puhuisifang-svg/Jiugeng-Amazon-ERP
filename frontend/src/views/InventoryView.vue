@@ -1,10 +1,13 @@
 <script setup lang="ts">
+import SuccessToast from "@/components/SuccessToast.vue"
+import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { domainApi, type InventoryBalanceViewDto, type InventoryCommandType, type MaterialDetailDto } from '@/api/domain'
 import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
+import { isNonNegativeInventoryInteger, isPositiveInventoryInteger } from '@/ui/inventory'
 
 const balances = ref<InventoryBalanceViewDto[]>([])
 const materials = ref<MaterialDetailDto[]>([])
@@ -28,6 +31,10 @@ async function load() {
   finally { loading.value = false }
 }
 async function submit() {
+  if (!isPositiveInventoryInteger(quantity.value)) {
+    error.value = '数量必须是大于 0 的整数。'
+    return
+  }
   saving.value = true; error.value = ''; success.value = ''
   try {
     const response = await domainApi.transact(mockMode
@@ -45,9 +52,14 @@ async function submit() {
 }
 async function saveSafety(item: InventoryBalanceViewDto) {
   if (!item.materialId) return
+  const safetyStock = safetyValues.value[item.materialId]
+  if (!isNonNegativeInventoryInteger(safetyStock)) {
+    error.value = '安全库存必须是大于或等于 0 的整数。'
+    return
+  }
   saving.value = true; error.value = ''; success.value = ''
   try {
-    const updated = await domainApi.updateSafetyStock(item.materialId, safetyValues.value[item.materialId] ?? 0)
+    const updated = await domainApi.updateSafetyStock(item.materialId, safetyStock)
     const index = balances.value.findIndex(value => value.materialId === item.materialId)
     if (index >= 0) balances.value[index] = updated
     success.value = '安全库存已更新。'
@@ -99,9 +111,9 @@ onMounted(load)
       <label>数量<input
         v-model.number="quantity"
         required
-        min="0.0001"
+        min="1"
         type="number"
-        step="0.0001"
+        step="1"
       ></label>
       <label class="form-wide">原因<input
         v-model="reason"
@@ -115,13 +127,7 @@ onMounted(load)
         {{ saving ? '提交中…' : '提交流水' }}
       </button>
     </form>
-    <p
-      v-if="success"
-      class="data-state data-state--success"
-      role="status"
-    >
-      {{ success }}
-    </p>
+    <SuccessToast :message="success" />
     <p
       v-if="error"
       class="data-state data-state--error"
@@ -142,49 +148,51 @@ onMounted(load)
       <h2 class="table-title">
         当前余额
       </h2>
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>仓库</th><th>辅料</th><th>名称</th><th>数量</th><th>安全库存</th><th>单位</th><th>状态</th><th v-if="!mockMode && writable">
-              操作
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="item in balances"
-            :key="`${item.warehouseCode}-${item.materialCode}`"
-          >
-            <td>{{ item.warehouseCode }}</td><td>{{ item.materialCode }}</td><td>{{ item.materialName }}</td><td>{{ item.quantity }}</td>
-            <td>
-              <input
-                v-if="!mockMode && writable && item.materialId"
-                v-model.number="safetyValues[item.materialId]"
-                min="0"
-                type="number"
-                step="0.0001"
-              ><span v-else>{{ item.safetyStock ?? '—' }}</span>
-            </td>
-            <td>{{ item.unit }}</td><td :class="item.lowStock ? 'status-failure' : 'status-success'">
-              {{ item.lowStock ? '低库存' : '正常' }}
-            </td>
-            <td v-if="!mockMode && writable">
-              <button
-                :disabled="saving"
-                type="button"
-                @click="saveSafety(item)"
-              >
-                保存阈值
-              </button>
-            </td>
-          </tr>
-          <tr v-if="!balances.length">
-            <td :colspan="!mockMode && writable ? 8 : 7">
-              尚无库存余额；首次正式入库会自动建立余额。
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <TableViewport>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>仓库</th><th>辅料</th><th>名称</th><th>数量</th><th>安全库存</th><th>单位</th><th>状态</th><th v-if="!mockMode && writable">
+                操作
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="item in balances"
+              :key="`${item.warehouseCode}-${item.materialCode}`"
+            >
+              <td>{{ item.warehouseCode }}</td><td>{{ item.materialCode }}</td><td>{{ item.materialName }}</td><td>{{ item.quantity }}</td>
+              <td>
+                <input
+                  v-if="!mockMode && writable && item.materialId"
+                  v-model.number="safetyValues[item.materialId]"
+                  min="0"
+                  type="number"
+                  step="1"
+                ><span v-else>{{ item.safetyStock ?? '—' }}</span>
+              </td>
+              <td>{{ item.unit }}</td><td :class="item.lowStock ? 'status-failure' : 'status-success'">
+                {{ item.lowStock ? '低库存' : '正常' }}
+              </td>
+              <td v-if="!mockMode && writable">
+                <button
+                  :disabled="saving"
+                  type="button"
+                  @click="saveSafety(item)"
+                >
+                  保存阈值
+                </button>
+              </td>
+            </tr>
+            <tr v-if="!balances.length">
+              <td :colspan="!mockMode && writable ? 8 : 7">
+                尚无库存余额；首次正式入库会自动建立余额。
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </TableViewport>
     </article>
   </section>
 </template>

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SuccessToast from "@/components/SuccessToast.vue"
+import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, ref } from 'vue'
 import { domainApi } from '@/api/domain'
 import type { WatchEventDto } from '@/api/resources'
@@ -19,13 +21,7 @@ onMounted(load)
       class="data-state"
     >
       当前角色仅可查看监控事件。
-    </p><p
-      v-if="success"
-      class="data-state data-state--success"
-      role="status"
-    >
-      {{ success }}
-    </p><p
+    </p><SuccessToast :message="success" /><p
       v-if="error"
       class="data-state data-state--error"
       role="alert"
@@ -41,25 +37,27 @@ onMounted(load)
       v-else
       class="panel table-panel"
     >
-      <table class="data-table">
-        <thead><tr><th>店铺</th><th>ASIN</th><th>商品</th><th>来源运行</th><th>发现时间</th><th>状态</th><th>操作</th></tr></thead><tbody>
-          <tr
-            v-for="item in items"
-            :key="item.id"
-          >
-            <td>{{ item.storeName }}</td><td>{{ item.asin }}</td><td>{{ item.title }}</td><td>{{ item.sourceRunId ?? '—' }}</td><td>{{ item.detectedAt }}</td><td>{{ item.status }}</td><td>
-              <button
-                v-if="writable"
-                :disabled="busyId === item.id"
-                type="button"
-                @click="confirm(item)"
-              >
-                {{ item.status === 'CONFIRMED' ? '再次确认（幂等）' : '确认进入候选池' }}
-              </button><span v-else>只读</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <TableViewport>
+        <table class="data-table">
+          <thead><tr><th>店铺</th><th>ASIN</th><th>商品</th><th>来源运行</th><th>发现时间</th><th>状态</th><th>操作</th></tr></thead><tbody>
+            <tr
+              v-for="item in items"
+              :key="item.id"
+            >
+              <td>{{ item.storeName }}</td><td>{{ item.asin }}</td><td>{{ item.title }}</td><td>{{ item.sourceRunId ?? '—' }}</td><td>{{ item.detectedAt }}</td><td>{{ item.status }}</td><td>
+                <button
+                  v-if="writable"
+                  :disabled="busyId === item.id"
+                  type="button"
+                  @click="confirm(item)"
+                >
+                  {{ item.status === 'CONFIRMED' ? '再次确认（幂等）' : '确认进入候选池' }}
+                </button><span v-else>只读</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </TableViewport>
     </article>
   </section>
 </template>

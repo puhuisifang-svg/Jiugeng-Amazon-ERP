@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SuccessToast from "@/components/SuccessToast.vue"
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -82,7 +83,7 @@ async function resetPassword() {
           <label for="recovery-confirmation">确认新密码</label>
           <PasswordField id="recovery-confirmation" v-model="confirmation" autocomplete="new-password" :minlength="6" pattern="(?=.*[A-Za-z])(?=.*\\d).{6,128}" required />
         </template>
-        <p v-if="message" class="data-state data-state--success" role="status">{{ message }}</p>
+        <SuccessToast :message="message" />
         <p v-if="errorMessage" class="data-state data-state--error" role="alert">{{ errorMessage }}</p>
         <button :disabled="loading" type="submit">{{ loading ? '正在处理…' : requested ? '重置密码' : '发送验证码' }}</button>
         <button v-if="requested" class="secondary-button" type="button" @click="requested = false; message = ''">重新填写</button>

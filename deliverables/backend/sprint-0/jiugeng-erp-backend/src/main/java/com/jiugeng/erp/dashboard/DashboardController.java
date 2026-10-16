@@ -72,6 +72,12 @@ class DashboardController {
     TodayShipment archiveToday(@PathVariable String id,@Valid @RequestBody StateRequest request,
             @RequestHeader("Idempotency-Key") String key,@AuthenticationPrincipal AuthenticatedActor actor){
         return service.archiveToday(id,request.version(),request.reason(),key,actor);}
+    @PostMapping("/dashboard-maintenance/today-shipments/{id}/transfer-to-pending")
+    @PreAuthorize("hasAuthority('dashboard.shipments.manage')")
+    PendingShipment transferToPending(@PathVariable String id,@Valid @RequestBody StateRequest request,
+            @RequestHeader("Idempotency-Key") String key,@AuthenticationPrincipal AuthenticatedActor actor){
+        return service.transferToPending(id,request.version(),request.reason(),key,actor);}
+
     @GetMapping("/dashboard-maintenance/today-shipments/{id}/history") @PreAuthorize("hasAuthority('dashboard.shipments.manage')")
     List<AuditHistoryLookup.HistoryEvent> todayHistory(@PathVariable String id){return service.history("TODAY_SHIPMENT",id);}
 

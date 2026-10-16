@@ -30,7 +30,7 @@ describe('application routes', () => {
     const shell = appRoutes.find((route) => route.path === '/')
     const groups = new Set(shell?.children?.map((route) => route.meta?.group).filter(Boolean))
 
-    expect(groups).toEqual(new Set(['工作台', '工作台维护', '产品管理', '选品管理', '系统管理']))
+    expect(groups).toEqual(new Set(['工作台', '工作台维护', '产品管理', '发货管理', '选品管理', '系统管理']))
   })
 
   it('merges inventory into material management while preserving the legacy route guard', () => {

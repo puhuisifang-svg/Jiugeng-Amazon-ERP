@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SuccessToast from "@/components/SuccessToast.vue"
+import TableViewport from "@/components/TableViewport.vue"
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { monitoringApi, type FieldName, type MonitorDetail, type MonitorFields, type MonitorResult, type MonitorSnapshot, type MonitorTarget, type SnapshotInput } from '@/api/monitoring'
@@ -76,7 +78,7 @@ async function show(kind: typeof modalKind.value) {
 }
 function close() { if (!busy.value) modal.value?.close() }
 async function create() {
-  busy.value = true; error.value = ''
+  busy.value = true; notice.value = String(); error.value = ''
   try {
     const input = { asins: split(createAsins.value).map(s => s.toUpperCase()), tags: split(createTags.value), remark: createRemark.value }
     if (!input.asins.length || input.asins.length > 100) throw new Error('每批请输入 1～100 个 ASIN。')
@@ -88,7 +90,7 @@ async function create() {
 }
 async function batch(action = batchAction.value, targets = selectedRows.value) {
   if (!targets.length) return
-  busy.value = true; error.value = ''
+  busy.value = true; notice.value = String(); error.value = ''
   try {
     const result = await monitoringApi.batch(targets.map(({ id, version }) => ({ id, version })), action, split(batchTags.value))
     const failed = result.filter(r => r.status !== 'UPDATED')
@@ -97,16 +99,16 @@ async function batch(action = batchAction.value, targets = selectedRows.value) {
   } catch (e) { fail(e) } finally { busy.value = false }
 }
 async function follow(row: MonitorTarget) {
-  busy.value = true; error.value = ''
+  busy.value = true; notice.value = String(); error.value = ''
   try { await monitoringApi.follow(row.id, !row.followed); await load() } catch (e) { fail(e) } finally { busy.value = false }
 }
 async function followSelected(followed: boolean) {
-  busy.value = true; error.value = ''; let done = 0
+  busy.value = true; notice.value = String(); error.value = ''; let done = 0
   try { for (const row of selectedRows.value) { await monitoringApi.follow(row.id, followed); done++ } notice.value = `已${followed ? '关注' : '取消关注'} ${done} 条。`; await load() }
   catch (e) { notice.value = `已完成 ${done} 条，其余可重试。`; fail(e) } finally { busy.value = false }
 }
 async function saveColumns() {
-  busy.value = true; error.value = ''
+  busy.value = true; notice.value = String(); error.value = ''
   try { const p = await monitoringApi.columns(draftColumns.value); columns.value = p.columns; modal.value?.close() } catch (e) { fail(e) } finally { busy.value = false }
 }
 function moveColumn(index: number, offset: number) {
@@ -118,7 +120,7 @@ function moveColumn(index: number, offset: number) {
 }
 async function saveSnapshot() {
   if (!detail.value) return
-  busy.value = true; error.value = ''
+  busy.value = true; notice.value = String(); error.value = ''
   try {
     const fields: Record<string, unknown> = {}
     for (const field of fieldNames) {
@@ -150,13 +152,7 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
     <div class="monitor-intro">
       <div><span class="monitor-eyebrow">AMAZON · US</span><h2>{{ isDetail ? '商品观测详情' : '产品监控' }}</h2><p>持续记录商品变化，让每一次判断都有依据。</p></div><span class="monitor-source-note">人工观测 / 合成演示 · 尚未接入自动采集</span>
     </div>
-    <p
-      v-if="notice"
-      class="data-state data-state--success"
-      role="status"
-    >
-      {{ notice }}
-    </p>
+    <SuccessToast :message="notice" />
     <p
       v-if="error"
       class="data-state data-state--error"
@@ -277,117 +273,119 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
           v-else
           class="monitor-table-wrap"
         >
-          <table class="monitor-table">
-            <thead>
-              <tr>
-                <th>
-                  <input
-                    type="checkbox"
-                    aria-label="选择本页全部"
-                    :checked="allSelected"
-                    :disabled="busy"
-                    @change="toggleAll"
+          <TableViewport>
+            <table class="monitor-table">
+              <thead>
+                <tr>
+                  <th>
+                    <input
+                      type="checkbox"
+                      aria-label="选择本页全部"
+                      :checked="allSelected"
+                      :disabled="busy"
+                      @change="toggleAll"
+                    >
+                  </th><th>监控 / 关注</th><th class="monitor-product-col">
+                    商品 / ASIN
+                  </th><th>最新状态</th><th
+                    v-for="col in columns"
+                    :key="col"
                   >
-                </th><th>监控 / 关注</th><th class="monitor-product-col">
-                  商品 / ASIN
-                </th><th>最新状态</th><th
-                  v-for="col in columns"
-                  :key="col"
+                    {{ columnLabels[col] }}
+                  </th><th>操作</th>
+                </tr>
+              </thead><tbody>
+                <tr
+                  v-for="row in rows"
+                  :key="row.id"
                 >
-                  {{ columnLabels[col] }}
-                </th><th>操作</th>
-              </tr>
-            </thead><tbody>
-              <tr
-                v-for="row in rows"
-                :key="row.id"
-              >
-                <td>
-                  <input
-                    v-model="selected"
-                    type="checkbox"
-                    :value="row.id"
-                    :aria-label="`选择 ${row.asin}`"
-                    :disabled="busy"
-                  >
-                </td><td>
-                  <span :class="['monitor-pill', { paused: !row.enabled }]">{{ row.enabled ? '监控中' : '已暂停' }}</span><button
-                    class="monitor-star"
-                    :aria-label="`${row.followed ? '取消关注' : '关注'} ${row.asin}`"
-                    :disabled="busy"
-                    @click="follow(row)"
-                  >
-                    {{ row.followed ? '★' : '☆' }}
-                  </button>
-                </td><td>
-                  <div class="monitor-product">
-                    <img
-                      v-if="row.fields.imageUrl"
-                      :src="row.fields.imageUrl"
-                      alt="商品主图"
-                      referrerpolicy="no-referrer"
-                    ><span
-                      v-else
-                      class="monitor-image-empty"
-                    >暂无图片</span><div>
-                      <RouterLink :to="`/product-monitoring/${row.id}`">
-                        {{ row.fields.title || '等待首次观测' }}
-                      </RouterLink><p class="monitor-asin">
-                        {{ row.asin }}
-                      </p>
+                  <td>
+                    <input
+                      v-model="selected"
+                      type="checkbox"
+                      :value="row.id"
+                      :aria-label="`选择 ${row.asin}`"
+                      :disabled="busy"
+                    >
+                  </td><td>
+                    <span :class="['monitor-pill', { paused: !row.enabled }]">{{ row.enabled ? '监控中' : '已暂停' }}</span><button
+                      class="monitor-star"
+                      :aria-label="`${row.followed ? '取消关注' : '关注'} ${row.asin}`"
+                      :disabled="busy"
+                      @click="follow(row)"
+                    >
+                      {{ row.followed ? '★' : '☆' }}
+                    </button>
+                  </td><td>
+                    <div class="monitor-product">
+                      <img
+                        v-if="row.fields.imageUrl"
+                        :src="row.fields.imageUrl"
+                        alt="商品主图"
+                        referrerpolicy="no-referrer"
+                      ><span
+                        v-else
+                        class="monitor-image-empty"
+                      >暂无图片</span><div>
+                        <RouterLink :to="`/product-monitoring/${row.id}`">
+                          {{ row.fields.title || '等待首次观测' }}
+                        </RouterLink><p class="monitor-asin">
+                          {{ row.asin }}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </td><td>
-                  <span>{{ statusLabels[row.lastStatus] ?? row.lastStatus }}</span><small
-                    v-if="stale(row)"
-                    class="monitor-stale"
-                  >数据已超过 48 小时</small>
-                </td><td
-                  v-for="col in columns"
-                  :key="col"
-                >
-                  <template v-if="col === 'brand'">
-                    {{ display(row.fields.brand) }}
-                  </template><template v-else-if="col === 'price'">
-                    {{ row.fields.price == null ? '—' : `USD ${row.fields.price.toFixed(2)}` }}
-                  </template><template v-else-if="col === 'availability'">
-                    {{ display(row.fields.availability) }}
-                  </template><template v-else-if="col === 'owner'">
-                    {{ row.ownerName || '未分配' }}
-                  </template><template v-else-if="col === 'tags'">
-                    <span
-                      v-for="tag in row.tags"
-                      :key="tag"
-                      class="monitor-tag"
-                    >{{ tag }}</span><span v-if="!row.tags.length">—</span>
-                  </template><template v-else-if="col === 'updated'">
-                    {{ formatTime(row.observedAt) }}
-                  </template><template v-else-if="col === 'source'">
-                    {{ sourceLabel(row.source) }}
-                  </template>
-                </td><td>
-                  <RouterLink :to="`/product-monitoring/${row.id}`">
-                    详情
-                  </RouterLink><button
-                    class="monitor-text-button"
-                    :disabled="busy"
-                    @click="batch(row.enabled ? 'PAUSE' : 'ENABLE', [row])"
+                  </td><td>
+                    <span>{{ statusLabels[row.lastStatus] ?? row.lastStatus }}</span><small
+                      v-if="stale(row)"
+                      class="monitor-stale"
+                    >数据已超过 48 小时</small>
+                  </td><td
+                    v-for="col in columns"
+                    :key="col"
                   >
-                    {{ row.enabled ? '暂停' : '恢复' }}
-                  </button>
-                </td>
-              </tr><tr v-if="!rows.length">
-                <td
-                  :colspan="columns.length + 5"
-                  class="monitor-empty"
-                >
-                  <h3>暂无监控商品</h3><p>添加美国站 ASIN，录入首次观测后即可建立基线。</p><button @click="show('create')">
-                    添加监控
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                    <template v-if="col === 'brand'">
+                      {{ display(row.fields.brand) }}
+                    </template><template v-else-if="col === 'price'">
+                      {{ row.fields.price == null ? '—' : `USD ${row.fields.price.toFixed(2)}` }}
+                    </template><template v-else-if="col === 'availability'">
+                      {{ display(row.fields.availability) }}
+                    </template><template v-else-if="col === 'owner'">
+                      {{ row.ownerName || '未分配' }}
+                    </template><template v-else-if="col === 'tags'">
+                      <span
+                        v-for="tag in row.tags"
+                        :key="tag"
+                        class="monitor-tag"
+                      >{{ tag }}</span><span v-if="!row.tags.length">—</span>
+                    </template><template v-else-if="col === 'updated'">
+                      {{ formatTime(row.observedAt) }}
+                    </template><template v-else-if="col === 'source'">
+                      {{ sourceLabel(row.source) }}
+                    </template>
+                  </td><td>
+                    <RouterLink :to="`/product-monitoring/${row.id}`">
+                      详情
+                    </RouterLink><button
+                      class="monitor-text-button"
+                      :disabled="busy"
+                      @click="batch(row.enabled ? 'PAUSE' : 'ENABLE', [row])"
+                    >
+                      {{ row.enabled ? '暂停' : '恢复' }}
+                    </button>
+                  </td>
+                </tr><tr v-if="!rows.length">
+                  <td
+                    :colspan="columns.length + 5"
+                    class="monitor-empty"
+                  >
+                    <h3>暂无监控商品</h3><p>添加美国站 ASIN，录入首次观测后即可建立基线。</p><button @click="show('create')">
+                      添加监控
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </TableViewport>
         </div>
         <div class="monitor-pagination">
           <span>共 {{ total }} 条</span><span class="monitor-spacer" /><button

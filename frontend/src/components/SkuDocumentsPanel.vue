@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SuccessToast from "@/components/SuccessToast.vue"
+import TableViewport from "@/components/TableViewport.vue"
 import { onMounted, ref } from 'vue'
 import { catalogApi, type SkuDocument } from '@/api/catalog'
 import { session } from '@/state/session'
@@ -68,13 +70,7 @@ onMounted(load)
         刷新列表
       </button>
     </p>
-    <p
-      v-if="success"
-      role="status"
-      class="data-state data-state--success"
-    >
-      {{ success }}
-    </p>
+    <SuccessToast :message="success" />
     <p v-if="loading">
       正在加载文件…
     </p>
@@ -85,30 +81,32 @@ onMounted(load)
       v-else
       class="table-scroll"
     >
-      <table class="data-table">
-        <thead><tr><th>文件名</th><th>大小</th><th>上传时间</th><th>操作</th></tr></thead>
-        <tbody>
-          <tr
-            v-for="file in files"
-            :key="file.id"
-          >
-            <td class="document-name">
-              {{ file.fileName }}
-            </td><td>{{ Math.max(1, Math.ceil(file.byteSize / 1024)) }} KB</td>
-            <td>{{ new Date(file.uploadedAt).toLocaleString('zh-CN') }}</td>
-            <td>
-              <button
-                type="button"
-                class="secondary-button"
-                :disabled="!!downloading"
-                @click="download(file)"
-              >
-                {{ downloading === file.id ? '下载中…' : '下载' }}
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <TableViewport>
+        <table class="data-table">
+          <thead><tr><th>文件名</th><th>大小</th><th>上传时间</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr
+              v-for="file in files"
+              :key="file.id"
+            >
+              <td class="document-name">
+                {{ file.fileName }}
+              </td><td>{{ Math.max(1, Math.ceil(file.byteSize / 1024)) }} KB</td>
+              <td>{{ new Date(file.uploadedAt).toLocaleString('zh-CN') }}</td>
+              <td>
+                <button
+                  type="button"
+                  class="secondary-button"
+                  :disabled="!!downloading"
+                  @click="download(file)"
+                >
+                  {{ downloading === file.id ? '下载中…' : '下载' }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </TableViewport>
     </div>
   </section>
 </template>

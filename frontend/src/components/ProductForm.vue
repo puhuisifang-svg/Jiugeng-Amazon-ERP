@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { catalogApi } from '@/api/catalog'
 import { domainApi, type InventoryBalanceViewDto, type MaterialDetailDto, type ProductInput, type ProductVariantInput, type SupplierDto } from '@/api/domain'
 import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vue'
+import SupplierContactLinks from '@/components/SupplierContactLinks.vue'
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
 
@@ -354,13 +355,10 @@ onMounted(loadReferences)
               :checked="link.primary"
               @change="makePrimary(variant, link.supplierId)"
             >主供应商</label>
-            <input
-              v-model="link.purchaseUrl"
-              aria-label="采购链接"
-              type="url"
-              maxlength="500"
-              placeholder="1688 HTTPS 采购链接"
-            ><input
+            <SupplierContactLinks
+              :supplier="suppliers.find(item => item.id === link.supplierId)"
+              :purchase-url="link.purchaseUrl"
+            /><input
               v-model="link.remark"
               aria-label="供应商关系备注"
               maxlength="500"

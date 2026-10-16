@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SuccessToast from "@/components/SuccessToast.vue"
 import { computed, onMounted, ref } from 'vue'
 import { domainApi, type WatchRunMode } from '@/api/domain'
 import type { WatchStoreDto } from '@/api/resources'
@@ -61,13 +62,7 @@ onMounted(load)
     >
       当前角色仅可查看监控店铺。
     </p>
-    <p
-      v-if="success"
-      class="data-state data-state--success"
-      role="status"
-    >
-      {{ success }}
-    </p>
+    <SuccessToast :message="success" />
     <p
       v-if="error"
       class="data-state data-state--error"

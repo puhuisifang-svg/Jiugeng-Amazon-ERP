@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SuccessToast from "@/components/SuccessToast.vue"
+import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
@@ -141,13 +143,7 @@ onMounted(load)
       role="alert"
     >
       {{ error }}
-    </p><p
-      v-if="success"
-      class="success-message"
-      role="status"
-    >
-      {{ success }}
-    </p>
+    </p><SuccessToast :message="success" />
     <section class="panel filter-panel purchase-order-filters">
       <label>搜索<input
         v-model="keyword"
@@ -199,51 +195,53 @@ onMounted(load)
         v-else
         class="table-scroll"
       >
-        <table class="data-table">
-          <thead><tr><th>采购单 / 供应商</th><th>明细</th><th>采购金额</th><th>收货进度</th><th>预计到货</th><th>状态</th><th>操作</th></tr></thead>
-          <tbody>
-            <tr
-              v-for="order in visibleOrders"
-              :key="order.id"
-            >
-              <td>
-                <RouterLink
-                  class="text-link"
-                  :to="`/purchases/orders/${order.id}`"
-                >
-                  <strong>{{ order.orderNo }}</strong>
-                </RouterLink><small>{{ order.supplierName }}</small><small>{{ new Date(order.createdAt).toLocaleDateString() }} 创建</small>
-              </td>
-              <td>{{ order.lines.length }} 项<small>{{ order.lines[0]?.itemCode }}{{ order.lines.length > 1 ? ' 等' : '' }}</small></td>
-              <td>{{ order.currency }} {{ total(order) }}</td>
-              <td>{{ order.lines.filter(line => line.remainingQuantity === 0).length }} / {{ order.lines.length }} 项已收齐<small>{{ order.status === 'CANCELLED' ? '未收余量已关闭' : '分项数量见详情' }}</small></td>
-              <td :class="{ 'error-message': overdue(order) }">
-                {{ order.expectedDeliveryDate || '未约定' }}<small v-if="overdue(order)">逾期未收齐</small>
-              </td>
-              <td>
-                <span
-                  class="purchase-status"
-                  :data-status="order.status"
-                >{{ statusLabels[order.status] }}</span>
-              </td>
-              <td class="table-actions">
-                <RouterLink
-                  class="text-link"
-                  :to="`/purchases/orders/${order.id}`"
-                >
-                  {{ order.status === 'DRAFT' ? '核对 / 下单' : '查看详情' }}
-                </RouterLink><button
-                  v-if="writable && order.status === 'DRAFT'"
-                  type="button"
-                  class="secondary-button"
-                  @click="openEdit(order)"
-                >
-                  编辑
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <TableViewport>
+          <table class="data-table">
+            <thead><tr><th>采购单 / 供应商</th><th>明细</th><th>采购金额</th><th>收货进度</th><th>预计到货</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr
+                v-for="order in visibleOrders"
+                :key="order.id"
+              >
+                <td>
+                  <RouterLink
+                    class="text-link"
+                    :to="`/purchases/orders/${order.id}`"
+                  >
+                    <strong>{{ order.orderNo }}</strong>
+                  </RouterLink><small>{{ order.supplierName }}</small><small>{{ new Date(order.createdAt).toLocaleDateString() }} 创建</small>
+                </td>
+                <td>{{ order.lines.length }} 项<small>{{ order.lines[0]?.itemCode }}{{ order.lines.length > 1 ? ' 等' : '' }}</small></td>
+                <td>{{ order.currency }} {{ total(order) }}</td>
+                <td>{{ order.lines.filter(line => line.remainingQuantity === 0).length }} / {{ order.lines.length }} 项已收齐<small>{{ order.status === 'CANCELLED' ? '未收余量已关闭' : '分项数量见详情' }}</small></td>
+                <td :class="{ 'error-message': overdue(order) }">
+                  {{ order.expectedDeliveryDate || '未约定' }}<small v-if="overdue(order)">逾期未收齐</small>
+                </td>
+                <td>
+                  <span
+                    class="purchase-status"
+                    :data-status="order.status"
+                  >{{ statusLabels[order.status] }}</span>
+                </td>
+                <td class="table-actions">
+                  <RouterLink
+                    class="text-link"
+                    :to="`/purchases/orders/${order.id}`"
+                  >
+                    {{ order.status === 'DRAFT' ? '核对 / 下单' : '查看详情' }}
+                  </RouterLink><button
+                    v-if="writable && order.status === 'DRAFT'"
+                    type="button"
+                    class="secondary-button"
+                    @click="openEdit(order)"
+                  >
+                    编辑
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </TableViewport>
       </div>
       <footer class="purchase-pagination">
         <span>共 {{ filtered.length }} 单</span><label>每页 <select
@@ -343,69 +341,71 @@ onMounted(load)
             该供应商尚未关联启用的{{ form.orderType === 'PRODUCT' ? 'SKU' : '辅料' }}，请先到对应档案维护供货关系。
           </p>
           <div class="form-wide table-scroll">
-            <table class="data-table purchase-edit-lines">
-              <thead><tr><th>采购项目</th><th>数量</th><th>单位</th><th>单价</th><th>金额</th><th>操作</th></tr></thead><tbody>
-                <tr
-                  v-for="(line,index) in form.lines"
-                  :key="index"
-                >
-                  <td>
-                    <select
-                      v-model="line.itemId"
-                      required
-                      :aria-label="`采购项目 ${index + 1}`"
-                      :disabled="referenceLoading || !references.length"
-                    >
-                      <option
-                        value=""
-                        disabled
+            <TableViewport>
+              <table class="data-table purchase-edit-lines">
+                <thead><tr><th>采购项目</th><th>数量</th><th>单位</th><th>单价</th><th>金额</th><th>操作</th></tr></thead><tbody>
+                  <tr
+                    v-for="(line,index) in form.lines"
+                    :key="index"
+                  >
+                    <td>
+                      <select
+                        v-model="line.itemId"
+                        required
+                        :aria-label="`采购项目 ${index + 1}`"
+                        :disabled="referenceLoading || !references.length"
                       >
-                        {{ referenceLoading ? '正在加载…' : '选择可采购项目' }}
-                      </option><option
-                        v-for="item in references"
-                        :key="item.id"
-                        :value="item.id"
-                        :disabled="form.lines.some((other, otherIndex) => otherIndex !== index && other.itemId === item.id)"
+                        <option
+                          value=""
+                          disabled
+                        >
+                          {{ referenceLoading ? '正在加载…' : '选择可采购项目' }}
+                        </option><option
+                          v-for="item in references"
+                          :key="item.id"
+                          :value="item.id"
+                          :disabled="form.lines.some((other, otherIndex) => otherIndex !== index && other.itemId === item.id)"
+                        >
+                          {{ item.code }} · {{ item.name }}
+                        </option>
+                      </select>
+                    </td>
+                    <td>
+                      <input
+                        v-model.number="line.quantity"
+                        required
+                        type="number"
+                        min="0.0001"
+                        step="0.0001"
+                        aria-label="采购数量"
                       >
-                        {{ item.code }} · {{ item.name }}
-                      </option>
-                    </select>
-                  </td>
-                  <td>
-                    <input
-                      v-model.number="line.quantity"
-                      required
-                      type="number"
-                      min="0.0001"
-                      step="0.0001"
-                      aria-label="采购数量"
-                    >
-                  </td>
-                  <td>{{ references.find(item => item.id === line.itemId)?.unit || '—' }}</td>
-                  <td>
-                    <input
-                      v-model.number="line.unitPrice"
-                      required
-                      type="number"
-                      min="0"
-                      step="0.0001"
-                      aria-label="采购单价"
-                    >
-                  </td>
-                  <td>{{ (Number(line.quantity || 0) * Number(line.unitPrice || 0)).toFixed(2) }}</td>
-                  <td>
-                    <button
-                      type="button"
-                      class="secondary-button"
-                      :disabled="form.lines.length <= 1"
-                      @click="form.lines.splice(index, 1)"
-                    >
-                      移除
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                    </td>
+                    <td>{{ references.find(item => item.id === line.itemId)?.unit || '—' }}</td>
+                    <td>
+                      <input
+                        v-model.number="line.unitPrice"
+                        required
+                        type="number"
+                        min="0"
+                        step="0.0001"
+                        aria-label="采购单价"
+                      >
+                    </td>
+                    <td>{{ (Number(line.quantity || 0) * Number(line.unitPrice || 0)).toFixed(2) }}</td>
+                    <td>
+                      <button
+                        type="button"
+                        class="secondary-button"
+                        :disabled="form.lines.length <= 1"
+                        @click="form.lines.splice(index, 1)"
+                      >
+                        移除
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </TableViewport>
           </div>
           <div class="form-wide purchase-section-heading">
             <button

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SuccessToast from "@/components/SuccessToast.vue"
 import { computed, onMounted, reactive, ref } from 'vue'
 import { domainApi, type CandidateStatus } from '@/api/domain'
 import type { SelectionCandidateDto } from '@/api/resources'
@@ -100,13 +101,7 @@ onMounted(load)
       class="data-state"
     >
       当前角色仅可查看候选池。
-    </p><p
-      v-if="success"
-      class="data-state data-state--success"
-      role="status"
-    >
-      {{ success }}
-    </p><p
+    </p><SuccessToast :message="success" /><p
       v-if="error"
       class="data-state data-state--error"
       role="alert"

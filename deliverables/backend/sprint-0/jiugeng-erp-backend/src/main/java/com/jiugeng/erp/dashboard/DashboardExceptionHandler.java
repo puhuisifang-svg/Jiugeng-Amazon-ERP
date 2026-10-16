@@ -9,7 +9,7 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.http.ResponseEntity;
 
 @Profile("!mock")
-@RestControllerAdvice(assignableTypes = DashboardController.class)
+@RestControllerAdvice(assignableTypes = {DashboardController.class, ShipmentDocumentController.class, ShipmentDispatchController.class})
 class DashboardExceptionHandler {
     @ExceptionHandler(DashboardException.class)
     ResponseEntity<Problem> business(DashboardException exception) {
@@ -28,8 +28,13 @@ class DashboardExceptionHandler {
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     ResponseEntity<Problem> tooLarge(Exception exception) {
-        return ResponseEntity.status(413).body(new Problem("DASHBOARD_IMAGE_TOO_LARGE", "图片不得超过 5 MB"));
+        return ResponseEntity.status(413).body(new Problem("DASHBOARD_FILE_TOO_LARGE", "文件超过上传限制；图片最多 5 MB，标签文件最多 10 MB"));
     }
 
     record Problem(String code, String detail) {}
+
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    ResponseEntity<Problem> duplicate(Exception exception) {
+        return ResponseEntity.status(409).body(new Problem("SHIPMENT_CONFLICT","记录已变化或请求已处理，请刷新后重试"));
+    }
 }

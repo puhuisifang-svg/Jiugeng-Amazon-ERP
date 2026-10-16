@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SuccessToast from "@/components/SuccessToast.vue"
+import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
@@ -6,10 +8,12 @@ import { ApiError } from '@/api/client'
 import { catalogApi } from '@/api/catalog'
 import { domainApi, type InventoryBalanceViewDto, type InventoryCommandType, type MaterialDetailDto, type MaterialInput, type SupplierAssignmentDto, type SupplierDto, type SupplierLinkDto } from '@/api/domain'
 import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vue'
+import SupplierContactLinks from '@/components/SupplierContactLinks.vue'
 import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import ListPagination from '@/components/ListPagination.vue'
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
+import { isNonNegativeInventoryInteger, isPositiveInventoryInteger } from '@/ui/inventory'
 
 const items = ref<MaterialDetailDto[]>([])
 const balances = ref<InventoryBalanceViewDto[]>([])
@@ -168,6 +172,10 @@ async function save() {
 async function submitInventory() {
   if (saving.value) return
   inventoryError.value = ''
+  if (!isPositiveInventoryInteger(inventoryForm.quantity)) {
+    inventoryError.value = '数量必须是大于 0 的整数。'
+    return
+  }
   const balance = selectedMaterial.value ? balanceFor(selectedMaterial.value) : undefined
   if (!mockMode.value && ['OUTBOUND', 'ADJUST_OUT'].includes(inventoryForm.type) && balance && inventoryForm.quantity > balance.quantity) {
     inventoryError.value = `库存不足：当前可用 ${balance.quantity} ${balance.unit}，本次需要 ${inventoryForm.quantity} ${balance.unit}。请减少数量或先办理入库。`
@@ -198,9 +206,14 @@ async function submitInventory() {
 async function saveSafety(item: MaterialDetailDto) {
   const balance = balanceFor(item)
   if (!balance?.materialId) return
+  const safetyStock = safetyValues.value[balance.materialId]
+  if (!isNonNegativeInventoryInteger(safetyStock)) {
+    error.value = '安全库存必须是大于或等于 0 的整数。'
+    return
+  }
   saving.value = true; error.value = ''; success.value = ''
   try {
-    const updated = await domainApi.updateSafetyStock(balance.materialId, safetyValues.value[balance.materialId] ?? 0)
+    const updated = await domainApi.updateSafetyStock(balance.materialId, safetyStock)
     const index = balances.value.findIndex(value => value.materialId === balance.materialId)
     if (index >= 0) balances.value[index] = updated
     success.value = '安全库存已更新。'
@@ -423,12 +436,10 @@ onMounted(load)
               :checked="link.primary"
               @change="makePrimary(link.supplierId)"
             >主供应商</label>
-            <input
-              v-model="link.purchaseUrl"
-              aria-label="辅料采购链接"
-              type="url"
-              placeholder="1688 HTTPS 采购链接"
-            ><input
+            <SupplierContactLinks
+              :supplier="supplierOptions.find(item => item.id === link.supplierId)"
+              :purchase-url="link.purchaseUrl"
+            /><input
               v-model="link.remark"
               aria-label="辅料供应商关系备注"
               maxlength="500"
@@ -503,9 +514,9 @@ onMounted(load)
         <label>数量<input
           v-model.number="inventoryForm.quantity"
           required
-          min="0.0001"
+          min="1"
           type="number"
-          step="0.0001"
+          step="1"
         ></label>
         <p
           v-if="selectedMaterial && balanceFor(selectedMaterial)"
@@ -542,13 +553,7 @@ onMounted(load)
         </div>
       </form>
     </div>
-    <p
-      v-if="success"
-      class="data-state data-state--success"
-      role="status"
-    >
-      {{ success }}
-    </p>
+    <SuccessToast :message="success" />
     <p
       v-if="error"
       class="data-state data-state--error"
@@ -567,156 +572,158 @@ onMounted(load)
       class="panel table-panel"
     >
       <div class="table-scroll">
-        <table class="data-table material-table">
-          <thead>
-            <tr>
-              <th
-                v-if="formal && writable"
-                class="selection-cell"
-              >
-                <input
-                  type="checkbox"
-                  aria-label="选择本页全部辅料"
-                  :checked="allPageSelected"
-                  :disabled="saving"
-                  @change="selectPage"
-                >
-              </th>
-              <th>图片</th><th>辅料编码</th><th>品名 / 类型</th><th>规格</th><th v-if="inventoryReadable">
-                现存量
-              </th><th v-if="inventoryReadable">
-                安全库存
-              </th><th>单位</th><th v-if="inventoryReadable">
-                库存状态
-              </th><th>主档状态</th><th v-if="rowActionsAvailable">
-                操作
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="item in pageItems"
-              :key="item.id"
-            >
-              <td
-                v-if="formal && writable"
-                class="selection-cell"
-              >
-                <input
-                  v-model="selectedIds"
-                  type="checkbox"
-                  :value="item.id"
-                  :aria-label="`选择辅料 ${item.materialCode}`"
-                  :disabled="saving"
-                >
-              </td>
-              <td>
-                <button
-                  v-if="item.imageAssetId || (item.imageUrl && !failedRemoteImages.has(item.id))"
-                  class="material-image-button"
-                  type="button"
-                  :aria-label="`查看${item.name}大图`"
-                  @click="previewImage(item)"
-                >
-                  <AuthenticatedCatalogImage
-                    v-if="item.imageAssetId"
-                    :image-id="item.imageAssetId"
-                    :alt="item.name"
-                  /><img
-                    v-else
-                    class="material-image"
-                    :src="item.imageUrl"
-                    :alt="item.name"
-                    loading="lazy"
-                    referrerpolicy="no-referrer"
-                    @error="markRemoteImageFailed(item.id)"
-                  >
-                </button><span
-                  v-else
-                  class="material-image material-image--placeholder"
-                  role="img"
-                  :aria-label="`${item.name}暂无可用图片`"
-                >图</span>
-              </td>
-              <td><strong>{{ item.materialCode }}</strong></td><td>{{ item.name }}<small>{{ item.materialType }}</small></td><td>{{ item.specification || '—' }}</td>
-              <td v-if="inventoryReadable">
-                {{ balanceFor(item)?.quantity ?? '—' }}
-              </td>
-              <td v-if="inventoryReadable">
-                <div
-                  v-if="formal && inventoryWritable && balanceFor(item)?.materialId"
-                  class="safety-editor"
+        <TableViewport>
+          <table class="data-table material-table">
+            <thead>
+              <tr>
+                <th
+                  v-if="formal && writable"
+                  class="selection-cell"
                 >
                   <input
-                    v-model.number="safetyValues[item.id]"
-                    :aria-label="`${item.materialCode}安全库存`"
-                    min="0"
-                    type="number"
-                    step="0.0001"
-                  >
-                  <button
+                    type="checkbox"
+                    aria-label="选择本页全部辅料"
+                    :checked="allPageSelected"
                     :disabled="saving"
-                    type="button"
-                    @click="saveSafety(item)"
+                    @change="selectPage"
                   >
-                    保存
-                  </button>
-                </div><span v-else>{{ balanceFor(item)?.safetyStock ?? '—' }}</span>
-              </td>
-              <td>{{ item.unit }}</td>
-              <td
-                v-if="inventoryReadable"
-                :class="balanceFor(item)?.lowStock ? 'status-failure' : balanceFor(item) ? 'status-success' : ''"
+                </th>
+                <th>图片</th><th>辅料编码</th><th>品名 / 类型</th><th>规格</th><th v-if="inventoryReadable">
+                  现存量
+                </th><th v-if="inventoryReadable">
+                  安全库存
+                </th><th>单位</th><th v-if="inventoryReadable">
+                  库存状态
+                </th><th>主档状态</th><th v-if="rowActionsAvailable">
+                  操作
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="item in pageItems"
+                :key="item.id"
               >
-                {{ balanceFor(item) ? (balanceFor(item)?.lowStock ? '低库存' : '正常') : '未初始化' }}
-              </td>
-              <td>{{ item.status === 'ACTIVE' ? '启用' : '停用' }}</td>
-              <td v-if="rowActionsAvailable">
-                <div class="table-actions">
-                  <button
-                    v-if="writable"
-                    type="button"
-                    :disabled="item.status === 'DISABLED' || saving"
-                    @click="edit(item)"
-                  >
-                    编辑
-                  </button>
-                  <button
-                    v-if="inventoryWritable"
-                    class="secondary-button"
-                    type="button"
-                    :disabled="item.status === 'DISABLED' || saving"
-                    @click="openInventory(item)"
-                  >
-                    库存
-                  </button>
-                  <button
-                    v-if="formal && supplierAccess"
-                    class="secondary-button"
-                    type="button"
-                    @click="openPurchase(item)"
-                  >
-                    采购
-                  </button>
-                  <button
-                    v-if="formal && writable"
-                    type="button"
-                    :class="item.status === 'ACTIVE' ? 'danger-button' : 'secondary-button'"
+                <td
+                  v-if="formal && writable"
+                  class="selection-cell"
+                >
+                  <input
+                    v-model="selectedIds"
+                    type="checkbox"
+                    :value="item.id"
+                    :aria-label="`选择辅料 ${item.materialCode}`"
                     :disabled="saving"
-                    @click="toggleStatus(item)"
                   >
-                    {{ item.status === 'ACTIVE' ? '停用' : '启用' }}
-                  </button>
-                </div>
-              </td>
-            </tr>
-            <tr v-if="!filteredItems.length">
-              <td :colspan="6 + (inventoryReadable ? 3 : 0) + (rowActionsAvailable ? 1 : 0) + (formal && writable ? 1 : 0)">
-                没有符合条件的辅料。
-              </td>
-            </tr>
-          </tbody>
-        </table>
+                </td>
+                <td>
+                  <button
+                    v-if="item.imageAssetId || (item.imageUrl && !failedRemoteImages.has(item.id))"
+                    class="material-image-button"
+                    type="button"
+                    :aria-label="`查看${item.name}大图`"
+                    @click="previewImage(item)"
+                  >
+                    <AuthenticatedCatalogImage
+                      v-if="item.imageAssetId"
+                      :image-id="item.imageAssetId"
+                      :alt="item.name"
+                    /><img
+                      v-else
+                      class="material-image"
+                      :src="item.imageUrl"
+                      :alt="item.name"
+                      loading="lazy"
+                      referrerpolicy="no-referrer"
+                      @error="markRemoteImageFailed(item.id)"
+                    >
+                  </button><span
+                    v-else
+                    class="material-image material-image--placeholder"
+                    role="img"
+                    :aria-label="`${item.name}暂无可用图片`"
+                  >图</span>
+                </td>
+                <td><strong>{{ item.materialCode }}</strong></td><td>{{ item.name }}<small>{{ item.materialType }}</small></td><td>{{ item.specification || '—' }}</td>
+                <td v-if="inventoryReadable">
+                  {{ balanceFor(item)?.quantity ?? '—' }}
+                </td>
+                <td v-if="inventoryReadable">
+                  <div
+                    v-if="formal && inventoryWritable && balanceFor(item)?.materialId"
+                    class="safety-editor"
+                  >
+                    <input
+                      v-model.number="safetyValues[item.id]"
+                      :aria-label="`${item.materialCode}安全库存`"
+                      min="0"
+                      type="number"
+                      step="1"
+                    >
+                    <button
+                      :disabled="saving"
+                      type="button"
+                      @click="saveSafety(item)"
+                    >
+                      保存
+                    </button>
+                  </div><span v-else>{{ balanceFor(item)?.safetyStock ?? '—' }}</span>
+                </td>
+                <td>{{ item.unit }}</td>
+                <td
+                  v-if="inventoryReadable"
+                  :class="balanceFor(item)?.lowStock ? 'status-failure' : balanceFor(item) ? 'status-success' : ''"
+                >
+                  {{ balanceFor(item) ? (balanceFor(item)?.lowStock ? '低库存' : '正常') : '未初始化' }}
+                </td>
+                <td>{{ item.status === 'ACTIVE' ? '启用' : '停用' }}</td>
+                <td v-if="rowActionsAvailable">
+                  <div class="table-actions">
+                    <button
+                      v-if="writable"
+                      type="button"
+                      :disabled="item.status === 'DISABLED' || saving"
+                      @click="edit(item)"
+                    >
+                      编辑
+                    </button>
+                    <button
+                      v-if="inventoryWritable"
+                      class="secondary-button"
+                      type="button"
+                      :disabled="item.status === 'DISABLED' || saving"
+                      @click="openInventory(item)"
+                    >
+                      库存
+                    </button>
+                    <button
+                      v-if="formal && supplierAccess"
+                      class="secondary-button"
+                      type="button"
+                      @click="openPurchase(item)"
+                    >
+                      采购
+                    </button>
+                    <button
+                      v-if="formal && writable"
+                      type="button"
+                      :class="item.status === 'ACTIVE' ? 'danger-button' : 'secondary-button'"
+                      :disabled="saving"
+                      @click="toggleStatus(item)"
+                    >
+                      {{ item.status === 'ACTIVE' ? '停用' : '启用' }}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              <tr v-if="!filteredItems.length">
+                <td :colspan="6 + (inventoryReadable ? 3 : 0) + (rowActionsAvailable ? 1 : 0) + (formal && writable ? 1 : 0)">
+                  没有符合条件的辅料。
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </TableViewport>
       </div>
       <ListPagination
         v-model:page="page"
@@ -802,53 +809,55 @@ onMounted(load)
           v-else
           class="table-scroll"
         >
-          <table class="data-table purchase-table">
-            <thead><tr><th>供应商</th><th>联系人</th><th>电话</th><th>微信号</th><th>微信二维码</th><th>采购链接</th><th>关系</th><th>备注</th></tr></thead>
-            <tbody>
-              <tr
-                v-for="item in purchaseSuppliers"
-                :key="item.link.supplierId"
-              >
-                <td><strong>{{ item.supplier.name }}</strong><small>{{ item.supplier.status === 'ACTIVE' ? '启用' : '停用' }}</small></td>
-                <td>{{ item.supplier.contactPerson || '—' }}</td>
-                <td>{{ item.supplier.phone || '—' }}</td>
-                <td>{{ item.supplier.wechatId || '—' }}</td>
-                <td>
-                  <button
-                    v-if="item.supplier.qrImageId || item.supplier.qrImageUrl"
-                    class="image-button"
-                    type="button"
-                    :aria-label="`查看${item.supplier.name}微信二维码`"
-                    @click="previewSupplierQr(item.supplier)"
-                  >
-                    <AuthenticatedCatalogImage
-                      v-if="item.supplier.qrImageId"
-                      class="supplier-qr-thumbnail"
-                      :image-id="item.supplier.qrImageId"
-                      :alt="`${item.supplier.name}微信二维码`"
-                    /><img
-                      v-else
-                      class="supplier-qr-thumbnail"
-                      :src="item.supplier.qrImageUrl"
-                      :alt="`${item.supplier.name}微信二维码`"
-                      loading="lazy"
-                      referrerpolicy="no-referrer"
+          <TableViewport>
+            <table class="data-table purchase-table">
+              <thead><tr><th>供应商</th><th>联系人</th><th>电话</th><th>微信号</th><th>微信二维码</th><th>采购链接</th><th>关系</th><th>备注</th></tr></thead>
+              <tbody>
+                <tr
+                  v-for="item in purchaseSuppliers"
+                  :key="item.link.supplierId"
+                >
+                  <td><strong>{{ item.supplier.name }}</strong><small>{{ item.supplier.status === 'ACTIVE' ? '启用' : '停用' }}</small></td>
+                  <td>{{ item.supplier.contactPerson || '—' }}</td>
+                  <td>{{ item.supplier.phone || '—' }}</td>
+                  <td>{{ item.supplier.wechatId || '—' }}</td>
+                  <td>
+                    <button
+                      v-if="item.supplier.qrImageId || item.supplier.qrImageUrl"
+                      class="image-button"
+                      type="button"
+                      :aria-label="`查看${item.supplier.name}微信二维码`"
+                      @click="previewSupplierQr(item.supplier)"
                     >
-                  </button><span v-else>—</span>
-                </td>
-                <td>
-                  <a
-                    v-if="item.link.purchaseUrl || item.supplier.sourceUrl"
-                    :href="item.link.purchaseUrl || item.supplier.sourceUrl"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >打开采购链接</a><span v-else>—</span>
-                </td>
-                <td>{{ item.link.primary ? '主供应商' : '备选供应商' }}</td>
-                <td>{{ item.link.remark || item.supplier.remark || '—' }}</td>
-              </tr>
-            </tbody>
-          </table>
+                      <AuthenticatedCatalogImage
+                        v-if="item.supplier.qrImageId"
+                        class="supplier-qr-thumbnail"
+                        :image-id="item.supplier.qrImageId"
+                        :alt="`${item.supplier.name}微信二维码`"
+                      /><img
+                        v-else
+                        class="supplier-qr-thumbnail"
+                        :src="item.supplier.qrImageUrl"
+                        :alt="`${item.supplier.name}微信二维码`"
+                        loading="lazy"
+                        referrerpolicy="no-referrer"
+                      >
+                    </button><span v-else>—</span>
+                  </td>
+                  <td>
+                    <a
+                      v-if="item.link.purchaseUrl || item.supplier.sourceUrl"
+                      :href="item.link.purchaseUrl || item.supplier.sourceUrl"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >打开采购链接</a><span v-else>—</span>
+                  </td>
+                  <td>{{ item.link.primary ? '主供应商' : '备选供应商' }}</td>
+                  <td>{{ item.link.remark || item.supplier.remark || '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </TableViewport>
         </div>
       </section>
     </div>

@@ -13,3 +13,11 @@ export const inventoryTransactionTypeLabels: Record<InventoryTransactionType, st
 export function inventoryTransactionTypeLabel(type: InventoryTransactionType) {
   return inventoryTransactionTypeLabels[type]
 }
+
+export function isPositiveInventoryInteger(value: number) {
+  return Number.isInteger(value) && value > 0
+}
+
+export function isNonNegativeInventoryInteger(value: number | undefined): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0
+}

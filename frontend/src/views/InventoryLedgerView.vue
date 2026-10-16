@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { domainApi, type LedgerEntryDto } from '@/api/domain'
@@ -110,39 +111,41 @@ onMounted(load)
       class="panel table-panel"
     >
       <div class="table-scroll">
-        <table class="data-table inventory-ledger-table">
-          <thead>
-            <tr>
-              <th>时间</th><th>辅料</th><th>类型</th><th>变动</th><th>结存</th><th>原因</th><th>操作人</th><th v-if="writable">
-                操作
-              </th>
-            </tr>
-          </thead><tbody>
-            <tr
-              v-for="item in pageEntries"
-              :key="item.id"
-            >
-              <td>{{ item.occurredAt }}</td><td>{{ item.materialCode }}</td><td>{{ inventoryTransactionTypeLabel(item.type) }}</td><td>{{ item.signedQuantity ?? item.quantity }}</td><td>{{ item.balanceAfter ?? '—' }}</td><td>{{ item.reason }}</td><td>{{ item.actorLoginName ?? '—' }}</td><td v-if="writable">
-                <button
-                  v-if="item.type !== 'REVERSAL'"
-                  :disabled="busy === item.id || isReversed(item)"
-                  type="button"
-                  @click="openReversal(item)"
-                >
-                  {{ isReversed(item) ? '已冲销' : '冲销' }}
-                </button><span
-                  v-else
-                  class="ledger-action-placeholder"
-                >—</span>
-              </td>
-            </tr>
-            <tr v-if="!filtered.length">
-              <td :colspan="writable ? 8 : 7">
-                暂无库存流水。
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <TableViewport>
+          <table class="data-table inventory-ledger-table">
+            <thead>
+              <tr>
+                <th>时间</th><th>辅料</th><th>类型</th><th>变动</th><th>结存</th><th>原因</th><th>操作人</th><th v-if="writable">
+                  操作
+                </th>
+              </tr>
+            </thead><tbody>
+              <tr
+                v-for="item in pageEntries"
+                :key="item.id"
+              >
+                <td>{{ item.occurredAt }}</td><td>{{ item.materialCode }}</td><td>{{ inventoryTransactionTypeLabel(item.type) }}</td><td>{{ item.signedQuantity ?? item.quantity }}</td><td>{{ item.balanceAfter ?? '—' }}</td><td>{{ item.reason }}</td><td>{{ item.actorLoginName ?? '—' }}</td><td v-if="writable">
+                  <button
+                    v-if="item.type !== 'REVERSAL'"
+                    :disabled="busy === item.id || isReversed(item)"
+                    type="button"
+                    @click="openReversal(item)"
+                  >
+                    {{ isReversed(item) ? '已冲销' : '冲销' }}
+                  </button><span
+                    v-else
+                    class="ledger-action-placeholder"
+                  >—</span>
+                </td>
+              </tr>
+              <tr v-if="!filtered.length">
+                <td :colspan="writable ? 8 : 7">
+                  暂无库存流水。
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </TableViewport>
       </div>
       <ListPagination
         v-model:page="page"

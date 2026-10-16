@@ -28,6 +28,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
@@ -245,7 +246,7 @@ class MockErpController {
             @NotBlank @Size(max = 100) String requestId,
             @NotBlank @Size(max = 64) String materialCode,
             @NotNull TransactionType type,
-            @NotNull BigDecimal quantity,
+            @NotNull @Digits(integer = 15, fraction = 0) BigDecimal quantity,
             @NotBlank @Size(max = 500) String reason) {
     }
 

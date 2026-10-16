@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SuccessToast from "@/components/SuccessToast.vue"
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { domainApi } from '@/api/domain'
@@ -80,13 +81,7 @@ onMounted(load)
     >
       {{ error }}
     </p>
-    <p
-      v-if="success"
-      class="data-state data-state--success"
-      role="status"
-    >
-      {{ success }}
-    </p>
+    <SuccessToast :message="success" />
     <template v-if="detail">
       <RouterLink
         v-if="detail.candidate.status === 'APPROVED' && runtimeConfig.authMode !== 'mock'"

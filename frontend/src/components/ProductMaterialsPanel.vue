@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SuccessToast from "@/components/SuccessToast.vue"
+import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import { ApiError } from '@/api/client'
@@ -151,13 +153,7 @@ onMounted(load)
         取消
       </button>
     </form>
-    <p
-      v-if="success"
-      class="data-state data-state--success"
-      role="status"
-    >
-      {{ success }}
-    </p>
+    <SuccessToast :message="success" />
     <p
       v-if="error"
       class="data-state data-state--error"
@@ -181,44 +177,46 @@ onMounted(load)
       v-else
       class="panel table-panel"
     >
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>SKU</th><th>辅料</th><th>标准用量</th><th>损耗率</th><th>状态</th><th v-if="writable">
-              操作
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="item in relations"
-            :key="item.id"
-          >
-            <td>{{ item.skuCode }}</td><td>{{ item.materialCode }} · {{ item.materialName }}</td>
-            <td>{{ item.standardQuantity }} {{ item.unit }}</td><td>{{ item.lossRate }}</td><td>{{ item.enabled ? '启用' : '停用' }}</td>
-            <td
-              v-if="writable"
-              class="table-actions"
+      <TableViewport>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>SKU</th><th>辅料</th><th>标准用量</th><th>损耗率</th><th>状态</th><th v-if="writable">
+                操作
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="item in relations"
+              :key="item.id"
             >
-              <button
-                type="button"
-                :disabled="!item.enabled || busy"
-                @click="edit(item)"
+              <td>{{ item.skuCode }}</td><td>{{ item.materialCode }} · {{ item.materialName }}</td>
+              <td>{{ item.standardQuantity }} {{ item.unit }}</td><td>{{ item.lossRate }}</td><td>{{ item.enabled ? '启用' : '停用' }}</td>
+              <td
+                v-if="writable"
+                class="table-actions"
               >
-                调整
-              </button>
-              <button
-                type="button"
-                class="danger-button"
-                :disabled="!item.enabled || busy"
-                @click="disable(item)"
-              >
-                停用
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+                <button
+                  type="button"
+                  :disabled="!item.enabled || busy"
+                  @click="edit(item)"
+                >
+                  调整
+                </button>
+                <button
+                  type="button"
+                  class="danger-button"
+                  :disabled="!item.enabled || busy"
+                  @click="disable(item)"
+                >
+                  停用
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </TableViewport>
     </article>
   </section>
 </template>

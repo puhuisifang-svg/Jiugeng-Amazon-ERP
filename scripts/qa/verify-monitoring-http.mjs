@@ -17,7 +17,7 @@ assert(container && database?.match(/^[a-zA-Z0-9_]+$/) && config, 'Explicit data
 const image = 'mysql@sha256:64756cc92f707eb504496d774353990bcb0f6999ddf598b6ad188f2da66bd000'
 function sql(statement) {
   // The config file is mounted read-only; neither passwords nor session tokens go to output.
-  return execFileSync('docker', ['run', '--rm', '-i', '--network', `container:${container}`, '-v', `${config}:/run/client.cnf:ro`, image, 'mysql', '--defaults-extra-file=/run/client.cnf', '--batch', '--skip-column-names', database], { input: statement, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
+  return execFileSync('docker', ['run', '--rm', '-i', '--network', `container:${container}`, '-v', `${config}:/run/client.cnf:ro`, image, 'mysql', '--defaults-extra-file=/run/client.cnf', '--default-character-set=utf8mb4', '--batch', '--skip-column-names', database], { input: statement, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
 }
 function jar(group, name) {
   const base = resolve(homedir(), '.m2/repository', group, name)
@@ -51,6 +51,7 @@ try {
   if (verification) {
     assert(stateFile, 'State file required')
     const saved = JSON.parse(readFileSync(stateFile, 'utf8'))
+    assert([...saved.targetIds, ...saved.requestIds].every(id => /^[0-9a-f-]{36}$/.test(id)), 'Invalid QA record IDs')
     targetIds.push(...saved.targetIds); requestIds.push(...saved.requestIds)
     const token = await login('SELECTION')
     for (const id of targetIds) {

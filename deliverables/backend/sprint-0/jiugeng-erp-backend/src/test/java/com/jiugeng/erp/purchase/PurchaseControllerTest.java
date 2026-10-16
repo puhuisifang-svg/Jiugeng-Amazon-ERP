@@ -91,6 +91,19 @@ class PurchaseControllerTest {
                 .andExpect(jsonPath("$.receipts").isArray()).andExpect(jsonPath("$.history[0].action").value("PURCHASE_ORDER_CREATE"));
     }
 
+    @Test void orderCannotUseAnItemThatIsNotLinkedToItsSupplier() throws Exception {
+        String token=login("supplier-link-buyer","PRODUCT_MATERIAL");
+        String otherSupplier=UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO supplier(id,name,phone,status,created_by,updated_by) VALUES(?,?,'10010','ACTIVE','test','test')",otherSupplier,"无关联供应商");
+        mvc.perform(get("/api/v1/purchases/references").param("orderType","MATERIAL").param("supplierId",otherSupplier)
+                .header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$").isEmpty());
+        Map<String,Object> request=Map.of("orderType","MATERIAL","supplierId",otherSupplier,"currency","CNY",
+                "lines",List.of(Map.of("itemId",materialId,"quantity",1,"unitPrice",1)));
+        mvc.perform(post("/api/v1/purchases/orders").header("Authorization",bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).content(json(request)))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SUPPLIER_ITEM_LINK_REQUIRED"));
+    }
+
     private JsonNode createOrder(String token,String type,String itemId,String quantity,String price)throws Exception{
         Map<String,Object> request=Map.of("orderType",type,"supplierId",supplierId,"currency","CNY","lines",List.of(Map.of("itemId",itemId,"quantity",quantity,"unitPrice",price)));
         String body=mvc.perform(post("/api/v1/purchases/orders").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(request)))

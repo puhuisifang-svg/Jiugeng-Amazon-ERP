@@ -91,17 +91,21 @@ class PurchaseService {
 
     @Transactional
     OrderView submit(String id, long version, AuthenticatedActor actor) {
-        OrderView before = order(id);
+        OrderView before = repository.find(id, true).orElseThrow(() -> missing(id));
         if (before.status() != Status.DRAFT) throw state("只有草稿采购单可提交");
+        repository.activeSupplier(before.supplierId());
+        for (LineView line : before.lines()) repository.activeItem(before.orderType(), before.supplierId(), line.itemId());
         transition(id, Status.DRAFT, Status.SUBMITTED, actor, version);
         OrderView after = order(id); audit(actor,"PURCHASE_ORDER_SUBMIT",id,snapshot(before),snapshot(after)); return after;
     }
 
     @Transactional
-    OrderView cancel(String id, long version, AuthenticatedActor actor) {
-        OrderView before = order(id);
+    OrderView cancel(String id, long version, String reason, AuthenticatedActor actor) {
+        String validatedReason = required(reason, "取消原因", 500);
+        OrderView before = repository.find(id, true).orElseThrow(() -> missing(id));
         if (before.status() == Status.COMPLETED || before.status() == Status.CANCELLED) throw state("已完成或已取消采购单不可取消");
         transition(id, before.status(), Status.CANCELLED, actor, version);
+        repository.cancellationReason(id, validatedReason);
         OrderView after = order(id); audit(actor,"PURCHASE_ORDER_CANCEL",id,snapshot(before),snapshot(after)); return after;
     }
 
@@ -171,7 +175,10 @@ class PurchaseService {
             lines.add(new PurchaseRepository.ResolvedLine(UUID.randomUUID().toString(), number++, item,
                     positive(line.quantity(), "采购数量"), nonNegative(line.unitPrice(), "采购单价")));
         }
-        return new ValidatedOrder(new OrderInput(raw.orderType(), supplierId, currency, remark, raw.version(), raw.lines()), lines);
+        LocalDate deliveryDate = raw.expectedDeliveryDate();
+        if (deliveryDate != null && (deliveryDate.getYear() < 2000 || deliveryDate.getYear() > 9999)) throw invalid("预计到货日期超出有效范围");
+        return new ValidatedOrder(new OrderInput(raw.orderType(), supplierId, currency, remark, raw.version(), raw.lines(),
+                deliveryDate, optional(raw.deliveryAddress(), 500)), lines);
     }
     private ReceiptInput validateReceipt(ReceiptInput raw) {
         if (raw == null) throw invalid("收货请求不能为空");
@@ -197,8 +204,8 @@ class PurchaseService {
         catch(NoSuchAlgorithmException error){throw new IllegalStateException(error);}
     }
     private long requireVersion(Long version){if(version==null||version<0)throw invalid("版本号不能为空");return version;}
-    private BigDecimal positive(BigDecimal value,String label){if(value==null||value.signum()<=0||value.scale()>4)throw invalid(label+"必须为最多四位小数的正数");return value;}
-    private BigDecimal nonNegative(BigDecimal value,String label){if(value==null||value.signum()<0||value.scale()>4)throw invalid(label+"必须为最多四位小数的非负数");return value;}
+    private BigDecimal positive(BigDecimal value,String label){if(value==null||value.signum()<=0||value.scale()>4||value.compareTo(new BigDecimal("99999999999999.9999"))>0)throw invalid(label+"必须为有效范围内最多四位小数的正数");return value;}
+    private BigDecimal nonNegative(BigDecimal value,String label){if(value==null||value.signum()<0||value.scale()>4||value.compareTo(new BigDecimal("99999999999999.9999"))>0)throw invalid(label+"必须为有效范围内最多四位小数的非负数");return value;}
     private String required(String value,String label,int max){String result=optional(value,max);if(result==null)throw invalid(label+"不能为空");return result;}
     private String optional(String value,int max){if(value==null)return null;String result=value.trim();if(result.isEmpty())return null;if(result.length()>max||result.chars().anyMatch(c->c<32))throw invalid("字段格式或长度不正确");return result;}
     private PurchaseException invalid(String message){return new PurchaseException(400,"PURCHASE_FIELD_INVALID",message);}

@@ -63,6 +63,9 @@ describe('application routes', () => {
     const shell = appRoutes.find((route) => route.path === '/')
     const purchases = shell?.children?.filter((route) => String(route.path).startsWith('purchases')) ?? []
     expect(purchases).toHaveLength(4)
+    expect(purchases.filter(route => !route.meta?.hidden).map(route => route.path)).toEqual(['purchases/orders'])
+    expect(purchases.find(route => route.path === 'purchases')?.redirect).toBe('/purchases/orders')
+    expect(purchases.find(route => route.path === 'purchases/receipts')?.redirect).toBe('/purchases/orders')
     expect(purchases.every((route) => route.meta?.capabilities?.includes('purchases.read'))).toBe(true)
     expect(capabilitiesForRole('ADMIN')).toEqual(expect.arrayContaining(['purchases.read', 'purchases.write', 'purchases.receive']))
     expect(capabilitiesForRole('PRODUCT_MATERIAL')).toEqual(expect.arrayContaining(['purchases.read', 'purchases.write', 'purchases.receive']))

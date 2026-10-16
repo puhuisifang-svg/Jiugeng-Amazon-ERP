@@ -65,13 +65,13 @@ describe('horizontal navigation shell', () => {
 
   it('shows purchase management as its own domain only to permitted users', async () => {
     const allowed = ref<string[] | null>(['dashboard.read', 'purchases.read'])
-    const { wrapper, router } = await setup('/purchases', allowed)
+    const { wrapper, router } = await setup('/purchases/orders', allowed)
     expect(wrapper.get('[data-domain="采购"]').classes()).toContain('is-active')
     await wrapper.get('[data-domain="采购"]').trigger('click')
     const panel = wrapper.get('.mega-panel')
-    expect(panel.text()).toContain('采购看板')
+    expect(panel.text()).not.toContain('采购看板')
     expect(panel.text()).toContain('采购单')
-    expect(panel.text()).toContain('收货记录')
+    expect(panel.text()).not.toContain('收货记录')
     await panel.get('a[href="/purchases/orders"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/purchases/orders')

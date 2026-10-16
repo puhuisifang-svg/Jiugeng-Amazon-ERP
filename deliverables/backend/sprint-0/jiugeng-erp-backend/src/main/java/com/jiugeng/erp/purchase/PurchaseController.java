@@ -5,6 +5,7 @@ import static com.jiugeng.erp.purchase.PurchaseTypes.*;
 import com.jiugeng.erp.iam.AuthenticatedActor;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -24,13 +25,14 @@ class PurchaseController {
     @PostMapping("/orders") @PreAuthorize("hasAuthority('purchases.write')") OrderView create(@RequestBody OrderRequest request,@AuthenticationPrincipal AuthenticatedActor actor){return service.create(request.input(),actor);}
     @PutMapping("/orders/{id}") @PreAuthorize("hasAuthority('purchases.write')") OrderView update(@PathVariable String id,@RequestBody OrderRequest request,@AuthenticationPrincipal AuthenticatedActor actor){return service.update(id,request.input(),actor);}
     @PostMapping("/orders/{id}/submit") @PreAuthorize("hasAuthority('purchases.write')") OrderView submit(@PathVariable String id,@RequestBody VersionRequest request,@AuthenticationPrincipal AuthenticatedActor actor){return service.submit(id,request.version(),actor);}
-    @PostMapping("/orders/{id}/cancel") @PreAuthorize("hasAuthority('purchases.write')") OrderView cancel(@PathVariable String id,@RequestBody VersionRequest request,@AuthenticationPrincipal AuthenticatedActor actor){return service.cancel(id,request.version(),actor);}
+    @PostMapping("/orders/{id}/cancel") @PreAuthorize("hasAuthority('purchases.write')") OrderView cancel(@PathVariable String id,@RequestBody CancelRequest request,@AuthenticationPrincipal AuthenticatedActor actor){return service.cancel(id,request.version(),request.reason(),actor);}
     @PostMapping("/orders/{id}/receipts") @PreAuthorize("hasAuthority('purchases.receive')") ReceiptView receive(@PathVariable String id,@RequestBody ReceiptRequest request,@AuthenticationPrincipal AuthenticatedActor actor){return service.receive(id,request.input(),actor);}
     @GetMapping("/receipts") @PreAuthorize("hasAuthority('purchases.read')") List<ReceiptView> receipts(@RequestParam(required=false)String orderId){return service.receipts(orderId);}
 
     record LineRequest(String itemId,BigDecimal quantity,BigDecimal unitPrice){LineInput input(){return new LineInput(itemId,quantity,unitPrice);}}
-    record OrderRequest(OrderType orderType,String supplierId,String currency,String remark,Long version,List<LineRequest>lines){OrderInput input(){return new OrderInput(orderType,supplierId,currency,remark,version,lines==null?null:lines.stream().map(LineRequest::input).toList());}}
+    record OrderRequest(OrderType orderType,String supplierId,String currency,String remark,Long version,List<LineRequest>lines,LocalDate expectedDeliveryDate,String deliveryAddress){OrderInput input(){return new OrderInput(orderType,supplierId,currency,remark,version,lines==null?null:lines.stream().map(line -> line == null ? null : line.input()).toList(),expectedDeliveryDate,deliveryAddress);}}
     record VersionRequest(long version){}
+    record CancelRequest(long version,String reason){}
     record ReceiptLineRequest(String orderLineId,BigDecimal quantity){ReceiptLineInput input(){return new ReceiptLineInput(orderLineId,quantity);}}
-    record ReceiptRequest(String requestId,Instant receivedAt,String remark,List<ReceiptLineRequest>lines){ReceiptInput input(){return new ReceiptInput(requestId,receivedAt,remark,lines==null?null:lines.stream().map(ReceiptLineRequest::input).toList());}}
+    record ReceiptRequest(String requestId,Instant receivedAt,String remark,List<ReceiptLineRequest>lines){ReceiptInput input(){return new ReceiptInput(requestId,receivedAt,remark,lines==null?null:lines.stream().map(line -> line == null ? null : line.input()).toList());}}
 }

@@ -68,11 +68,12 @@ class PurchaseRepository {
 
     void insertOrder(String id, String orderNo, OrderInput input, String actorId) {
         jdbc.sql("""
-                INSERT INTO purchase_order (id,order_no,order_type,supplier_id,status,currency,remark,created_by,updated_by)
-                VALUES (:id,:orderNo,:type,:supplier,'DRAFT',:currency,:remark,:actor,:actor)
+                INSERT INTO purchase_order (id,order_no,order_type,supplier_id,status,currency,remark,created_by,updated_by,expected_delivery_date,delivery_address)
+                VALUES (:id,:orderNo,:type,:supplier,'DRAFT',:currency,:remark,:actor,:actor,:deliveryDate,:address)
                 """).param("id", id).param("orderNo", orderNo).param("type", input.orderType().name())
                 .param("supplier", input.supplierId()).param("currency", input.currency()).param("remark", input.remark())
-                .param("actor", actorId).update();
+                .param("actor", actorId).param("deliveryDate", input.expectedDeliveryDate())
+                .param("address", input.deliveryAddress()).update();
     }
 
     void replaceLines(String orderId, List<ResolvedLine> lines) {
@@ -88,10 +89,16 @@ class PurchaseRepository {
     int updateDraft(String id, OrderInput input, String actorId, long version) {
         return jdbc.sql("""
                 UPDATE purchase_order SET supplier_id=:supplier,currency=:currency,remark=:remark,version=version+1,
-                  updated_by=:actor,updated_at=CURRENT_TIMESTAMP
+                  updated_by=:actor,updated_at=CURRENT_TIMESTAMP,expected_delivery_date=:deliveryDate,delivery_address=:address
                 WHERE id=:id AND status='DRAFT' AND version=:version
                 """).param("supplier", input.supplierId()).param("currency", input.currency()).param("remark", input.remark())
-                .param("actor", actorId).param("id", id).param("version", version).update();
+                .param("actor", actorId).param("id", id).param("version", version)
+                .param("deliveryDate", input.expectedDeliveryDate()).param("address", input.deliveryAddress()).update();
+    }
+
+    void cancellationReason(String id, String reason) {
+        jdbc.sql("UPDATE purchase_order SET cancellation_reason=:reason WHERE id=:id")
+                .param("reason", reason).param("id", id).update();
     }
 
     int transition(String id, Status from, Status to, String actorId, long version) {
@@ -206,14 +213,15 @@ class PurchaseRepository {
     private OrderView withLines(OrderView value) {
         return new OrderView(value.id(), value.orderNo(), value.orderType(), value.supplierId(), value.supplierName(),
                 value.status(), value.currency(), value.remark(), value.version(), lines(value.id()), value.createdAt(),
-                value.updatedAt());
+                value.updatedAt(), value.expectedDeliveryDate(), value.deliveryAddress(), value.cancellationReason());
     }
 
     private OrderView mapOrder(ResultSet rs, int row) throws SQLException {
         return new OrderView(rs.getString("id"), rs.getString("order_no"), OrderType.valueOf(rs.getString("order_type")),
                 rs.getString("supplier_id"), rs.getString("supplier_name"), Status.valueOf(rs.getString("status")),
                 rs.getString("currency"), rs.getString("remark"), rs.getLong("version"), List.of(),
-                instant(rs,"created_at"), instant(rs,"updated_at"));
+                instant(rs,"created_at"), instant(rs,"updated_at"), rs.getObject("expected_delivery_date", java.time.LocalDate.class),
+                rs.getString("delivery_address"), rs.getString("cancellation_reason"));
     }
     private Instant instant(ResultSet rs, String column) throws SQLException { return rs.getTimestamp(column).toInstant(); }
 

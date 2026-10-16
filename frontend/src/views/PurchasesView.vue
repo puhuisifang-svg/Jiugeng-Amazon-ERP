@@ -1,56 +1,100 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
 import { domainApi, type SupplierDto } from '@/api/domain'
-import { purchaseApi, type PurchaseDashboard, type PurchaseOrder, type PurchaseOrderInput, type PurchaseReceipt, type PurchaseReferenceItem, type PurchaseStatus } from '@/api/purchases'
+import { purchaseApi, type PurchaseOrder, type PurchaseOrderInput, type PurchaseOrderType, type PurchaseReferenceItem, type PurchaseStatus } from '@/api/purchases'
 import { session } from '@/state/session'
 
-const props = defineProps<{ mode: 'dashboard' | 'orders' | 'receipts' }>()
-const orders = ref<PurchaseOrder[]>([]); const receipts = ref<PurchaseReceipt[]>([]); const dashboard = ref<PurchaseDashboard>()
+const route = useRoute(); const router = useRouter()
+const orders = ref<PurchaseOrder[]>([])
 const suppliers = ref<SupplierDto[]>([]); const references = ref<PurchaseReferenceItem[]>([])
-const loading = ref(false); const referenceLoading = ref(false); const saving = ref(false); const error = ref(''); const success = ref(''); const status = ref<PurchaseStatus | ''>('')
+const loading = ref(false); const referenceLoading = ref(false); const supplierLoading = ref(false); const saving = ref(false)
+const error = ref(''); const formError = ref(''); const success = ref('')
+const type = computed<PurchaseOrderType>(() => route.query.type === 'MATERIAL' ? 'MATERIAL' : 'PRODUCT')
+const status = ref<PurchaseStatus | ''>(''); const keyword = ref(''); const delivery = ref(''); const page = ref(1); const size = ref(20)
 const editing = ref<PurchaseOrder>(); const showOrderForm = ref(false)
-const form = reactive<PurchaseOrderInput>({ orderType: 'PRODUCT', supplierId: '', currency: 'CNY', remark: '', lines: [{ itemId: '', quantity: 1, unitPrice: 0 }] })
+const form = reactive<PurchaseOrderInput>({ orderType: 'PRODUCT', supplierId: '', currency: 'CNY', remark: '', lines: [] })
 const writable = computed(() => session.canAccess(['purchases.write']))
-const statusLabels: Record<PurchaseStatus,string> = { DRAFT: '草稿', SUBMITTED: '已提交', PARTIALLY_RECEIVED: '部分收货', COMPLETED: '已完成', CANCELLED: '已取消' }
+const statusLabels: Record<PurchaseStatus, string> = { DRAFT: '草稿', SUBMITTED: '待收货', PARTIALLY_RECEIVED: '部分收货', COMPLETED: '已完成', CANCELLED: '已取消 / 余量关闭' }
 const typeLabels = { PRODUCT: '产品采购', MATERIAL: '辅料采购' }
+const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai' }).format(new Date())
+const overdue = (order: PurchaseOrder) => ['SUBMITTED', 'PARTIALLY_RECEIVED'].includes(order.status) && !!order.expectedDeliveryDate && order.expectedDeliveryDate < today
+const typedOrders = computed(() => orders.value.filter(order => order.orderType === type.value))
+const filtered = computed(() => typedOrders.value.filter(order => {
+  const q = keyword.value.trim().toLowerCase()
+  return (!status.value || order.status === status.value)
+    && (!q || [order.orderNo, order.supplierName, ...order.lines.flatMap(line => [line.itemCode, line.itemName])].some(value => value.toLowerCase().includes(q)))
+    && (!delivery.value || (delivery.value === 'overdue' ? overdue(order) : !order.expectedDeliveryDate))
+}))
+const pageCount = computed(() => Math.max(1, Math.ceil(filtered.value.length / size.value)))
+const visibleOrders = computed(() => filtered.value.slice((page.value - 1) * size.value, page.value * size.value))
+const total = (order: PurchaseOrder) => order.lines.reduce((sum, line) => sum + line.orderedQuantity * line.unitPrice, 0).toFixed(2)
+const formTotal = computed(() => form.lines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0), 0).toFixed(2))
+let referenceSequence = 0
 function message(exception: unknown, fallback: string) { return exception instanceof ApiError ? exception.message : fallback }
-function resetForm() { Object.assign(form, { orderType: 'PRODUCT', supplierId: '', currency: 'CNY', remark: '', lines: [{ itemId: '', quantity: 1, unitPrice: 0 }] }); references.value = []; editing.value = undefined; showOrderForm.value = false }
+function resetFilters() { status.value = ''; keyword.value = ''; delivery.value = ''; page.value = 1 }
+async function changeType(value: PurchaseOrderType) { resetFilters(); await router.replace({ query: { type: value } }) }
+function closeForm() { if (saving.value) return; referenceSequence++; showOrderForm.value = false; references.value = []; formError.value = '' }
 async function load() {
   loading.value = true; error.value = ''
-  try {
-    if (props.mode === 'dashboard') dashboard.value = await purchaseApi.dashboard()
-    else if (props.mode === 'orders') orders.value = await purchaseApi.orders(status.value || undefined)
-    else receipts.value = await purchaseApi.receipts()
-  } catch (exception) { error.value = message(exception, '采购数据加载失败。') } finally { loading.value = false }
+  try { orders.value = await purchaseApi.orders() }
+  catch (exception) { error.value = message(exception, '采购数据加载失败，请重试。') }
+  finally { loading.value = false }
 }
 async function loadSuppliers() {
-  if (suppliers.value.length) return
-  try { suppliers.value = (await domainApi.suppliers({ status: 'ACTIVE', size: 100 })).items }
-  catch (exception) { error.value = message(exception, '供应商加载失败，请先确认供应商档案权限。') }
+  supplierLoading.value = true
+  try {
+    const result: SupplierDto[] = []; let currentPage = 0
+    while (true) {
+      const response = await domainApi.suppliers({ status: 'ACTIVE', size: 100, page: currentPage++ })
+      result.push(...response.items)
+      if (!response.items.length || result.length >= response.totalCount) break
+    }
+    suppliers.value = result
+  } catch (exception) { formError.value = message(exception, '供应商加载失败，请关闭后重试。') }
+  finally { supplierLoading.value = false }
 }
 async function loadReferences(resetLines = true) {
-  references.value = []; if (resetLines) form.lines = [{ itemId: '', quantity: 1, unitPrice: 0 }]
-  if (!form.supplierId) return
+  const sequence = ++referenceSequence
+  references.value = []; formError.value = ''
+  if (resetLines) form.lines = [{ itemId: '', quantity: 1, unitPrice: 0 }]
+  if (!form.supplierId) { referenceLoading.value = false; return }
   referenceLoading.value = true
-  try { references.value = await purchaseApi.references(form.orderType, form.supplierId) }
-  catch (exception) { error.value = message(exception, '可采购商品加载失败。') } finally { referenceLoading.value = false }
+  try { const result = await purchaseApi.references(form.orderType, form.supplierId); if (sequence === referenceSequence) references.value = result }
+  catch (exception) { if (sequence === referenceSequence) formError.value = message(exception, '可采购项目加载失败，请重新选择供应商。') }
+  finally { if (sequence === referenceSequence) referenceLoading.value = false }
 }
-async function openCreate() { resetForm(); showOrderForm.value = true; await loadSuppliers() }
+async function openCreate() {
+  editing.value = undefined; formError.value = ''; references.value = []; referenceSequence++
+  Object.assign(form, { orderType: type.value, supplierId: '', currency: 'CNY', remark: '', version: undefined, expectedDeliveryDate: '', deliveryAddress: '', lines: [{ itemId: '', quantity: 1, unitPrice: 0 }] })
+  showOrderForm.value = true; await loadSuppliers()
+}
 async function openEdit(order: PurchaseOrder) {
-  editing.value = order; showOrderForm.value = true; await loadSuppliers()
-  Object.assign(form, { orderType: order.orderType, supplierId: order.supplierId, currency: order.currency, remark: order.remark ?? '', version: order.version, lines: order.lines.map(line => ({ itemId: line.itemId, quantity: line.orderedQuantity, unitPrice: line.unitPrice })) })
-  await loadReferences(false)
+  editing.value = order; formError.value = ''; showOrderForm.value = true
+  Object.assign(form, { orderType: order.orderType, supplierId: order.supplierId, currency: order.currency, remark: order.remark ?? '', version: order.version, expectedDeliveryDate: order.expectedDeliveryDate ?? '', deliveryAddress: order.deliveryAddress ?? '', lines: order.lines.map(line => ({ itemId: line.itemId, quantity: line.orderedQuantity, unitPrice: line.unitPrice })) })
+  await Promise.all([loadSuppliers(), loadReferences(false)])
 }
-function addLine() { form.lines.push({ itemId: '', quantity: 1, unitPrice: 0 }) }
-function removeLine(index: number) { if (form.lines.length > 1) form.lines.splice(index, 1) }
+function addLine() { if (form.lines.length < 200) form.lines.push({ itemId: '', quantity: 1, unitPrice: 0 }) }
+function validNumber(value: number, positive: boolean) { return Number.isFinite(Number(value)) && (positive ? Number(value) > 0 : Number(value) >= 0) && /^\d+(\.\d{1,4})?$/.test(String(value)) }
 async function saveOrder() {
-  saving.value = true; error.value = ''; success.value = ''
-  try { const payload = { ...form, lines: form.lines.map(line => ({ ...line })) }; if (editing.value) await purchaseApi.update(editing.value.id, payload); else await purchaseApi.create(payload); success.value = editing.value ? '采购单已更新。' : '采购单草稿已创建。'; resetForm(); await load() }
-  catch (exception) { error.value = message(exception, '采购单保存失败。') } finally { saving.value = false }
+  if (saving.value || referenceLoading.value) return
+  formError.value = ''; success.value = ''
+  if (!form.supplierId || !form.lines.length || form.lines.some(line => !references.value.some(item => item.id === line.itemId))) { formError.value = '请选择供应商及有效采购项目。'; return }
+  if (new Set(form.lines.map(line => line.itemId)).size !== form.lines.length) { formError.value = '采购项目不可重复，请合并相同项目的数量。'; return }
+  if (form.lines.some(line => !validNumber(line.quantity, true) || !validNumber(line.unitPrice, false))) { formError.value = '数量必须大于 0，单价不可为负数，最多支持四位小数。'; return }
+  saving.value = true
+  try {
+    const payload = { ...form, expectedDeliveryDate: form.expectedDeliveryDate || null, lines: form.lines.map(line => ({ ...line })) }
+    if (editing.value) await purchaseApi.update(editing.value.id, payload); else await purchaseApi.create(payload)
+    success.value = editing.value ? '采购单草稿已更新。' : '采购单草稿已保存，请进入详情核对并确认下单。'
+    saving.value = false; closeForm(); await load()
+  } catch (exception) { formError.value = message(exception, '保存结果未确认，请先刷新列表检查是否已保存，避免重复建单。') }
+  finally { saving.value = false }
 }
-watch(() => props.mode, load); watch(status, () => { if (props.mode === 'orders') load() }); onMounted(load)
+watch([type, status, keyword, delivery, size], () => { page.value = 1 })
+watch(pageCount, value => { if (page.value > value) page.value = value })
+onMounted(load)
 </script>
 
 <template>
@@ -58,16 +102,39 @@ watch(() => props.mode, load); watch(status, () => { if (props.mode === 'orders'
     <header class="panel purchase-header">
       <div>
         <p class="eyebrow">
-          PURCHASE MANAGEMENT
-        </p><h1>{{ mode === 'dashboard' ? '采购看板' : mode === 'orders' ? '采购单' : '收货记录' }}</h1><p>从供应商关系选择可采购商品，完整跟踪下单、分批收货与库存入库。</p>
-      </div><button
-        v-if="mode === 'orders' && writable"
+          PURCHASE ORDERS
+        </p><h1>采购单</h1><p>建单 → 确认下单 → 分批收货 → 完成，采购与到货进度在一处管理。</p>
+      </div>
+      <button
+        v-if="writable"
+        class="primary-link"
         type="button"
+        :disabled="showOrderForm"
         @click="openCreate"
       >
-        新建采购单
+        新建{{ typeLabels[type] }}单
       </button>
     </header>
+    <div
+      class="purchase-tabs"
+      role="tablist"
+      aria-label="采购类型"
+    >
+      <button
+        v-for="(label, key) in typeLabels"
+        :id="`tab-${key}`"
+        :key="key"
+        type="button"
+        role="tab"
+        :aria-selected="type === key"
+        aria-controls="purchase-orders-panel"
+        @click="changeType(key)"
+        @keydown.right.prevent="changeType(type === 'PRODUCT' ? 'MATERIAL' : 'PRODUCT')"
+        @keydown.left.prevent="changeType(type === 'PRODUCT' ? 'MATERIAL' : 'PRODUCT')"
+      >
+        {{ label }} <span>{{ orders.filter(order => order.orderType === key).length }}</span>
+      </button>
+    </div>
     <p
       v-if="error"
       class="error-message"
@@ -81,178 +148,132 @@ watch(() => props.mode, load); watch(status, () => { if (props.mode === 'orders'
     >
       {{ success }}
     </p>
-    <template v-if="mode === 'dashboard'">
-      <section
-        class="metric-grid"
-        aria-label="采购统计"
+    <section class="panel filter-panel purchase-order-filters">
+      <label>搜索<input
+        v-model="keyword"
+        placeholder="采购单号 / 供应商 / SKU / 辅料"
+        aria-label="搜索采购单"
+      ></label>
+      <label>状态<select v-model="status"><option value="">全部状态</option><option
+        v-for="(label,key) in statusLabels"
+        :key="key"
+        :value="key"
+      >{{ label }}</option></select></label>
+      <label>交期<select v-model="delivery"><option value="">全部交期</option><option value="overdue">已逾期未收齐</option><option value="missing">未填写交期</option></select></label>
+      <button
+        type="button"
+        @click="resetFilters"
       >
-        <RouterLink
-          class="panel purchase-metric"
-          to="/purchases/orders"
-        >
-          <strong>{{ dashboard?.draft ?? 0 }}</strong><span>草稿</span>
-        </RouterLink><RouterLink
-          class="panel purchase-metric"
-          to="/purchases/orders"
-        >
-          <strong>{{ dashboard?.pendingReceipt ?? 0 }}</strong><span>待收货</span>
-        </RouterLink><RouterLink
-          class="panel purchase-metric"
-          to="/purchases/orders"
-        >
-          <strong>{{ dashboard?.partial ?? 0 }}</strong><span>部分收货</span>
-        </RouterLink><RouterLink
-          class="panel purchase-metric"
-          to="/purchases/orders"
-        >
-          <strong>{{ dashboard?.completed ?? 0 }}</strong><span>已完成</span>
-        </RouterLink>
-      </section>
-      <section class="panel">
-        <div class="purchase-section-heading">
-          <h2>近期采购单</h2><RouterLink to="/purchases/orders">
-            查看全部
-          </RouterLink>
-        </div><div
-          v-if="!loading && !dashboard?.recent.length"
-          class="empty-state"
-        >
-          <span class="empty-state__icon">购</span><h2>还没有采购单</h2><p>前往采购单页面，从已关联供应商的产品或辅料创建第一张采购单。</p><RouterLink
-            class="toolbar-link"
-            to="/purchases/orders"
-          >
-            开始建单
-          </RouterLink>
-        </div><div
-          v-else
-          class="table-scroll"
-        >
-          <table>
-            <thead><tr><th>单号</th><th>类型</th><th>供应商</th><th>状态</th><th>更新时间</th></tr></thead><tbody>
-              <tr
-                v-for="order in dashboard?.recent"
-                :key="order.id"
-              >
-                <td>
-                  <RouterLink
-                    class="text-link"
-                    :to="`/purchases/orders/${order.id}`"
-                  >
-                    {{ order.orderNo }}
-                  </RouterLink>
-                </td><td>{{ typeLabels[order.orderType] }}</td><td>{{ order.supplierName }}</td><td>{{ statusLabels[order.status] }}</td><td>{{ new Date(order.updatedAt).toLocaleString() }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </template>
-    <template v-else-if="mode === 'orders'">
-      <section class="panel filter-panel purchase-filters">
-        <label>状态<select v-model="status"><option value="">全部状态</option><option
-          v-for="(label,key) in statusLabels"
-          :key="key"
-          :value="key"
-        >{{ label }}</option></select></label>
-      </section>
-      <section class="panel">
-        <p v-if="loading">
-          正在加载…
-        </p><div
-          v-else-if="!orders.length"
-          class="empty-state"
-        >
-          <span class="empty-state__icon">单</span><h2>{{ status ? '当前状态没有采购单' : '还没有采购单' }}</h2><p>建单前请先在产品/辅料档案中关联启用供应商。采购单只显示该供应商可供货的项目。</p><button
-            v-if="writable"
-            type="button"
-            @click="openCreate"
-          >
-            新建采购单
-          </button>
-        </div><div
-          v-else
-          class="table-scroll"
-        >
-          <table>
-            <thead><tr><th>采购单</th><th>类型</th><th>供应商</th><th>金额</th><th>收货进度</th><th>状态</th><th>操作</th></tr></thead><tbody>
-              <tr
-                v-for="order in orders"
-                :key="order.id"
-              >
-                <td>
-                  <RouterLink
-                    class="text-link"
-                    :to="`/purchases/orders/${order.id}`"
-                  >
-                    <strong>{{ order.orderNo }}</strong>
-                  </RouterLink><small>{{ order.lines.length }} 项明细</small>
-                </td><td>{{ typeLabels[order.orderType] }}</td><td>{{ order.supplierName }}</td><td>{{ order.currency }} {{ order.lines.reduce((sum,line) => sum + line.orderedQuantity * line.unitPrice, 0).toFixed(2) }}</td><td>{{ order.lines.reduce((sum,line) => sum + line.receivedQuantity, 0) }} / {{ order.lines.reduce((sum,line) => sum + line.orderedQuantity, 0) }}</td><td>{{ statusLabels[order.status] }}</td><td class="table-actions">
-                  <RouterLink
-                    class="primary-link"
-                    :to="`/purchases/orders/${order.id}`"
-                  >
-                    查看
-                  </RouterLink><button
-                    v-if="writable && order.status === 'DRAFT'"
-                    type="button"
-                    class="secondary-button"
-                    @click="openEdit(order)"
-                  >
-                    编辑
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </template>
+        重置
+      </button><button
+        type="button"
+        :disabled="loading"
+        @click="load"
+      >
+        {{ loading ? '刷新中…' : '刷新' }}
+      </button>
+    </section>
     <section
-      v-else
-      class="panel"
+      id="purchase-orders-panel"
+      class="panel table-panel"
+      role="tabpanel"
+      :aria-labelledby="`tab-${type}`"
+      :aria-busy="loading"
     >
+      <p class="purchase-list-note">
+        {{ type === 'PRODUCT' ? '产品按 SKU 采购，收货登记到货数量；暂不生成成品库存。' : '辅料按档案单位采购，登记收货后同步增加固定仓库存。' }} 收货与历史记录在采购单详情查看。
+      </p>
+      <p
+        v-if="loading"
+        class="purchase-list-note"
+      >
+        正在加载采购单…
+      </p>
       <div
-        v-if="!loading && !receipts.length"
+        v-else-if="!filtered.length"
         class="empty-state"
       >
-        <span class="empty-state__icon">收</span><h2>还没有收货记录</h2><p>采购单提交后，请在采购单详情中执行分批收货。</p><RouterLink
-          class="toolbar-link"
-          to="/purchases/orders"
-        >
-          查看采购单
-        </RouterLink>
-      </div><div
+        <span class="empty-state__icon">单</span><h2>暂无符合条件的{{ typeLabels[type] }}单</h2><p>可调整筛选条件，或先维护供应商供货关系后新建采购单。</p>
+      </div>
+      <div
         v-else
         class="table-scroll"
       >
-        <table>
-          <thead><tr><th>采购单</th><th>收货时间</th><th>操作人</th><th>明细</th><th>备注</th></tr></thead><tbody>
+        <table class="data-table">
+          <thead><tr><th>采购单 / 供应商</th><th>明细</th><th>采购金额</th><th>收货进度</th><th>预计到货</th><th>状态</th><th>操作</th></tr></thead>
+          <tbody>
             <tr
-              v-for="receipt in receipts"
-              :key="receipt.id"
+              v-for="order in visibleOrders"
+              :key="order.id"
             >
               <td>
                 <RouterLink
                   class="text-link"
-                  :to="`/purchases/orders/${receipt.orderId}`"
+                  :to="`/purchases/orders/${order.id}`"
                 >
-                  {{ receipt.orderNo }}
-                </RouterLink>
-              </td><td>{{ new Date(receipt.receivedAt).toLocaleString() }}</td><td>{{ receipt.actorLoginName }}</td><td>{{ receipt.lines.map(line => `${line.itemCode} × ${line.quantity}`).join('；') }}</td><td>{{ receipt.remark || '—' }}</td>
+                  <strong>{{ order.orderNo }}</strong>
+                </RouterLink><small>{{ order.supplierName }}</small><small>{{ new Date(order.createdAt).toLocaleDateString() }} 创建</small>
+              </td>
+              <td>{{ order.lines.length }} 项<small>{{ order.lines[0]?.itemCode }}{{ order.lines.length > 1 ? ' 等' : '' }}</small></td>
+              <td>{{ order.currency }} {{ total(order) }}</td>
+              <td>{{ order.lines.filter(line => line.remainingQuantity === 0).length }} / {{ order.lines.length }} 项已收齐<small>{{ order.status === 'CANCELLED' ? '未收余量已关闭' : '分项数量见详情' }}</small></td>
+              <td :class="{ 'error-message': overdue(order) }">
+                {{ order.expectedDeliveryDate || '未约定' }}<small v-if="overdue(order)">逾期未收齐</small>
+              </td>
+              <td>
+                <span
+                  class="purchase-status"
+                  :data-status="order.status"
+                >{{ statusLabels[order.status] }}</span>
+              </td>
+              <td class="table-actions">
+                <RouterLink
+                  class="text-link"
+                  :to="`/purchases/orders/${order.id}`"
+                >
+                  {{ order.status === 'DRAFT' ? '核对 / 下单' : '查看详情' }}
+                </RouterLink><button
+                  v-if="writable && order.status === 'DRAFT'"
+                  type="button"
+                  class="secondary-button"
+                  @click="openEdit(order)"
+                >
+                  编辑
+                </button>
+              </td>
             </tr>
           </tbody>
         </table>
       </div>
+      <footer class="purchase-pagination">
+        <span>共 {{ filtered.length }} 单</span><label>每页 <select
+          v-model.number="size"
+          aria-label="每页条数"
+        ><option :value="20">20</option><option :value="50">50</option><option :value="100">100</option></select></label><button
+          type="button"
+          class="secondary-button"
+          :disabled="page <= 1"
+          @click="page--"
+        >
+          上一页
+        </button><span>{{ page }} / {{ pageCount }}</span><button
+          type="button"
+          class="secondary-button"
+          :disabled="page >= pageCount"
+          @click="page++"
+        >
+          下一页
+        </button>
+      </footer>
     </section>
-
     <div
       v-if="showOrderForm"
       class="operation-dialog"
       role="dialog"
       aria-modal="true"
       aria-labelledby="purchase-form-title"
-      @click.self="resetForm"
-      @keydown.esc="resetForm"
+      @click.self="closeForm"
+      @keydown.esc="closeForm"
     >
       <form
         class="panel operation-form operation-dialog__card"
@@ -262,101 +283,157 @@ watch(() => props.mode, load); watch(status, () => { if (props.mode === 'orders'
           type="button"
           class="operation-dialog__close"
           aria-label="关闭"
-          @click="resetForm"
+          :disabled="saving"
+          @click="closeForm"
         >
           ×
-        </button><h2 id="purchase-form-title">
-          {{ editing ? '编辑采购单' : '新建采购单' }}
-        </h2><p class="form-wide purchase-form-hint">
-          先选择采购类型与供应商，再从该供应商已关联的项目中添加明细。
-        </p><label>采购类型<select
-          v-model="form.orderType"
-          :disabled="Boolean(editing)"
-          @change="loadReferences()"
-        ><option value="PRODUCT">产品采购</option><option value="MATERIAL">辅料采购</option></select></label><label>供应商<select
-          v-model="form.supplierId"
-          required
-          @change="loadReferences()"
-        ><option
-          value=""
-          disabled
-        >请选择启用供应商</option><option
-          v-for="supplier in suppliers"
-          :key="supplier.id"
-          :value="supplier.id"
-        >{{ supplier.name }}</option></select></label><label>币种<input
-          v-model="form.currency"
-          required
-          maxlength="3"
-        ></label><label class="form-wide">备注<textarea
-          v-model="form.remark"
-          maxlength="500"
-        /></label><div
-          v-if="form.supplierId && !referenceLoading && !references.length"
-          class="form-wide empty-inline"
-          role="status"
+        </button>
+        <h2 id="purchase-form-title">
+          {{ editing ? '编辑' : '新建' }}{{ typeLabels[form.orderType] }}单
+        </h2>
+        <p class="form-wide purchase-form-hint">
+          一单一供应商，产品与辅料不混单。保存为草稿后，请在详情确认下单。
+        </p>
+        <p
+          v-if="formError"
+          class="error-message form-wide"
+          role="alert"
         >
-          该供应商尚未关联可采购的{{ form.orderType === 'PRODUCT' ? '启用 SKU' : '启用辅料' }}。请先到产品或辅料管理维护供应商关系。
-        </div><div class="form-wide purchase-lines">
-          <div
-            v-for="(line,index) in form.lines"
-            :key="index"
-            class="purchase-line"
+          {{ formError }}
+        </p>
+        <fieldset
+          class="purchase-form-fields form-wide"
+          :disabled="saving"
+        >
+          <label>供应商<select
+            v-model="form.supplierId"
+            required
+            :disabled="supplierLoading"
+            @change="loadReferences()"
+          ><option
+            value=""
+            disabled
+          >{{ supplierLoading ? '正在加载供应商…' : '请选择启用供应商' }}</option><option
+            v-for="supplier in suppliers"
+            :key="supplier.id"
+            :value="supplier.id"
+          >{{ supplier.name }}</option></select></label>
+          <label>币种<input
+            v-model="form.currency"
+            required
+            maxlength="3"
+            pattern="[A-Za-z]{3}"
+            placeholder="CNY"
+          ></label>
+          <label>预计到货日期<input
+            v-model="form.expectedDeliveryDate"
+            type="date"
+            min="2000-01-01"
+            max="9999-12-31"
+          ></label>
+          <label>收货信息<input
+            v-model="form.deliveryAddress"
+            maxlength="500"
+            placeholder="收货地址、联系人或内部仓库说明"
+          ></label>
+          <p
+            v-if="form.supplierId && !referenceLoading && !references.length"
+            class="form-wide empty-inline"
           >
-            <select
-              v-model="line.itemId"
-              required
-              :disabled="!references.length"
-            >
-              <option
-                value=""
-                disabled
-              >
-                {{ referenceLoading ? '正在加载…' : '选择可采购项目' }}
-              </option><option
-                v-for="item in references"
-                :key="item.id"
-                :value="item.id"
-              >
-                {{ item.primarySupplier ? '★ ' : '' }}{{ item.code }} · {{ item.name }}（{{ item.unit }}）
-              </option>
-            </select><input
-              v-model.number="line.quantity"
-              type="number"
-              min="0.0001"
-              step="0.0001"
-              aria-label="采购数量"
-            ><input
-              v-model.number="line.unitPrice"
-              type="number"
-              min="0"
-              step="0.0001"
-              aria-label="采购单价"
-            ><button
+            该供应商尚未关联启用的{{ form.orderType === 'PRODUCT' ? 'SKU' : '辅料' }}，请先到对应档案维护供货关系。
+          </p>
+          <div class="form-wide table-scroll">
+            <table class="data-table purchase-edit-lines">
+              <thead><tr><th>采购项目</th><th>数量</th><th>单位</th><th>单价</th><th>金额</th><th>操作</th></tr></thead><tbody>
+                <tr
+                  v-for="(line,index) in form.lines"
+                  :key="index"
+                >
+                  <td>
+                    <select
+                      v-model="line.itemId"
+                      required
+                      :aria-label="`采购项目 ${index + 1}`"
+                      :disabled="referenceLoading || !references.length"
+                    >
+                      <option
+                        value=""
+                        disabled
+                      >
+                        {{ referenceLoading ? '正在加载…' : '选择可采购项目' }}
+                      </option><option
+                        v-for="item in references"
+                        :key="item.id"
+                        :value="item.id"
+                        :disabled="form.lines.some((other, otherIndex) => otherIndex !== index && other.itemId === item.id)"
+                      >
+                        {{ item.code }} · {{ item.name }}
+                      </option>
+                    </select>
+                  </td>
+                  <td>
+                    <input
+                      v-model.number="line.quantity"
+                      required
+                      type="number"
+                      min="0.0001"
+                      step="0.0001"
+                      aria-label="采购数量"
+                    >
+                  </td>
+                  <td>{{ references.find(item => item.id === line.itemId)?.unit || '—' }}</td>
+                  <td>
+                    <input
+                      v-model.number="line.unitPrice"
+                      required
+                      type="number"
+                      min="0"
+                      step="0.0001"
+                      aria-label="采购单价"
+                    >
+                  </td>
+                  <td>{{ (Number(line.quantity || 0) * Number(line.unitPrice || 0)).toFixed(2) }}</td>
+                  <td>
+                    <button
+                      type="button"
+                      class="secondary-button"
+                      :disabled="form.lines.length <= 1"
+                      @click="form.lines.splice(index, 1)"
+                    >
+                      移除
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="form-wide purchase-section-heading">
+            <button
               type="button"
               class="secondary-button"
-              @click="removeLine(index)"
+              :disabled="!references.length || form.lines.length >= 200"
+              @click="addLine"
             >
-              删除
-            </button>
-          </div><button
-            type="button"
-            class="secondary-button"
-            :disabled="!references.length"
-            @click="addLine"
-          >
-            增加明细
-          </button>
-        </div><div class="operation-form__actions">
+              增加明细
+            </button><strong>合计 {{ form.currency.toUpperCase() }} {{ formTotal }}</strong>
+          </div>
+          <label class="form-wide">采购备注<textarea
+            v-model="form.remark"
+            maxlength="500"
+            placeholder="包装要求、供货约定等（单行文本）"
+          /></label>
+        </fieldset>
+        <div class="operation-form__actions">
           <button
             type="button"
             class="secondary-button"
-            @click="resetForm"
+            :disabled="saving"
+            @click="closeForm"
           >
             取消
           </button><button
-            :disabled="saving || !references.length"
             type="submit"
+            :disabled="saving || referenceLoading || supplierLoading || !references.length"
           >
             {{ saving ? '保存中…' : '保存草稿' }}
           </button>

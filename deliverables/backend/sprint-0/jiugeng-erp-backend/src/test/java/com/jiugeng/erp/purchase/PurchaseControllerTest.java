@@ -3,6 +3,7 @@ package com.jiugeng.erp.purchase;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -56,7 +57,7 @@ class PurchaseControllerTest {
         mvc.perform(post("/api/v1/purchases/orders/{id}/receipts",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(receipt)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.replayed").value(true));
         assertThat(jdbc.queryForObject("SELECT quantity FROM inventory_balance WHERE auxiliary_material_id=?",java.math.BigDecimal.class,materialId)).isEqualByComparingTo("4.0000");
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM inventory_transaction WHERE request_id LIKE 'PURCHASE:%'",Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM inventory_transaction WHERE request_id LIKE 'PURCHASE:%' AND auxiliary_material_id=?",Integer.class,materialId)).isEqualTo(1);
     }
 
     @Test void productReceiptCompletesWithoutInventorySideEffectAndOverReceiptIsRejected() throws Exception {
@@ -68,7 +69,7 @@ class PurchaseControllerTest {
         mvc.perform(post("/api/v1/purchases/orders/{id}/receipts",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("requestId","PRODUCT-OK","receivedAt","2026-10-16T08:00:00Z","lines",List.of(Map.of("orderLineId",lineId,"quantity",2))))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.lines[0].inventoryTransactionId").doesNotExist());
         mvc.perform(get("/api/v1/purchases/orders/{id}",id).header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("COMPLETED"));
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM inventory_transaction WHERE request_id LIKE 'PURCHASE:%'",Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM inventory_transaction WHERE request_id LIKE 'PURCHASE:%' AND auxiliary_material_id=?",Integer.class,materialId)).isZero();
         assertThat(objectMapper.readTree(submitted).get("status").asText()).isEqualTo("SUBMITTED");
     }
 
@@ -102,6 +103,68 @@ class PurchaseControllerTest {
         mvc.perform(post("/api/v1/purchases/orders").header("Authorization",bearer(token))
                 .contentType(MediaType.APPLICATION_JSON).content(json(request)))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SUPPLIER_ITEM_LINK_REQUIRED"));
+    }
+
+    @Test void deliveryDetailsSurviveDraftUpdatesAndCancellationRequiresReason() throws Exception {
+        String token=login("delivery-buyer","PRODUCT_MATERIAL");
+        JsonNode order=createOrder(token,"MATERIAL",materialId,"10","2"); String id=order.get("id").asText();
+        var input=Map.of("orderType","MATERIAL","supplierId",supplierId,"currency","CNY","version",0,
+                "expectedDeliveryDate","2026-11-20","deliveryAddress","验收固定仓",
+                "lines",List.of(Map.of("itemId",materialId,"quantity",10,"unitPrice",2)));
+        mvc.perform(put("/api/v1/purchases/orders/{id}",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.expectedDeliveryDate").value("2026-11-20"))
+                .andExpect(jsonPath("$.deliveryAddress").value("验收固定仓"));
+        mvc.perform(put("/api/v1/purchases/orders/{id}",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input)))
+                .andExpect(status().isConflict());
+        mvc.perform(post("/api/v1/purchases/orders/{id}/cancel",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("version",1,"reason"," "))))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/purchases/orders/{id}/cancel",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("version",1,"reason","需求取消"))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.cancellationReason").value("需求取消"));
+        mvc.perform(get("/api/v1/purchases/orders/{id}/detail",id).header("Authorization",bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.order.expectedDeliveryDate").value("2026-11-20"));
+    }
+
+    @Test void submissionRevalidatesSupplierAndItemAvailability() throws Exception {
+        String token=login("submission-buyer","PRODUCT_MATERIAL"); JsonNode order=createOrder(token,"PRODUCT",variantId,"2","1");
+        String id=order.get("id").asText();
+        jdbc.update("UPDATE supplier SET status='DISABLED' WHERE id=?",supplierId);
+        mvc.perform(post("/api/v1/purchases/orders/{id}/submit",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content("{\"version\":0}"))
+                .andExpect(status().isConflict());
+        jdbc.update("UPDATE supplier SET status='ACTIVE' WHERE id=?",supplierId);
+        jdbc.update("DELETE FROM product_variant_supplier WHERE variant_id=?",variantId);
+        mvc.perform(post("/api/v1/purchases/orders/{id}/submit",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content("{\"version\":0}"))
+                .andExpect(status().isConflict());
+        mvc.perform(get("/api/v1/purchases/orders/{id}",id).header("Authorization",bearer(token)))
+                .andExpect(jsonPath("$.status").value("DRAFT")).andExpect(jsonPath("$.version").value(0));
+    }
+
+    @Test void closingPartiallyReceivedOrderPreservesStockAndRejectsFurtherReceipts() throws Exception {
+        String token=login("closing-buyer","PRODUCT_MATERIAL"); JsonNode order=createOrder(token,"MATERIAL",materialId,"10","2");
+        String id=order.get("id").asText(),lineId=order.at("/lines/0/id").asText();
+        mvc.perform(post("/api/v1/purchases/orders/{id}/submit",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content("{\"version\":0}"))
+                .andExpect(status().isOk());
+        var receipt=Map.of("requestId",UUID.randomUUID().toString(),"receivedAt","2026-10-16T08:00:00Z","lines",List.of(Map.of("orderLineId",lineId,"quantity",4)));
+        mvc.perform(post("/api/v1/purchases/orders/{id}/receipts",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(receipt)))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/purchases/orders/{id}/cancel",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("version",1,"reason","余量不再供货"))))
+                .andExpect(status().isConflict());
+        mvc.perform(post("/api/v1/purchases/orders/{id}/cancel",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("version",2,"reason","余量不再供货"))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.lines[0].receivedQuantity").value(4));
+        mvc.perform(post("/api/v1/purchases/orders/{id}/receipts",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(receipt)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.replayed").value(true));
+        mvc.perform(post("/api/v1/purchases/orders/{id}/receipts",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("requestId",UUID.randomUUID().toString(),"receivedAt","2026-10-16T08:00:00Z","lines",List.of(Map.of("orderLineId",lineId,"quantity",1))))))
+                .andExpect(status().isConflict());
+        assertThat(jdbc.queryForObject("SELECT quantity FROM inventory_balance WHERE auxiliary_material_id=?",java.math.BigDecimal.class,materialId)).isEqualByComparingTo("4");
+    }
+
+    @Test void rejectsNullLinesAndOutOfRangeNumbersWithoutServerErrors() throws Exception {
+        String token=login("bounds-buyer","PRODUCT_MATERIAL");
+        mvc.perform(post("/api/v1/purchases/orders").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"orderType\":\"MATERIAL\",\"supplierId\":\""+supplierId+"\",\"currency\":\"CNY\",\"lines\":[null]}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/purchases/orders").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of("orderType","MATERIAL","supplierId",supplierId,"currency","CNY","lines",List.of(Map.of("itemId",materialId,"quantity","100000000000000","unitPrice",1))))))
+                .andExpect(status().isBadRequest());
     }
 
     private JsonNode createOrder(String token,String type,String itemId,String quantity,String price)throws Exception{

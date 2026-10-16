@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://jiugeng.example/contracts/mvp-active-scope-v1.json",
-  "contractVersion": "1.1",
+  "contractVersion": "1.2",
   "decision": "DEC-012",
   "status": "APPROVED",
   "roles": ["ADMIN", "PRODUCT_MATERIAL", "SELECTION"],
@@ -11,7 +11,8 @@
     "materialInventory": ["AuxiliaryMaterial", "ProductAuxiliaryMaterial", "AuxiliaryMaterialSupplier", "Warehouse", "InventoryBalance", "InventoryTransaction"],
     "selection": ["SelectionCandidate", "CandidateNote", "CandidateEvidence"],
     "watch": ["WatchStore", "CollectorRun", "StoreSnapshot", "StoreSnapshotItem", "NewListingEvent"],
-    "importExport": ["ImportBatch", "ImportIssue", "ImportPreview", "ImportResultFile"]
+    "importExport": ["ImportBatch", "ImportIssue", "ImportPreview", "ImportResultFile"],
+    "purchase": ["PurchaseOrder", "PurchaseOrderLine", "PurchaseReceipt", "PurchaseReceiptLine"]
   },
   "importTypes": [
     {"id": "PRODUCTS", "resource": "products", "templateVersion": "2.0", "dependsOn": []},
@@ -35,7 +36,8 @@
     "/api/v1/dashboard-maintenance",
     "/api/v1/dashboard-images",
     "/api/v1/suppliers",
-    "/api/v1/catalog-images"
+    "/api/v1/catalog-images",
+    "/api/v1/purchases"
   ],
   "capabilities": [
     "system.users.manage",
@@ -47,7 +49,8 @@
     "imports.read", "imports.template.download", "imports.validate", "imports.commit", "imports.cancel", "imports.result.download",
     "audit.read.all", "audit.read.self",
     "dashboard.read", "dashboard.shipments.manage", "dashboard.pending-products.manage",
-    "suppliers.read", "suppliers.write"
+    "suppliers.read", "suppliers.write",
+    "purchases.read", "purchases.write", "purchases.receive"
   ],
   "roleCapabilities": {
     "ADMIN": [
@@ -60,7 +63,8 @@
       "imports.read", "imports.template.download", "imports.validate", "imports.commit", "imports.cancel", "imports.result.download",
       "audit.read.all", "audit.read.self",
       "dashboard.read", "dashboard.shipments.manage", "dashboard.pending-products.manage",
-      "suppliers.read", "suppliers.write"
+      "suppliers.read", "suppliers.write",
+      "purchases.read", "purchases.write", "purchases.receive"
     ],
     "PRODUCT_MATERIAL": [
       "products.read", "products.write",
@@ -70,7 +74,8 @@
       "imports.read", "imports.template.download", "imports.validate", "imports.commit", "imports.cancel", "imports.result.download",
       "audit.read.self",
       "dashboard.read", "dashboard.shipments.manage", "dashboard.pending-products.manage",
-      "suppliers.read", "suppliers.write"
+      "suppliers.read", "suppliers.write",
+      "purchases.read", "purchases.write", "purchases.receive"
     ],
     "SELECTION": [
       "products.read", "materials.read",

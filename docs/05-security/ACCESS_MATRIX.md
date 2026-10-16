@@ -2,9 +2,9 @@
 
 | 字段 | 内容 |
 | --- | --- |
-| 版本 | v1.3 |
-| 状态 | Approved（ERP-021-003 新增供应商独立权限） |
-| 日期 | 2026-10-15 |
+| 版本 | v1.4 |
+| 状态 | Approved（ERP-029 新增采购管理权限） |
+| 日期 | 2026-10-16 |
 
 | 资源/能力 | 系统管理员 | 产品/辅料人员 | 选品人员 |
 | --- | --- | --- | --- |
@@ -16,6 +16,7 @@
 | 店铺上新监控 | 管理 | 查看 | 操作 |
 | 首页工作清单 | 管理 | 操作 | 查看；可维护新品待开发 |
 | 供应商档案与联系方式 | 管理 | 操作 | 无 |
+| 采购单与收货 | 管理 | 操作 | 无 |
 | 审计日志 | 全局查看 | 查看本人操作 | 查看本人操作 |
 | 密钥值 | 默认无；Ops 受控管理 | 无 | 无 |
 
@@ -23,7 +24,7 @@
 
 ## 动作级 Capability 基线
 
-角色用于初始化 capability 集合；前端菜单/按钮/路由使用 `can(capability)`，后端每个接口独立校验同名 capability。本节冻结当前 MVP 的 24 个机器名与三角色映射。机器可读清单见 [当前 MVP 活跃范围契约](../01-product/mvp-active-scope-contract.json)。
+角色用于初始化 capability 集合；前端菜单/按钮/路由使用 `can(capability)`，后端每个接口独立校验同名 capability。本节冻结当前 MVP 的 27 个机器名与三角色映射。机器可读清单见 [当前 MVP 活跃范围契约](../01-product/mvp-active-scope-contract.json)。
 
 | Capability | ADMIN | PRODUCT_MATERIAL | SELECTION |
 | --- | --- | --- | --- |
@@ -51,6 +52,9 @@
 | `dashboard.pending-products.manage` | 是 | 是 | 是 |
 | `suppliers.read` | 是 | 是 | 否 |
 | `suppliers.write` | 是 | 是 | 否 |
+| `purchases.read` | 是 | 是 | 否 |
+| `purchases.write` | 是 | 是 | 否 |
+| `purchases.receive` | 是 | 是 | 否 |
 
 ## 店铺边界
 

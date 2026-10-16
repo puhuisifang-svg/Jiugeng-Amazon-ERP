@@ -158,6 +158,11 @@ query_scalar "INSERT INTO watch_baseline_asin (store_id, asin, source_run_id) VA
 query_scalar "INSERT INTO watch_new_product_event (id, event_key, store_id, detected_run_id, asin, title, status, candidate_id, first_detected_at, confirmed_at, confirmed_by) VALUES ('00000000-0000-0000-0000-000000000025', 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', '00000000-0000-0000-0000-000000000023', '00000000-0000-0000-0000-000000000024', 'B0ERP018001', 'ERP-019 事件', 'CONFIRMED', '00000000-0000-0000-0000-000000000020', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'system')" >/dev/null
 
 query_scalar "INSERT INTO sku_document (id,variant_id,kind,file_name,byte_size,content,uploaded_by) VALUES ('00000000-0000-0000-0000-000000000026','00000000-0000-0000-0000-000000000011','MANUAL','synthetic-manual.txt',4,UNHEX('74657374'),'system')" >/dev/null
+query_scalar "INSERT INTO supplier (id,name,phone,status,created_by,updated_by) VALUES ('00000000-0000-0000-0000-000000000027','ERP-029 持久化供应商','10086','ACTIVE','system','system')" >/dev/null
+query_scalar "INSERT INTO purchase_order (id,order_no,order_type,supplier_id,status,currency,remark,version,created_by,updated_by) VALUES ('00000000-0000-0000-0000-000000000028','PO-ERP-029-PROBE','MATERIAL','00000000-0000-0000-0000-000000000027','PARTIALLY_RECEIVED','CNY','ERP-029 restart probe',2,'system','system')" >/dev/null
+query_scalar "INSERT INTO purchase_order_line (id,order_id,line_no,item_id,item_code,item_name,unit,ordered_quantity,received_quantity,unit_price) VALUES ('00000000-0000-0000-0000-000000000029','00000000-0000-0000-0000-000000000028',1,'00000000-0000-0000-0000-000000000012','ERP-011-PROBE','辅料持久化探针','PCS',10.0000,4.0000,3.5000)" >/dev/null
+query_scalar "INSERT INTO purchase_receipt (id,order_id,request_id,payload_hash,received_at,remark,actor_user_id,actor_login_name) VALUES ('00000000-0000-0000-0000-000000000030','00000000-0000-0000-0000-000000000028','ERP-029-RECEIPT-PROBE','9999999999999999999999999999999999999999999999999999999999999999',CURRENT_TIMESTAMP,'ERP-029 receipt probe','system','system')" >/dev/null
+query_scalar "INSERT INTO purchase_receipt_line (id,receipt_id,order_line_id,quantity,inventory_transaction_id) VALUES ('00000000-0000-0000-0000-000000000031','00000000-0000-0000-0000-000000000030','00000000-0000-0000-0000-000000000029',4.0000,'00000000-0000-0000-0000-000000000014')" >/dev/null
 stop_backend
 docker restart "$mysql_container" >/dev/null
 wait_for_mysql
@@ -185,6 +190,8 @@ selection_probe_count=$(query_scalar "SELECT COUNT(*) FROM selection_candidate c
 [ "$selection_probe_count" = "1" ]
 watch_probe_count=$(query_scalar "SELECT COUNT(*) FROM watch_store s JOIN watch_run r ON r.id=s.baseline_run_id JOIN watch_baseline_asin b ON b.store_id=s.id JOIN watch_new_product_event e ON e.store_id=s.id WHERE s.store_key='ERP-019-STORE' AND r.request_id='ERP-019-PROBE' AND b.asin='B0ERP019001' AND e.candidate_id='00000000-0000-0000-0000-000000000020'")
 [ "$watch_probe_count" = "1" ]
+purchase_probe_count=$(query_scalar "SELECT COUNT(*) FROM purchase_order o JOIN purchase_order_line l ON l.order_id=o.id JOIN purchase_receipt r ON r.order_id=o.id JOIN purchase_receipt_line rl ON rl.receipt_id=r.id WHERE o.order_no='PO-ERP-029-PROBE' AND o.status='PARTIALLY_RECEIVED' AND o.version=2 AND l.received_quantity=4.0000 AND r.request_id='ERP-029-RECEIPT-PROBE' AND rl.quantity=4.0000")
+[ "$purchase_probe_count" = "1" ]
 
 ERP_BACKEND_URL="http://127.0.0.1:$backend_port" "$repo_root/scripts/dev/smoke-local-mysql-backend.sh"
 

@@ -22,7 +22,7 @@ describe('application routes', () => {
     const shell = appRoutes.find((route) => route.path === '/')
     const groups = new Set(shell?.children?.map((route) => route.meta?.group).filter(Boolean))
 
-    expect(groups).toEqual(new Set(['工作台', '工作台维护', '产品管理', '选品管理', '系统管理']))
+    expect(groups).toEqual(new Set(['工作台', '工作台维护', '产品管理', '采购管理', '选品管理', '系统管理']))
   })
 
   it('merges inventory into material management while preserving the legacy route guard', () => {
@@ -41,7 +41,8 @@ describe('application routes', () => {
     const paths = new Set(shell?.children?.map((route) => `/${route.path}`))
     const expectedPaths = [
       '/home', '/products', '/materials', '/suppliers', '/inventory/balances',
-      '/inventory/ledger', '/imports', '/selection/candidates', '/watch/stores',
+      '/inventory/ledger', '/imports', '/purchases', '/purchases/orders', '/purchases/receipts',
+      '/selection/candidates', '/watch/stores',
       '/watch/events', '/system/users', '/system/audit',
       '/dashboard-maintenance/today-shipments', '/dashboard-maintenance/pending-shipments',
       '/dashboard-maintenance/pending-products',
@@ -56,6 +57,16 @@ describe('application routes', () => {
     const suppliers = shell?.children?.find((route) => route.name === 'suppliers')
     expect(suppliers?.meta?.capabilities).toEqual(['suppliers.read'])
     expect(capabilitiesForRole('SELECTION')).not.toContain('suppliers.read')
+  })
+
+  it('protects all purchase workspaces and keeps selection users out', () => {
+    const shell = appRoutes.find((route) => route.path === '/')
+    const purchases = shell?.children?.filter((route) => String(route.path).startsWith('purchases')) ?? []
+    expect(purchases).toHaveLength(3)
+    expect(purchases.every((route) => route.meta?.capabilities?.includes('purchases.read'))).toBe(true)
+    expect(capabilitiesForRole('ADMIN')).toEqual(expect.arrayContaining(['purchases.read', 'purchases.write', 'purchases.receive']))
+    expect(capabilitiesForRole('PRODUCT_MATERIAL')).toEqual(expect.arrayContaining(['purchases.read', 'purchases.write', 'purchases.receive']))
+    expect(capabilitiesForRole('SELECTION')).not.toContain('purchases.read')
   })
 
   it('refreshes server capabilities before treating a persisted session as forbidden', async () => {

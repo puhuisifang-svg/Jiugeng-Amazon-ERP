@@ -7,7 +7,7 @@ export type Capability =
   | 'imports.read' | 'imports.template.download' | 'imports.validate' | 'imports.commit' | 'imports.cancel'
   | 'imports.result.download' | 'audit.read.all' | 'audit.read.self'
   | 'dashboard.read' | 'dashboard.shipments.manage' | 'dashboard.pending-products.manage'
-  | 'suppliers.read' | 'suppliers.write'
+  | 'suppliers.read' | 'suppliers.write' | 'purchases.read' | 'purchases.write' | 'purchases.receive'
 
 declare module 'vue-router' {
   interface RouteMeta {

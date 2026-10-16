@@ -379,3 +379,10 @@ select:disabled { color: #8a93a5; background-color: #f3f5f8; cursor: not-allowed
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
   .worklist-track--animated { animation: none !important; }
 }
+.purchase-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.purchase-header h1 { margin: .2rem 0; }
+.purchase-header p { margin: 0; color: var(--text-muted); }
+.purchase-lines { display: grid; gap: .75rem; }
+.purchase-line { display: grid; grid-template-columns: minmax(12rem, 2fr) minmax(7rem, .6fr) minmax(7rem, .6fr) auto; gap: .5rem; align-items: center; }
+.purchase-page table small { display: block; color: var(--text-muted); margin-top: .2rem; }
+@media (max-width: 760px) { .purchase-header { align-items: flex-start; flex-direction: column; } .purchase-line { grid-template-columns: 1fr; } }

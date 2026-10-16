@@ -13,6 +13,7 @@ const visited = ref<string[]>([])
 const definitions = [
   { title: '工作台', icon: '⌂', groups: ['工作台', '工作台维护'] },
   { title: '商品', icon: '◇', groups: ['产品管理'] },
+  { title: '采购', icon: '购', groups: ['采购管理'] },
   { title: '选品', icon: '☆', groups: ['选品管理'] },
   { title: '设置', icon: '⚙', groups: ['系统管理'] },
 ]

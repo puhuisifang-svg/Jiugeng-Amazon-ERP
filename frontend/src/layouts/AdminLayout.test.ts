@@ -52,6 +52,24 @@ describe('horizontal navigation shell', () => {
     expect(wrapper.get('.workspace-tab.is-current').text()).toContain('辅料管理')
   })
 
+  it('shows purchase management as its own domain only to permitted users', async () => {
+    const allowed = ref<string[] | null>(['dashboard.read', 'purchases.read'])
+    const { wrapper, router } = await setup('/purchases', allowed)
+    expect(wrapper.get('[data-domain="采购"]').classes()).toContain('is-active')
+    await wrapper.get('[data-domain="采购"]').trigger('click')
+    const panel = wrapper.get('.mega-panel')
+    expect(panel.text()).toContain('采购看板')
+    expect(panel.text()).toContain('采购单')
+    expect(panel.text()).toContain('收货记录')
+    await panel.get('a[href="/purchases/orders"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/purchases/orders')
+
+    allowed.value = ['dashboard.read']
+    await nextTick()
+    expect(wrapper.find('[data-domain="采购"]').exists()).toBe(false)
+  })
+
   it('never exposes hidden routes or unauthorized groups and removes revoked tabs', async () => {
     const allowed = ref<string[] | null>(['dashboard.read', 'products.read'])
     const { wrapper } = await setup('/products', allowed)

@@ -17,6 +17,8 @@ const formValue = computed<ProductInput | undefined>(() => product.value ? ({
   description: product.value.description, status: product.value.status, version: product.value.version,
   variants: product.value.variants.map(item => ({ id: item.id, skuCode: item.skuCode, variantName: item.variantName,
     itemDimensions: item.itemDimensions, packageDimensions: item.packageDimensions, packageWeightGrams: item.packageWeightGrams,
+    itemLengthCm: item.itemLengthCm, itemWidthCm: item.itemWidthCm, itemHeightCm: item.itemHeightCm,
+    packageLengthCm: item.packageLengthCm, packageWidthCm: item.packageWidthCm, packageHeightCm: item.packageHeightCm,
     status: item.status, imageAssetId: item.imageAssetId, imageUrl: item.imageUrl, version: item.version,
     suppliers: item.suppliers ?? [], materials: item.materials ?? [] })),
 }) : undefined)

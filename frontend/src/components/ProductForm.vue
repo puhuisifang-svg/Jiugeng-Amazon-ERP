@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, toRaw } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, toRaw } from 'vue'
 import { RouterLink } from 'vue-router'
 import { catalogApi } from '@/api/catalog'
 import { domainApi, type InventoryBalanceViewDto, type MaterialDetailDto, type ProductInput, type ProductVariantInput, type SupplierDto } from '@/api/domain'
@@ -11,13 +11,13 @@ const props = defineProps<{ initial?: ProductInput; busy?: boolean; submitLabel:
 const emit = defineEmits<{ submit: [value: ProductInput]; cancel: [] }>()
 const suppliers = ref<SupplierDto[]>([]); const materials = ref<MaterialDetailDto[]>([])
 const balances = ref<InventoryBalanceViewDto[]>([]); const inventoryFailed = ref(false)
-const loadingReferences = ref(false); const imageError = ref(''); const uploading = ref<number | null>(null)
+const referenceError = ref(''); const loadingReferences = ref(false); const imageError = ref(''); const uploading = ref<number | null>(null)
 const activeTabs = ref<Record<number, 'basic' | 'purchase' | 'specs' | 'materials' | 'image'>>({})
 function activeTab(index: number) { return activeTabs.value[index] ?? 'basic' }
 function setTab(index: number, value: 'basic' | 'purchase' | 'specs' | 'materials' | 'image') { activeTabs.value[index] = value }
 const supplierAccess = computed(() => session.canAccess(['suppliers.read']))
 function blankVariant(): ProductVariantInput { return { skuCode: '', variantName: '', status: 'DRAFT', suppliers: [], materials: [] } }
-const model = reactive<ProductInput>(structuredClone(props.initial ?? { productCode: '', productName: '', status: 'DRAFT', variants: [blankVariant()] }))
+const model = reactive<ProductInput>(JSON.parse(JSON.stringify(props.initial ?? { productCode: '', productName: '', status: 'DRAFT', variants: [blankVariant()] })))
 function addVariant() { model.variants.push(blankVariant()) }
 function removeVariant(index: number) { if (model.variants.length > 1) model.variants.splice(index, 1) }
 function supplierName(id: string) { return suppliers.value.find(item => item.id === id)?.name ?? id }
@@ -28,17 +28,76 @@ function addMaterial(variant: ProductVariantInput, event: Event) { const element
 function makePrimary(variant: ProductVariantInput, id: string) { variant.suppliers.forEach(item => { item.primary = item.supplierId === id }) }
 function useImageUrl(variant: ProductVariantInput) { if (variant.imageUrl?.trim()) variant.imageAssetId = undefined }
 async function uploadImage(variant: ProductVariantInput, index: number, event: Event) { const file = (event.target as HTMLInputElement).files?.[0]; if (!file) return; uploading.value = index; imageError.value = ''; try { variant.imageAssetId = (await catalogApi.uploadImage('SKU_MAIN', file)).id; variant.imageUrl = undefined } catch (error) { imageError.value = error instanceof Error ? error.message : '图片上传失败。' } finally { uploading.value = null } }
-async function loadReferences() { if (runtimeConfig.authMode !== 'password') return; loadingReferences.value = true; try { const materialResponse = await domainApi.materials(); materials.value = materialResponse.items.filter(item => item.status === 'ACTIVE'); if (session.canAccess(['inventory.read'])) { try { balances.value = (await domainApi.balances()).items } catch { inventoryFailed.value = true } } if (supplierAccess.value) suppliers.value = (await domainApi.suppliers({ status: 'ACTIVE', size: 100 })).items } finally { loadingReferences.value = false } }
-function submit() { emit('submit', structuredClone(toRaw(model))) }
+async function loadReferences() {
+  if (runtimeConfig.authMode !== 'password') return
+  loadingReferences.value = true; referenceError.value = ''
+  const failed: string[] = []
+  try {
+    if (session.canAccess(['materials.read'])) {
+      try { materials.value = (await domainApi.materials()).items } catch { failed.push('辅料') }
+    }
+    if (session.canAccess(['inventory.read'])) {
+      try { balances.value = (await domainApi.balances()).items } catch { inventoryFailed.value = true }
+    }
+    if (supplierAccess.value) {
+      try {
+        const all: SupplierDto[] = []
+        let page = 0
+        while (true) {
+          const response = await domainApi.suppliers({ page, size: 100 })
+          all.push(...response.items)
+          if (!response.items.length || all.length >= response.totalCount) break
+          page++
+        }
+        suppliers.value = all
+      } catch { failed.push('供应商') }
+    }
+    if (failed.length) referenceError.value = `${failed.join('、')}资料加载失败，请重试；已有关联资料保留。`
+  } finally { loadingReferences.value = false }
+}
+async function submit(event: Event) {
+  if (props.busy || uploading.value !== null) return
+  const form = event.target as HTMLFormElement
+  const invalid = form.querySelector<HTMLInputElement>(':invalid')
+  if (invalid) {
+    const editor = invalid.closest<HTMLElement>('[data-variant-index]')
+    if (editor) {
+      const index = Number(editor.dataset.variantIndex)
+      const panel = invalid.closest<HTMLElement>('[data-editor-tab]')
+      setTab(index, panel?.dataset.editorTab as 'basic' | 'purchase' | 'specs' | 'materials' | 'image' ?? 'basic')
+    }
+    await nextTick(); invalid.reportValidity(); invalid.focus(); return
+  }
+  const input = structuredClone(toRaw(model))
+  for (const variant of input.variants) {
+    for (const key of ['itemLengthCm', 'itemWidthCm', 'itemHeightCm', 'packageLengthCm', 'packageWidthCm', 'packageHeightCm', 'packageWeightGrams'] as const) {
+      if ((variant[key] as unknown) === '') variant[key] = undefined
+    }
+  }
+  emit('submit', input)
+}
 onMounted(loadReferences)
 </script>
 
 <template>
   <form
     class="page-stack"
+    novalidate
     @submit.prevent="submit"
   >
     <div class="product-form__body page-stack">
+      <p
+        v-if="referenceError"
+        class="data-state data-state--error"
+        role="alert"
+      >
+        {{ referenceError }} <button
+          type="button"
+          @click="loadReferences"
+        >
+          重试
+        </button>
+      </p>
       <section class="panel operation-form product-form">
         <h2>产品基础信息</h2>
         <label>产品编码<input
@@ -73,10 +132,12 @@ onMounted(loadReferences)
         v-for="(variant, variantIndex) in model.variants"
         v-show="!focusVariantId || (focusVariantId === '__NEW__' ? !variant.id : variant.id === focusVariantId)"
         :key="variant.id ?? variantIndex"
+        :data-variant-index="variantIndex"
         class="panel compact-panel variant-editor"
       >
         <div class="card-heading">
           <h2>SKU {{ variantIndex + 1 }}</h2><button
+            v-if="!focusVariantId"
             type="button"
             class="danger-link"
             :disabled="model.variants.length === 1"
@@ -129,6 +190,7 @@ onMounted(loadReferences)
         <div class="sku-editor-grid">
           <div
             v-show="activeTab(variantIndex) === 'image'"
+            data-editor-tab="image"
             class="catalog-image-editor sku-image-editor product-tab-panel product-tab-panel--wide"
           >
             <AuthenticatedCatalogImage
@@ -174,6 +236,7 @@ onMounted(loadReferences)
           </div>
           <div
             v-show="activeTab(variantIndex) === 'basic'"
+            data-editor-tab="basic"
             class="operation-form nested-form product-tab-panel--wide"
           >
             <label>SKU 编码<input
@@ -190,6 +253,7 @@ onMounted(loadReferences)
           </div>
           <section
             v-show="activeTab(variantIndex) === 'specs'"
+            data-editor-tab="specs"
             class="operation-form nested-form structured-dimensions product-tab-panel--wide"
           >
             <h3>产品规格（cm）</h3><span />
@@ -254,6 +318,7 @@ onMounted(loadReferences)
         <section
           v-if="supplierAccess"
           v-show="activeTab(variantIndex) === 'purchase'"
+          data-editor-tab="purchase"
           class="relation-editor product-tab-panel"
         >
           <h3>关联供应商</h3>
@@ -271,7 +336,7 @@ onMounted(loadReferences)
             <option value="">
               选择供应商…
             </option><option
-              v-for="supplier in suppliers"
+              v-for="supplier in suppliers.filter(item => item.status === 'ACTIVE')"
               :key="supplier.id"
               :value="supplier.id"
             >
@@ -311,6 +376,7 @@ onMounted(loadReferences)
         </section>
         <section
           v-show="activeTab(variantIndex) === 'materials'"
+          data-editor-tab="materials"
           class="relation-editor product-tab-panel"
         >
           <h3>关联辅料</h3>
@@ -323,7 +389,7 @@ onMounted(loadReferences)
             <option value="">
               选择启用辅料…
             </option><option
-              v-for="material in materials"
+              v-for="material in materials.filter(item => item.status === 'ACTIVE')"
               :key="material.id"
               :value="material.id"
             >
@@ -368,6 +434,7 @@ onMounted(loadReferences)
     </div>
     <div class="form-footer">
       <button
+        v-if="!focusVariantId"
         type="button"
         class="secondary-action"
         @click="addVariant"

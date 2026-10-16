@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, toRaw } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { ApiError } from '@/api/client'
@@ -21,14 +21,16 @@ const storageKey = computed(() => `jiugeng.product-sku.columns.${session.user.va
 function restoredColumns(): ColumnKey[] {
   try {
     const values = JSON.parse(localStorage.getItem(storageKey.value) ?? '[]') as ColumnKey[]
-    return values.length ? values.filter(key => columns.some(column => column.key === key)) : defaultColumns
+    const valid = Array.isArray(values) ? [...new Set(values.filter(key => columns.some(column => column.key === key)))] : []
+    return valid.length ? (valid.includes('sku') ? valid : ['sku', ...valid]) : defaultColumns
   } catch { return defaultColumns }
 }
 
 const rows = ref<SkuListItemDto[]>([]); const products = ref<ProductDetailDto[]>([])
 const total = ref(0); const page = ref(0); const size = ref(20); const loading = ref(true); const saving = ref(false)
 const error = ref(''); const success = ref(''); const selected = ref<string[]>([]); const showAdvanced = ref(false)
-const productTypeMode = ref<'ALL' | 'NORMAL'>('ALL')
+const expanded = ref<string[]>([])
+const appliedFilters = ref({ field: 'SKU', q: '', exact: true, status: '', productStatus: '', hasImage: '', hasSupplier: '', hasMaterial: '', sort: 'updatedAt', direction: 'desc' })
 const showCreate = ref(false); const showColumns = ref(false); const showBatch = ref(false); const showDetail = ref(false); const showEdit = ref(false); const showExport = ref(false)
 const showAddSku = ref(false); const addSkuProductId = ref('')
 const showBatchSearch = ref(false); const batchSearchText = ref('')
@@ -42,8 +44,9 @@ const filters = reactive({ field: 'SKU', q: '', exact: true, status: '', product
 const batch = reactive({ statusSelected: false, status: 'ACTIVE' as VariantStatus, itemDimensionsSelected: false, itemDimensionsMode: 'SET' as 'SET' | 'CLEAR', itemLengthCm: undefined as number | undefined, itemWidthCm: undefined as number | undefined, itemHeightCm: undefined as number | undefined, packageDimensionsSelected: false, packageDimensionsMode: 'SET' as 'SET' | 'CLEAR', packageLengthCm: undefined as number | undefined, packageWidthCm: undefined as number | undefined, packageHeightCm: undefined as number | undefined, packageWeightSelected: false, packageWeightMode: 'SET' as 'SET' | 'CLEAR', packageWeightGrams: undefined as number | undefined })
 const writable = computed(() => session.canAccess(['products.write']))
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / size.value)))
-const allSelected = computed(() => rows.value.length > 0 && rows.value.every(row => selected.value.includes(row.variant.id ?? '')))
+const allSelected = computed(() => pageRows.value.length > 0 && pageRows.value.every(row => selected.value.includes(row.variant.id ?? '')))
 const selectedRows = computed(() => rows.value.filter(row => selected.value.includes(row.variant.id ?? '')))
+const historyError = ref('')
 const detailVariant = computed(() => detailRow.value?.variant)
 function hasColumn(key: ColumnKey) { return visibleColumns.value.includes(key) && (key !== 'supplier' || session.canAccess(['suppliers.read'])) }
 function labelStatus(status: string) { return status === 'ACTIVE' ? '启用' : status === 'DRAFT' ? '待定' : '停用' }
@@ -55,29 +58,78 @@ function dimensionLabel(variant: ProductVariantDto) {
   return variant.itemDimensions || variant.packageDimensions || '—'
 }
 function toInput(product: ProductDetailDto): ProductInput {
-  return { productCode: product.productCode, productName: product.productName, productType: product.productType, description: product.description, status: product.status, version: product.version, variants: product.variants.map(variant => ({ id: variant.id, skuCode: variant.skuCode, variantName: variant.variantName, itemDimensions: variant.itemDimensions, packageDimensions: variant.packageDimensions, itemLengthCm: variant.itemLengthCm, itemWidthCm: variant.itemWidthCm, itemHeightCm: variant.itemHeightCm, packageLengthCm: variant.packageLengthCm, packageWidthCm: variant.packageWidthCm, packageHeightCm: variant.packageHeightCm, packageWeightGrams: variant.packageWeightGrams, status: variant.status, imageAssetId: variant.imageAssetId, imageUrl: variant.imageUrl, version: variant.version, suppliers: structuredClone(variant.suppliers), materials: structuredClone(variant.materials) })) }
+  return { productCode: product.productCode, productName: product.productName, productType: product.productType, description: product.description, status: product.status, version: product.version, variants: product.variants.map(variant => ({ id: variant.id, skuCode: variant.skuCode, variantName: variant.variantName, itemDimensions: variant.itemDimensions, packageDimensions: variant.packageDimensions, itemLengthCm: variant.itemLengthCm, itemWidthCm: variant.itemWidthCm, itemHeightCm: variant.itemHeightCm, packageLengthCm: variant.packageLengthCm, packageWidthCm: variant.packageWidthCm, packageHeightCm: variant.packageHeightCm, packageWeightGrams: variant.packageWeightGrams, status: variant.status, imageAssetId: variant.imageAssetId, imageUrl: variant.imageUrl, version: variant.version, suppliers: structuredClone(toRaw(variant.suppliers)), materials: structuredClone(toRaw(variant.materials)) })) }
 }
 function apiMessage(exception: unknown, fallback: string) { return exception instanceof ApiError || exception instanceof Error ? exception.message : fallback }
+let loadSequence = 0
+const displayedColumns = computed(() => visibleColumns.value.filter(key => hasColumn(key)))
+const groups = computed(() => {
+  const f = appliedFilters.value
+  const needles = f.q.trim().toLocaleUpperCase().split(/\r?\n/).filter(Boolean)
+  const matches = (product: ProductDetailDto, variant?: ProductVariantDto) => {
+    if (f.productStatus && product.status !== f.productStatus) return false
+    if (f.status && variant?.status !== f.status) return false
+    if (f.hasImage && Boolean(variant?.imageAssetId || variant?.imageUrl) !== (f.hasImage === 'true')) return false
+    if (f.hasSupplier && Boolean(variant?.suppliers.length) !== (f.hasSupplier === 'true')) return false
+    if (f.hasMaterial && Boolean(variant?.materials.length) !== (f.hasMaterial === 'true')) return false
+    const value = ({ SKU: variant?.skuCode, NAME: variant?.variantName, PRODUCT_CODE: product.productCode, PRODUCT_NAME: product.productName } as Record<string, string | undefined>)[f.field]?.toLocaleUpperCase() ?? ''
+    return !needles.length || needles.some(needle => f.exact ? value === needle : value.includes(needle))
+  }
+  return products.value.map(product => ({
+    product,
+    children: product.variants.filter(variant => matches(product, variant)).map(variant => ({
+      productId: product.id, productCode: product.productCode, productName: product.productName,
+      productType: product.productType, productStatus: product.status, variant,
+      businessAvailable: product.status === 'ACTIVE' && variant.status === 'ACTIVE', updatedAt: product.updatedAt,
+    } as SkuListItemDto)),
+  })).filter(group => group.children.length || (!group.product.variants.length && matches(group.product)))
+    .sort((a, b) => {
+      const first = f.sort === 'sku' ? a.product.productCode : a.product.updatedAt ?? ''
+      const second = f.sort === 'sku' ? b.product.productCode : b.product.updatedAt ?? ''
+      return first.localeCompare(second) * (f.direction === 'asc' ? 1 : -1)
+    })
+})
+const pageGroups = computed(() => groups.value.slice(page.value * size.value, (page.value + 1) * size.value))
+const pageRows = computed(() => pageGroups.value.flatMap(group => group.children))
+const matchingSkuCount = computed(() => groups.value.reduce((sum, group) => sum + group.children.length, 0))
+function toggleParent(id: string) { expanded.value = expanded.value.includes(id) ? expanded.value.filter(value => value !== id) : [...expanded.value, id] }
+function toggleGroup(children: SkuListItemDto[]) {
+  const ids = children.flatMap(row => row.variant.id ? [row.variant.id] : [])
+  selected.value = ids.every(id => selected.value.includes(id)) ? selected.value.filter(id => !ids.includes(id)) : [...new Set([...selected.value, ...ids])]
+}
+async function editParent(product: ProductDetailDto) {
+  error.value = ''; saving.value = true
+  try { editProduct.value = await domainApi.product(product.id); focusVariantId.value = undefined; showEdit.value = true }
+  catch (exception) { error.value = apiMessage(exception, '产品加载失败。') }
+  finally { saving.value = false }
+}
 async function load() {
+  const sequence = ++loadSequence
   loading.value = true; error.value = ''
   try {
-    const [skuPage, productPage] = await Promise.all([domainApi.skus({ field: filters.field, q: filters.q.trim(), exact: filters.exact, status: filters.status as VariantStatus || undefined, productStatus: filters.productStatus as 'DRAFT' | 'ACTIVE' | 'DISABLED' || undefined, hasImage: filters.hasImage === '' ? undefined : filters.hasImage === 'true', hasSupplier: filters.hasSupplier === '' ? undefined : filters.hasSupplier === 'true', hasMaterial: filters.hasMaterial === '' ? undefined : filters.hasMaterial === 'true', sort: filters.sort, direction: filters.direction, page: page.value, size: size.value }), domainApi.products()])
-    rows.value = skuPage.items; total.value = skuPage.totalCount; products.value = productPage.items
+    const result = await domainApi.products()
+    if (sequence !== loadSequence) return
+    products.value = result.items
+    appliedFilters.value = { ...filters }
+    total.value = groups.value.length
+    page.value = Math.min(page.value, totalPages.value - 1)
+    rows.value = groups.value.flatMap(group => group.children)
     selected.value = selected.value.filter(id => rows.value.some(row => row.variant.id === id))
-  } catch { error.value = runtimeConfig.authMode === 'mock' ? '产品模拟数据加载失败。' : '产品与 SKU 数据加载失败。' }
-  finally { loading.value = false }
+    if (filters.q || filters.status || filters.hasImage || filters.hasSupplier || filters.hasMaterial) expanded.value = groups.value.map(group => group.product.id)
+  } catch (exception) { if (sequence === loadSequence) error.value = apiMessage(exception, '产品与 SKU 数据加载失败。') }
+  finally { if (sequence === loadSequence) loading.value = false }
 }
-function search() { page.value = 0; void load() }
-function reset() { Object.assign(filters, { field: 'SKU', q: '', exact: true, status: '', productStatus: '', hasImage: '', hasSupplier: '', hasMaterial: '', sort: 'updatedAt', direction: 'desc' }); page.value = 0; void load() }
+function search() { page.value = 0; selected.value = []; void load() }
+function reset() { Object.assign(filters, { field: 'SKU', q: '', exact: true, status: '', productStatus: '', hasImage: '', hasSupplier: '', hasMaterial: '', sort: 'updatedAt', direction: 'desc' }); page.value = 0; selected.value = []; expanded.value = []; void load() }
 function applyBatchSearch() { const unique = [...new Set(batchSearchText.value.split(/\r?\n/).map(value => value.trim()).filter(Boolean))]; if (unique.length > 100) { error.value = '批量搜索最多输入 100 个 SKU 编码。'; return } filters.field = 'SKU'; filters.exact = true; filters.q = unique.join('\n'); showBatchSearch.value = false; search() }
 function toggleSort(field: 'sku' | 'updatedAt') { if (filters.sort === field) filters.direction = filters.direction === 'asc' ? 'desc' : 'asc'; else { filters.sort = field; filters.direction = field === 'sku' ? 'asc' : 'desc' } page.value = 0; void load() }
-function toggleAll() { selected.value = allSelected.value ? [] : rows.value.map(row => row.variant.id).filter((id): id is string => Boolean(id)) }
+function toggleAll() { selected.value = allSelected.value ? [] : pageRows.value.map(row => row.variant.id).filter((id): id is string => Boolean(id)) }
 function toggle(id?: string) { if (!id) return; selected.value = selected.value.includes(id) ? selected.value.filter(value => value !== id) : [...selected.value, id] }
-function openColumns() { columnDraft.value = [...visibleColumns.value]; showColumns.value = true }
+function openColumns() { error.value = ''; columnDraft.value = [...visibleColumns.value]; showColumns.value = true }
 function closeColumns() { columnDraft.value = [...visibleColumns.value]; showColumns.value = false }
-function persistColumns() { if (!columnDraft.value.includes('sku')) columnDraft.value.unshift('sku'); visibleColumns.value = [...columnDraft.value]; localStorage.setItem(storageKey.value, JSON.stringify(visibleColumns.value)); showColumns.value = false }
+function persistColumns() { if (!columnDraft.value.includes('sku')) columnDraft.value.unshift('sku'); visibleColumns.value = [...columnDraft.value]; try { localStorage.setItem(storageKey.value, JSON.stringify(visibleColumns.value)) } catch { success.value = '列设置已应用，浏览器未允许持久保存。' } showColumns.value = false }
 function moveColumn(index: number, direction: number) { const next = index + direction; if (next < 0 || next >= columnDraft.value.length) return; const copy = [...columnDraft.value]; [copy[index], copy[next]] = [copy[next]!, copy[index]!]; columnDraft.value = copy }
-async function openDetail(row: SkuListItemDto) { detailRow.value = row; detailTab.value = 'basic'; detailHistory.value = []; showDetail.value = true; try { detailHistory.value = await domainApi.productHistory(row.productId) } catch { detailHistory.value = [] } }
+async function openDetail(row: SkuListItemDto) { detailRow.value = row; detailTab.value = 'basic'; detailHistory.value = []; historyError.value = ''; showDetail.value = true; try { detailHistory.value = await domainApi.productHistory(row.productId) } catch { historyError.value = '操作日志加载失败，请重新打开详情重试。' } }
 async function openEdit(row: SkuListItemDto) {
   saving.value = true; error.value = ''
   try { editProduct.value = await domainApi.product(row.productId); focusVariantId.value = row.variant.id; showEdit.value = true }
@@ -87,10 +139,10 @@ async function copySku(row: SkuListItemDto) {
   saving.value = true; error.value = ''
   try {
     const product = await domainApi.product(row.productId); const source = product.variants.find(item => item.id === row.variant.id) ?? row.variant
-    const duplicate = structuredClone(source)
+    const duplicate = structuredClone(toRaw(source))
     delete duplicate.id; delete duplicate.version
     Object.assign(duplicate, { skuCode: '', variantName: `${source.variantName} 副本`, status: 'DRAFT' as const, suppliers: [], materials: [] })
-    editProduct.value = { ...product, variants: [...product.variants, duplicate] }; focusVariantId.value = undefined; showEdit.value = true
+    editProduct.value = { ...product, variants: [...product.variants, duplicate] }; focusVariantId.value = '__NEW__'; showEdit.value = true
   } catch (exception) { error.value = apiMessage(exception, '复制 SKU 失败。') } finally { saving.value = false }
 }
 async function addSkuToProduct() {
@@ -103,17 +155,21 @@ async function addSkuToProduct() {
   } catch (exception) { error.value = apiMessage(exception, '产品加载失败。') } finally { saving.value = false }
 }
 async function create(input: ProductInput) {
+  if (saving.value) return
   saving.value = true; error.value = ''
   try { await domainApi.createProduct(input); showCreate.value = false; success.value = '产品及 SKU 已创建。'; await load() }
   catch (exception) { error.value = apiMessage(exception, '产品创建失败，请检查输入。') } finally { saving.value = false }
 }
 async function update(input: ProductInput) {
+  if (saving.value) return
   if (!editProduct.value) return; saving.value = true; error.value = ''
   try { await domainApi.updateProduct(editProduct.value.id, input); showEdit.value = false; success.value = 'SKU 资料已保存。'; await load() }
   catch (exception) { error.value = apiMessage(exception, 'SKU 保存失败。') } finally { saving.value = false }
 }
 function resetBatch() { Object.assign(batch, { statusSelected: false, status: 'ACTIVE', itemDimensionsSelected: false, itemDimensionsMode: 'SET', itemLengthCm: undefined, itemWidthCm: undefined, itemHeightCm: undefined, packageDimensionsSelected: false, packageDimensionsMode: 'SET', packageLengthCm: undefined, packageWidthCm: undefined, packageHeightCm: undefined, packageWeightSelected: false, packageWeightMode: 'SET', packageWeightGrams: undefined }) }
 async function submitBatch() {
+  if (saving.value) return
+  if (selected.value.length > 100) { error.value = '一次最多批量修改 100 个 SKU，请减少勾选。'; return }
   if (!selectedRows.value.length || !Object.keys(batch).some(key => key.endsWith('Selected') && batch[key as keyof typeof batch] === true)) { error.value = '请选择 SKU，并至少勾选一个要批量修改的字段。'; return }
   if (batch.itemDimensionsSelected && batch.itemDimensionsMode === 'SET' && [batch.itemLengthCm, batch.itemWidthCm, batch.itemHeightCm].some(value => value == null)) { error.value = '产品规格选择填入值时，长、宽、高必须完整。'; return }
   if (batch.packageDimensionsSelected && batch.packageDimensionsMode === 'SET' && [batch.packageLengthCm, batch.packageWidthCm, batch.packageHeightCm].some(value => value == null)) { error.value = '包装规格选择填入值时，长、宽、高必须完整。'; return }
@@ -124,35 +180,22 @@ async function submitBatch() {
   catch (exception) { error.value = apiMessage(exception, '批量修改失败，未提交任何变更。') } finally { saving.value = false }
 }
 async function exportRows() {
+  if (saving.value) return
+  const filters = appliedFilters.value
   saving.value = true; error.value = ''
   try {
     await domainApi.exportSkus({ field: filters.field, q: filters.q.trim(), exact: filters.exact, status: filters.status as VariantStatus || undefined, productStatus: filters.productStatus as 'DRAFT' | 'ACTIVE' | 'DISABLED' || undefined, hasImage: filters.hasImage === '' ? undefined : filters.hasImage === 'true', hasSupplier: filters.hasSupplier === '' ? undefined : filters.hasSupplier === 'true', hasMaterial: filters.hasMaterial === '' ? undefined : filters.hasMaterial === 'true', variantIds: exportScope.value === 'SELECTED' ? selected.value : undefined })
     showExport.value = false; success.value = 'SKU 导出文件已生成。'
   } catch (exception) { error.value = apiMessage(exception, 'SKU 导出失败。') } finally { saving.value = false }
 }
-function changePage(next: number) { page.value = next; void load() }
+function changePage(next: number) { page.value = next; selected.value = [] }
 onMounted(load)
 </script>
 
 <template>
   <section class="page-stack product-sku-page">
     <SyntheticNotice v-if="runtimeConfig.authMode === 'mock'" />
-    <section class="panel sku-filter-card">
-      <div class="sku-type-tabs">
-        <strong>商品类型</strong><button
-          type="button"
-          :class="{ active: productTypeMode === 'ALL' }"
-          @click="productTypeMode = 'ALL'; search()"
-        >
-          全部
-        </button><button
-          type="button"
-          :class="{ active: productTypeMode === 'NORMAL' }"
-          @click="productTypeMode = 'NORMAL'; search()"
-        >
-          普通商品
-        </button>
-      </div>
+    <section class="panel filter-panel sku-filter-card">
       <div class="sku-filter-grid">
         <label>SKU 状态<select v-model="filters.status"><option value="">全部状态</option><option value="ACTIVE">启用</option><option value="DRAFT">待定</option><option value="DISABLED">停用</option></select></label>
         <label>产品状态<select v-model="filters.productStatus"><option value="">全部状态</option><option value="ACTIVE">启用</option><option value="DRAFT">待定</option><option value="DISABLED">停用</option></select></label>
@@ -234,7 +277,7 @@ onMounted(load)
           class="secondary-button"
           type="button"
           :disabled="!selected.length"
-          @click="showBatch = true"
+          @click="resetBatch(); error = ''; showBatch = true"
         >
           批量修改
         </button><RouterLink
@@ -289,17 +332,23 @@ onMounted(load)
       正在加载…
     </p>
     <article
-      v-else-if="!rows.length"
+      v-else-if="!groups.length"
       class="panel empty-state"
     >
-      <h2>暂无匹配的 SKU</h2><p>调整筛选条件，或点击“新增产品”建立首个 SKU。</p>
+      <h2>暂无匹配的产品</h2><p
+        v-if="error"
+        class="data-state data-state--error"
+        role="alert"
+      >
+        {{ error }}
+      </p><p>调整筛选条件，或点击“新增产品”建立父体及子体 SKU。</p>
     </article>
     <article
       v-else
       class="panel table-panel sku-table-panel"
     >
       <div class="table-scroll">
-        <table class="data-table sku-master-table">
+        <table class="data-table material-table sku-master-table">
           <thead>
             <tr>
               <th>
@@ -309,127 +358,211 @@ onMounted(load)
                   :checked="allSelected"
                   @change="toggleAll"
                 >
-              </th><th v-if="hasColumn('image')">
-                图片
-              </th><th v-if="hasColumn('sku')">
+              </th>
+              <th
+                v-for="key in displayedColumns"
+                :key="key"
+              >
                 <button
+                  v-if="key === 'sku' || key === 'updated'"
                   class="sort-button"
                   type="button"
-                  @click="toggleSort('sku')"
+                  @click="toggleSort(key === 'sku' ? 'sku' : 'updatedAt')"
                 >
-                  SKU {{ filters.sort === 'sku' ? (filters.direction === 'asc' ? '↑' : '↓') : '' }}
-                </button>
-              </th><th v-if="hasColumn('name')">
-                品名
-              </th><th v-if="hasColumn('product')">
-                产品信息
-              </th><th v-if="hasColumn('status')">
-                状态
-              </th><th v-if="hasColumn('dimensions')">
-                规格
-              </th><th v-if="hasColumn('weight')">
-                包装重量
-              </th><th v-if="hasColumn('supplier')">
-                供应商
-              </th><th v-if="hasColumn('material')">
-                辅料
-              </th><th v-if="hasColumn('updated')">
-                <button
-                  class="sort-button"
-                  type="button"
-                  @click="toggleSort('updatedAt')"
-                >
-                  更新时间 {{ filters.sort === 'updatedAt' ? (filters.direction === 'asc' ? '↑' : '↓') : '' }}
-                </button>
+                  {{ key === 'sku' ? '父体编码 / 子体 SKU' : '更新时间' }} {{ filters.sort === (key === 'sku' ? 'sku' : 'updatedAt') ? (filters.direction === 'asc' ? '↑' : '↓') : '' }}
+                </button><template v-else>
+                  {{ columns.find(column => column.key === key)?.label }}
+                </template>
               </th><th class="sticky-action">
                 操作
               </th>
             </tr>
-          </thead><tbody>
-            <tr
-              v-for="row in rows"
-              :key="row.variant.id ?? row.variant.skuCode"
+          </thead>
+          <tbody>
+            <template
+              v-for="group in pageGroups"
+              :key="group.product.id"
             >
-              <td>
-                <input
-                  type="checkbox"
-                  :aria-label="`选择 ${row.variant.skuCode}`"
-                  :checked="selected.includes(row.variant.id ?? '')"
-                  @change="toggle(row.variant.id)"
+              <tr
+                class="product-parent-row"
+                @click="toggleParent(group.product.id)"
+              >
+                <td @click.stop>
+                  <input
+                    type="checkbox"
+                    :aria-label="`选择父体 ${group.product.productCode}`"
+                    :checked="group.children.length > 0 && group.children.every(row => selected.includes(row.variant.id ?? ''))"
+                    :disabled="!group.children.length"
+                    @change="toggleGroup(group.children)"
+                  >
+                </td>
+                <td
+                  v-for="key in displayedColumns"
+                  :key="key"
                 >
-              </td>
-              <td v-if="hasColumn('image')">
-                <AuthenticatedCatalogImage
-                  v-if="row.variant.imageAssetId"
-                  :image-id="row.variant.imageAssetId"
-                  :alt="`${row.variant.variantName}主图`"
-                /><img
-                  v-else-if="row.variant.imageUrl"
-                  class="product-thumbnail"
-                  :src="row.variant.imageUrl"
-                  :alt="`${row.variant.variantName}主图`"
-                ><span
-                  v-else
-                  class="product-thumbnail product-thumbnail--placeholder"
-                >图</span>
-              </td>
-              <td v-if="hasColumn('sku')">
-                <button
-                  class="sku-code-button"
-                  type="button"
-                  @click="openDetail(row)"
-                >
-                  {{ row.variant.skuCode }}
-                </button>
-              </td><td v-if="hasColumn('name')">
-                {{ row.variant.variantName }}
-              </td><td v-if="hasColumn('product')">
-                <strong>{{ row.productName }}</strong><small>{{ row.productCode }} · {{ row.productType || '普通商品' }}</small>
-              </td>
-              <td v-if="hasColumn('status')">
-                <span :class="['status-badge', `status-badge--${row.variant.status.toLowerCase()}`]">{{ labelStatus(row.variant.status) }}</span><small v-if="!row.businessAvailable">业务不可用</small>
-              </td><td v-if="hasColumn('dimensions')">
-                {{ dimensionLabel(row.variant) }}
-              </td><td v-if="hasColumn('weight')">
-                {{ row.variant.packageWeightGrams != null ? `${row.variant.packageWeightGrams} g` : '—' }}
-              </td><td v-if="hasColumn('supplier')">
-                {{ row.variant.suppliers.length }} 个
-              </td><td v-if="hasColumn('material')">
-                {{ row.variant.materials.length }} 个
-              </td><td v-if="hasColumn('updated')">
-                {{ row.updatedAt || '—' }}
-              </td>
-              <td class="sticky-action">
-                <div class="table-actions">
                   <button
+                    v-if="key === 'sku'"
                     type="button"
-                    class="link-button"
-                    @click="openDetail(row)"
+                    class="parent-toggle"
+                    :aria-expanded="expanded.includes(group.product.id)"
+                    @click.stop="toggleParent(group.product.id)"
                   >
-                    详情
-                  </button><button
-                    v-if="writable"
-                    type="button"
-                    class="link-button"
-                    @click="openEdit(row)"
-                  >
-                    编辑
-                  </button><button
-                    v-if="writable"
-                    type="button"
-                    class="link-button"
-                    @click="copySku(row)"
-                  >
-                    复制
+                    {{ expanded.includes(group.product.id) ? '▾' : '▸' }} {{ group.product.productCode }}<small>父体 · {{ group.children.length }} 个子体</small>
                   </button>
-                </div>
-              </td>
-            </tr>
+                  <span
+                    v-else-if="key === 'image'"
+                    class="product-thumbnail"
+                  >父</span>
+                  <strong v-else-if="key === 'name'">{{ group.product.productName }}</strong>
+                  <span v-else-if="key === 'product'">{{ group.product.productType || '—' }}</span>
+                  <span
+                    v-else-if="key === 'status'"
+                    :class="['status-badge', `status-badge--${group.product.status.toLowerCase()}`]"
+                  >{{ labelStatus(group.product.status) }}</span>
+                  <span v-else-if="key === 'updated'">{{ group.product.updatedAt ? new Date(group.product.updatedAt).toLocaleString('zh-CN') : '—' }}</span>
+                  <span v-else>—</span>
+                </td>
+                <td
+                  class="sticky-action"
+                  @click.stop
+                >
+                  <div class="table-actions">
+                    <button
+                      type="button"
+                      class="secondary-button"
+                      @click="toggleParent(group.product.id)"
+                    >
+                      {{ expanded.includes(group.product.id) ? '收起子体' : '展开子体' }}
+                    </button>
+                    <button
+                      v-if="writable"
+                      type="button"
+                      :disabled="saving"
+                      @click="editParent(group.product)"
+                    >
+                      编辑父体
+                    </button>
+                    <button
+                      v-if="writable"
+                      type="button"
+                      class="secondary-button"
+                      :disabled="saving"
+                      @click="addSkuProductId = group.product.id; addSkuToProduct()"
+                    >
+                      添加子体
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              <template v-if="expanded.includes(group.product.id)">
+                <tr
+                  v-for="row in group.children"
+                  :key="row.variant.id ?? row.variant.skuCode"
+                  class="product-child-row"
+                >
+                  <td>
+                    <input
+                      type="checkbox"
+                      :aria-label="`选择 ${row.variant.skuCode}`"
+                      :checked="selected.includes(row.variant.id ?? '')"
+                      @change="toggle(row.variant.id)"
+                    >
+                  </td>
+                  <td
+                    v-for="key in displayedColumns"
+                    :key="key"
+                  >
+                    <template v-if="key === 'image'">
+                      <AuthenticatedCatalogImage
+                        v-if="row.variant.imageAssetId"
+                        :image-id="row.variant.imageAssetId"
+                        :alt="`${row.variant.variantName}主图`"
+                      />
+                      <img
+                        v-else-if="row.variant.imageUrl"
+                        class="product-thumbnail"
+                        :src="row.variant.imageUrl"
+                        :alt="`${row.variant.variantName}主图`"
+                      >
+                      <span
+                        v-else
+                        class="product-thumbnail"
+                      >图</span>
+                    </template>
+                    <button
+                      v-else-if="key === 'sku'"
+                      class="sku-code-button"
+                      type="button"
+                      @click="openDetail(row)"
+                    >
+                      ↳ {{ row.variant.skuCode }}
+                    </button>
+                    <template v-else-if="key === 'name'">
+                      {{ row.variant.variantName }}
+                    </template>
+                    <template v-else-if="key === 'product'">
+                      {{ row.productName }}<small>{{ row.productCode }}</small>
+                    </template>
+                    <template v-else-if="key === 'status'">
+                      <span :class="['status-badge', `status-badge--${row.variant.status.toLowerCase()}`]">{{ labelStatus(row.variant.status) }}</span><small v-if="!row.businessAvailable">业务不可用</small>
+                    </template>
+                    <template v-else-if="key === 'dimensions'">
+                      {{ dimensionLabel(row.variant) }}
+                    </template>
+                    <template v-else-if="key === 'weight'">
+                      {{ row.variant.packageWeightGrams != null ? `${row.variant.packageWeightGrams} g` : '—' }}
+                    </template>
+                    <template v-else-if="key === 'supplier'">
+                      {{ row.variant.suppliers.length }} 个
+                    </template>
+                    <template v-else-if="key === 'material'">
+                      {{ row.variant.materials.length }} 个
+                    </template>
+                    <template v-else-if="key === 'updated'">
+                      {{ row.updatedAt ? new Date(row.updatedAt).toLocaleString('zh-CN') : '—' }}
+                    </template>
+                  </td>
+                  <td class="sticky-action">
+                    <div class="table-actions">
+                      <button
+                        type="button"
+                        class="secondary-button"
+                        @click="openDetail(row)"
+                      >
+                        详情
+                      </button>
+                      <button
+                        v-if="writable"
+                        type="button"
+                        :disabled="saving"
+                        @click="openEdit(row)"
+                      >
+                        编辑
+                      </button>
+                      <button
+                        v-if="writable"
+                        type="button"
+                        class="secondary-button"
+                        :disabled="saving"
+                        @click="copySku(row)"
+                      >
+                        复制
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                <tr v-if="!group.children.length">
+                  <td :colspan="displayedColumns.length + 2">
+                    暂无子体，可点击“添加子体”创建。
+                  </td>
+                </tr>
+              </template>
+            </template>
           </tbody>
         </table>
       </div>
       <footer class="sku-pagination">
-        <span>已选 {{ selected.length }} 项，共 {{ total }} 条</span><div>
+        <span>已选 {{ selected.length }} 个 SKU，共 {{ total }} 个父体 / {{ matchingSkuCount }} 个子体</span><div>
           <label>每页<select
             v-model.number="size"
             @change="page = 0; load()"
@@ -469,7 +602,13 @@ onMounted(load)
           @click="showAddSku = false"
         >
           ×
-        </button><h2>为产品添加 SKU</h2>
+        </button><h2>为产品添加 SKU</h2><p
+          v-if="error"
+          class="data-state data-state--error"
+          role="alert"
+        >
+          {{ error }}
+        </p>
         <label>所属产品<select
           v-model="addSkuProductId"
           required
@@ -514,7 +653,13 @@ onMounted(load)
         >
           ×
         </button>
-        <h2>批量搜索 SKU</h2><p>每行一个 SKU 编码，自动去除空行和重复项，最多 100 个。</p>
+        <h2>批量搜索 SKU</h2><p
+          v-if="error"
+          class="data-state data-state--error"
+          role="alert"
+        >
+          {{ error }}
+        </p><p>每行一个 SKU 编码，自动去除空行和重复项，最多 100 个。</p>
         <textarea
           v-model="batchSearchText"
           rows="10"
@@ -550,7 +695,13 @@ onMounted(load)
           @click="showCreate = false"
         >
           ×
-        </button><h2>新增产品</h2><p>创建产品主档，并维护一个或多个内部 SKU。</p><ProductForm
+        </button><h2>新增产品</h2><p
+          v-if="error"
+          class="data-state data-state--error"
+          role="alert"
+        >
+          {{ error }}
+        </p><p>创建产品主档，并维护一个或多个内部 SKU。</p><ProductForm
           class="product-create-form"
           :busy="saving"
           submit-label="创建产品"
@@ -576,7 +727,13 @@ onMounted(load)
           @click="showEdit = false"
         >
           ×
-        </button><h2>编辑 SKU</h2><p>{{ focusVariantId ? '仅聚焦当前 SKU；保存时保留同产品下其他 SKU。' : '复制 SKU 后请填写唯一 SKU 编码。' }}</p><ProductForm
+        </button><h2>编辑 SKU</h2><p
+          v-if="error"
+          class="data-state data-state--error"
+          role="alert"
+        >
+          {{ error }}
+        </p><p>{{ focusVariantId === '__NEW__' ? '填写新子体的唯一 SKU 编码。' : focusVariantId ? '编辑当前子体，保存时保留其他子体。' : '维护父体资料及其全部子体。' }}</p><ProductForm
           :key="`${editProduct.id}-${focusVariantId ?? 'copy'}`"
           class="product-create-form"
           :initial="toInput(editProduct)"
@@ -618,7 +775,15 @@ onMounted(load)
           ><span
             v-else
             class="product-thumbnail product-thumbnail--placeholder"
-          >图</span><div><h2>{{ detailVariant?.variantName }}</h2><p>{{ detailVariant?.skuCode }} · {{ detailRow.productName }}（{{ detailRow.productCode }}）</p></div>
+          >图</span><div>
+            <h2>{{ detailVariant?.variantName }}</h2><p
+              v-if="error"
+              class="data-state data-state--error"
+              role="alert"
+            >
+              {{ error }}
+            </p><p>{{ detailVariant?.skuCode }} · {{ detailRow.productName }}（{{ detailRow.productCode }}）</p>
+          </div>
         </header><nav class="product-editor-tabs">
           <button
             v-for="tab in ([['basic','基础信息'],['purchase','采购信息'],['specs','规格信息'],['materials','关联辅料'],['image','图片管理'],['history','操作日志']] as const)"
@@ -693,7 +858,13 @@ onMounted(load)
           v-else
           class="detail-list operation-history"
         >
-          <p v-if="!detailHistory.length">
+          <p
+            v-if="historyError"
+            class="data-state data-state--error"
+            role="alert"
+          >
+            {{ historyError }}
+          </p><p v-else-if="!detailHistory.length">
             暂无可见操作日志。
           </p>
           <table
@@ -739,7 +910,13 @@ onMounted(load)
           @click="closeColumns"
         >
           ×
-        </button><h2>列设置</h2><div class="column-picker">
+        </button><h2>列设置</h2><p
+          v-if="error"
+          class="data-state data-state--error"
+          role="alert"
+        >
+          {{ error }}
+        </p><div class="column-picker">
           <div>
             <h3>可选列</h3><label class="column-search">字段搜索<input
               v-model="columnSearch"
@@ -809,12 +986,18 @@ onMounted(load)
           @click="showExport = false"
         >
           ×
-        </button><h2>导出产品 SKU</h2><p>导出当前可见业务字段为 XLSX；不包含图片原始地址、采购链接或操作列，最多 10000 条。</p>
+        </button><h2>导出产品 SKU</h2><p
+          v-if="error"
+          class="data-state data-state--error"
+          role="alert"
+        >
+          {{ error }}
+        </p><p>导出当前可见业务字段为 XLSX；不包含图片原始地址、采购链接或操作列，最多 10000 条。</p>
         <label class="batch-field"><input
           v-model="exportScope"
           type="radio"
           value="FILTERED"
-        >筛选全部（预计 {{ total }} 条）</label>
+        >筛选全部（预计 {{ matchingSkuCount }} 条）</label>
         <label class="batch-field"><input
           v-model="exportScope"
           type="radio"
@@ -830,7 +1013,7 @@ onMounted(load)
             取消
           </button><button
             type="submit"
-            :disabled="saving || (exportScope === 'FILTERED' && total > 10000) || (exportScope === 'SELECTED' && !selected.length)"
+            :disabled="saving || (exportScope === 'FILTERED' && matchingSkuCount > 10000) || (exportScope === 'SELECTED' && !selected.length)"
           >
             {{ saving ? '生成中…' : '确认导出' }}
           </button>
@@ -856,7 +1039,13 @@ onMounted(load)
           @click="showBatch = false"
         >
           ×
-        </button><h2>批量修改 {{ selected.length }} 个 SKU</h2><p>只有已勾选的字段会被修改；选填字段须明确选择“填入值”或“清空”。整批校验通过后一次提交。</p><label class="batch-field"><input
+        </button><h2>批量修改 {{ selected.length }} 个 SKU</h2><p
+          v-if="error"
+          class="data-state data-state--error"
+          role="alert"
+        >
+          {{ error }}
+        </p><p>只有已勾选的字段会被修改；选填字段须明确选择“填入值”或“清空”。整批校验通过后一次提交。</p><label class="batch-field"><input
           v-model="batch.statusSelected"
           type="checkbox"
         >SKU 状态<select

@@ -290,6 +290,24 @@ select:disabled { color: #8a93a5; background-color: #f3f5f8; cursor: not-allowed
 .product-tab-panel--wide { grid-column: 1 / -1; }
 .legacy-dimensions { grid-column: 1 / -1; color: var(--muted); }
 .sku-filter-card { display: grid; gap: 18px; padding: 18px 20px; }
+.product-sku-page .sku-filter-card { min-height: 0; gap: 14px; padding: 20px; }
+.product-sku-page .sku-filter-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.product-sku-page .sku-search-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.product-sku-page .sku-search-row > input { flex: 1; min-width: 220px; }
+.product-sku-page .sku-search-row > select { width: 150px; }
+.product-sku-page .exact-search { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.product-sku-page input[type="checkbox"], .product-sku-page input[type="radio"] { width: 16px; height: 16px; min-height: 16px; margin: 0; padding: 0; accent-color: var(--accent); }
+.product-sku-page .operation-dialog__card input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), .product-sku-page .operation-dialog__card select, .product-sku-page .operation-dialog__card textarea, .product-sku-page .sku-pagination select { min-height: 40px; padding: 8px 11px; color: var(--ink); background-color: white; border: 1px solid var(--line); border-radius: 7px; }
+.product-sku-page .operation-dialog__card label { font-size: 13px; }
+.product-sku-page .sku-master-table .sort-button, .product-sku-page .sku-master-table .sku-code-button, .product-sku-page .sku-master-table .parent-toggle { padding: 0; min-height: 32px; color: #425d9c; background: transparent; text-align: left; }
+.product-sku-page .sku-master-table .sort-button { color: var(--muted); }
+.product-sku-page .product-parent-row, .product-sku-page .product-parent-row .sticky-action { background: #f4f6fa; cursor: pointer; }
+.product-sku-page .product-child-row td { background: white; }
+.product-sku-page .sku-master-table { min-width: 1180px; }
+.product-sku-page .sku-master-table .sticky-action { min-width: 260px; }
+.product-sku-page .dialog-footer .secondary-action { color: var(--ink); background: #eef0f4; }
+.product-sku-page button:disabled { opacity: .5; cursor: not-allowed; }
+.product-sku-page .column-picker button { border: 1px solid var(--line); border-radius: 6px; background: #eef0f4; cursor: pointer; }
 .sku-type-tabs { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--line); }
 .sku-type-tabs strong { margin-right: 14px; }
 .sku-type-tabs button { padding: 10px 16px; color: var(--muted); background: transparent; border: 0; border-bottom: 2px solid transparent; cursor: pointer; }

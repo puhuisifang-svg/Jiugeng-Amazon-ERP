@@ -30,7 +30,7 @@ describe('application routes', () => {
     const shell = appRoutes.find((route) => route.path === '/')
     const groups = new Set(shell?.children?.map((route) => route.meta?.group).filter(Boolean))
 
-    expect(groups).toEqual(new Set(['工作台', '工作台维护', '产品管理', '采购管理', '产品监控', '选品管理', '系统管理']))
+    expect(groups).toEqual(new Set(['工作台', '工作台维护', '产品管理', '选品管理', '系统管理']))
   })
 
   it('merges inventory into material management while preserving the legacy route guard', () => {
@@ -72,6 +72,7 @@ describe('application routes', () => {
     const purchases = shell?.children?.filter((route) => String(route.path).startsWith('purchases')) ?? []
     expect(purchases).toHaveLength(4)
     expect(purchases.filter(route => !route.meta?.hidden).map(route => route.path)).toEqual(['purchases/orders'])
+    expect(purchases.find(route => route.path === 'purchases/orders')?.meta).toMatchObject({ title: '采购管理', group: '产品管理' })
     expect(purchases.find(route => route.path === 'purchases')?.redirect).toBe('/purchases/orders')
     expect(purchases.find(route => route.path === 'purchases/receipts')?.redirect).toBe('/purchases/orders')
     expect(purchases.every((route) => route.meta?.capabilities?.includes('purchases.read'))).toBe(true)

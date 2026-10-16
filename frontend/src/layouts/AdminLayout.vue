@@ -8,13 +8,13 @@ import { session } from '@/state/session'
 const route = useRoute()
 const router = useRouter()
 const navigation = ref<HTMLElement>()
+const content = ref<HTMLElement>()
 const openDomain = ref('')
 const visited = ref<string[]>([])
 const definitions = [
   { title: '工作台', icon: '⌂', groups: ['工作台', '工作台维护'] },
   { title: '商品', icon: '◇', groups: ['产品管理'] },
-  { title: '采购', icon: '购', groups: ['采购管理'] },
-  { title: '选品', icon: '☆', groups: ['选品管理', '产品监控'] },
+  { title: '选品', icon: '☆', groups: ['选品管理'] },
   { title: '设置', icon: '⚙', groups: ['系统管理'] },
 ]
 const entries = computed(() => (appRoutes.find(item => item.path === '/')?.children ?? [])
@@ -45,6 +45,14 @@ watch([() => route.fullPath, entries], () => {
     visited.value = [...visited.value, entry.path].slice(-10)
   }
 }, { immediate: true })
+
+// The workspace, rather than the document, owns page scrolling.
+watch(() => route.fullPath, () => {
+  if (content.value) {
+    content.value.scrollTop = 0
+    content.value.scrollLeft = 0
+  }
+}, { flush: 'post' })
 
 function closeMenu(restoreFocus = false) {
   const title = openDomain.value
@@ -232,6 +240,7 @@ onBeforeUnmount(() => {
     </div>
     <main
       id="main-content"
+      ref="content"
       class="erp-content"
       tabindex="-1"
     >
@@ -241,7 +250,8 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.erp-shell { min-height: 100vh; background: #f0f2f7; }
+.erp-shell { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); height: 100vh; height: 100dvh; overflow: hidden; background: #f0f2f7; }
+.erp-shell > * { min-width: 0; }
 .erp-header { position: relative; z-index: 12; display: flex; align-items: stretch; justify-content: space-between; min-height: 56px; color: #e4e9f5; background: #101c3b; }
 .erp-navigation { display: flex; min-width: 0; align-items: stretch; }
 .erp-brand { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; padding: 0 24px 0 20px; color: inherit; white-space: nowrap; font-size: 17px; text-decoration: none; }
@@ -274,12 +284,12 @@ onBeforeUnmount(() => {
 .workspace-tab.is-current, .home-tab.is-current { color: #233b79; background: white; }
 .tabs-hint { padding: 7px 12px; color: #b0bfe4; font-size: 12px; white-space: nowrap; }
 .page-heading { display: flex; align-items: center; justify-content: space-between; min-height: 60px; padding: 12px 24px; background: white; border-bottom: 1px solid #e5e8ef; }
-.page-heading__trail { display: flex; align-items: center; gap: 12px; color: #8992a4; font-size: 13px; }
+.page-heading__trail { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; min-width: 0; color: #8992a4; font-size: 13px; }
 .page-heading__trail a { color: #53617a; font-weight: 700; text-decoration: none; }
 .page-heading__trail a:hover { color: #ff8a34; }
 .page-heading h1 { margin: 0; color: #202c43; font-size: 17px; font-weight: 600; }
 .page-heading__brand { color: #8a94a6; font-size: 12px; }
-.erp-content { padding: 20px 24px; outline: none; }
+.erp-content { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 20px 24px; outline: none; }
 .erp-shell :is(a, button):focus-visible { outline: 2px solid #ffb448; outline-offset: -3px; }
 .skip-navigation { position: fixed; z-index: 30; top: -60px; left: 16px; padding: 12px; color: #101c3b; background: #ffb448; }
 .skip-navigation:focus { top: 4px; }

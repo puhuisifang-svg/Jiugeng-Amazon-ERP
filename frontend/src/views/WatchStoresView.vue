@@ -19,7 +19,7 @@ const snapshots = ref<Record<string, string>>({})
 async function load() {
   loading.value = true
   try { items.value = (await domainApi.watchStores()).items }
-  catch { error.value = '监控店铺数据加载失败。' }
+  catch { error.value = '店铺监控数据加载失败。' }
   finally { loading.value = false }
 }
 

@@ -34,6 +34,7 @@ describe('horizontal navigation shell', () => {
     expect(wrapper.find('[data-domain="产品监控"]').exists()).toBe(false)
     expect(wrapper.get('[data-domain="选品"]').classes()).toContain('is-active')
     await wrapper.get('[data-domain="选品"]').trigger('click')
+    expect(wrapper.findAll('.mega-row h2').map(item => item.text())).toEqual(['☆选品管理'])
     expect(wrapper.findAll('.mega-panel a')).toHaveLength(1)
     expect(wrapper.get('.mega-panel a[href="/product-monitoring"]').text()).toBe('产品监控')
     await wrapper.get('.mega-panel a[href="/product-monitoring"]').trigger('click')
@@ -63,14 +64,18 @@ describe('horizontal navigation shell', () => {
     expect(wrapper.get('.workspace-tab.is-current').text()).toContain('辅料管理')
   })
 
-  it('shows purchase management as its own domain only to permitted users', async () => {
+  it('shows purchase management under products only to permitted users', async () => {
     const allowed = ref<string[] | null>(['dashboard.read', 'purchases.read'])
     const { wrapper, router } = await setup('/purchases/orders', allowed)
-    expect(wrapper.get('[data-domain="采购"]').classes()).toContain('is-active')
-    await wrapper.get('[data-domain="采购"]').trigger('click')
+    expect(wrapper.find('[data-domain="采购"]').exists()).toBe(false)
+    expect(wrapper.get('[data-domain="商品"]').classes()).toContain('is-active')
+    expect(wrapper.get('.page-heading__trail').text()).toBe('商品/采购管理')
+    expect(wrapper.get('.workspace-tab.is-current').text()).toContain('采购管理')
+    await wrapper.get('[data-domain="商品"]').trigger('click')
     const panel = wrapper.get('.mega-panel')
     expect(panel.text()).not.toContain('采购看板')
-    expect(panel.text()).toContain('采购单')
+    expect(panel.get('h2').text()).toContain('产品管理')
+    expect(panel.get('a[href="/purchases/orders"]').text()).toBe('采购管理')
     expect(panel.text()).not.toContain('收货记录')
     await panel.get('a[href="/purchases/orders"]').trigger('click')
     await flushPromises()
@@ -78,7 +83,40 @@ describe('horizontal navigation shell', () => {
 
     allowed.value = ['dashboard.read']
     await nextTick()
-    expect(wrapper.find('[data-domain="采购"]').exists()).toBe(false)
+    expect(wrapper.find('[data-domain="商品"]').exists()).toBe(false)
+  })
+
+  it.each([
+    ['/watch/stores', '店铺监控'],
+    ['/watch/events', '上新监控'],
+  ])('uses consistent selection labels for %s', async (path, title) => {
+    const { wrapper } = await setup(path)
+    expect(wrapper.get('.page-heading__trail').text()).toBe(`选品/${title}`)
+    expect(wrapper.get('.workspace-tab.is-current').text()).toContain(title)
+    await wrapper.get('[data-domain="选品"]').trigger('click')
+    expect(wrapper.get(`.mega-panel a[href="${path}"]`).text()).toBe(title)
+    expect(wrapper.findAll('.mega-row')).toHaveLength(1)
+  })
+
+  it('keeps the purchase detail breadcrumb linked to purchase management', async () => {
+    const { wrapper, router } = await setup('/purchases/orders/example')
+    expect(wrapper.get('.page-heading__trail').text()).toBe('商品/采购管理/采购单详情')
+    expect(wrapper.get('.workspace-tab.is-current').text()).toContain('采购管理')
+    await wrapper.get('.page-heading__trail a[href="/purchases/orders"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/purchases/orders')
+  })
+
+  it('resets workspace scrolling on navigation without nesting navigation bars in the scroller', async () => {
+    const { wrapper, router } = await setup('/products')
+    const content = wrapper.get<HTMLElement>('#main-content').element
+    expect(content.querySelector('.erp-header, .workspace-tabs, .page-heading')).toBeNull()
+    content.scrollTop = 480
+    content.scrollLeft = 100
+    await router.push('/watch/stores')
+    await nextTick()
+    expect(content.scrollTop).toBe(0)
+    expect(content.scrollLeft).toBe(0)
   })
 
   it('never exposes hidden routes or unauthorized groups and removes revoked tabs', async () => {

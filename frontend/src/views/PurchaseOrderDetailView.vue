@@ -96,7 +96,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
           class="secondary-action"
           :to="returnPath"
         >
-          返回采购单
+          返回采购管理
         </RouterLink>
       </div>
     </header>

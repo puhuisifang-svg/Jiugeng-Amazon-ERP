@@ -103,7 +103,7 @@ onMounted(load)
       <div>
         <p class="eyebrow">
           PURCHASE ORDERS
-        </p><h1>采购单</h1><p>建单 → 确认下单 → 分批收货 → 完成，采购与到货进度在一处管理。</p>
+        </p><h1>采购管理</h1><p>建单 → 确认下单 → 分批收货 → 完成，采购与到货进度在一处管理。</p>
       </div>
       <button
         v-if="writable"

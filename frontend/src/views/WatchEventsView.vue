@@ -8,7 +8,7 @@ import { session } from '@/state/session'
 type Event = WatchEventDto
 const items = ref<Event[]>([]); const loading = ref(true); const busyId = ref(''); const error = ref(''); const success = ref('')
 const writable = computed(() => session.canAccess(['watch.write']))
-async function load() { loading.value = true; try { items.value = (await domainApi.events()).items } catch { error.value = '上新事件数据加载失败。' } finally { loading.value = false } }
+async function load() { loading.value = true; try { items.value = (await domainApi.events()).items } catch { error.value = '上新监控数据加载失败。' } finally { loading.value = false } }
 async function confirm(item: Event) { busyId.value = item.id; error.value = ''; success.value = ''; try { const response = await domainApi.confirmEvent(item.id); const index = items.value.findIndex(event => event.id === item.id); items.value[index] = response.item; success.value = response.replayed ? `事件已确认，复用候选 ${response.candidate.id}。` : `已确认并生成候选 ${response.candidate.id}。` } catch { error.value = '确认失败，请刷新后重试。' } finally { busyId.value = '' } }
 onMounted(load)
 </script>

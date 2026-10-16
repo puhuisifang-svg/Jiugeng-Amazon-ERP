@@ -3,7 +3,7 @@
 | 字段 | 内容 |
 | --- | --- |
 | 任务 | ERP-006 / ERP-021-003 |
-| 版本 | v1.1 |
+| 版本 | v1.4（ERP-033） |
 | 状态 | Approved |
 | 日期 | 2026-10-15 |
 | Owner | PJM / PM / Backend / Frontend / QA |
@@ -11,6 +11,8 @@
 | 机器可读副本 | [mvp-active-scope-contract.json](mvp-active-scope-contract.json) |
 
 ## 1. 目的与优先级
+
+ERP-033 用户于 2026-10-16 授权新品开发：商品 / 产品管理新增新品开发，审核通过候选同事务创建唯一开发草稿，历史已通过候选迁移补建。复用 products.read/write；开发完成须关联已启用产品，不自动建档。详见 [ERP-033 PRD](../../deliverables/pjm/ERP-033_NEW_PRODUCT_DEVELOPMENT_PRD.md)。
 
 ERP-030 用户于 2026-10-16 授权独立产品监控：新增 monitoring 领域和 `/api/v1/product-monitoring`，所有有效登录用户均可操作，不依赖岗位 capability，不建设人员操作追溯；保留商品观测历史。首期仅美国站人工/合成观测，真实自动采集后置。此范围不改变现有 Watch 店铺上新边界。实施基线见 [ERP-030 PRD](../../deliverables/pjm/ERP-030_PRODUCT_MONITORING_PRD.md)。
 
@@ -32,6 +34,7 @@ Sprint 0 的六类导入契约及其评审记录继续作为审计证据保留�
 | Material | AuxiliaryMaterial、ProductAuxiliaryMaterial、AuxiliaryMaterialSupplier 单层关系 | 多层 BOM、替代料、成本、采购与生产 |
 | Inventory | 单一预置 Warehouse、余额、OPENING/INBOUND/OUTBOUND/ADJUSTMENT 流水 | 多仓、库位、批次、效期、调拨与成本 |
 | Selection | Candidate、评估、状态、负责人、标签、评审记录、证据链接 | AI 决策、销量预测、评论分析 |
+| Development | 候选通过快照、开发需求、方案/打样/研究、状态流转、成果产品关联 | 自动建档、1688 集成、自定义字段、附件、利润引擎 |
 | Watch | 一个指定公开店铺、采集运行、快照、基线、新品事件、人工复核 | 公司店铺账号管理、SP-API Listing 同步、实时监控、多站点 |
 | Import / Export | 五类当前 MVP 导入、结果文件、候选 CSV 导出 | Store Listing 导入、任意格式识别、跨模块报表中心 |
 
@@ -66,12 +69,13 @@ ERP-021-003 起，`PRODUCTS` 与 `VARIANTS` 使用模板 `2.0`；另外三类继
 - `/watch/stores`、`/watch/events`
 - `/dashboard`、`/dashboard-maintenance`、`/dashboard-images`
 - `/suppliers`、`/catalog-images`
+- `/purchases`、`/product-monitoring`、`/product-development`
 
 当前 MVP 不提供 `/store-accounts`、`/store-listings` 或等价的公司店铺与 Listing 映射接口。监控目标只通过 `watch.*` 能力访问。
 
 ## 5. 动作级权限
 
-当前 capability 共 24 个：
+当前 capability 共 27 个：
 
 - `system.users.manage`
 - `products.read`、`products.write`
@@ -83,6 +87,7 @@ ERP-021-003 起，`PRODUCTS` 与 `VARIANTS` 使用模板 `2.0`；另外三类继
 - `audit.read.all`、`audit.read.self`
 - `dashboard.read`、`dashboard.shipments.manage`、`dashboard.pending-products.manage`
 - `suppliers.read`、`suppliers.write`
+- `purchases.read`、`purchases.write`、`purchases.receive`
 
 `listings.read`、`listings.write` 和 `stores.write` 不属于当前 capability 集合。角色映射以 [权限矩阵](../05-security/ACCESS_MATRIX.md) 为准，前端可见性不能替代后端逐接口鉴权。
 

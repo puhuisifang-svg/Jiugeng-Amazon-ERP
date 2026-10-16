@@ -5,6 +5,7 @@ import { domainApi } from '@/api/domain'
 import type { CandidateDetailDto } from '@/api/resources'
 import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import { session } from '@/state/session'
+import { runtimeConfig } from '@/config/runtime'
 
 const route = useRoute()
 const candidateId = computed(() => String(route.params.candidateId))
@@ -60,7 +61,7 @@ onMounted(load)
 
 <template>
   <section class="page-stack">
-    <SyntheticNotice />
+    <SyntheticNotice v-if="runtimeConfig.authMode === 'mock'" />
     <p>
       <RouterLink to="/selection/candidates">
         ← 返回候选池
@@ -87,6 +88,13 @@ onMounted(load)
       {{ success }}
     </p>
     <template v-if="detail">
+      <RouterLink
+        v-if="detail.candidate.status === 'APPROVED' && runtimeConfig.authMode !== 'mock'"
+        class="primary-link"
+        :to="`/product-development/${detail.candidate.id}`"
+      >
+        进入新品开发
+      </RouterLink>
       <article class="panel compact-panel">
         <div class="card-heading">
           <div><strong>{{ detail.candidate.asin }}</strong><h2>{{ detail.candidate.title }}</h2></div>

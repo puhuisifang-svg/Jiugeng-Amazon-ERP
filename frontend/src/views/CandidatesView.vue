@@ -4,6 +4,7 @@ import { domainApi, type CandidateStatus } from '@/api/domain'
 import type { SelectionCandidateDto } from '@/api/resources'
 import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import { session } from '@/state/session'
+import { runtimeConfig } from '@/config/runtime'
 import { downloadCandidatesCsv } from '@/utils/candidateCsv'
 
 type Candidate = SelectionCandidateDto & { rejectionReason?: string }
@@ -68,13 +69,13 @@ onMounted(load)
 </script>
 <template>
   <section class="page-stack">
-    <SyntheticNotice />
+    <SyntheticNotice v-if="runtimeConfig.authMode === 'mock'" />
     <form
       v-if="writable"
       class="panel operation-form"
       @submit.prevent="create"
     >
-      <h2>手工新增模拟候选</h2><label class="form-wide">ASIN 或 Amazon URL<input
+      <h2>{{ runtimeConfig.authMode === 'mock' ? '手工新增模拟候选' : '手工新增候选' }}</h2><label class="form-wide">ASIN 或 Amazon URL<input
         v-model="asinOrUrl"
         required
         placeholder="B0… 或 https://www.amazon.com/dp/B0…"
@@ -170,6 +171,13 @@ onMounted(load)
         </p><p>
           <RouterLink :to="`/selection/candidates/${item.id}`">
             查看详情与评审记录
+          </RouterLink>
+          <RouterLink
+            v-if="item.status === 'APPROVED' && runtimeConfig.authMode !== 'mock'"
+            class="primary-link"
+            :to="`/product-development/${item.id}`"
+          >
+            进入新品开发
           </RouterLink>
         </p>
         <form

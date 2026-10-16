@@ -25,7 +25,10 @@ class SelectionService implements SelectionCandidateGateway {
     private static final Pattern PATH = Pattern.compile("/(?:DP|GP/PRODUCT)/([A-Z0-9]{10,16})(?:/|$)");
     private final SelectionRepository repository;
     private final AuditTrail audit;
-    SelectionService(SelectionRepository repository, AuditTrail audit) { this.repository=repository; this.audit=audit; }
+    private final org.springframework.context.ApplicationEventPublisher events;
+    SelectionService(SelectionRepository repository, AuditTrail audit, org.springframework.context.ApplicationEventPublisher events) {
+        this.repository=repository; this.audit=audit; this.events=events;
+    }
 
     @Transactional(readOnly=true)
     List<CandidateView> candidates(String keyword, CandidateStatus status, String owner) {
@@ -51,6 +54,7 @@ class SelectionService implements SelectionCandidateGateway {
 
     @Transactional
     CandidateView evaluate(String id, EvaluationInput input, AuthenticatedActor actor) {
+        repository.lock(id);
         CandidateView before=candidate(id);
         String category=optional(input.category(),100), owner=optional(input.owner(),100), reason=optional(input.selectionReason(),1000);
         if(input.price()!=null&&input.price().signum()<0) throw invalid("CANDIDATE_PRICE_INVALID","价格不能小于 0");
@@ -69,6 +73,7 @@ class SelectionService implements SelectionCandidateGateway {
 
     @Transactional
     CandidateView transition(String id, CandidateStatus target, String rejectionReason, AuthenticatedActor actor) {
+        repository.lock(id);
         CandidateView before=candidate(id);
         if(target==null||!allowed(before.status()).contains(target)) throw conflict("INVALID_CANDIDATE_TRANSITION","不允许从 "+before.status()+" 变更为 "+target);
         String reason=optional(rejectionReason,500);
@@ -77,6 +82,9 @@ class SelectionService implements SelectionCandidateGateway {
         repository.transition(id,target,reason,actor.userId());
         CandidateView after=candidate(id);
         audit.record(operation(actor,"CANDIDATE_TRANSITION",id,snapshot(before),snapshot(after),"候选状态流转"));
+        if (target == CandidateStatus.APPROVED) events.publishEvent(new CandidateApproved(after.id(), after.asin(),
+                after.title(), after.category(), after.score(), after.price(), after.sourceUrl(),
+                after.selectionReason(), after.owner(), actor));
         return after;
     }
 

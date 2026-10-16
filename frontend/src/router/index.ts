@@ -27,6 +27,8 @@ export const appRoutes: RouteRecordRaw[] = [
     component: AdminLayout,
     redirect: '/home',
     children: [
+      { path: 'product-development', name: 'product-development', component: () => import('@/views/ProductDevelopmentView.vue'), meta: { title: '新品开发', group: '产品管理', icon: '新', capabilities: ['products.read'] } },
+      { path: 'product-development/:id', name: 'product-development-detail', component: () => import('@/views/ProductDevelopmentView.vue'), meta: { title: '新品开发详情', group: '产品管理', hidden: true, parentPath: '/product-development', capabilities: ['products.read'] } },
       { path: 'product-monitoring', name: 'product-monitoring', component: () => import('@/views/ProductMonitoringView.vue'), meta: { title: '产品监控', group: '产品监控', icon: '◎' } },
       { path: 'product-monitoring/:id', name: 'product-monitoring-detail', component: () => import('@/views/ProductMonitoringView.vue'), meta: { title: '监控详情', hidden: true, parentPath: '/product-monitoring' } },
       { path: 'home', name: 'home', component: () => import('@/views/DashboardView.vue'), meta: { title: '首页', group: '工作台', icon: '⌂', capabilities: ['dashboard.read'] } },

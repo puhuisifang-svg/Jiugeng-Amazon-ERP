@@ -137,6 +137,10 @@ ERP_BACKEND_URL="http://127.0.0.1:$backend_port" ERP_TEST_MYSQL_CONTAINER="$mysq
   ERP_TEST_MYSQL_DATABASE=jiugeng_erp_verify ERP_TEST_MYSQL_CONFIG="$work_dir/mysql-client.cnf" \
   node "$repo_root/scripts/qa/verify-purchase-http.mjs"
 
+ERP_BACKEND_URL="http://127.0.0.1:$backend_port" ERP_TEST_MYSQL_CONTAINER="$mysql_container" \
+  ERP_TEST_MYSQL_DATABASE=jiugeng_erp_verify ERP_TEST_MYSQL_CONFIG="$work_dir/mysql-client.cnf" \
+  ERP_DEVELOPMENT_STATE="$work_dir/development-state.json" node "$repo_root/scripts/qa/verify-development-http.mjs"
+
 baseline_count=$(query_scalar "SELECT COUNT(*) FROM schema_baseline WHERE module_name='modular-monolith' AND baseline_version='sprint-0'")
 [ "$baseline_count" = "1" ]
 
@@ -206,5 +210,9 @@ ERP_BACKEND_URL="http://127.0.0.1:$backend_port" ERP_TEST_MYSQL_CONTAINER="$mysq
   ERP_MONITOR_STATE="$work_dir/monitor-state.json" node "$repo_root/scripts/qa/verify-monitoring-http.mjs" --verify-restart
 
 ERP_BACKEND_URL="http://127.0.0.1:$backend_port" "$repo_root/scripts/dev/smoke-local-mysql-backend.sh"
+
+ERP_BACKEND_URL="http://127.0.0.1:$backend_port" ERP_TEST_MYSQL_CONTAINER="$mysql_container" \
+  ERP_TEST_MYSQL_DATABASE=jiugeng_erp_verify ERP_TEST_MYSQL_CONFIG="$work_dir/mysql-client.cnf" \
+  ERP_DEVELOPMENT_STATE="$work_dir/development-state.json" node "$repo_root/scripts/qa/verify-development-http.mjs" --verify-restart
 
 echo "PASS: MySQL profile migrated, survived restart, and kept mock endpoints isolated."

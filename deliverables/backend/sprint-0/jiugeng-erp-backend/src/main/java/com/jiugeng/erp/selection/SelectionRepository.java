@@ -36,6 +36,11 @@ class SelectionRepository {
                 .query(this::mapCandidate).optional();
     }
 
+    void lock(String id) {
+        jdbc.sql("SELECT id FROM selection_candidate WHERE id=:id FOR UPDATE").param("id", id)
+                .query(String.class).optional().orElseThrow(() -> new SelectionException(404,"CANDIDATE_NOT_FOUND","候选不存在"));
+    }
+
     boolean asinExists(String normalized) {
         return jdbc.sql("SELECT COUNT(*) FROM selection_candidate WHERE asin_normalized=:asin")
                 .param("asin", normalized).query(Integer.class).single() > 0;

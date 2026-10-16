@@ -9,6 +9,12 @@ import { appRoutes, refreshAccessIfStale } from './index'
 afterEach(() => vi.restoreAllMocks())
 
 describe('application routes', () => {
+  it('places candidate-linked development under product management using existing product access', () => {
+    const routes = appRoutes.find(route => route.path === '/')?.children?.filter(route => route.path.startsWith('product-development')) ?? []
+    expect(routes).toHaveLength(2)
+    expect(routes.every(route => route.meta?.group === '产品管理' && route.meta.capabilities?.includes('products.read'))).toBe(true)
+    expect(routes.filter(route => !route.meta?.hidden).map(route => route.meta?.title)).toEqual(['新品开发'])
+  })
   it('redirects the root shell to the home page', async () => {
     const router = createRouter({ history: createMemoryHistory(), routes: appRoutes })
 

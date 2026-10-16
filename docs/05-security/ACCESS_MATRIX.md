@@ -67,6 +67,8 @@ ERP-030 独立产品监控：ADMIN、PRODUCT_MATERIAL、SELECTION 均可读写�
 
 ## 鉴权边界
 
+- ERP-033 新品开发读取使用 `products.read`，维护和状态流转使用 `products.write`；SELECTION 审核通过候选时由同事务事件创建开发草稿，不因此获得开发资料写权限。开发详情的领域操作历史沿用业务记录查询，不暴露全局审计。
+
 - 前端隐藏/禁用仅改善体验，不构成安全控制；后端必须按 capability 独立鉴权。
 - `audit.read.self` 只允许读取当前用户自身操作事件；普通角色不得修改/删除审计记录。
 - 密钥值不授予任何上述业务角色；监控数据源如需 API Key，只保存 SecretRef，由 Ops 受控管理。

@@ -34,6 +34,10 @@ class SupplierControllerTest {
 
     @BeforeEach
     void reset() {
+        jdbc.update("DELETE FROM purchase_receipt_line");
+        jdbc.update("DELETE FROM purchase_receipt");
+        jdbc.update("DELETE FROM purchase_order_line");
+        jdbc.update("DELETE FROM purchase_order");
         jdbc.update("DELETE FROM product_variant_supplier");
         jdbc.update("DELETE FROM auxiliary_material_supplier");
         jdbc.update("DELETE FROM supplier");

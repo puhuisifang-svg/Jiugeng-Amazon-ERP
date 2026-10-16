@@ -21,7 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-class InventoryService implements InventoryOpeningService {
+class InventoryService implements InventoryOpeningService, InventoryInboundGateway {
     private final InventoryRepository repository;
     private final AuditTrail auditTrail;
 
@@ -54,6 +54,14 @@ class InventoryService implements InventoryOpeningService {
         TransactionResult result = post(new TransactionCommand(command.requestId(), command.materialId(),
                 TransactionType.OPENING, command.quantity(), command.unit(), command.reason(), null), actor, true, safety);
         return new OpeningResult(result.item().id(), result.balance().quantity(), result.replayed());
+    }
+
+    @Override
+    @Transactional
+    public InventoryInboundGateway.Result postInbound(InventoryInboundGateway.Command command, AuthenticatedActor actor) {
+        TransactionResult result = post(new TransactionCommand(command.requestId(), command.materialId(),
+                TransactionType.INBOUND, command.quantity(), command.unit(), command.reason(), null), actor, false, null);
+        return new InventoryInboundGateway.Result(result.item().id(), result.balance().quantity(), result.replayed());
     }
 
     @Transactional

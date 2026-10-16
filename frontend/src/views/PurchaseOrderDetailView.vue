@@ -84,12 +84,21 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
         <p class="eyebrow">
           PURCHASE ORDER
         </p><h1>{{ detail?.order.orderNo || '采购单详情' }}</h1><p>采购单、收货记录与操作历史统一展示。</p>
-      </div><RouterLink
-        class="secondary-action"
-        :to="returnPath"
-      >
-        返回采购单
-      </RouterLink>
+      </div><div class="purchase-detail-actions">
+        <button
+          type="button"
+          class="secondary-button"
+          :disabled="saving || loading"
+          @click="load"
+        >
+          刷新单据
+        </button><RouterLink
+          class="secondary-action"
+          :to="returnPath"
+        >
+          返回采购单
+        </RouterLink>
+      </div>
     </header>
     <p
       v-if="error"
@@ -107,14 +116,6 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
       正在加载…
     </p>
     <template v-else-if="detail">
-      <button
-        type="button"
-        class="secondary-button"
-        :disabled="saving"
-        @click="load"
-      >
-        刷新单据
-      </button>
       <section class="panel purchase-summary">
         <dl>
           <div><dt>状态</dt><dd>{{ statusLabels[detail.order.status] }}</dd></div><div><dt>采购类型</dt><dd>{{ detail.order.orderType === 'PRODUCT' ? '产品采购' : '辅料采购' }}</dd></div><div><dt>供应商</dt><dd>{{ detail.order.supplierName }}</dd></div><div><dt>采购金额</dt><dd>{{ detail.order.currency }} {{ detail.order.lines.reduce((sum,line) => sum + line.orderedQuantity * line.unitPrice, 0).toFixed(2) }}</dd></div><div><dt>创建时间</dt><dd>{{ new Date(detail.order.createdAt).toLocaleString() }}</dd></div><div><dt>预计到货日期</dt><dd>{{ detail.order.expectedDeliveryDate || '未约定' }}</dd></div><div><dt>收货信息</dt><dd>{{ detail.order.deliveryAddress || '未填写' }}</dd></div><div><dt>备注</dt><dd>{{ detail.order.remark || '—' }}</dd></div><div v-if="detail.order.status === 'CANCELLED'">

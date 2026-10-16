@@ -29,10 +29,16 @@ async function setup(path = '/home', allowed = ref<string[] | null>(null)) {
 }
 
 describe('horizontal navigation shell', () => {
-  it('exposes independent product monitoring even without role capabilities', async () => {
-    const { wrapper } = await setup('/product-monitoring', ref([]))
-    await wrapper.get('[data-domain="产品监控"]').trigger('click')
+  it.each(['/product-monitoring', '/product-monitoring/example'])('groups monitoring under selection without granting other selection access: %s', async path => {
+    const { wrapper, router } = await setup(path, ref([]))
+    expect(wrapper.find('[data-domain="产品监控"]').exists()).toBe(false)
+    expect(wrapper.get('[data-domain="选品"]').classes()).toContain('is-active')
+    await wrapper.get('[data-domain="选品"]').trigger('click')
+    expect(wrapper.findAll('.mega-panel a')).toHaveLength(1)
     expect(wrapper.get('.mega-panel a[href="/product-monitoring"]').text()).toBe('产品监控')
+    await wrapper.get('.mega-panel a[href="/product-monitoring"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/product-monitoring')
   })
   it('navigates to the home page from the brand', async () => {
     const { wrapper, router } = await setup('/products')
@@ -78,7 +84,7 @@ describe('horizontal navigation shell', () => {
   it('never exposes hidden routes or unauthorized groups and removes revoked tabs', async () => {
     const allowed = ref<string[] | null>(['dashboard.read', 'products.read'])
     const { wrapper } = await setup('/products', allowed)
-    expect(wrapper.find('[data-domain="选品"]').exists()).toBe(false)
+    expect(wrapper.find('[data-domain="选品"]').exists()).toBe(true)
     await wrapper.get('[data-domain="商品"]').trigger('click')
     expect(wrapper.find('.mega-panel a[href="/products/new"]').exists()).toBe(false)
     expect(wrapper.find('.mega-panel a[href="/imports"]').exists()).toBe(false)

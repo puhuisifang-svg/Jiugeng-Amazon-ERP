@@ -80,7 +80,7 @@ class PurchaseService {
         OrderView before = order(id);
         if (before.status() != Status.DRAFT) throw state("只有草稿采购单可编辑");
         if (raw == null || raw.orderType() != before.orderType()) throw invalid("采购类型保存后不可修改");
-        ValidatedOrder valid = validate(raw, before.orderType());
+        ValidatedOrder valid = validate(raw, before.orderType(),before);
         long version = requireVersion(raw.version());
         if (repository.updateDraft(id, valid.input(), actor.userId(), version) != 1) throw versionConflict();
         repository.replaceLines(id, valid.lines());
@@ -94,7 +94,7 @@ class PurchaseService {
         OrderView before = repository.find(id, true).orElseThrow(() -> missing(id));
         if (before.status() != Status.DRAFT) throw state("只有草稿采购单可提交");
         repository.activeSupplier(before.supplierId());
-        for (LineView line : before.lines()) repository.activeItem(before.orderType(), before.supplierId(), line.itemId());
+        for (LineView line : before.lines()) repository.existingItem(before.orderType(), before.supplierId(), line.itemId());
         transition(id, Status.DRAFT, Status.SUBMITTED, actor, version);
         OrderView after = order(id); audit(actor,"PURCHASE_ORDER_SUBMIT",id,snapshot(before),snapshot(after)); return after;
     }
@@ -158,7 +158,8 @@ class PurchaseService {
     private void transition(String id, Status from, Status to, AuthenticatedActor actor, long version) {
         if (repository.transition(id, from, to, actor.userId(), version) != 1) throw versionConflict();
     }
-    private ValidatedOrder validate(OrderInput raw, OrderType expectedType) {
+    private ValidatedOrder validate(OrderInput raw, OrderType expectedType) { return validate(raw,expectedType,null); }
+    private ValidatedOrder validate(OrderInput raw, OrderType expectedType,OrderView before) {
         if (raw == null || raw.orderType() == null) throw invalid("采购类型不能为空");
         if (expectedType != null && raw.orderType() != expectedType) throw invalid("采购类型不可修改");
         String supplierId = required(raw.supplierId(), "供应商", 36); repository.activeSupplier(supplierId);
@@ -171,7 +172,12 @@ class PurchaseService {
             if (line == null) throw invalid("采购明细不能为空");
             String itemId = required(line.itemId(), "采购对象", 36);
             if (!items.add(itemId)) throw invalid("同一采购对象不可重复");
-            PurchaseRepository.ItemRef item = repository.activeItem(raw.orderType(), supplierId, itemId);
+            var prior=before!=null && before.supplierId().equals(supplierId)?before.lines().stream().filter(v->v.itemId().equals(itemId)).findFirst():java.util.Optional.<LineView>empty();
+            PurchaseRepository.ItemRef item;
+            if(prior.isPresent()) {
+                repository.existingItem(raw.orderType(),supplierId,itemId);
+                var saved=prior.get();item=new PurchaseRepository.ItemRef(saved.itemId(),saved.itemCode(),saved.itemName(),saved.unit());
+            } else item=repository.activeItem(raw.orderType(), supplierId, itemId);
             lines.add(new PurchaseRepository.ResolvedLine(UUID.randomUUID().toString(), number++, item,
                     positive(line.quantity(), "采购数量"), nonNegative(line.unitPrice(), "采购单价")));
         }

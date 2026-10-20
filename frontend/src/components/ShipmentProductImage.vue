@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { domainApi, type ProductDetailDto } from '@/api/domain'
 import AuthenticatedCatalogImage from './AuthenticatedCatalogImage.vue'
 
-const props = defineProps<{ productId: string; product?: ProductDetailDto | undefined; alt: string }>()
+const props = defineProps<{ productId: string; variantId?: string | null | undefined; product?: ProductDetailDto | undefined; alt: string }>()
 const loaded = ref<ProductDetailDto>()
 const preview = ref(false)
 watch(() => [props.productId, props.product] as const, async ([id, product], _old, onCleanup) => {
@@ -14,7 +14,8 @@ watch(() => [props.productId, props.product] as const, async ([id, product], _ol
   onCleanup(() => { active = false })
   try { const value = await domainApi.product(id); if (active) loaded.value = value } catch { /* Show missing image state. */ }
 }, { immediate: true })
-const variant = computed(() => (props.product ?? loaded.value)?.variants?.find(item => item.imageAssetId || item.imageUrl))
+watch(() => props.variantId, () => { preview.value = false })
+const variant = computed(() => props.variantId ? (props.product ?? loaded.value)?.variants?.find(item => item.id === props.variantId) : undefined)
 </script>
 
 <template>
@@ -42,7 +43,7 @@ const variant = computed(() => (props.product ?? loaded.value)?.variants?.find(i
     v-else
     role="img"
     :aria-label="`${alt}（未设置产品图片）`"
-  >未设置产品图片</span>
+  >{{ variantId ? '未设置产品图片' : '待补选 SKU' }}</span>
   <Teleport to="body">
     <div
       v-if="preview"

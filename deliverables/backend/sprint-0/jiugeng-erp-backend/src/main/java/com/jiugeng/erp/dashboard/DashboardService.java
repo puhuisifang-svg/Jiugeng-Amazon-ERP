@@ -30,6 +30,7 @@ class DashboardService {
     static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Shanghai");
     private final DashboardRepository repository;
     private final ProductLookup products;
+    private final com.jiugeng.erp.customer.CustomerProductLookup customerProducts;
     private final DashboardImageStore images;
     private final AuditTrail audit;
     private final AuditHistoryLookup auditHistory;
@@ -37,10 +38,10 @@ class DashboardService {
     private final Clock clock;
     private final long orphanHours;
 
-    DashboardService(DashboardRepository repository, ProductLookup products, DashboardImageStore images,
+    DashboardService(DashboardRepository repository, ProductLookup products, com.jiugeng.erp.customer.CustomerProductLookup customerProducts, DashboardImageStore images,
             AuditTrail audit, AuditHistoryLookup auditHistory, ObjectMapper objectMapper, Clock clock,
             @Value("${app.dashboard.image-orphan-hours:24}") long orphanHours) {
-        this.repository=repository;this.products=products;this.images=images;this.audit=audit;this.auditHistory=auditHistory;
+        this.repository=repository;this.products=products;this.customerProducts=customerProducts;this.images=images;this.audit=audit;this.auditHistory=auditHistory;
         this.objectMapper=objectMapper;this.clock=clock;this.orphanHours=orphanHours;
     }
 
@@ -69,7 +70,7 @@ class DashboardService {
         ShipmentInput input=shipment(raw);String hash=hash(input);var prior=command(actor,"TODAY_CREATE",key,hash);
         if(prior!=null)return today(prior.resourceId());
         if(input.date().isAfter(businessDate()))throw invalid("今日发货只能登记当天或历史安排");
-        var product=product(input.productId());String id=UUID.randomUUID().toString();
+        var product=sku(input);String id=UUID.randomUUID().toString();
         repository.insertToday(id,input,product.productCode(),product.name(),null,actor.userId());
         attach(input.imageId(),ImagePurpose.SHIPMENT,"TODAY_SHIPMENT",id,actor);
         TodayShipment created=today(id);record(actor,"DASHBOARD_TODAY_CREATE","TODAY_SHIPMENT",id,null,snapshot(created),"新增当日发货安排");
@@ -80,7 +81,8 @@ class DashboardService {
     TodayShipment updateToday(String id,ShipmentInput raw,long version,String correctionReason,AuthenticatedActor actor){
         TodayShipment before=today(id);if(before.status()!=TodayStatus.ACTIVE)throw state();
         if(before.shipDate().isBefore(businessDate()))required(correctionReason,"历史更正原因",500);
-        ShipmentInput input=shipment(raw);var product=product(input.productId());
+        ShipmentInput input=shipment(retainBinding(raw,before.customerProduct()));var product=sku(input);
+        if(input.customerProduct()==before.customerProduct()) product=new ProductLookup.ProductReference(before.productId(),before.productCode(),before.productName(),true);
         if(input.date().isAfter(businessDate()))throw invalid("今日发货只能登记当天或历史安排");
         if(repository.updateToday(id,input,product.productCode(),product.name(),version,actor.userId())!=1)throw conflict();
         attach(input.imageId(),ImagePurpose.SHIPMENT,"TODAY_SHIPMENT",id,actor);
@@ -111,7 +113,7 @@ class DashboardService {
         var previous=source.sourcePendingShipmentId()==null?null:pendingShipment(source.sourcePendingShipmentId());
         String targetId=previous==null?UUID.randomUUID().toString():previous.id();
         var input=new ShipmentInput(previous==null?source.shipDate():previous.plannedShipDate(),source.productId(),source.imageId(),source.quantity(),
-                source.boxCount(),source.remark(),previous==null?source.latestShipAt():previous.latestShipAt());
+                source.boxCount(),source.remark(),previous==null?source.latestShipAt():previous.latestShipAt(),source.variantId(),source.customerProduct()==null?null:source.customerProduct().id(),source.customerProduct());
         if(previous==null){
             repository.insertPendingShipment(targetId,input,source.productCode(),source.productName(),actor.userId());
             repository.linkTodayToPending(id,targetId);
@@ -130,7 +132,7 @@ class DashboardService {
     PendingShipment createPendingShipment(ShipmentInput raw,String key,AuthenticatedActor actor){
         ShipmentInput input=shipment(raw,true);String hash=hash(input);var prior=command(actor,"PENDING_SHIPMENT_CREATE",key,hash);
         if(prior!=null)return pendingShipment(prior.resourceId());
-        var product=product(input.productId());String id=UUID.randomUUID().toString();
+        var product=sku(input);String id=UUID.randomUUID().toString();
         repository.insertPendingShipment(id,input,product.productCode(),product.name(),actor.userId());
         attach(input.imageId(),ImagePurpose.SHIPMENT,"PENDING_SHIPMENT",id,actor);
         var created=pendingShipment(id);record(actor,"DASHBOARD_PENDING_SHIPMENT_CREATE","PENDING_SHIPMENT",id,null,snapshot(created),"新增待发货安排");
@@ -140,7 +142,8 @@ class DashboardService {
     @Transactional
     PendingShipment updatePendingShipment(String id,ShipmentInput raw,long version,AuthenticatedActor actor){
         PendingShipment before=pendingShipment(id);if(before.status()!=PendingShipmentStatus.PENDING)throw state();
-        ShipmentInput input=shipment(raw,true);var product=product(input.productId());
+        ShipmentInput input=shipment(retainBinding(raw,before.customerProduct()),true);var product=sku(input);
+        if(input.customerProduct()==before.customerProduct()) product=new ProductLookup.ProductReference(before.productId(),before.productCode(),before.productName(),true);
         if(repository.updatePendingShipment(id,input,product.productCode(),product.name(),version,actor.userId())!=1)throw conflict();
         attach(input.imageId(),ImagePurpose.SHIPMENT,"PENDING_SHIPMENT",id,actor);
         releaseReplaced(before.imageId(),input.imageId(),"PENDING_SHIPMENT",id);
@@ -159,14 +162,15 @@ class DashboardService {
     @Transactional
     TodayShipment transfer(String id,int quantity,int boxes,String remark,Instant latest,String imageId,long version,
                            String key,AuthenticatedActor actor){
-        ShipmentInput raw=new ShipmentInput(businessDate(),"source",imageId,quantity,boxes,remark,latest);
+        ShipmentInput raw=new ShipmentInput(businessDate(),"source",imageId,quantity,boxes,remark,latest,null,null,null);
         String hash=hash(new TransferCommand(id,quantity,boxes,remark==null?"":remark,latest.toString(),
                 imageId==null?"":imageId,version));
         var prior=command(actor,"PENDING_SHIPMENT_TRANSFER",key,hash);if(prior!=null)return today(prior.resourceId());
         var source=repository.pendingShipmentForUpdate(id).orElseThrow(()->missing("PENDING_SHIPMENT_NOT_FOUND","待发货记录不存在"));
         if(source.status()!=PendingShipmentStatus.PENDING)throw state();
         ShipmentInput input=shipment(new ShipmentInput(raw.date(),source.productId(),raw.imageId()==null?source.imageId():raw.imageId(),
-                raw.quantity(),raw.boxCount(),raw.remark(),raw.latestShipAt()));
+                raw.quantity(),raw.boxCount(),raw.remark(),raw.latestShipAt(),source.variantId(),source.customerProduct()==null?null:source.customerProduct().id(),source.customerProduct()));
+        sku(input);
         var previousToday=repository.todayByPending(id).orElse(null);
         String todayId=previousToday==null?UUID.randomUUID().toString():previousToday.id();
         if(previousToday==null)repository.insertToday(todayId,input,source.productCode(),source.productName(),id,actor.userId());
@@ -255,14 +259,30 @@ class DashboardService {
 
     record ImageContent(byte[] bytes,String mediaType){}
 
+    private ShipmentInput retainBinding(ShipmentInput raw,com.jiugeng.erp.customer.CustomerProductLookup.ShippingProduct original) {
+        if(original==null || !original.id().equals(raw.customerProductId())) return raw;
+        return new ShipmentInput(raw.date(),raw.productId(),raw.imageId(),raw.quantity(),raw.boxCount(),raw.remark(),
+            raw.latestShipAt(),raw.variantId(),raw.customerProductId(),original);
+    }
     private ShipmentInput shipment(ShipmentInput input){return shipment(input,false);}
     private ShipmentInput shipment(ShipmentInput input,boolean pending){if(input==null||input.date()==null||input.latestShipAt()==null)throw invalid("发货日期和最晚发货时间必填");
         String productId=required(input.productId(),"产品",36);if(input.quantity()<=0||input.boxCount()<=0)throw invalid("数量和箱数必须大于 0");
         LocalDate latestDate=input.latestShipAt().atZone(BUSINESS_ZONE).toLocalDate();
         if(pending ? latestDate.isBefore(input.date()) : !latestDate.equals(input.date()))throw invalid(pending ? "最晚发货日期不能早于计划发货日期" : "最晚发货时间必须落在发货日期当天");
-        return new ShipmentInput(input.date(),productId,blank(input.imageId()),input.quantity(),input.boxCount(),text(input.remark(),500),input.latestShipAt());}
+        String customerProductId=required(input.customerProductId(),"客户商品（历史记录请先编辑补选）",36);
+        var binding=(input.customerProduct()==null?customerProducts.active(customerProductId):customerProducts.forExisting(customerProductId))
+            .orElseThrow(()->invalid("客户、客户商品或 SKU 已停用或不存在，请重新选择"));
+        if(!binding.productId().equals(productId)||!binding.variantId().equals(input.variantId()))throw invalid("客户商品与所选 SKU 不匹配");
+        // Transfers retain the original customer code/requirements snapshot rather than silently refreshing it.
+        var snapshot=input.customerProduct()==null?binding:input.customerProduct();
+        return new ShipmentInput(input.date(),productId,blank(input.imageId()),input.quantity(),input.boxCount(),text(input.remark(),500),input.latestShipAt(),required(input.variantId(),"SKU（旧记录请先编辑补选）",36),binding.id(),snapshot);}
     private PendingProductInput pendingProductInput(PendingProductInput input){if(input==null||input.expectedCompletionDate()==null||input.expectedQuantity()<=0)throw invalid("预计数量必须大于 0且预计完成日期必填");
         return new PendingProductInput(required(input.productName(),"产品名称",128),blank(input.imageId()),input.expectedQuantity(),text(input.remark(),500),input.expectedCompletionDate());}
+    private ProductLookup.ProductReference sku(ShipmentInput input) {
+        var sku=(input.customerProduct()==null?products.findSku(input.productId(),input.variantId()):products.findExistingSku(input.productId(),input.variantId())).orElseThrow(()->invalid("所选 SKU 不属于该产品或已不存在，请重新选择"));
+        if(!sku.active())throw invalid("只能选择启用产品下的启用 SKU");
+        return new ProductLookup.ProductReference(input.productId(),sku.skuCode(),sku.name(),true);
+    }
     private ProductLookup.ProductReference product(String id){var product=products.findById(id).orElseThrow(()->missing("PRODUCT_NOT_FOUND","产品不存在"));
         if(!product.active())throw new DashboardException(409,"PRODUCT_DISABLED","不允许引用停用产品");if(product.name().length()>128)throw invalid("产品名称超过工作台快照上限 128 字符");return product;}
     private void attach(String imageId,ImagePurpose purpose,String type,String resourceId,AuthenticatedActor actor){if(imageId==null)return;var image=repository.image(imageId).orElseThrow(()->missing("DASHBOARD_IMAGE_NOT_FOUND","图片不存在"));

@@ -7,12 +7,17 @@ export type DashboardKind = 'today-shipments' | 'pending-shipments' | 'pending-p
 export type WorklistKind = DashboardKind
 export interface ShipmentDocument { id: string; kind: 'LABEL' | 'CARTON_LABEL'; fileName: string; byteSize: number; uploadedAt: string }
 export type PendingProductStatus = 'PENDING' | 'COMPLETED' | 'ARCHIVED'
+export interface ShippingCustomerProduct { id: string; customerId: string; customerName: string; productId: string; variantId: string; customerProductCode: string; requirements: string }
 export interface TodayShipment {
+  variantId?: string | null
+  customerProduct?: ShippingCustomerProduct | null
   id: string; shipDate: string; productId: string; productCode: string; productName: string; imageId?: string
   quantity: number; quantityUnit: 'SET'; boxCount: number; remark?: string; latestShipAt: string
   status: 'ACTIVE' | 'ARCHIVED' | 'SHIPPED'; sourcePendingShipmentId?: string; version: number; createdAt: string; updatedAt: string
 }
 export interface PendingShipment {
+  variantId?: string | null
+  customerProduct?: ShippingCustomerProduct | null
   id: string; plannedShipDate: string; productId: string; productCode: string; productName: string; imageId?: string
   quantity: number; quantityUnit: 'SET'; boxCount: number; remark?: string; latestShipAt: string
   status: 'PENDING' | 'TRANSFERRED_TO_TODAY' | 'ARCHIVED'; version: number; createdAt: string; updatedAt: string
@@ -23,6 +28,8 @@ export interface PendingProduct {
 }
 export type DashboardItem = TodayShipment | PendingShipment | PendingProduct
 export interface ShipmentDispatch {
+  variantId?: string | null
+  customerProduct?: ShippingCustomerProduct | null
   id: string; todayShipmentId: string; productId: string; productCode: string; productName: string; skuCodes: string
   quantity: number; boxCount: number; remark?: string; plannedDate: string; businessDate: string; dispatchedAt: string; actorName: string
 }
@@ -30,14 +37,14 @@ export interface DispatchTotals { records: number; quantity: number; boxCount: n
 export interface ShipmentStatistics {
   summary: DispatchTotals & { products: number }
   daily: Array<DispatchTotals & { date: string }>
-  products: Array<DispatchTotals & { productId: string; productCode: string; productName: string }>
+  products: Array<DispatchTotals & { productId: string; productCode: string; productName: string; variantId?: string | null; customerProduct?: ShippingCustomerProduct | null }>
   details: Page<ShipmentDispatch>
 }
 export interface HomeSlice<T> { items: T[]; totalCount: number; truncated: boolean; businessDate: string; generatedAt: string }
 export interface Page<T> { items: T[]; page: number; size: number; totalElements: number; totalPages: number }
 export interface ImageReceipt { id: string; purpose: 'SHIPMENT' | 'PENDING_PRODUCT'; sourceFileName: string; mediaType: string; byteSize: number; width: number; height: number; sha256: string }
 export interface DashboardHistoryEvent { id: string; action: string; actorLoginName: string; actorDisplayName: string; beforeValue?: unknown; afterValue?: unknown; detail?: string; occurredAt: string }
-export interface ShipmentInput { date: string; productId: string; imageId?: string | undefined; quantity: number; boxCount: number; remark?: string | undefined; latestShipTime: string }
+export interface ShipmentInput { customerProductId?: string; date: string; productId: string; variantId?: string; imageId?: string | undefined; quantity: number; boxCount: number; remark?: string | undefined; latestShipTime: string }
 export interface PendingProductInput { productName: string; imageId?: string | undefined; expectedQuantity: number; remark?: string | undefined; expectedCompletionDate: string }
 
 export async function loadDashboardSummary(): Promise<DashboardSummary> {

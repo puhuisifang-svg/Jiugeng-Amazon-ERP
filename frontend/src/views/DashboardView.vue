@@ -11,6 +11,7 @@ import ContinuousWorklist from '@/components/ContinuousWorklist.vue'
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
 import { ApiError } from '@/api/client'
+import CartonLabelExport from '@/components/CartonLabelExport.vue'
 import SuccessToast from '@/components/SuccessToast.vue'
 import { createShipmentImage } from '@/ui/shipmentExport'
 
@@ -33,11 +34,13 @@ const canDispatch = computed(() => session.canAccess(['dashboard.shipments.manag
 const selectedIds = ref<string[]>([]); const dispatchTarget = ref<TodayShipment[]>(); const dispatchKeys = new Map<string, string>()
 const dispatching = ref(false); const dispatchError = ref(''); const dispatchSuccess = ref('')
 const todayItems = computed(() => (slices.value['today-shipments']?.items ?? []) as TodayShipment[])
-const selectedShipments = computed(() => todayItems.value.filter(item => selectedIds.value.includes(item.id)))
-const allSelected = computed(() => todayItems.value.length > 0 && selectedShipments.value.length === todayItems.value.length)
+const selectableShipments = computed(() => todayItems.value.filter(item => item.variantId && item.customerProduct))
+const selectedShipments = computed(() => selectableShipments.value.filter(item => selectedIds.value.includes(item.id)))
+const allSelected = computed(() => selectableShipments.value.length > 0 && selectedShipments.value.length === selectableShipments.value.length)
+const labelIds = ref<string[]>()
 const exporting = ref(false); const exportUrl = ref(''); const exportName = ref(''); const exportWarning = ref(''); const exportError = ref('')
 function toggleSelection(id: string) { selectedIds.value = selectedIds.value.includes(id) ? selectedIds.value.filter(value => value !== id) : [...selectedIds.value, id] }
-function selectAll() { selectedIds.value = allSelected.value ? [] : todayItems.value.map(item => item.id) }
+function selectAll() { selectedIds.value = allSelected.value ? [] : selectableShipments.value.map(item => item.id) }
 function closeExport() { if (exportUrl.value) URL.revokeObjectURL(exportUrl.value); exportUrl.value = '' }
 async function exportImage() {
   if (exporting.value || !selectedShipments.value.length) return
@@ -313,6 +316,19 @@ onBeforeUnmount(() => { window.clearInterval(refreshTimer); window.removeEventLi
             >
               {{ exporting ? '生成图片中…' : '导出' }}
             </button>
+            <button
+              v-if="active === 'today-shipments' && canDispatch"
+              type="button"
+              :disabled="!selectedShipments.length || loading || dispatching"
+              @click="labelIds = selectedShipments.map(item => item.id)"
+            >
+              导出外箱标 PDF
+            </button>
+            <CartonLabelExport
+              v-if="labelIds"
+              :shipment-ids="labelIds"
+              @close="labelIds = undefined"
+            />
             <small v-if="active === 'today-shipments'">{{ selectedShipments.length ? `已选 ${selectedShipments.length} 条` : '请先勾选需要导出的记录' }}（最多展示10条）</small>
           </div>
           <span v-if="currentSlice?.truncated">仅展示前 10 条，前往维护页查看全部</span>

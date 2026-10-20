@@ -7,15 +7,17 @@ import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vu
 import SupplierContactLinks from '@/components/SupplierContactLinks.vue'
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
+import { blankCustoms, customsInput } from '@/api/customs'
+import CustomsFields from '@/components/CustomsFields.vue'
 
 const props = defineProps<{ initial?: ProductInput; busy?: boolean; submitLabel: string; showCancel?: boolean; focusVariantId?: string | undefined }>()
 const emit = defineEmits<{ submit: [value: ProductInput]; cancel: [] }>()
 const suppliers = ref<SupplierDto[]>([]); const materials = ref<MaterialDetailDto[]>([])
 const balances = ref<InventoryBalanceViewDto[]>([]); const inventoryFailed = ref(false)
 const referenceError = ref(''); const loadingReferences = ref(false); const imageError = ref(''); const uploading = ref<number | null>(null)
-const activeTabs = ref<Record<number, 'basic' | 'purchase' | 'specs' | 'materials' | 'image'>>({})
+const activeTabs = ref<Record<number, 'basic' | 'purchase' | 'specs' | 'materials' | 'image' | 'customs'>>({})
 function activeTab(index: number) { return activeTabs.value[index] ?? 'basic' }
-function setTab(index: number, value: 'basic' | 'purchase' | 'specs' | 'materials' | 'image') { activeTabs.value[index] = value }
+function setTab(index: number, value: 'basic' | 'purchase' | 'specs' | 'materials' | 'image' | 'customs') { if (value === 'customs' && !model.variants[index]!.customs) model.variants[index]!.customs = blankCustoms(); activeTabs.value[index] = value }
 const supplierAccess = computed(() => session.canAccess(['suppliers.read']))
 function blankVariant(): ProductVariantInput { return { skuCode: '', variantName: '', status: 'DRAFT', suppliers: [], materials: [] } }
 const model = reactive<ProductInput>(JSON.parse(JSON.stringify(props.initial ?? { productCode: '', productName: '', status: 'DRAFT', variants: [blankVariant()] })))
@@ -29,6 +31,15 @@ function addMaterial(variant: ProductVariantInput, event: Event) { const element
 function makePrimary(variant: ProductVariantInput, id: string) { variant.suppliers.forEach(item => { item.primary = item.supplierId === id }) }
 function useImageUrl(variant: ProductVariantInput) { if (variant.imageUrl?.trim()) variant.imageAssetId = undefined }
 async function uploadImage(variant: ProductVariantInput, index: number, event: Event) { const file = (event.target as HTMLInputElement).files?.[0]; if (!file) return; uploading.value = index; imageError.value = ''; try { variant.imageAssetId = (await catalogApi.uploadImage('SKU_MAIN', file)).id; variant.imageUrl = undefined } catch (error) { imageError.value = error instanceof Error ? error.message : '图片上传失败。' } finally { uploading.value = null } }
+async function uploadParentImage(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file || props.busy || uploading.value !== null) return
+  uploading.value = -1; imageError.value = ''
+  try { model.imageAssetId = (await catalogApi.uploadImage('PRODUCT_MAIN', file)).id }
+  catch (error) { imageError.value = error instanceof Error ? error.message : '父体图片上传失败。' }
+  finally { uploading.value = null; input.value = '' }
+}
 async function loadReferences() {
   if (runtimeConfig.authMode !== 'password') return
   loadingReferences.value = true; referenceError.value = ''
@@ -65,12 +76,13 @@ async function submit(event: Event) {
     if (editor) {
       const index = Number(editor.dataset.variantIndex)
       const panel = invalid.closest<HTMLElement>('[data-editor-tab]')
-      setTab(index, panel?.dataset.editorTab as 'basic' | 'purchase' | 'specs' | 'materials' | 'image' ?? 'basic')
+      setTab(index, panel?.dataset.editorTab as 'basic' | 'purchase' | 'specs' | 'materials' | 'image' | 'customs' ?? 'basic')
     }
     await nextTick(); invalid.reportValidity(); invalid.focus(); return
   }
   const input = structuredClone(toRaw(model))
   for (const variant of input.variants) {
+    if (variant.customs) variant.customs = customsInput(variant.customs)
     for (const key of ['itemLengthCm', 'itemWidthCm', 'itemHeightCm', 'packageLengthCm', 'packageWidthCm', 'packageHeightCm', 'packageWeightGrams'] as const) {
       if ((variant[key] as unknown) === '') variant[key] = undefined
     }
@@ -117,6 +129,40 @@ onMounted(loadReferences)
           maxlength="100"
         ></label>
         <label>状态<select v-model="model.status"><option value="ACTIVE">启用</option><option value="DRAFT">待定</option><option value="DISABLED">停用</option></select></label>
+        <fieldset
+          class="form-wide catalog-image-editor parent-image-editor"
+          :disabled="busy || uploading !== null"
+        >
+          <legend>父体图片</legend>
+          <AuthenticatedCatalogImage
+            v-if="model.imageAssetId"
+            :image-id="model.imageAssetId"
+            alt="父体图片"
+          />
+          <span
+            v-else
+            class="catalog-image catalog-image--placeholder"
+            role="img"
+            aria-label="父体暂无图片"
+          />
+          <label>{{ uploading === -1 ? '上传中…' : '上传父体图片' }}<input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            aria-label="上传父体图片"
+            @change="uploadParentImage"
+          ></label>
+          <button
+            v-if="model.imageAssetId"
+            type="button"
+            class="secondary-button"
+            @click="model.imageAssetId = null"
+          >
+            移除父体图片
+          </button>
+          <p class="form-wide">
+            支持 JPG、PNG、WebP，最大 5 MB。保存产品后生效；父体与 SKU 图片独立维护。
+          </p>
+        </fieldset>
         <label class="form-wide">描述<textarea
           v-model="model.description"
           maxlength="1000"
@@ -187,7 +233,25 @@ onMounted(loadReferences)
           >
             图片管理
           </button>
+          <button
+            type="button"
+            :class="{ active: activeTab(variantIndex) === 'customs' }"
+            @click="setTab(variantIndex, 'customs')"
+          >
+            报关资料
+          </button>
         </nav>
+        <div
+          v-if="variant.customs"
+          v-show="activeTab(variantIndex) === 'customs'"
+          data-editor-tab="customs"
+          class="product-tab-panel product-tab-panel--wide"
+        >
+          <CustomsFields
+            v-model="variant.customs"
+            :disabled="busy"
+          />
+        </div>
         <div class="sku-editor-grid">
           <div
             v-show="activeTab(variantIndex) === 'image'"
@@ -457,3 +521,11 @@ onMounted(loadReferences)
     </div>
   </form>
 </template>
+
+<style scoped>
+.product-form__body { grid-auto-rows: max-content; align-content: start; }
+.parent-image-editor { min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+.parent-image-editor legend { color: var(--muted); font-size: 13px; font-weight: 700; }
+.parent-image-editor label { min-width: 0; flex: 1 1 220px; }
+.parent-image-editor p { flex-basis: 100%; margin: 0; color: var(--muted); font-size: 12px; }
+</style>

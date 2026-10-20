@@ -41,12 +41,135 @@ class ProductControllerTest {
         jdbc.update("DELETE FROM auxiliary_material_supplier");
         jdbc.update("DELETE FROM product_auxiliary_material");
         jdbc.update("DELETE FROM variant_attribute");
+        jdbc.update("DELETE FROM customer_product");
         jdbc.update("DELETE FROM product_variant");
         jdbc.update("DELETE FROM product");
         jdbc.update("DELETE FROM iam_password_reset_challenge");
         jdbc.update("DELETE FROM audit_event");
         jdbc.update("DELETE FROM iam_session");
         jdbc.update("DELETE FROM iam_user");
+    }
+
+    @Test
+    void customsSavedWithProductAndComplianceEditsShareSameSkuRecord() throws Exception {
+        String token=createUserAndLogin("customs-owner","PRODUCT_MATERIAL");
+        var input=product("CUSTOMS-P","合成父体","CUSTOMS-S","合成蓝色");
+        @SuppressWarnings("unchecked") var variant=(Map<String,Object>)((List<?>)input.get("variants")).getFirst();
+        variant.put("customs",customsProfile());
+        var created=objectMapper.readTree(mvc.perform(post("/api/v1/products").header("Authorization",bearer(token))
+            .contentType(MediaType.APPLICATION_JSON).content(json(input))).andExpect(status().isOk())
+            .andExpect(jsonPath("$.variants[0].customs.nameEn").value("Synthetic textile pouch"))
+            .andExpect(jsonPath("$.variants[0].customs.version").value(1)).andReturn().getResponse().getContentAsString());
+        String id=created.path("id").asText(), sku=created.at("/variants/0/id").asText();
+        mvc.perform(get("/api/v1/product-customs").param("q","CUSTOMS-S").param("state","DRAFT").header("Authorization",bearer(token)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(1)).andExpect(jsonPath("$.items[0].skuName").value("合成蓝色 款"));
+        var profile=customsProfile();profile.put("version",1);profile.put("nameEn","Updated synthetic pouch");
+        mvc.perform(put("/api/v1/product-customs/"+sku).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(profile)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.version").value(2));
+        mvc.perform(get("/api/v1/products/"+id).header("Authorization",bearer(token)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.variants[0].customs.nameEn").value("Updated synthetic pouch"));
+        // A stale product editor cannot overwrite a newer compliance edit; product edits roll back too.
+        ((com.fasterxml.jackson.databind.node.ObjectNode)created).put("productName","不应保存的合成名称");
+        mvc.perform(put("/api/v1/products/"+id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(created.toString()))
+            .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CUSTOMS_VERSION_CONFLICT"));
+        assertThat(jdbc.queryForObject("SELECT product_name FROM product WHERE id=?",String.class,id)).isEqualTo("合成父体");
+        assertThat(jdbc.queryForObject("SELECT version FROM product WHERE id=?",Long.class,id)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE action='PRODUCT_CUSTOMS_UPDATE' AND resource_id=?",Integer.class,sku)).isEqualTo(2);
+    }
+
+    @Test
+    void customsFailureRollsBackProductAndDefaultCustomerProduct() throws Exception {
+        String token=createUserAndLogin("customs-rollback","ADMIN");
+        var input=product("CUSTOMS-BAD","合成父体","CUSTOMS-BAD-S","合成");
+        @SuppressWarnings("unchecked") var variant=(Map<String,Object>)((List<?>)input.get("variants")).getFirst();
+        var profile=customsProfile();profile.put("netWeightKg","2");profile.put("grossWeightKg","1");variant.put("customs",profile);
+        mvc.perform(post("/api/v1/products").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input)))
+            .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("CUSTOMS_WEIGHT_INVALID"));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product",Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM customer_product",Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE action IN ('PRODUCT_CREATE','CUSTOMER_PRODUCT_CREATE','PRODUCT_CUSTOMS_UPDATE')",Integer.class)).isZero();
+    }
+
+    @Test
+    void customsMissingDraftReviewValidationAndPermissions() throws Exception {
+        String token=createUserAndLogin("customs-validation","ADMIN");
+        var created=objectMapper.readTree(mvc.perform(post("/api/v1/products").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON)
+            .content(json(product("CUSTOMS-EMPTY","合成父体","CUSTOMS-EMPTY-S","合成")))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        String sku=created.at("/variants/0/id").asText(), path="/api/v1/product-customs/"+sku;
+        mvc.perform(get("/api/v1/product-customs").param("state","MISSING").header("Authorization",bearer(token)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(1));
+        for(var change:List.of(Map.of("usCode","123"),Map.of("originCountry","china"),Map.of("chinaCode","123456789A"),Map.of("netWeightKg","0"),Map.of("state","REVIEWED"))) {
+            var profile=customsProfile();profile.putAll(change);
+            mvc.perform(put(path).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(profile))).andExpect(status().isBadRequest());
+        }
+        var reviewed=customsProfile();reviewed.putAll(Map.of("state","REVIEWED","nameZh","合成袋","composition","合成材质","usage","合成收纳用途","originCountry","CN","unit","个","chinaCode","0000000000","declarationElements","合成申报要素，非真实归类"));
+        mvc.perform(put(path).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(reviewed))).andExpect(status().isOk());
+        String reader=createUserAndLogin("customs-reader","SELECTION");
+        mvc.perform(get("/api/v1/product-customs").param("state","REVIEWED").header("Authorization",bearer(reader))).andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(1));
+        mvc.perform(put(path).header("Authorization",bearer(reader)).contentType(MediaType.APPLICATION_JSON).content(json(reviewed))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/product-customs")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/product-customs").param("page","-1").header("Authorization",bearer(token))).andExpect(status().isBadRequest());
+        mvc.perform(put("/api/v1/product-customs/missing").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(customsProfile()))).andExpect(status().isNotFound());
+    }
+    private Map<String,Object> customsProfile() { return new java.util.HashMap<>(Map.of("nameEn","Synthetic textile pouch","state","DRAFT","version",0)); }
+
+    @Test
+    void createsEachSkuForCurrentDefaultCustomerWithoutInventingPrices() throws Exception {
+        String token = createUserAndLogin("default-customer-owner", "PRODUCT_MATERIAL");
+        String oldDefault = jdbc.queryForObject("SELECT default_customer_id FROM customer_preferences WHERE id=1", String.class);
+        String customer = java.util.UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO customer(id,name,status,created_by,updated_by) VALUES(?,'合成默认客户','ACTIVE','test','test')", customer);
+        jdbc.update("UPDATE customer_preferences SET default_customer_id=? WHERE id=1", customer);
+        try {
+            var input = product("AUTO-P", "合成父体", "AUTO-A", "合成蓝色");
+            @SuppressWarnings("unchecked")
+            var variants = (List<Map<String,Object>>) input.get("variants");
+            var second = new java.util.LinkedHashMap<>(variants.getFirst());
+            second.put("skuCode", "AUTO-B"); second.put("variantName", "合成红色款"); second.put("status", "ACTIVE");
+            variants.add(second);
+            JsonNode created = objectMapper.readTree(mvc.perform(post("/api/v1/products")
+                .header("Authorization", bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+            String id = created.path("id").asText();
+            assertThat(jdbc.queryForList("SELECT customer_id FROM customer_product WHERE product_id=?", String.class, id))
+                .containsExactly(customer, customer);
+            assertThat(jdbc.queryForList("SELECT product_name FROM customer_product WHERE product_id=?", String.class, id))
+                .containsExactlyInAnyOrder("合成蓝色 款", "合成红色款");
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM customer_product WHERE product_id=? AND supply_price IS NULL AND price_unit='套' AND customer_product_code='' AND requirements='' AND status='ACTIVE'", Integer.class, id)).isEqualTo(2);
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE action='CUSTOMER_PRODUCT_CREATE'", Integer.class)).isEqualTo(2);
+            // A second submission cannot duplicate associations; editing never transfers ownership.
+            mvc.perform(post("/api/v1/products").header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).content(json(input))).andExpect(status().isConflict());
+            jdbc.update("UPDATE customer_preferences SET default_customer_id=? WHERE id=1", oldDefault);
+            mvc.perform(put("/api/v1/products/" + id).header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).content(created.toString())).andExpect(status().isOk());
+            assertThat(jdbc.queryForList("SELECT customer_id FROM customer_product WHERE product_id=?", String.class, id))
+                .containsExactly(customer, customer);
+        } finally {
+            jdbc.update("UPDATE customer_preferences SET default_customer_id=? WHERE id=1", oldDefault);
+        }
+    }
+
+    @Test
+    void unavailableDefaultCustomerRollsBackProductSkusAndAudit() throws Exception {
+        String token = createUserAndLogin("default-rollback-owner", "PRODUCT_MATERIAL");
+        String customer = jdbc.queryForObject("SELECT default_customer_id FROM customer_preferences WHERE id=1", String.class);
+        try {
+            for (boolean missing : List.of(true, false)) {
+                jdbc.update("UPDATE customer_preferences SET default_customer_id=? WHERE id=1", missing ? null : customer);
+                jdbc.update("UPDATE customer SET status='DISABLED' WHERE id=?", customer);
+                mvc.perform(post("/api/v1/products").header("Authorization", bearer(token))
+                    .contentType(MediaType.APPLICATION_JSON).content(json(product("ROLL-P", "合成回滚产品", "ROLL-S", "合成"))))
+                    .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEFAULT_CUSTOMER_REQUIRED"));
+                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product", Integer.class)).isZero();
+                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product_variant", Integer.class)).isZero();
+                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM customer_product", Integer.class)).isZero();
+                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE action IN ('PRODUCT_CREATE','CUSTOMER_PRODUCT_CREATE')", Integer.class)).isZero();
+            }
+        } finally {
+            jdbc.update("UPDATE customer SET status='ACTIVE' WHERE id=?", customer);
+            jdbc.update("UPDATE customer_preferences SET default_customer_id=? WHERE id=1", customer);
+        }
     }
 
     @Test
@@ -398,6 +521,72 @@ class ProductControllerTest {
         try (var workbook = new XSSFWorkbook(new ByteArrayInputStream(exported))) {
             assertThat(workbook.getSheetAt(0).getPhysicalNumberOfRows()).isEqualTo(2);
         }
+    }
+
+    @Test
+    void parentImageUploadReplaceRemoveAndBatchPreserveSkuImages() throws Exception {
+        String token=createUserAndLogin("parent-image-owner","PRODUCT_MATERIAL");
+        String parent=uploadCatalogImage(token,"PRODUCT_MAIN"), sku=uploadCatalogImage(token,"SKU_MAIN");
+        var input=product("PARENT-IMAGE","合成父体","PARENT-IMAGE-S","合成子体");
+        input.put("imageAssetId",parent);
+        @SuppressWarnings("unchecked") var variant=(Map<String,Object>)((List<?>)input.get("variants")).getFirst();
+        variant.put("imageAssetId",sku);
+        var created=objectMapper.readTree(mvc.perform(post("/api/v1/products").header("Authorization",bearer(token))
+            .contentType(MediaType.APPLICATION_JSON).content(json(input))).andExpect(status().isOk())
+            .andExpect(jsonPath("$.imageAssetId").value(parent)).andExpect(jsonPath("$.variants[0].imageAssetId").value(sku))
+            .andReturn().getResponse().getContentAsString());
+        String id=created.path("id").asText(), variantId=created.at("/variants/0/id").asText();
+        mvc.perform(get("/api/v1/catalog-images/"+parent+"/original").header("Authorization",bearer(token))).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/products").header("Authorization",bearer(token))).andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].imageAssetId").value(parent));
+        mvc.perform(post("/api/v1/products/skus/batch").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON)
+            .content(json(Map.of("items",List.of(Map.of("productId",id,"variantId",variantId,"productVersion",0,
+                "variantVersion",0,"statusSelected",true,"status","ACTIVE")))))).andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].imageAssetId").value(parent));
+        var current=(com.fasterxml.jackson.databind.node.ObjectNode)objectMapper.readTree(mvc.perform(get("/api/v1/products/"+id)
+            .header("Authorization",bearer(token))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        String replacement=uploadCatalogImage(token,"PRODUCT_MAIN"); current.put("imageAssetId",replacement);
+        var updated=(com.fasterxml.jackson.databind.node.ObjectNode)objectMapper.readTree(mvc.perform(put("/api/v1/products/"+id)
+            .header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(current.toString()))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.imageAssetId").value(replacement))
+            .andExpect(jsonPath("$.variants[0].imageAssetId").value(sku)).andReturn().getResponse().getContentAsString());
+        assertThat(jdbc.queryForObject("SELECT status FROM catalog_image_asset WHERE id=?",String.class,parent)).isEqualTo("PENDING");
+        mvc.perform(put("/api/v1/products/"+id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(current.toString()))
+            .andExpect(status().isConflict());
+        updated.putNull("imageAssetId");
+        mvc.perform(put("/api/v1/products/"+id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(updated.toString()))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.imageAssetId").isEmpty()).andExpect(jsonPath("$.variants[0].imageAssetId").value(sku));
+        assertThat(jdbc.queryForObject("SELECT status FROM catalog_image_asset WHERE id=?",String.class,replacement)).isEqualTo("PENDING");
+    }
+
+    @Test
+    void parentImagesRejectWrongPurposeOtherOwnerAndUnauthorizedUpload() throws Exception {
+        String token=createUserAndLogin("parent-valid-owner","PRODUCT_MATERIAL");
+        String other=createUserAndLogin("parent-other-owner","PRODUCT_MATERIAL");
+        var input=product("BAD-PARENT","合成父体","BAD-PARENT-S","合成");
+        input.put("imageAssetId",uploadCatalogImage(token,"SKU_MAIN"));
+        mvc.perform(post("/api/v1/products").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input)))
+            .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("CATALOG_IMAGE_PURPOSE_INVALID"));
+        input.put("imageAssetId",uploadCatalogImage(other,"PRODUCT_MAIN"));
+        mvc.perform(post("/api/v1/products").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input)))
+            .andExpect(status().isConflict());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product WHERE product_code='BAD-PARENT'",Integer.class)).isZero();
+        String reader=createUserAndLogin("parent-reader","SELECTION");
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/v1/catalog-images")
+            .file(new org.springframework.mock.web.MockMultipartFile("file","invalid.png","image/png",new byte[]{1,2,3}))
+            .param("purpose","PRODUCT_MAIN").header("Authorization",bearer(reader))).andExpect(status().isForbidden());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/v1/catalog-images")
+            .file(new org.springframework.mock.web.MockMultipartFile("file","invalid.png","image/png",new byte[]{1,2,3}))
+            .param("purpose","PRODUCT_MAIN").header("Authorization",bearer(token))).andExpect(status().isBadRequest());
+    }
+
+    private String uploadCatalogImage(String token,String purpose) throws Exception {
+        var bytes=new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(2,2,java.awt.image.BufferedImage.TYPE_INT_RGB),"png",bytes);
+        return objectMapper.readTree(mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/v1/catalog-images")
+            .file(new org.springframework.mock.web.MockMultipartFile("file","synthetic.png","image/png",bytes.toByteArray()))
+            .param("purpose",purpose).header("Authorization",bearer(token))).andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString()).path("id").asText();
     }
 
     private String createUserAndLogin(String loginName, String role) throws Exception {

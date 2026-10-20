@@ -1,7 +1,7 @@
 import { ApiError, getSessionToken, SESSION_EXPIRED_EVENT } from './client'
 import { runtimeConfig } from '@/config/runtime'
 
-export type CatalogImagePurpose = 'SKU_MAIN' | 'SUPPLIER_QR' | 'MATERIAL_IMAGE'
+export type CatalogImagePurpose = 'PRODUCT_MAIN' | 'SKU_MAIN' | 'SUPPLIER_QR' | 'MATERIAL_IMAGE'
 export interface CatalogImageReceipt { id: string; purpose: CatalogImagePurpose; sourceFileName: string; mediaType: string; byteSize: number; width: number; height: number; sha256: string }
 export interface SkuDocument { id: string; kind: 'MANUAL' | 'LABEL'; fileName: string; byteSize: number; uploadedAt: string }
 function documentPath(productId: string, variantId: string) { return `/v1/products/${encodeURIComponent(productId)}/skus/${encodeURIComponent(variantId)}/documents` }

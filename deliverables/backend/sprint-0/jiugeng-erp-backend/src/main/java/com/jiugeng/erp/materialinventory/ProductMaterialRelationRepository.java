@@ -35,11 +35,11 @@ class ProductMaterialRelationRepository {
     }
 
     boolean activeProduct(String id) {
-        return count("SELECT COUNT(*) FROM product WHERE id = :id AND status = 'ACTIVE'", id);
+        return count("SELECT COUNT(*) FROM product WHERE id = :id AND status = 'ACTIVE' AND deleted_at IS NULL", id);
     }
 
     boolean activeVariantInProduct(String variantId, String productId) {
-        return jdbc.sql("SELECT COUNT(*) FROM product_variant WHERE id = :id AND product_id = :productId AND status = 'ACTIVE'")
+        return jdbc.sql("SELECT COUNT(*) FROM product_variant WHERE id = :id AND product_id = :productId AND status = 'ACTIVE' AND deleted_at IS NULL")
                 .param("id", variantId).param("productId", productId).query(Integer.class).single() > 0;
     }
 
@@ -48,7 +48,7 @@ class ProductMaterialRelationRepository {
     }
 
     List<String> activeVariantIds(String productId) {
-        return jdbc.sql("SELECT id FROM product_variant WHERE product_id = :productId AND status = 'ACTIVE' ORDER BY sku_code_normalized")
+        return jdbc.sql("SELECT id FROM product_variant WHERE product_id = :productId AND status = 'ACTIVE' AND deleted_at IS NULL ORDER BY sku_code_normalized")
                 .param("productId", productId).query(String.class).list();
     }
 

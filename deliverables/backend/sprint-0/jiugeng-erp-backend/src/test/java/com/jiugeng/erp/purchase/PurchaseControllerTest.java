@@ -1,4 +1,5 @@
 package com.jiugeng.erp.purchase;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -62,6 +63,16 @@ class PurchaseControllerTest {
 
     @Test void productReceiptCompletesWithoutInventorySideEffectAndOverReceiptIsRejected() throws Exception {
         String token=login("product-buyer","PRODUCT_MATERIAL"); JsonNode order=createOrder(token,"PRODUCT",variantId,"2","18"); String id=order.get("id").asText();
+        String productId=jdbc.queryForObject("SELECT product_id FROM product_variant WHERE id=?",String.class,variantId);
+        mvc.perform(delete("/api/v1/products/"+productId).param("version","0").header("Authorization",bearer(token))).andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/products/"+productId).header("Authorization",bearer(token))).andExpect(status().isNotFound());
+        var payload=Map.of("orderType","PRODUCT","supplierId",supplierId,"currency","CNY","version",0,
+            "lines",List.of(Map.of("itemId",variantId,"quantity",2,"unitPrice",18)));
+        mvc.perform(post("/api/v1/purchases/orders").header("Authorization",bearer(token))
+            .contentType(MediaType.APPLICATION_JSON).content(json(payload))).andExpect(status().isConflict());
+        order=objectMapper.readTree(mvc.perform(put("/api/v1/purchases/orders/"+id).header("Authorization",bearer(token))
+            .contentType(MediaType.APPLICATION_JSON).content(json(payload))).andExpect(status().isOk())
+            .andExpect(jsonPath("$.lines[0].itemName").value("采购SKU")).andReturn().getResponse().getContentAsString());
         String submitted=mvc.perform(post("/api/v1/purchases/orders/{id}/submit",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("version",order.get("version").asLong())))).andReturn().getResponse().getContentAsString();
         String lineId=order.at("/lines/0/id").asText();
         mvc.perform(post("/api/v1/purchases/orders/{id}/receipts",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("requestId","PRODUCT-OVER","receivedAt","2026-10-16T08:00:00Z","lines",List.of(Map.of("orderLineId",lineId,"quantity",3))))))

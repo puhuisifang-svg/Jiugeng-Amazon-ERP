@@ -2,7 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { createProduct, skus } = vi.hoisted(() => ({ createProduct: vi.fn(), skus: vi.fn() }))
-const product = { id: 'p1', productCode: 'P-1', productName: '测试产品', productType: '家居', status: 'ACTIVE', version: 0, skuCount: 1, updatedAt: '2026-10-15', variants: [{ id: 'v1', skuCode: 'SKU-1', variantName: '标准款', status: 'ACTIVE', version: 0, imageUrl: 'https://images.example.com/sku-1.png', attributes: [], suppliers: [], materials: [] }] }
+const product: import('@/api/domain').ProductDetailDto = { nameZh: '测试产品', supplierDetailsAvailable: true, id: 'p1', productCode: 'P-1', productName: '测试产品', productType: '家居', status: 'ACTIVE', version: 0, skuCount: 1, updatedAt: '2026-10-15', variants: [{ id: 'v1', skuCode: 'SKU-1', variantName: '标准款', status: 'ACTIVE', version: 0, imageUrl: 'https://images.example.com/sku-1.png', attributes: [], suppliers: [], materials: [] }] }
 
 vi.mock('@/config/runtime', () => ({ runtimeConfig: { authMode: 'password' } }))
 vi.mock('@/state/session', () => ({ session: { user: { value: { id: 'user-1' } }, canAccess: () => true } }))
@@ -14,6 +14,7 @@ vi.mock('@/api/domain', () => ({
     product: vi.fn(async () => product),
     createProduct,
     updateProduct: vi.fn(),
+    deleteProduct: vi.fn(), deleteSku: vi.fn(),
     batchUpdateSkus: vi.fn(),
     exportSkus: vi.fn(),
     productHistory: vi.fn(async () => []),
@@ -30,6 +31,18 @@ import ProductForm from '@/components/ProductForm.vue'
 const RouterLink = { props: ['to'], template: '<a :href="to"><slot /></a>' }
 
 describe('ProductsView', () => {
+  it('shows parent thumbnail, opens its preview and preserves it in the parent editor', async () => {
+    vi.mocked(domainApi.products).mockResolvedValueOnce({ items: [{ ...product, imageAssetId: 'parent-asset' }], mockData: false } as Awaited<ReturnType<typeof domainApi.products>>)
+    const wrapper = mount(ProductsView, { global: { stubs: { RouterLink, AuthenticatedCatalogImage: true } } })
+    await flushPromises()
+    await wrapper.get('[aria-label="查看父体 测试产品 图片"]').trigger('click')
+    expect(wrapper.get('[aria-label="测试产品图片预览"]').get('authenticated-catalog-image-stub').attributes('imageid')).toBe('parent-asset')
+    await wrapper.get('[aria-label="关闭图片预览"]').trigger('click')
+    vi.mocked(domainApi.product).mockResolvedValueOnce({ ...product, imageAssetId: 'parent-asset' } as Awaited<ReturnType<typeof domainApi.product>>)
+    await wrapper.findAll('button').find(b => b.text() === '编辑父体')!.trigger('click'); await flushPromises()
+    expect(wrapper.findComponent(ProductForm).props('initial')).toMatchObject({ imageAssetId: 'parent-asset' })
+    wrapper.unmount()
+  })
   it('opens a product image at full size and closes the preview', async () => {
     const wrapper = mount(ProductsView, { global: { stubs: { RouterLink } } })
     await flushPromises()
@@ -42,10 +55,36 @@ describe('ProductsView', () => {
   })
   beforeEach(() => {
     localStorage.clear()
+    HTMLDialogElement.prototype.showModal = function () { this.open = true }
+    vi.mocked(domainApi.deleteProduct).mockReset().mockResolvedValue(undefined)
+    vi.mocked(domainApi.deleteSku).mockReset().mockResolvedValue(undefined)
     skus.mockReset().mockResolvedValue({ items: [{ productId: 'p1', productCode: 'P-1', productName: '测试产品', productType: '家居', productStatus: 'ACTIVE', businessAvailable: true, updatedAt: '2026-10-15', variant: product.variants[0] }], totalCount: 1, page: 0, size: 20 })
     createProduct.mockReset().mockResolvedValue({ item: product, mockData: false })
   })
 
+  it('requires parent and SKU confirmation and retains rejection reasons', async () => {
+    const wrapper = mount(ProductsView, { global: { stubs: { RouterLink } } })
+    await flushPromises()
+    await wrapper.findAll('button').find(b => b.text() === '删除父体')!.trigger('click')
+    expect(domainApi.deleteProduct).not.toHaveBeenCalled()
+    expect(wrapper.get('dialog').text()).toContain('全部 SKU')
+    expect(wrapper.get('dialog').text()).toContain('采用逻辑删除')
+    expect(wrapper.get('dialog').text()).toContain('保留图片、资料和历史单据')
+    expect(wrapper.get('dialog').text()).not.toContain('存在发货、发票、采购或收货记录时将拒绝删除')
+    await wrapper.get('dialog .secondary-button').trigger('click')
+    expect(wrapper.find('dialog').exists()).toBe(false)
+    await wrapper.get('.parent-toggle').trigger('click')
+    await wrapper.findAll('button').find(b => b.text() === '删除 SKU')!.trigger('click')
+    vi.mocked(domainApi.deleteSku).mockRejectedValueOnce(new Error('存在历史发货记录'))
+    await wrapper.get('dialog .danger-button').trigger('click'); await flushPromises()
+    expect(domainApi.deleteSku).toHaveBeenCalledWith('p1', 'v1', 0, 0)
+    expect(wrapper.get('dialog [role="alert"]').text()).toBe('存在历史发货记录')
+    await wrapper.get('dialog .secondary-button').trigger('click')
+    await wrapper.findAll('button').find(b => b.text() === '删除父体')!.trigger('click')
+    await wrapper.get('dialog .danger-button').trigger('click'); await flushPromises()
+    expect(domainApi.deleteProduct).toHaveBeenCalledWith('p1', 0)
+    expect(wrapper.find('dialog').exists()).toBe(false); wrapper.unmount()
+  })
   it('renders Sellfox-style filters, toolbar and the SKU-first table', async () => {
     const wrapper = mount(ProductsView, { global: { stubs: { RouterLink } } })
     await flushPromises()

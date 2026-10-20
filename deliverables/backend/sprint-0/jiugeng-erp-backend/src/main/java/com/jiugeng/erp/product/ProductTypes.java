@@ -18,17 +18,17 @@ final class ProductTypes {
             BigDecimal packageLengthCm,BigDecimal packageWidthCm,BigDecimal packageHeightCm,BigDecimal packageWeight,
             String packageWeightUnit,BigDecimal packageWeightGrams,VariantStatus status,String imageAssetId,String imageUrl,
             long version,List<AttributeView> attributes,List<SupplierAssignment> suppliers,
-            List<MaterialAssignment> materials){}
+            List<MaterialAssignment> materials,CustomsProfile customs){}
     record ProductView(String id,String productCode,String productName,String nameZh,String nameEn,String brand,
             String internalCategory,String productType,String description,ProductStatus status,long version,
-            List<VariantView> variants,int skuCount,boolean supplierDetailsAvailable,Instant createdAt,Instant updatedAt){}
+            List<VariantView> variants,int skuCount,boolean supplierDetailsAvailable,Instant createdAt,Instant updatedAt,String imageAssetId){}
     record VariantInput(String id,String skuCode,String variantName,String itemDimensions,String packageDimensions,
             BigDecimal itemLengthCm,BigDecimal itemWidthCm,BigDecimal itemHeightCm,
             BigDecimal packageLengthCm,BigDecimal packageWidthCm,BigDecimal packageHeightCm,
             BigDecimal packageWeightGrams,VariantStatus status,String imageAssetId,String imageUrl,Long version,
             List<SupplierAssignment> suppliers,List<MaterialAssignment> materials){}
     record ProductInput(String productCode,String productName,String productType,String description,
-            ProductStatus status,Long version,List<VariantInput> variants){}
+            ProductStatus status,Long version,List<VariantInput> variants,String imageAssetId){}
     record SkuListItem(String productId,String productCode,String productName,ProductStatus productStatus,
             String productType,VariantView variant,boolean businessAvailable,Instant updatedAt){}
     record SkuPage(List<SkuListItem> items,long totalCount,int page,int size){}

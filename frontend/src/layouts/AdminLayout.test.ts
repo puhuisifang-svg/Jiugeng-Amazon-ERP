@@ -29,6 +29,17 @@ async function setup(path = '/home', allowed = ref<string[] | null>(null)) {
 }
 
 describe('horizontal navigation shell', () => {
+  it('groups customer information and products under permission-gated customer management', async () => {
+    const allowed = ref<string[] | null>(['customers.read'])
+    const { wrapper } = await setup('/customers/info', allowed)
+    expect(wrapper.get('.page-heading__trail').text()).toBe('客户/客户管理/客户信息')
+    await wrapper.get('[data-domain="客户"]').trigger('click')
+    expect(wrapper.get('.mega-panel').text()).toContain('客户管理')
+    expect(wrapper.get('a[href="/customers/products"]').text()).toBe('客户商品')
+    expect(wrapper.get('a[href="/customers/invoices"]').text()).toBe('发票管理')
+    allowed.value = []; await nextTick()
+    expect(wrapper.find('[data-domain="客户"]').exists()).toBe(false)
+  })
   it('groups shipment management and statistics under shipping with permission gating', async () => {
     const allowed = ref<string[] | null>(['dashboard.read', 'dashboard.shipments.manage'])
     const { wrapper } = await setup('/shipping/statistics', allowed)

@@ -2,12 +2,15 @@ import { ApiError, SESSION_EXPIRED_EVENT, SESSION_TOKEN_KEY, apiRequest, assertS
 import type { CandidateDetailDto, InventoryBalanceDto, MaterialDto, ProductDto, SelectionCandidateDto, SyntheticList, WatchEventDto, WatchStoreDto } from './resources'
 import { runtimeConfig } from '@/config/runtime'
 
+import type { CustomsProfile } from './customs'
+
 export type ProductStatus = 'DRAFT' | 'ACTIVE' | 'DISABLED'
 export type VariantStatus = 'DRAFT' | 'ACTIVE' | 'DISABLED'
 export interface VariantAttributeDto { attributeCode: string; attributeValue: string; displayOrder: number }
 export interface SupplierAssignmentDto { supplierId: string; purchaseUrl?: string | undefined; remark?: string | undefined; primary: boolean }
 export interface MaterialAssignmentDto { materialId: string; standardQuantity: number; unit: string; lossRate: number; remark?: string | undefined; enabled: boolean }
 export interface ProductVariantDto {
+  customs?: CustomsProfile | null | undefined
   id?: string
   skuCode: string
   variantName: string
@@ -34,6 +37,7 @@ export interface ProductVariantDto {
   materials: MaterialAssignmentDto[]
 }
 export interface ProductVariantInput {
+  customs?: CustomsProfile | null | undefined
   id?: string | undefined; skuCode: string; variantName: string; itemDimensions?: string | undefined; packageDimensions?: string | undefined
   itemLengthCm?: number | undefined; itemWidthCm?: number | undefined; itemHeightCm?: number | undefined
   packageLengthCm?: number | undefined; packageWidthCm?: number | undefined; packageHeightCm?: number | undefined
@@ -45,6 +49,7 @@ export interface SkuPageDto { items: SkuListItemDto[]; totalCount: number; page:
 export interface ProductHistoryDto { id: string; action: string; actorLoginName: string; actorDisplayName?: string; detail?: string; occurredAt: string }
 export interface BatchVariantPatchInput { productId: string; variantId: string; productVersion: number; variantVersion: number; status?: VariantStatus | undefined; statusSelected: boolean; itemLengthCm?: number | undefined; itemWidthCm?: number | undefined; itemHeightCm?: number | undefined; itemDimensionsSelected: boolean; packageLengthCm?: number | undefined; packageWidthCm?: number | undefined; packageHeightCm?: number | undefined; packageDimensionsSelected: boolean; packageWeightGrams?: number | undefined; packageWeightSelected: boolean }
 export interface ProductDetailDto {
+  imageAssetId?: string | null | undefined
   id: string
   productCode: string
   productName: string
@@ -63,6 +68,7 @@ export interface ProductDetailDto {
   updatedAt?: string
 }
 export interface ProductInput {
+  imageAssetId?: string | null | undefined
   productCode: string
   productName: string
   productType?: string | undefined
@@ -306,6 +312,8 @@ export const domainApi = {
     if (runtimeConfig.authMode === 'mock') throw new Error('Mock products cannot be edited')
     return apiRequest<ProductDetailDto>(`/v1/products/${id}`, { method: 'PUT', body: JSON.stringify(input) })
   },
+  deleteProduct: (id: string, version: number) => apiRequest<void>(`/v1/products/${encodeURIComponent(id)}?version=${version}`, { method: 'DELETE' }),
+  deleteSku: (productId: string, variantId: string, productVersion: number, version: number) => apiRequest<void>(`/v1/products/${encodeURIComponent(productId)}/skus/${encodeURIComponent(variantId)}?productVersion=${productVersion}&version=${version}`, { method: 'DELETE' }),
   disableProduct: async (id: string) => {
     if (runtimeConfig.authMode === 'mock') throw new Error('Mock products cannot be disabled')
     const current = await product(id)

@@ -15,6 +15,8 @@ const definitions = [
   { title: '工作台', icon: '⌂', groups: ['工作台', '工作台维护'] },
   { title: '商品', icon: '◇', groups: ['产品管理'] },
   { title: '发货', icon: '↗', groups: ['发货管理'] },
+  { title: '客户', icon: '客', groups: ['客户管理'] },
+  { title: '合规', icon: '✓', groups: ['报关管理'] },
   { title: '选品', icon: '☆', groups: ['选品管理'] },
   { title: '设置', icon: '⚙', groups: ['系统管理'] },
 ]

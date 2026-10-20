@@ -42,6 +42,7 @@ class ImportControllerTest {
         jdbc.update("DELETE FROM import_issue"); jdbc.update("DELETE FROM import_batch");
         jdbc.update("DELETE FROM inventory_transaction"); jdbc.update("DELETE FROM inventory_balance");
         jdbc.update("DELETE FROM product_auxiliary_material"); jdbc.update("DELETE FROM variant_attribute");
+        jdbc.update("DELETE FROM customer_product");
         jdbc.update("DELETE FROM product_variant"); jdbc.update("DELETE FROM product"); jdbc.update("DELETE FROM auxiliary_material");
         jdbc.update("DELETE FROM iam_password_reset_challenge"); jdbc.update("DELETE FROM audit_event");
         jdbc.update("DELETE FROM iam_session"); jdbc.update("DELETE FROM iam_user");

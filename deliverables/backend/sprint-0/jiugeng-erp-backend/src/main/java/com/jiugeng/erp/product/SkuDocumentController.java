@@ -51,6 +51,8 @@ class SkuDocumentController {
     Document upload(@PathVariable String productId, @PathVariable String variantId, @RequestParam Kind kind,
                     @RequestParam MultipartFile file, @AuthenticationPrincipal AuthenticatedActor actor) throws IOException {
         requireVariant(productId, variantId);
+        if(jdbc.queryForObject("SELECT COUNT(*) FROM product_variant WHERE id=? AND deleted_at IS NULL",Integer.class,variantId)!=1)
+            throw new ProductException(404,"SKU_NOT_FOUND","SKU 已删除，不能上传新资料");
         if (file.isEmpty() || file.getSize() > 10 * 1024 * 1024)
             throw new ProductException(400, "SKU_DOCUMENT_SIZE_INVALID", "文件不能为空，且不能超过 10 MB");
         String name = file.getOriginalFilename();

@@ -27,6 +27,10 @@ export const appRoutes: RouteRecordRaw[] = [
     component: AdminLayout,
     redirect: '/home',
     children: [
+      { path: 'compliance/customs', name: 'customs-management', component: () => import('@/views/CustomsManagementView.vue'), meta: { title: '报关管理', group: '报关管理', capabilities: ['products.read'], breadcrumbs: [{ title: '合规' }, { title: '报关管理' }] } },
+      { path: 'customers/info', name: 'customer-info', component: () => import('@/views/CustomerManagementView.vue'), props: { kind: 'info' }, meta: { title: '客户信息', group: '客户管理', capabilities: ['customers.read'], breadcrumbs: [{ title: '客户' }, { title: '客户管理' }, { title: '客户信息' }] } },
+      { path: 'customers/products', name: 'customer-products', component: () => import('@/views/CustomerManagementView.vue'), props: { kind: 'products' }, meta: { title: '客户商品', group: '客户管理', capabilities: ['customers.read'], breadcrumbs: [{ title: '客户' }, { title: '客户管理' }, { title: '客户商品' }] } },
+      { path: 'customers/invoices', name: 'customer-invoices', component: () => import('@/views/InvoiceManagementView.vue'), meta: { title: '发票管理', group: '客户管理', capabilities: ['customers.read'], breadcrumbs: [{ title: '客户' }, { title: '客户管理' }, { title: '发票管理' }] } },
       { path: 'product-development', name: 'product-development', component: () => import('@/views/ProductDevelopmentView.vue'), meta: { title: '新品开发', group: '产品管理', icon: '新', capabilities: ['products.read'] } },
       { path: 'product-development/new', name: 'product-development-new', component: () => import('@/views/ProductDevelopmentView.vue'), meta: { title: '添加新品需求', group: '产品管理', hidden: true, parentPath: '/product-development', capabilities: ['products.write'] } },
       { path: 'product-development/:id', name: 'product-development-detail', component: () => import('@/views/ProductDevelopmentView.vue'), meta: { title: '新品开发详情', group: '产品管理', hidden: true, parentPath: '/product-development', capabilities: ['products.read'] } },

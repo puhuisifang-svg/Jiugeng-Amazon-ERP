@@ -14,11 +14,11 @@ export function wrapExportText(context: Pick<CanvasRenderingContext2D, 'measureT
   }
   return lines
 }
-async function productImage(productId: string): Promise<HTMLImageElement | undefined> {
+async function productImage(productId: string, variantId: string): Promise<HTMLImageElement | undefined> {
   let url = ''; let owned = false
   try {
     const product = await domainApi.product(productId)
-    const variant = product.variants.find(v => v.imageAssetId || v.imageUrl)
+    const variant = product.variants.find(v => v.id === variantId)
     if (!variant) return undefined
     if (variant.imageAssetId) { url = URL.createObjectURL(await catalogApi.imageBlob(variant.imageAssetId, 'original')); owned = true }
     else url = variant.imageUrl ?? ''
@@ -34,16 +34,18 @@ async function productImage(productId: string): Promise<HTMLImageElement | undef
 }
 export async function createShipmentImage(items: TodayShipment[], date: string): Promise<{ blob: Blob; missingImages: number }> {
   if (!items.length) throw new Error('没有可导出的发货记录。')
+  if (items.some(item => !item.variantId || !item.customerProduct)) throw new Error('存在未绑定客户商品的历史记录，请先编辑补选后再导出。')
   await document.fonts?.ready
   const canvas = document.createElement('canvas'); const context = canvas.getContext('2d')
   if (!context) throw new Error('当前浏览器不支持图片导出。')
   const imageCache = new Map<string, Promise<HTMLImageElement | undefined>>()
   const rows = await Promise.all(items.map(async item => {
-    if (!imageCache.has(item.productId)) imageCache.set(item.productId, productImage(item.productId))
-    const image = await imageCache.get(item.productId)
-    context.font = '26px sans-serif'
-    const name = wrapExportText(context, item.productName, 400)
-    const remark = wrapExportText(context, item.remark || '—', 580)
+    const imageKey = `${item.productId}:${item.variantId}`
+    if (!imageCache.has(imageKey)) imageCache.set(imageKey, productImage(item.productId, item.variantId!))
+    const image = await imageCache.get(imageKey)
+    context.font = 'bold 26px sans-serif'
+    const name = wrapExportText(context, `${item.productName}\n客户：${item.customerProduct?.customerName ?? ''}\n客户编码：${item.customerProduct?.customerProductCode || '未填'}`, 400)
+    const remark = wrapExportText(context, [item.remark, item.customerProduct?.requirements ? `特殊需求：${item.customerProduct.requirements}` : ''].filter(Boolean).join('\n') || '—', 580)
     return { item, image, name, remark, height: Math.max(160, Math.max(name.length, remark.length) * 36 + 40) }
   }))
   canvas.width = 1600; canvas.height = 240 + rows.reduce((sum, row) => sum + row.height, 0)
@@ -60,11 +62,12 @@ export async function createShipmentImage(items: TodayShipment[], date: string):
   let y = 200
   for (const [index, row] of rows.entries()) {
     if (index % 2 === 1) { context.fillStyle = '#f8fafc'; context.fillRect(40, y, 1520, row.height) }
-    context.fillStyle = '#172033'; context.font = '26px sans-serif'
+    context.fillStyle = '#172033'; context.font = 'bold 26px sans-serif'
     const center = y + row.height / 2
     row.name.forEach((line, i) => context.fillText(line, 220, center + (i - (row.name.length - 1) / 2) * 36))
-    row.remark.forEach((line, i) => context.fillText(line, 960, center + (i - (row.remark.length - 1) / 2) * 36))
     context.fillText(`${row.item.quantity} 套`, 650, center); context.fillText(`${row.item.boxCount} 箱`, 800, center)
+    context.fillStyle = '#dc2626'
+    row.remark.forEach((line, i) => context.fillText(line, 960, center + (i - (row.remark.length - 1) / 2) * 36))
     if (row.image) {
       const scale = Math.min(130 / row.image.naturalWidth, 130 / row.image.naturalHeight)
       const width = row.image.naturalWidth * scale; const height = row.image.naturalHeight * scale

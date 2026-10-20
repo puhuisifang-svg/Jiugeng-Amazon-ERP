@@ -26,7 +26,7 @@ function date(value: string) { return new Intl.DateTimeFormat('en-CA', { timeZon
         name="today-dispatch"
         :aria-label="`选择发货：${item.productName}`"
         :checked="selected"
-        :disabled="disabled"
+        :disabled="disabled || !item.variantId || !item.customerProduct"
         @change="emit('select', item.id)"
       >
     </td>
@@ -40,6 +40,7 @@ function date(value: string) { return new Intl.DateTimeFormat('en-CA', { timeZon
       <ShipmentProductImage
         v-if="product"
         :product-id="item.productId"
+        :variant-id="item.variantId"
         :product="product"
         :alt="item.productName"
       /><span
@@ -48,10 +49,7 @@ function date(value: string) { return new Intl.DateTimeFormat('en-CA', { timeZon
       >{{ error ? '图片不可用' : '加载中…' }}</span>
     </td>
     <td class="shipment-product-cell">
-      <strong>{{ item.productName }}</strong><small
-        v-for="variant in product?.variants"
-        :key="variant.id || variant.skuCode"
-      >SKU：{{ variant.skuCode }}</small><small v-if="!product?.variants.length">产品编号：{{ item.productCode }}</small><small
+      <strong>{{ item.productName }}</strong><small v-if="item.customerProduct">客户：{{ item.customerProduct.customerName }} · 客户编码：{{ item.customerProduct.customerProductCode || '未填' }}</small><small v-else>历史记录 · 未绑定客户商品</small><small>{{ item.variantId ? `SKU：${item.productCode}` : '历史父体记录 · 待补选 SKU' }}</small><small
         v-if="error"
         role="alert"
       >{{ error }}</small>
@@ -63,10 +61,11 @@ function date(value: string) { return new Intl.DateTimeFormat('en-CA', { timeZon
       {{ item.boxCount }} <small>箱</small>
     </td>
     <td class="shipment-remark">
-      {{ item.remark || '—' }}
+      {{ item.remark || '—' }}<small v-if="item.customerProduct?.requirements">特殊需求：{{ item.customerProduct.requirements }}</small>
     </td>
     <td>
       <ShipmentFiles
+        :key="`${item.id}:${item.variantId}:${item.customerProduct?.id}:label`"
         :shipment-id="item.id"
         :scope="scope"
         kind="LABEL"
@@ -74,6 +73,7 @@ function date(value: string) { return new Intl.DateTimeFormat('en-CA', { timeZon
     </td>
     <td>
       <ShipmentFiles
+        :key="`${item.id}:${item.variantId}:${item.customerProduct?.id}:carton`"
         :shipment-id="item.id"
         :scope="scope"
         kind="CARTON_LABEL"
@@ -83,6 +83,7 @@ function date(value: string) { return new Intl.DateTimeFormat('en-CA', { timeZon
       <ShipmentManuals
         v-if="product"
         :product="product"
+        :variant-id="item.variantId"
       /><span
         v-else
         class="muted"

@@ -16,7 +16,16 @@ import org.springframework.stereotype.Repository;
 @Repository
 class DashboardRepository {
     private final JdbcClient jdbc;
-    DashboardRepository(JdbcClient jdbc) { this.jdbc = jdbc; }
+    private final com.fasterxml.jackson.databind.ObjectMapper mapper;
+    DashboardRepository(JdbcClient jdbc, com.fasterxml.jackson.databind.ObjectMapper mapper) { this.jdbc = jdbc; this.mapper=mapper; }
+    String customerJson(com.jiugeng.erp.customer.CustomerProductLookup.ShippingProduct value) {
+        if(value==null)return null;
+        try{return mapper.writeValueAsString(value);}catch(com.fasterxml.jackson.core.JsonProcessingException e){throw new IllegalStateException(e);}
+    }
+    com.jiugeng.erp.customer.CustomerProductLookup.ShippingProduct customerSnapshot(String value) {
+        if(value==null)return null;
+        try{return mapper.readValue(value,com.jiugeng.erp.customer.CustomerProductLookup.ShippingProduct.class);}catch(com.fasterxml.jackson.core.JsonProcessingException e){throw new IllegalStateException(e);}
+    }
 
     void insertImage(ImageAsset image) {
         jdbc.sql("""
@@ -196,11 +205,11 @@ class DashboardRepository {
         jdbc.sql("""
                 INSERT INTO dashboard_today_shipment (id,ship_date,product_id,product_code_snapshot,
                     product_name_snapshot,image_asset_id,quantity,quantity_unit,box_count,remark,latest_ship_at,
-                    status,source_pending_shipment_id,created_by,updated_by)
+                    status,source_pending_shipment_id,created_by,updated_by,variant_id,customer_product_id,customer_snapshot)
                 VALUES (:id,:date,:productId,:code,:name,:image,:quantity,'SET',:boxes,:remark,:latest,'ACTIVE',
-                    :source,:actor,:actor)
+                    :source,:actor,:actor,:variant,:customerProduct,:customerSnapshot)
                 """).param("id",id).param("date",input.date()).param("productId",input.productId())
-                .param("code",productCode).param("name",productName).param("image",input.imageId())
+                .param("code",productCode).param("name",productName).param("image",input.imageId()).param("variant",input.variantId()).param("customerProduct",input.customerProductId()).param("customerSnapshot",customerJson(input.customerProduct()))
                 .param("quantity",input.quantity()).param("boxes",input.boxCount()).param("remark",input.remark())
                 .param("latest",input.latestShipAt()).param("source",sourcePendingId).param("actor",actorId).update();
     }
@@ -208,12 +217,12 @@ class DashboardRepository {
     int updateToday(String id, ShipmentInput input, String code, String name, long version, String actorId) {
         return jdbc.sql("""
                 UPDATE dashboard_today_shipment SET ship_date=:date,product_id=:productId,
-                    product_code_snapshot=:code,product_name_snapshot=:name,image_asset_id=:image,quantity=:quantity,
+                    product_code_snapshot=:code,product_name_snapshot=:name,image_asset_id=:image,quantity=:quantity,variant_id=:variant,customer_product_id=:customerProduct,customer_snapshot=:customerSnapshot,
                     box_count=:boxes,remark=:remark,latest_ship_at=:latest,updated_by=:actor,
                     updated_at=CURRENT_TIMESTAMP,version=version+1
                 WHERE id=:id AND version=:version AND status='ACTIVE'
                 """).param("date",input.date()).param("productId",input.productId()).param("code",code).param("name",name)
-                .param("image",input.imageId()).param("quantity",input.quantity()).param("boxes",input.boxCount())
+                .param("image",input.imageId()).param("quantity",input.quantity()).param("boxes",input.boxCount()).param("variant",input.variantId()).param("customerProduct",input.customerProductId()).param("customerSnapshot",customerJson(input.customerProduct()))
                 .param("remark",input.remark()).param("latest",input.latestShipAt()).param("actor",actorId)
                 .param("id",id).param("version",version).update();
     }
@@ -231,11 +240,11 @@ class DashboardRepository {
         jdbc.sql("""
                 INSERT INTO dashboard_pending_shipment (id,planned_ship_date,product_id,product_code_snapshot,
                     product_name_snapshot,image_asset_id,quantity,quantity_unit,box_count,remark,latest_ship_at,
-                    status,created_by,updated_by)
+                    status,created_by,updated_by,variant_id,customer_product_id,customer_snapshot)
                 VALUES (:id,:date,:productId,:code,:name,:image,:quantity,'SET',:boxes,:remark,:latest,'PENDING',
-                    :actor,:actor)
+                    :actor,:actor,:variant,:customerProduct,:customerSnapshot)
                 """).param("id",id).param("date",input.date()).param("productId",input.productId())
-                .param("code",productCode).param("name",productName).param("image",input.imageId())
+                .param("code",productCode).param("name",productName).param("image",input.imageId()).param("variant",input.variantId()).param("customerProduct",input.customerProductId()).param("customerSnapshot",customerJson(input.customerProduct()))
                 .param("quantity",input.quantity()).param("boxes",input.boxCount()).param("remark",input.remark())
                 .param("latest",input.latestShipAt()).param("actor",actorId).update();
     }
@@ -243,12 +252,12 @@ class DashboardRepository {
     int updatePendingShipment(String id, ShipmentInput input, String code, String name, long version, String actorId) {
         return jdbc.sql("""
                 UPDATE dashboard_pending_shipment SET planned_ship_date=:date,product_id=:productId,
-                    product_code_snapshot=:code,product_name_snapshot=:name,image_asset_id=:image,quantity=:quantity,
+                    product_code_snapshot=:code,product_name_snapshot=:name,image_asset_id=:image,quantity=:quantity,variant_id=:variant,customer_product_id=:customerProduct,customer_snapshot=:customerSnapshot,
                     box_count=:boxes,remark=:remark,latest_ship_at=:latest,updated_by=:actor,
                     updated_at=CURRENT_TIMESTAMP,version=version+1
                 WHERE id=:id AND version=:version AND status='PENDING'
                 """).param("date",input.date()).param("productId",input.productId()).param("code",code).param("name",name)
-                .param("image",input.imageId()).param("quantity",input.quantity()).param("boxes",input.boxCount())
+                .param("image",input.imageId()).param("quantity",input.quantity()).param("boxes",input.boxCount()).param("variant",input.variantId()).param("customerProduct",input.customerProductId()).param("customerSnapshot",customerJson(input.customerProduct()))
                 .param("remark",input.remark()).param("latest",input.latestShipAt()).param("actor",actorId)
                 .param("id",id).param("version",version).update();
     }
@@ -328,7 +337,7 @@ class DashboardRepository {
     private Query filters(String select, String dateColumn, String keyword, String status, LocalDate from, LocalDate to) {
         StringBuilder sql = new StringBuilder(select).append(" WHERE 1=1");
         Map<String,Object> params = new HashMap<>();
-        if (keyword != null) { sql.append(" AND (UPPER(product_code_snapshot) LIKE :keyword OR UPPER(product_name_snapshot) LIKE :keyword)"); params.put("keyword","%"+keyword.toUpperCase(java.util.Locale.ROOT)+"%"); }
+        if (keyword != null) { sql.append(" AND (UPPER(product_code_snapshot) LIKE :keyword OR UPPER(product_name_snapshot) LIKE :keyword OR UPPER(COALESCE(customer_snapshot,'')) LIKE :keyword OR UPPER(COALESCE(remark,'')) LIKE :keyword)"); params.put("keyword","%"+keyword.toUpperCase(java.util.Locale.ROOT)+"%"); }
         if (status != null) { sql.append(" AND status=:status"); params.put("status",status); }
         if (from != null) { sql.append(" AND ").append(dateColumn).append(">=:fromDate"); params.put("fromDate",from); }
         if (to != null) { sql.append(" AND ").append(dateColumn).append("<=:toDate"); params.put("toDate",to); }
@@ -354,14 +363,14 @@ class DashboardRepository {
             rs.getString("quantity_unit"),rs.getInt("box_count"),rs.getString("remark"),instant(rs,"latest_ship_at"),
             TodayStatus.valueOf(rs.getString("status")),rs.getString("source_pending_shipment_id"),rs.getLong("version"),
             rs.getString("created_by"),rs.getString("updated_by"),rs.getString("archived_by"),nullableInstant(rs,"archived_at"),
-            rs.getString("archive_reason"),instant(rs,"created_at"),instant(rs,"updated_at")); }
+            rs.getString("archive_reason"),instant(rs,"created_at"),instant(rs,"updated_at"),rs.getString("variant_id"),customerSnapshot(rs.getString("customer_snapshot"))); }
     private PendingShipment mapPendingShipment(ResultSet rs,int n)throws SQLException { return new PendingShipment(rs.getString("id"),
             rs.getDate("planned_ship_date").toLocalDate(),rs.getString("product_id"),rs.getString("product_code_snapshot"),
             rs.getString("product_name_snapshot"),rs.getString("image_asset_id"),rs.getInt("quantity"),
             rs.getString("quantity_unit"),rs.getInt("box_count"),rs.getString("remark"),instant(rs,"latest_ship_at"),
             PendingShipmentStatus.valueOf(rs.getString("status")),rs.getLong("version"),rs.getString("created_by"),
             rs.getString("updated_by"),rs.getString("archived_by"),nullableInstant(rs,"archived_at"),rs.getString("archive_reason"),
-            instant(rs,"created_at"),instant(rs,"updated_at")); }
+            instant(rs,"created_at"),instant(rs,"updated_at"),rs.getString("variant_id"),customerSnapshot(rs.getString("customer_snapshot"))); }
     private PendingProduct mapPendingProduct(ResultSet rs,int n)throws SQLException { return new PendingProduct(rs.getString("id"),
             rs.getString("product_name"),rs.getString("image_asset_id"),rs.getInt("expected_quantity"),
             rs.getString("quantity_unit"),rs.getString("remark"),rs.getDate("expected_completion_date").toLocalDate(),

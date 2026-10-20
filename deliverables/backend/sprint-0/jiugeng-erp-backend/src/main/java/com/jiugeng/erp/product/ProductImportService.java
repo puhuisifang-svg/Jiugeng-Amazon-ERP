@@ -34,6 +34,7 @@ class ProductImportService implements ProductImportGateway {
             if (!"导入模板".equals(row.sheet())) continue;
             String code = value(row, "product_code");
             requiredCode(errors, row, "product_code", code);
+            if(deletedCode("product","product_code_normalized",code)) errors.add(error(row,"product_code","PRODUCT_DELETED","该编码已删除并为历史单据保留，请使用新编码",code));
             required(errors, row, "product_name", value(row, "product_name"), 128);
             optional(errors, row, "product_type", value(row, "product_type"), 100);
             optional(errors, row, "description", value(row, "description"), 1000);
@@ -49,6 +50,7 @@ class ProductImportService implements ProductImportGateway {
         List<ImportRow> variants = rows.stream().filter(row -> "variants_导入模板".equals(row.sheet())).toList();
         for (ImportRow row : variants) {
             String sku = value(row, "sku_code"); String product = value(row, "product_code");
+            if(deletedCode("product_variant","sku_code_normalized",sku)) errors.add(error(row,"sku_code","SKU_DELETED","该 SKU 已删除并为历史单据保留，请使用新编码",sku));
             requiredCode(errors, row, "sku_code", sku); requiredCode(errors, row, "product_code", product);
             required(errors, row, "variant_name", value(row, "variant_name"), 128);
             optional(errors, row, "item_dimensions", value(row, "item_dimensions"), 200);
@@ -115,7 +117,7 @@ class ProductImportService implements ProductImportGateway {
     private void validateDatabaseReferences(List<ImportRow> rows, List<Error> errors) {
         for (ImportRow row : rows) {
             String productCode = normalize(value(row, "product_code"));
-            var found = jdbc.sql("SELECT id,status FROM product WHERE product_code_normalized=:code").param("code", productCode)
+            var found = jdbc.sql("SELECT id,status FROM product WHERE product_code_normalized=:code AND deleted_at IS NULL").param("code", productCode)
                     .query((rs, n) -> Map.entry(rs.getString(1), rs.getString(2))).optional();
             if (found.isEmpty() || "DISABLED".equals(found.get().getValue())) errors.add(error(row, "product_code",
                     "PRODUCT_REFERENCE_INVALID", "产品不存在或已停用", value(row, "product_code")));
@@ -123,6 +125,10 @@ class ProductImportService implements ProductImportGateway {
             if (existing != null && !existing.normalizedProductCode().equals(productCode)) errors.add(error(row,
                     "product_code", "SKU_PRODUCT_CONFLICT", "现有 SKU 属于其他产品", value(row, "product_code")));
         }
+    }
+
+    private boolean deletedCode(String table,String column,String code) {
+        return jdbc.sql("SELECT COUNT(*) FROM "+table+" WHERE "+column+"=:code AND deleted_at IS NOT NULL").param("code",normalize(code)).query(Long.class).single()>0;
     }
 
     private void validateWeight(List<Error> errors, ImportRow row) {

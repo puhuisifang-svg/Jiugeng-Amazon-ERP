@@ -22,18 +22,21 @@ class PurchaseRepository {
                 .orElseThrow(() -> new PurchaseException(409, "ACTIVE_SUPPLIER_REQUIRED", "采购单必须选择启用供应商"));
     }
 
-    ItemRef activeItem(OrderType type, String supplierId, String id) {
+    ItemRef activeItem(OrderType type, String supplierId, String id) { return item(type,supplierId,id,false); }
+    ItemRef existingItem(OrderType type,String supplierId,String id) { return item(type,supplierId,id,true); }
+    private ItemRef item(OrderType type, String supplierId, String id, boolean existing) {
         String sql = type == OrderType.PRODUCT ? """
                 SELECT v.id, v.sku_code AS code, v.variant_name AS name, '套' AS unit
                 FROM product_variant v JOIN product p ON p.id=v.product_id
                 JOIN product_variant_supplier link ON link.variant_id=v.id AND link.supplier_id=:supplierId
-                WHERE v.id=:id AND v.status='ACTIVE' AND p.status='ACTIVE'
+                WHERE v.id=:id AND v.status='ACTIVE' AND p.status='ACTIVE' AND p.deleted_at IS NULL AND v.deleted_at IS NULL
                 """ : """
                 SELECT m.id, m.material_code AS code, m.name, m.unit FROM auxiliary_material m
                 JOIN auxiliary_material_supplier link ON link.auxiliary_material_id=m.id AND link.supplier_id=:supplierId
                 WHERE m.id=:id AND m.status='ACTIVE'
                 """;
-        return jdbc.sql(sql).param("id", id).param("supplierId", supplierId).query((rs, row) -> new ItemRef(rs.getString("id"),
+        if(existing && type==OrderType.PRODUCT) sql=sql.replace(" AND p.deleted_at IS NULL AND v.deleted_at IS NULL","");
+        return jdbc.sql(sql+" FOR UPDATE").param("id", id).param("supplierId", supplierId).query((rs, row) -> new ItemRef(rs.getString("id"),
                 rs.getString("code"), rs.getString("name"), rs.getString("unit"))).optional()
                 .orElseThrow(() -> new PurchaseException(409, "SUPPLIER_ITEM_LINK_REQUIRED", "该供应商未关联所选商品或辅料"));
     }
@@ -46,7 +49,7 @@ class PurchaseRepository {
                 FROM product_variant_supplier link
                 JOIN product_variant v ON v.id=link.variant_id
                 JOIN product p ON p.id=v.product_id
-                WHERE link.supplier_id=:supplierId AND v.status='ACTIVE' AND p.status='ACTIVE'
+                WHERE link.supplier_id=:supplierId AND v.status='ACTIVE' AND p.status='ACTIVE' AND p.deleted_at IS NULL AND v.deleted_at IS NULL
                 ORDER BY primary_supplier DESC,v.sku_code
                 """ : """
                 SELECT m.id,m.material_code AS code,m.name,m.unit,

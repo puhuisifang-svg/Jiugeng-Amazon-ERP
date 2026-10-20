@@ -165,7 +165,7 @@ class MaterialImportService implements MaterialImportGateway {
         if (!CODE.matcher(sku).matches() || !CODE.matcher(material).matches()) return;
         var variant = jdbc.sql("""
                 SELECT v.id FROM product_variant v JOIN product p ON p.id=v.product_id
-                WHERE v.sku_code_normalized=:sku AND v.status='ACTIVE' AND p.status='ACTIVE'
+                WHERE v.sku_code_normalized=:sku AND v.status='ACTIVE' AND p.status='ACTIVE' AND p.deleted_at IS NULL AND v.deleted_at IS NULL
                 """).param("sku", normalize(sku)).query(String.class).optional();
         if (variant.isEmpty()) {
             errors.add(error(row, "sku_code", "SKU_REFERENCE_INVALID", "SKU 不存在、已停用或所属产品已停用", sku));
@@ -183,7 +183,7 @@ class MaterialImportService implements MaterialImportGateway {
         return jdbc.sql("""
                 SELECT p.id,v.id,m.id FROM product_variant v JOIN product p ON p.id=v.product_id
                 JOIN auxiliary_material m ON m.material_code_normalized=:material
-                WHERE v.sku_code_normalized=:sku AND v.status='ACTIVE' AND p.status='ACTIVE' AND m.status='ACTIVE'
+                WHERE v.sku_code_normalized=:sku AND v.status='ACTIVE' AND p.status='ACTIVE' AND p.deleted_at IS NULL AND v.deleted_at IS NULL AND m.status='ACTIVE'
                 """).param("sku", sku).param("material", material)
                 .query((rs, n) -> new Reference(rs.getString(1), rs.getString(2), rs.getString(3))).single();
     }

@@ -37,8 +37,9 @@ describe('shipment files and previews', () => {
   it('reads product manuals with SKU labels and uses original download API', async () => {
     const manual = { ...file, kind: 'MANUAL' as const, fileName: '说明书.pdf' }
     vi.mocked(catalogApi.documents).mockResolvedValue([manual])
-    const product = { id: 'p1', variants: [{ id: 'v1', skuCode: 'SKU-1' }] } as ProductDetailDto
-    const wrapper = mount(ShipmentManuals, { props: { product } }); await flushPromises()
+    const product = { id: 'p1', variants: [{ id: 'v2', skuCode: 'SKU-2' }, { id: 'v1', skuCode: 'SKU-1' }] } as ProductDetailDto
+    const wrapper = mount(ShipmentManuals, { props: { product, variantId: 'v1' } }); await flushPromises()
+    expect(catalogApi.documents).toHaveBeenCalledTimes(1)
     expect(catalogApi.documents).toHaveBeenCalledWith('p1', 'v1', 'MANUAL')
     expect(wrapper.text()).toContain('SKU-1 · 说明书.pdf')
     await wrapper.get('button').trigger('click'); await flushPromises()
@@ -46,12 +47,22 @@ describe('shipment files and previews', () => {
     wrapper.unmount()
   })
   it('opens and closes product image preview', async () => {
-    const product = { id: 'p1', variants: [{ imageUrl: 'https://example.com/test.png' }] } as ProductDetailDto
-    const wrapper = mount(ShipmentProductImage, { props: { productId: 'p1', product, alt: '测试产品' }, global: { stubs: { Teleport: true } } })
+    const product = { id: 'p1', variants: [{ id: 'v2', imageUrl: 'https://example.com/wrong.png' }, { id: 'v1', imageUrl: 'https://example.com/test.png' }] } as ProductDetailDto
+    const wrapper = mount(ShipmentProductImage, { props: { productId: 'p1', variantId: 'v1', product, alt: '测试产品' }, global: { stubs: { Teleport: true } } })
     await wrapper.get('.image-button').trigger('click')
     expect(wrapper.get('[role="dialog"] img').attributes('src')).toBe('https://example.com/test.png')
     await wrapper.get('[aria-label="关闭图片预览"]').trigger('click')
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
     wrapper.unmount()
+  })
+  it('does not guess an image or manual for legacy records or an imageless SKU', async () => {
+    const product = { id: 'p1', variants: [{ id: 'v1', imageUrl: 'https://example.com/wrong.png' }, { id: 'v2' }] } as ProductDetailDto
+    const wrapper = mount(ShipmentProductImage, { props: { productId: 'p1', product, alt: '旧记录' } })
+    expect(wrapper.text()).toContain('待补选 SKU'); expect(wrapper.find('img').exists()).toBe(false)
+    await wrapper.setProps({ variantId: 'v2' })
+    expect(wrapper.text()).toContain('未设置产品图片'); expect(wrapper.find('img').exists()).toBe(false)
+    const manuals = mount(ShipmentManuals, { props: { product } }); await flushPromises()
+    expect(catalogApi.documents).not.toHaveBeenCalled()
+    wrapper.unmount(); manuals.unmount()
   })
 })

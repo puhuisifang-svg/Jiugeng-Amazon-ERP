@@ -9,7 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@RestControllerAdvice(assignableTypes = {ProductController.class, SkuDocumentController.class})
+@RestControllerAdvice(assignableTypes = {ProductController.class, SkuDocumentController.class, ProductCustomsController.class})
 @Profile("!mock")
 class ProductExceptionHandler {
     @ExceptionHandler(ProductException.class)
@@ -19,6 +19,7 @@ class ProductExceptionHandler {
 
     @ExceptionHandler({MethodArgumentNotValidException.class, HttpMessageNotReadableException.class,
         org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
+        org.springframework.web.method.annotation.HandlerMethodValidationException.class,
         org.springframework.web.bind.MissingServletRequestParameterException.class,
         org.springframework.web.multipart.support.MissingServletRequestPartException.class})
     ResponseEntity<Problem> invalid(Exception exception) {

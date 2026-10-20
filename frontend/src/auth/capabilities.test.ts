@@ -5,6 +5,7 @@ import { capabilitiesForRole } from './capabilities'
 describe('MVP role capabilities', () => {
   it('keeps the administrator mapping aligned with the approved catalog capability contract', () => {
     expect(new Set(capabilitiesForRole('ADMIN'))).toEqual(new Set([
+      'customers.read', 'customers.write',
       'system.users.manage', 'products.read', 'products.write', 'materials.read', 'materials.write',
       'inventory.read', 'inventory.write', 'selection.read', 'selection.write', 'watch.read', 'watch.write',
       'imports.read', 'imports.template.download', 'imports.validate', 'imports.commit', 'imports.cancel',

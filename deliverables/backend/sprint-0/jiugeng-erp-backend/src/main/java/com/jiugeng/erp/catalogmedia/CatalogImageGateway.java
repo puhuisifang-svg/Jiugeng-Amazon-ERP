@@ -4,7 +4,7 @@ import com.jiugeng.erp.iam.AuthenticatedActor;
 
 /** Public attachment boundary used by Product, Material and Supplier modules. */
 public interface CatalogImageGateway {
-    enum Purpose { SKU_MAIN, SUPPLIER_QR, MATERIAL_IMAGE }
+    enum Purpose { PRODUCT_MAIN, SKU_MAIN, SUPPLIER_QR, MATERIAL_IMAGE }
 
     final class AttachmentException extends RuntimeException {
         private final int status; private final String code;

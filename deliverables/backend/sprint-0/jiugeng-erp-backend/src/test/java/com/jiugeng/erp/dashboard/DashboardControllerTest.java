@@ -1,5 +1,7 @@
 package com.jiugeng.erp.dashboard;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -66,17 +68,152 @@ class DashboardControllerTest {
     @AfterEach void after(){clean();}
 
     @Test
-    void dispatchIsAuthorizedIdempotentImmutableAndIncludedInStatistics() throws Exception {
+    void customerBindingIsRequiredAndSnapshotSurvivesRoundTrip() throws Exception {
+        String product=createProduct("CP-SKU","合成客户SKU"),token=user("customer-shipping","PRODUCT_MATERIAL");
+        LocalDate today=LocalDate.now(ZoneId.of("Asia/Shanghai"));
+        var input=new LinkedHashMap<>(shipment(today,product,2,1,today.atTime(23,59)));
+        String cp=(String)input.remove("customerProductId");
+        String path="/api/v1/dashboard-maintenance/today-shipments";
+        mvc.perform(post(path).header("Authorization",bearer(token)).header("Idempotency-Key","no-cp").contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(input))).andExpect(status().isBadRequest());
+        input.put("customerProductId",cp);
+        jdbc.update("UPDATE customer_product SET customer_product_code='SYN-CODE',requirements='合成原需求' WHERE id=?",cp);
+        String body=mvc.perform(post(path).header("Authorization",bearer(token)).header("Idempotency-Key","with-cp").contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(input)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.customerProduct.customerProductCode").value("SYN-CODE")).andReturn().getResponse().getContentAsString();
+        String id=json.readTree(body).path("id").asText();
+        jdbc.update("UPDATE customer_product SET customer_product_code='SYN-NEW',requirements='合成新需求' WHERE id=?",cp);
+        String pending=mvc.perform(post(path+"/"+id+"/transfer-to-pending").header("Authorization",bearer(token)).header("Idempotency-Key","cp-return")
+            .contentType(MediaType.APPLICATION_JSON).content("{\"version\":0,\"reason\":\"合成测试\"}"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.customerProduct.customerProductCode").value("SYN-CODE")).andReturn().getResponse().getContentAsString();
+        String pendingId=json.readTree(pending).path("id").asText();
+        var transfer=Map.of("quantity",2,"boxCount",1,"version",0,"latestShipTime",today.atTime(23,59).toString());
+        mvc.perform(post("/api/v1/dashboard-maintenance/pending-shipments/"+pendingId+"/transfer-to-today")
+            .header("Authorization",bearer(token)).header("Idempotency-Key","cp-today").contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(transfer)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.customerProduct.requirements").value("合成原需求"));
+        long version=jdbc.queryForObject("SELECT version FROM dashboard_today_shipment WHERE id=?",Long.class,id);
+        jdbc.update("UPDATE customer_product SET status='DISABLED' WHERE id=?",cp);
+        mvc.perform(post("/api/v1/shipping/today-shipments/"+id+"/dispatch").header("Authorization",bearer(token)).header("Idempotency-Key","cp-disabled")
+            .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("version",version)))).andExpect(status().isConflict());
+    }
+    @Test
+    void bindsExactSkuRejectsInvalidSelectionsAndKeepsLegacyUnbound() throws Exception {
+        String parent=createProduct("SKU-PARENT","父体不应当作 SKU 名称");
+        String sku=createSku(parent,"SKU-SECOND","第二款".repeat(50));
+        String foreign=createProduct("OTHER-PARENT","另一父体");
+        String foreignSku=jdbc.queryForObject("SELECT id FROM product_variant WHERE product_id=?",String.class,foreign);
+        String token=user("sku-manager","PRODUCT_MATERIAL");
+        LocalDate date=LocalDate.now(ZoneId.of("Asia/Shanghai"));
+        var input=new LinkedHashMap<>(shipment(date,parent,3,1,date.atTime(23,59)));
+        String path="/api/v1/dashboard-maintenance/today-shipments";
+        input.remove("variantId");
+        mvc.perform(post(path).header("Authorization",bearer(token)).header("Idempotency-Key","missing-sku")
+            .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(input))).andExpect(status().isBadRequest());
+        input.put("variantId",foreignSku);
+        mvc.perform(post(path).header("Authorization",bearer(token)).header("Idempotency-Key","foreign-sku")
+            .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(input))).andExpect(status().isBadRequest());
+        input.put("variantId",sku); input.put("customerProductId",sku);
+        jdbc.update("UPDATE product_variant SET lifecycle_status='DISABLED' WHERE id=?",sku);
+        mvc.perform(post(path).header("Authorization",bearer(token)).header("Idempotency-Key","disabled-sku")
+            .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(input))).andExpect(status().isBadRequest());
+        jdbc.update("UPDATE product_variant SET lifecycle_status='ACTIVE' WHERE id=?",sku);
+        String body=mvc.perform(post(path).header("Authorization",bearer(token)).header("Idempotency-Key","exact-sku")
+            .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(input)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.variantId").value(sku))
+            .andExpect(jsonPath("$.productCode").value("SKU-SECOND"))
+            .andExpect(jsonPath("$.productName").value("第二款".repeat(50))).andReturn().getResponse().getContentAsString();
+        String id=json.readTree(body).get("id").asText();
+        // Simulate a pre-migration parent record; no automatic inference is permitted.
+        jdbc.update("UPDATE dashboard_today_shipment SET variant_id=NULL WHERE id=?",id);
+        mvc.perform(post("/api/v1/shipping/today-shipments/"+id+"/dispatch").header("Authorization",bearer(token))
+            .header("Idempotency-Key","legacy-dispatch").contentType(MediaType.APPLICATION_JSON).content("{\"version\":0}"))
+            .andExpect(status().isConflict());
+        mvc.perform(patch(path+"/"+id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(Map.of("shipment",input,"version",0))))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.variantId").value(sku));
+        String pending=mvc.perform(post(path+"/"+id+"/transfer-to-pending").header("Authorization",bearer(token))
+            .header("Idempotency-Key","sku-return").contentType(MediaType.APPLICATION_JSON).content("{\"version\":1,\"reason\":\"调整\"}"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.variantId").value(sku)).andReturn().getResponse().getContentAsString();
+        String pendingId=json.readTree(pending).get("id").asText();
+        var transfer=Map.of("version",0,"quantity",3,"boxCount",1,"latestShipTime",date.atTime(23,59).toString());
+        String restored=mvc.perform(post("/api/v1/dashboard-maintenance/pending-shipments/"+pendingId+"/transfer-to-today")
+            .header("Authorization",bearer(token)).header("Idempotency-Key","sku-restore").contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(transfer))).andExpect(status().isOk()).andExpect(jsonPath("$.variantId").value(sku))
+            .andExpect(jsonPath("$.id").value(id)).andReturn().getResponse().getContentAsString();
+        mvc.perform(post("/api/v1/shipping/today-shipments/"+id+"/dispatch").header("Authorization",bearer(token))
+            .header("Idempotency-Key","bound-dispatch").contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(Map.of("version",json.readTree(restored).get("version").asLong()))))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.variantId").value(sku)).andExpect(jsonPath("$.skuCodes").value("SKU-SECOND"));
+        var firstInput=shipment(date,parent,2,1,date.atTime(23,59));
+        String first=mvc.perform(post(path).header("Authorization",bearer(token)).header("Idempotency-Key","first-sku")
+            .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(firstInput)))
+            .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        mvc.perform(post("/api/v1/shipping/today-shipments/"+json.readTree(first).get("id").asText()+"/dispatch")
+            .header("Authorization",bearer(token)).header("Idempotency-Key","first-dispatch").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"version\":0}")).andExpect(status().isOk());
+        jdbc.update("UPDATE product_variant SET variant_name='后来更名' WHERE id=?",sku);
+        mvc.perform(get("/api/v1/shipping/statistics").param("from",date.toString()).param("to",date.toString())
+            .header("Authorization",bearer(token))).andExpect(status().isOk())
+            .andExpect(jsonPath("$.summary.products").value(2)).andExpect(jsonPath("$.summary.quantity").value(5))
+            .andExpect(jsonPath("$.products.length()").value(2)).andExpect(jsonPath("$.products[0].productName").value("第二款".repeat(50)));
+    }
+
+    @Test
+    void deletedCustomerProductRetainsSnapshotAndExistingShipmentCanContinue() throws Exception {
+        String product=createProduct("DELETE-SNAPSHOT","原名称"), token=user("delete-snapshot","ADMIN");
+        LocalDate date=LocalDate.now(ZoneId.of("Asia/Shanghai"));
+        var input=shipment(date,product,3,1,date.atTime(23,59));
+        String cp=input.get("customerProductId").toString();
+        String created=mvc.perform(post("/api/v1/dashboard-maintenance/pending-shipments")
+            .header("Authorization",bearer(token)).header("Idempotency-Key","snapshot-pending")
+            .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(input)))
+            .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String pendingId=json.readTree(created).get("id").asText();
+        mvc.perform(delete("/api/v1/customers/products/"+cp).param("version","0").header("Authorization",bearer(token)))
+            .andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/dashboard-maintenance/today-shipments")
+            .header("Authorization",bearer(token)).header("Idempotency-Key","deleted-new")
+            .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(input)))
+            .andExpect(status().isBadRequest());
+        mvc.perform(delete("/api/v1/products/"+product).param("version","0").header("Authorization",bearer(token)))
+            .andExpect(status().isNoContent());
+        jdbc.update("UPDATE product_variant SET variant_name='新名称' WHERE id=?",input.get("variantId"));
+        mvc.perform(patch("/api/v1/dashboard-maintenance/pending-shipments/"+pendingId)
+            .header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(Map.of("shipment",input,"version",0))))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.productName").value("原名称"));
+        var transfer=Map.of("quantity",3,"boxCount",1,"remark","保留历史","latestShipTime",date.atTime(23,59).toString(),"version",1);
+        String today=mvc.perform(post("/api/v1/dashboard-maintenance/pending-shipments/"+pendingId+"/transfer-to-today")
+            .header("Authorization",bearer(token)).header("Idempotency-Key","deleted-transfer")
+            .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(transfer)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.productName").value("原名称"))
+            .andReturn().getResponse().getContentAsString();
+        String todayId=json.readTree(today).get("id").asText();
+        mvc.perform(patch("/api/v1/dashboard-maintenance/today-shipments/"+todayId)
+            .header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(Map.of("shipment",input,"version",0))))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.productName").value("原名称"));
+        mvc.perform(post("/api/v1/shipping/today-shipments/"+todayId+"/dispatch")
+            .header("Authorization",bearer(token)).header("Idempotency-Key","deleted-dispatch")
+            .contentType(MediaType.APPLICATION_JSON).content("{\"version\":1}"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.productName").value("原名称"));
+    }
+
+    @Test
+    void overdueDispatchIsAuthorizedIdempotentImmutableAndCountedOnConfirmationDate() throws Exception {
         String product=createProduct("SHIP-001","发货统计产品");
         String manager=user("ship-manager","PRODUCT_MATERIAL"), reader=user("ship-reader","SELECTION");
         LocalDate date=LocalDate.now(ZoneId.of("Asia/Shanghai"));
-        var input=shipment(date,product,5,2,date.atTime(23,59));
+        var planned=date.minusDays(1);
+        var input=shipment(planned,product,5,2,planned.atTime(23,59));
         String created=mvc.perform(post("/api/v1/dashboard-maintenance/today-shipments")
             .header("Authorization",bearer(manager)).header("Idempotency-Key","create-dispatch")
             .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(input)))
             .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         String id=json.readTree(created).get("id").asText();
         String endpoint="/api/v1/shipping/today-shipments/"+id+"/dispatch";
+        jdbc.update("UPDATE dashboard_today_shipment SET ship_date=? WHERE id=?",date.plusDays(1),id);
+        mvc.perform(post(endpoint).header("Authorization",bearer(manager)).header("Idempotency-Key","future-dispatch")
+            .contentType(MediaType.APPLICATION_JSON).content("{\"version\":0}")).andExpect(status().isConflict());
+        jdbc.update("UPDATE dashboard_today_shipment SET ship_date=? WHERE id=?",planned,id);
         mvc.perform(post(endpoint).header("Authorization",bearer(reader)).header("Idempotency-Key","dispatch-1")
             .contentType(MediaType.APPLICATION_JSON).content("{\"version\":0}")).andExpect(status().isForbidden());
         mvc.perform(post(endpoint).header("Authorization",bearer(manager)).header("Idempotency-Key","stale-dispatch")
@@ -84,6 +221,7 @@ class DashboardControllerTest {
         String dispatched=mvc.perform(post(endpoint).header("Authorization",bearer(manager)).header("Idempotency-Key","dispatch-1")
             .contentType(MediaType.APPLICATION_JSON).content("{\"version\":0}"))
             .andExpect(status().isOk()).andExpect(jsonPath("$.quantity").value(5)).andExpect(jsonPath("$.businessDate").value(date.toString()))
+            .andExpect(jsonPath("$.plannedDate").value(planned.toString()))
             .andReturn().getResponse().getContentAsString();
         mvc.perform(post(endpoint).header("Authorization",bearer(manager)).header("Idempotency-Key","dispatch-1")
             .contentType(MediaType.APPLICATION_JSON).content("{\"version\":0}"))
@@ -161,6 +299,17 @@ class DashboardControllerTest {
         mvc.perform(get("/api/v1/shipment-documents/pending-shipments/"+pending+"/"+document+"/download").header("Authorization",bearer(reader))).andExpect(status().isOk());
         mvc.perform(multipart(endpoint).file(file).param("kind","LABEL").header("Authorization",bearer(manager))).andExpect(status().isConflict());
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE action='SHIPMENT_DOCUMENT_UPLOAD'",Integer.class)).isEqualTo(2);
+        String otherSku=createSku(productId,"DOC-002","另一款商品");
+        var changed=new LinkedHashMap<>(shipment(today,productId,3,1,today.atTime(23,59)));
+        changed.put("variantId",otherSku); changed.put("customerProductId",otherSku);
+        mvc.perform(patch("/api/v1/dashboard-maintenance/pending-shipments/"+pending)
+            .header("Authorization",bearer(manager)).contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(Map.of("shipment",changed,"version",0))))
+            .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/shipment-documents/pending-shipments/"+pending).param("kind","LABEL")
+            .header("Authorization",bearer(reader))).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(0));
+        mvc.perform(get("/api/v1/shipment-documents/pending-shipments/"+pending+"/"+document+"/download")
+            .header("Authorization",bearer(reader))).andExpect(status().isNotFound());
     }
 
     @Test
@@ -429,11 +578,18 @@ class DashboardControllerTest {
     private byte[] png() throws Exception {BufferedImage image=new BufferedImage(32,24,BufferedImage.TYPE_INT_RGB);ByteArrayOutputStream out=new ByteArrayOutputStream();ImageIO.write(image,"png",out);return out.toByteArray();}
     private Map<String,Object> shipment(LocalDate date,String productId,int quantity,int boxes,LocalDateTime latest){return Map.of(
             "date",date.toString(),"productId",productId,"quantity",quantity,"boxCount",boxes,"remark","安排",
-            "latestShipTime",latest.toString());}
+            "latestShipTime",latest.toString(),"customerProductId",jdbc.queryForObject("SELECT id FROM product_variant WHERE product_id=? ORDER BY sku_code LIMIT 1",String.class,productId),"variantId",jdbc.queryForObject("SELECT id FROM product_variant WHERE product_id=? ORDER BY sku_code LIMIT 1",String.class,productId));}
     private String createProduct(String code,String name){String id=UUID.randomUUID().toString();jdbc.update("""
             INSERT INTO product (id,product_code,product_code_normalized,name_zh,status,created_by,updated_by)
             VALUES (?,?,?,?,'ACTIVE','test','test')
-            """,id,code,code.toUpperCase(),name);return id;}
+            """,id,code,code.toUpperCase(),name);
+        createSku(id,code+"-SKU",name);return id;}
+    private String createSku(String productId,String code,String name){
+        String id=UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO product_variant(id,product_id,sku_code,sku_code_normalized,variant_name,status,attribute_signature) VALUES(?,?,?,?,?,'ACTIVE',?)",id,productId,code,code.toUpperCase(),name,id);
+        jdbc.update("INSERT INTO customer_product(id,customer_id,product_id,variant_id,sku_code,product_name,supply_price,price_unit,created_by,updated_by) SELECT ?,default_customer_id,?,?,?,?,NULL,'套','test','test' FROM customer_preferences WHERE id=1",id,productId,id,code,name);
+        return id;
+    }
     private String user(String login,String role)throws Exception{String id=UUID.randomUUID().toString();var encoder=new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder();jdbc.update("""
             INSERT INTO iam_user (id,login_name,display_name,password_hash,role,status,must_change_password)
             VALUES (?,?,?,?,?,'ENABLED',FALSE)
@@ -442,6 +598,6 @@ class DashboardControllerTest {
             .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();return json.readTree(response).get("token").asText();}
     private String bearer(String token){return "Bearer "+token;}
     private void clean(){for(String table:new String[]{"dashboard_shipment_dispatch","dashboard_shipment_document","dashboard_command","dashboard_today_shipment","dashboard_pending_shipment",
-            "dashboard_pending_product","dashboard_image_asset","product_auxiliary_material","variant_attribute","product_variant","product",
+            "dashboard_pending_product","dashboard_image_asset","product_auxiliary_material","variant_attribute","customer_product","product_variant","product",
             "iam_password_reset_challenge","audit_event","iam_session","iam_user"}){jdbc.update("DELETE FROM "+table);}}
 }

@@ -1,15 +1,18 @@
 <script setup lang="ts">
+import CartonLabelExport from '@/components/CartonLabelExport.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { ApiError } from '@/api/client'
-import { dashboardApi, type DashboardHistoryEvent, type DashboardItem, type DashboardKind, type PendingProduct, type PendingProductInput, type PendingShipment, type ShipmentInput } from '@/api/dashboard'
+import { dashboardApi, type DashboardHistoryEvent, type DashboardItem, type DashboardKind, type PendingProduct, type PendingProductInput, type PendingShipment, type ShipmentInput, type TodayShipment } from '@/api/dashboard'
 import { domainApi, type ProductDetailDto } from '@/api/domain'
 import AuthenticatedDashboardImage from '@/components/AuthenticatedDashboardImage.vue'
 import ShipmentProductImage from '@/components/ShipmentProductImage.vue'
 import ShipmentFiles from '@/components/ShipmentFiles.vue'
+import ShipmentCustomerPicker from '@/components/ShipmentCustomerPicker.vue'
+import type { CustomerProduct } from '@/api/customers'
 import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import { runtimeConfig } from '@/config/runtime'
 
@@ -20,10 +23,34 @@ const loading = ref(true); const saving = ref(false); const error = ref(''); con
 const page = ref(0); const totalPages = ref(0); const total = ref(0); const editing = ref<DashboardItem | null>(null)
 const filters = reactive({ keyword: '', status: props.kind === 'today-shipments' ? 'ACTIVE' : '', from: '', to: '' })
 const shipment = reactive<ShipmentInput>({ date: '', productId: '', quantity: 1, boxCount: 1, remark: '', latestShipTime: '' })
+function selectCustomerProduct(value: CustomerProduct | undefined) {
+  shipment.customerProductId = value?.id ?? ''; shipment.variantId = value?.variantId ?? ''; shipment.productId = value?.productId ?? ''
+}
 const pendingProduct = reactive<PendingProductInput>({ productName: '', expectedQuantity: 1, remark: '', expectedCompletionDate: '' })
 const correctionReason = ref(''); const imageId = ref(''); const imageFile = ref<File>(); const previewUrl = ref('')
 const history = ref<DashboardHistoryEvent[]>([]); const historyTitle = ref('')
 const formOpen = ref(false)
+const discardOpen = ref(false)
+const initialForm = ref('')
+const shipmentForm = ref<HTMLFormElement>()
+const continueButton = ref<HTMLButtonElement>()
+function formSnapshot() { return JSON.stringify([shipment, latestShipDate.value, correctionReason.value]) }
+function openNew() { reset(); error.value = ''; initialForm.value = formSnapshot(); formOpen.value = true }
+async function requestClose() {
+  if (saving.value) return
+  if (isProduct.value || formSnapshot() === initialForm.value) { reset(); return }
+  discardOpen.value = true
+  await nextTick(); continueButton.value?.focus()
+}
+async function continueEditing() {
+  discardOpen.value = false
+  await nextTick(); shipmentForm.value?.querySelector<HTMLElement>('select, input')?.focus()
+}
+function escapeForm() {
+  if (isProduct.value || saving.value) return
+  if (discardOpen.value) void continueEditing()
+  else void requestClose()
+}
 const latestShipDate = ref('')
 const pendingTransferTarget = ref<DashboardItem>()
 const transferReason = ref('')
@@ -31,6 +58,32 @@ const deleteTarget = ref<DashboardItem>()
 const todayTransferTarget = ref<PendingShipment>()
 const validationToast = ref('')
 const validationToastKey = ref(0)
+const labelIds = ref<string[]>(), labelSelected = ref<string[]>([])
+const labelEligible = computed(() => items.value.filter(item => 'shipDate' in item && item.customerProduct && item.status !== 'ARCHIVED'))
+const labelAll = computed(() => labelEligible.value.length > 0 && labelEligible.value.every(item => labelSelected.value.includes(item.id)))
+function toggleLabels() { labelSelected.value = labelAll.value ? [] : labelEligible.value.map(item => item.id) }
+watch(items, () => { labelSelected.value = labelSelected.value.filter(id => labelEligible.value.some(item => item.id === id)) })
+const dispatchTarget = ref<TodayShipment>()
+const dispatchError = ref('')
+const dispatchKeys = new Map<string, string>()
+function openDispatch(item: TodayShipment) {
+  if (saving.value) return
+  if (!item.variantId || !item.customerProduct) { validationToastKey.value++; validationToast.value = '请先编辑补选客户商品后再发货。'; return }
+  dispatchTarget.value = { ...item }; dispatchError.value = ''
+  const identity = `${item.id}:${item.version}`
+  if (!dispatchKeys.has(identity)) dispatchKeys.set(identity, crypto.randomUUID())
+}
+function closeDispatch() { if (!saving.value) dispatchTarget.value = undefined }
+async function confirmDispatch() {
+  const target = dispatchTarget.value
+  if (!target || saving.value) return
+  saving.value = true; dispatchError.value = ''; success.value = ''
+  try {
+    await dashboardApi.dispatch(target.id, target.version, dispatchKeys.get(`${target.id}:${target.version}`)!)
+    dispatchTarget.value = undefined; success.value = '发货已确认，已按实际确认日期计入发货统计。'; await load()
+  } catch (exception) { dispatchError.value = exception instanceof ApiError ? exception.message : '发货确认失败，请重试。' }
+  finally { saving.value = false }
+}
 let loadSequence = 0
 
 const isProduct = computed(() => props.kind === 'pending-products')
@@ -46,8 +99,9 @@ function historyChanges(event: DashboardHistoryEvent) {
     return value && typeof value === 'object' ? value as Record<string, unknown> : {}
   }
   if (!event.beforeValue || !event.afterValue) return []
-  const before = snapshot(event.beforeValue); const after = snapshot(event.afterValue)
-  const fields: Record<string, string> = { productName: '产品名', quantity: '发货数量', boxCount: '箱数', remark: '备注', plannedShipDate: '计划发货日期', latestShipAt: '最晚发货日期', status: '状态' }
+  const flatten = (value: unknown): Record<string, unknown> => { const row = snapshot(value); const customer = snapshot(row.customerProduct); return { ...row, customerName: customer.customerName, customerProductCode: customer.customerProductCode, customerRequirements: customer.requirements } }
+  const before = flatten(event.beforeValue); const after = flatten(event.afterValue)
+  const fields: Record<string, string> = { customerName: '客户', customerProductCode: '客户产品编码', customerRequirements: '客户特殊需求', productName: '产品名', productCode: 'SKU 编号', variantId: 'SKU 绑定', quantity: '发货数量', boxCount: '箱数', remark: '备注', plannedShipDate: '计划发货日期', latestShipAt: '最晚发货日期', status: '状态' }
   const display = (key: string, value: unknown) => value == null || value === '' ? '未填写' : key === 'latestShipAt' ? localDate(String(value)) : key === 'status' ? statusLabel(String(value)) : String(value)
   return Object.entries(fields).filter(([key]) => key in before && key in after && before[key] !== after[key])
     .map(([key, label]) => `${label}：${display(key, before[key])} → ${display(key, after[key])}`)
@@ -61,9 +115,10 @@ function dateRowspan(index: number) {
   return count
 }
 function reset() {
+  discardOpen.value = false
   formOpen.value = false; latestShipDate.value = ''
   editing.value = null; imageId.value = ''; imageFile.value = undefined; previewUrl.value = ''; correctionReason.value = ''
-  Object.assign(shipment, { date: '', productId: '', quantity: 1, boxCount: 1, remark: '', latestShipTime: '' })
+  Object.assign(shipment, { date: '', productId: '', variantId: '', customerProductId: '', quantity: 1, boxCount: 1, remark: '', latestShipTime: '' })
   Object.assign(pendingProduct, { productName: '', expectedQuantity: 1, remark: '', expectedCompletionDate: '' })
 }
 function edit(item: DashboardItem) {
@@ -71,7 +126,8 @@ function edit(item: DashboardItem) {
   if ('latestShipAt' in item) latestShipDate.value = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date(item.latestShipAt))
   editing.value = item; imageId.value = item.imageId ?? ''; imageFile.value = undefined; previewUrl.value = ''; error.value = ''; success.value = ''
   if ('expectedQuantity' in item) Object.assign(pendingProduct, { productName: item.productName, expectedQuantity: item.expectedQuantity, remark: item.remark ?? '', expectedCompletionDate: item.expectedCompletionDate })
-  else Object.assign(shipment, { date: 'shipDate' in item ? item.shipDate : item.plannedShipDate, productId: item.productId, quantity: item.quantity, boxCount: item.boxCount, remark: item.remark ?? '', latestShipTime: item.latestShipAt.slice(0, 16) })
+  else Object.assign(shipment, { date: 'shipDate' in item ? item.shipDate : item.plannedShipDate, productId: item.productId, variantId: item.variantId ?? '', customerProductId: item.customerProduct?.id ?? '', quantity: item.quantity, boxCount: item.boxCount, remark: item.remark ?? '', latestShipTime: item.latestShipAt.slice(0, 16) })
+  initialForm.value = formSnapshot()
 }
 async function load() {
   if (!formal) { loading.value = false; return }
@@ -105,6 +161,7 @@ async function uploadIfNeeded() {
   return receipt.id
 }
 async function save() {
+  if (saving.value || discardOpen.value) return
   saving.value = true; error.value = ''; success.value = ''
   try {
     const uploadedId = isProduct.value ? await uploadIfNeeded() : undefined
@@ -113,6 +170,7 @@ async function save() {
       if (editing.value) await dashboardApi.updatePendingProduct(editing.value.id, input, editing.value.version)
       else await dashboardApi.createPendingProduct(input)
     } else {
+      if (!shipment.variantId || !shipment.customerProductId) { error.value = '请选择客户商品；历史记录需补选后保存。'; return }
       const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date())
       const shipDate = editing.value && 'shipDate' in editing.value ? editing.value.shipDate : today
       const input = { ...shipment, ...(props.kind === 'today-shipments' ? { date: shipDate, latestShipTime: `${shipDate}T23:59` } : { latestShipTime: `${latestShipDate.value}T23:59` }), imageId: uploadedId, remark: shipment.remark?.trim() || undefined }
@@ -144,6 +202,7 @@ async function complete(item: PendingProduct) {
 }
 async function transfer(item: PendingShipment, confirmed = false) {
   if (saving.value) return
+  if (!item.variantId || !item.customerProduct) { validationToastKey.value++; validationToast.value = '该历史记录尚未绑定客户商品，请先编辑补选。'; return }
   if (!confirmed) { todayTransferTarget.value = item; error.value = ''; return }
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date())
   const latestShipTime = `${today}T23:59`
@@ -181,6 +240,7 @@ watch(() => props.kind, () => {
   pendingTransferTarget.value = undefined; transferReason.value = ''; historyTitle.value = ''; history.value = []
   deleteTarget.value = undefined
   todayTransferTarget.value = undefined
+  dispatchTarget.value = undefined
   reset(); void load()
 })
 onMounted(async () => {
@@ -191,7 +251,10 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section class="page-stack">
+  <section
+    class="page-stack"
+    :class="{ 'shipping-maintenance': !isProduct }"
+  >
     <template v-if="!formal">
       <SyntheticNotice />
       <article class="panel empty-state">
@@ -214,7 +277,7 @@ onMounted(async () => {
       >
         <button
           type="button"
-          @click="reset(); error = ''; formOpen = true"
+          @click="openNew"
         >
           {{ kind === 'pending-shipments' ? '新增待发货' : '新增今日发货' }}
         </button>
@@ -222,13 +285,39 @@ onMounted(async () => {
       <div
         v-if="isProduct || formOpen"
         :class="isProduct ? '' : 'operation-dialog'"
-        :role="isProduct ? undefined : 'dialog'"
+        :role="isProduct ? undefined : discardOpen ? 'alertdialog' : 'dialog'"
         :aria-modal="isProduct ? undefined : true"
-        aria-label="发货记录"
-        @click.self="!saving && !isProduct && reset()"
-        @keydown.esc="!saving && !isProduct && reset()"
+        :aria-label="discardOpen ? '放弃未保存的修改？' : '发货记录'"
+        @keydown.esc.stop.prevent="escapeForm"
       >
+        <div
+          v-if="discardOpen"
+          class="panel operation-form operation-dialog__card operation-dialog__card--compact"
+        >
+          <h2 class="form-wide">
+            放弃未保存的修改？
+          </h2>
+          <p class="form-wide">
+            当前填写的内容尚未保存。放弃后内容将丢失，是否继续填写？
+          </p>
+          <button
+            ref="continueButton"
+            type="button"
+            @click="continueEditing"
+          >
+            继续填写
+          </button>
+          <button
+            type="button"
+            class="danger-button"
+            @click="reset"
+          >
+            放弃修改
+          </button>
+        </div>
         <form
+          v-show="!discardOpen"
+          ref="shipmentForm"
           class="panel operation-form"
           :class="{ 'operation-dialog__card operation-dialog__card--compact': !isProduct }"
           @submit.prevent="save"
@@ -239,7 +328,7 @@ onMounted(async () => {
             type="button"
             aria-label="关闭发货弹窗"
             :disabled="saving"
-            @click="reset()"
+            @click="requestClose"
           >
             ×
           </button>
@@ -263,14 +352,15 @@ onMounted(async () => {
             ></label>
           </template>
           <template v-else>
-            <label>产品编号<select
-              v-model="shipment.productId"
-              required
-            ><option value="">请选择</option><option
-              v-for="product in products"
-              :key="product.id"
-              :value="product.id"
-            >{{ product.productCode }} · {{ product.productName }}</option></select></label>
+            <ShipmentCustomerPicker
+              :key="editing?.id ?? 'new'"
+              :initial="editing && 'customerProduct' in editing ? editing.customerProduct : undefined"
+              :product-name="editing?.productName ?? ''"
+              :editing="!!editing"
+              :disabled="saving"
+              @select="selectCustomerProduct"
+            />
+            <small v-if="editing && !shipment.variantId">历史记录未绑定客户商品，请明确选择；原标签不会自动归属到新客户商品。</small>
             <label v-if="kind !== 'today-shipments'">{{ dateLabel }}<input
               v-model="shipment.date"
               required
@@ -308,6 +398,7 @@ onMounted(async () => {
             <ShipmentProductImage
               v-if="!isProduct"
               :product-id="shipment.productId"
+              :variant-id="shipment.variantId"
               :product="products.find(item => item.id === shipment.productId)"
               alt="所选产品图案"
             />
@@ -335,7 +426,8 @@ onMounted(async () => {
             v-if="editing || !isProduct"
             class="secondary-button"
             type="button"
-            @click="reset"
+            :disabled="saving"
+            @click="requestClose"
           >
             取消
           </button>
@@ -355,7 +447,7 @@ onMounted(async () => {
         <label>关键字<input
           v-model="filters.keyword"
           maxlength="128"
-          :placeholder="isProduct ? '搜索产品名称' : '搜索产品编码、产品名称或备注'"
+          :placeholder="isProduct ? '搜索产品名称' : '搜索客户、客户产品编码、SKU或备注'"
         ></label>
         <label>状态<select v-model="filters.status"><option value="">全部</option><option :value="activeStatus">{{ statusLabel(activeStatus) }}</option><option
           v-if="isProduct"
@@ -407,24 +499,54 @@ onMounted(async () => {
         v-else
         class="panel table-panel"
       >
+        <div
+          v-if="kind === 'today-shipments'"
+          class="material-toolbar"
+        >
+          <button
+            type="button"
+            :disabled="!labelSelected.length"
+            @click="labelIds = [...labelSelected]"
+          >
+            导出外箱标 PDF（已选 {{ labelSelected.length }} 条）
+          </button>
+        </div>
         <div class="table-scroll">
           <TableViewport>
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>{{ kind === 'today-shipments' ? '发货日期' : kind === 'pending-shipments' ? '计划发货日期' : '预计完成日期' }}</th><th>产品图片</th><th>产品</th><th v-if="kind === 'pending-shipments'">
+                  <th v-if="kind === 'today-shipments'">
+                    <input
+                      type="checkbox"
+                      aria-label="全选本页外箱标"
+                      :checked="labelAll"
+                      @change="toggleLabels"
+                    >
+                  </th><th>{{ kind === 'today-shipments' ? '发货日期' : kind === 'pending-shipments' ? '计划发货日期' : '预计完成日期' }}</th><th>产品图片</th><th>产品</th><th v-if="kind === 'pending-shipments'">
                     最晚发货日期
                   </th><th>数量</th><th>箱数</th><th>备注</th><th v-if="kind === 'today-shipments'">
                     商品标签
                   </th><th v-if="kind === 'today-shipments'">
                     外箱标签
-                  </th><th>状态</th><th>更新时间</th><th>操作</th>
+                  </th><th>状态</th><th>更新时间</th><th :class="{ 'shipping-actions-cell': !isProduct }">
+                    操作
+                  </th>
                 </tr>
               </thead><tbody>
                 <tr
                   v-for="(item, index) in items"
                   :key="item.id"
                 >
+                  <td v-if="kind === 'today-shipments'">
+                    <input
+                      v-model="labelSelected"
+                      type="checkbox"
+                      :value="item.id"
+                      :disabled="!labelEligible.some(row => row.id === item.id)"
+                      :aria-label="'选择外箱标 ' + item.id"
+                    >
+                  </td>
                   <td
                     v-if="dateRowspan(index)"
                     class="shipment-date-cell"
@@ -440,70 +562,95 @@ onMounted(async () => {
                     <ShipmentProductImage
                       v-else
                       :product-id="item.productId"
+                      :variant-id="item.variantId"
                       :product="products.find(product => product.id === item.productId)"
                       :alt="item.productName"
                     />
-                  </td><td>{{ item.productName }}<small v-if="'productCode' in item">{{ item.productCode }}</small></td><td v-if="kind === 'pending-shipments'">
+                  </td><td class="shipment-product-cell">
+                    {{ item.productName }}<small v-if="'customerProduct' in item && item.customerProduct">客户：{{ item.customerProduct.customerName }} · 客户编码：{{ item.customerProduct.customerProductCode || '未填' }}<br>特殊需求：{{ item.customerProduct.requirements || '无' }}</small><small v-if="'productCode' in item">{{ item.variantId ? `SKU：${item.productCode}` : '历史父体记录 · 待补选 SKU' }}</small>
+                  </td><td v-if="kind === 'pending-shipments'">
                     {{ 'latestShipAt' in item ? localDate(item.latestShipAt) : '—' }}
                   </td><td>{{ ('expectedQuantity' in item ? item.expectedQuantity : item.quantity).toLocaleString() }} 套</td><td>{{ 'boxCount' in item ? item.boxCount : '—' }}</td><td class="shipment-remark">
                     {{ item.remark || '—' }}
                   </td><td v-if="kind === 'today-shipments'">
                     <ShipmentFiles
+                      :key="`${item.id}:${'variantId' in item ? item.variantId : ''}:${'customerProduct' in item ? item.customerProduct?.id : ''}:LABEL`"
                       :shipment-id="item.id"
                       scope="today-shipments"
                       kind="LABEL"
-                      :editable="item.status === 'ACTIVE'"
+                      :editable="item.status === 'ACTIVE' && 'variantId' in item && !!item.variantId && 'customerProduct' in item && !!item.customerProduct"
                     />
                   </td><td v-if="kind === 'today-shipments'">
                     <ShipmentFiles
+                      :key="`${item.id}:${'variantId' in item ? item.variantId : ''}:${'customerProduct' in item ? item.customerProduct?.id : ''}:CARTON_LABEL`"
                       :shipment-id="item.id"
                       scope="today-shipments"
                       kind="CARTON_LABEL"
-                      :editable="item.status === 'ACTIVE'"
+                      :editable="item.status === 'ACTIVE' && 'variantId' in item && !!item.variantId && 'customerProduct' in item && !!item.customerProduct"
                     />
-                  </td><td>{{ statusLabel(item.status) }}</td><td>{{ localDateTime(item.updatedAt) }}</td><td class="table-actions">
-                    <button
-                      v-if="item.status === activeStatus"
-                      type="button"
-                      @click="edit(item)"
-                    >
-                      编辑
-                    </button><button
-                      v-if="kind !== 'today-shipments'"
-                      class="shipment-history-button"
-                      type="button"
-                      @click="showHistory(item)"
-                    >
-                      历史
-                    </button><button
-                      v-if="kind === 'today-shipments' && item.status === 'ACTIVE'"
-                      type="button"
-                      :disabled="saving"
-                      @click="openTransferToPending(item)"
-                    >
-                      转为待发货
-                    </button><button
-                      v-if="kind === 'pending-shipments' && item.status === 'PENDING'"
-                      type="button"
-                      :disabled="saving"
-                      @click="transfer(item as PendingShipment)"
-                    >
-                      转到今日发货
-                    </button><button
-                      v-if="isProduct && item.status === 'PENDING'"
-                      type="button"
-                      @click="complete(item as PendingProduct)"
-                    >
-                      完成
-                    </button><button
-                      v-if="item.status === activeStatus || (kind === 'pending-shipments' && item.status === 'TRANSFERRED_TO_TODAY')"
-                      class="danger-button"
-                      type="button"
-                      :disabled="saving"
-                      @click="archive(item)"
-                    >
-                      {{ isProduct ? '归档' : '删除' }}
-                    </button>
+                  </td><td>{{ statusLabel(item.status) }}</td><td>{{ localDateTime(item.updatedAt) }}</td><td
+                    class="table-actions"
+                    :class="{ 'shipping-actions-cell': !isProduct }"
+                  >
+                    <div :class="{ 'shipping-action-buttons': !isProduct }">
+                      <button
+                        v-if="kind === 'today-shipments' && 'customerProduct' in item && item.customerProduct"
+                        type="button"
+                        @click="labelIds = [item.id]"
+                      >
+                        外箱标 PDF
+                      </button><button
+                        v-if="kind === 'today-shipments' && item.status === 'ACTIVE'"
+                        type="button"
+                        :disabled="saving"
+                        @click="openDispatch(item as TodayShipment)"
+                      >
+                        发货
+                      </button>
+                      <button
+                        v-if="item.status === activeStatus"
+                        type="button"
+                        :disabled="saving"
+                        @click="edit(item)"
+                      >
+                        编辑
+                      </button><button
+                        v-if="kind !== 'today-shipments'"
+                        class="shipment-history-button"
+                        type="button"
+                        @click="showHistory(item)"
+                      >
+                        历史
+                      </button><button
+                        v-if="kind === 'today-shipments' && item.status === 'ACTIVE'"
+                        type="button"
+                        :disabled="saving"
+                        @click="openTransferToPending(item)"
+                      >
+                        转为待发货
+                      </button><button
+                        v-if="kind === 'pending-shipments' && item.status === 'PENDING'"
+                        type="button"
+                        :disabled="saving"
+                        @click="transfer(item as PendingShipment)"
+                      >
+                        转到今日发货
+                      </button><button
+                        v-if="isProduct && item.status === 'PENDING'"
+                        type="button"
+                        @click="complete(item as PendingProduct)"
+                      >
+                        完成
+                      </button><button
+                        v-if="item.status === activeStatus || (kind === 'pending-shipments' && item.status === 'TRANSFERRED_TO_TODAY')"
+                        class="danger-button"
+                        type="button"
+                        :disabled="saving"
+                        @click="archive(item)"
+                      >
+                        {{ isProduct ? '归档' : '删除' }}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               </tbody>
@@ -523,6 +670,11 @@ onMounted(async () => {
           </button>
         </div>
       </article>
+      <CartonLabelExport
+        v-if="labelIds"
+        :shipment-ids="labelIds"
+        @close="labelIds = undefined"
+      />
       <div
         v-if="pendingTransferTarget"
         class="operation-dialog"
@@ -615,7 +767,7 @@ onMounted(async () => {
           转到今日发货
         </h2>
         <p class="form-wide shipment-transfer-summary">
-          产品名：{{ todayTransferTarget.productName }}<br>发货数量：{{ todayTransferTarget.quantity }} 套 · 发货箱数：{{ todayTransferTarget.boxCount }}
+          客户：{{ todayTransferTarget.customerProduct?.customerName || '未绑定' }}<br>产品名：{{ todayTransferTarget.productName }}<br>发货数量：{{ todayTransferTarget.quantity }} 套 · 发货箱数：{{ todayTransferTarget.boxCount }}
         </p>
         <p class="form-wide">
           确认后将加入今天的发货安排，待发货记录保留转移历史，不代表已实际发运。
@@ -738,6 +890,59 @@ onMounted(async () => {
           </li>
         </ol>
       </article>
+    </div>
+    <div
+      v-if="dispatchTarget"
+      class="operation-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-label="确认发货"
+      @keydown.esc="closeDispatch"
+    >
+      <form
+        class="panel operation-form operation-dialog__card operation-dialog__card--compact"
+        @submit.prevent="confirmDispatch"
+      >
+        <button
+          class="operation-dialog__close"
+          type="button"
+          aria-label="关闭发货确认"
+          :disabled="saving"
+          @click="closeDispatch"
+        >
+          ×
+        </button>
+        <h2 class="form-wide">
+          确认已发货？
+        </h2>
+        <p class="form-wide shipment-transfer-summary">
+          客户：{{ dispatchTarget.customerProduct?.customerName || '未绑定' }}<br>产品名：{{ dispatchTarget.productName }}<br>SKU：{{ dispatchTarget.productCode }}<br>原计划发货日期：{{ dispatchTarget.shipDate }}<br>发货数量：{{ dispatchTarget.quantity }} 套 · 发货箱数：{{ dispatchTarget.boxCount }} 箱<br>备注：{{ dispatchTarget.remark || '—' }}
+        </p>
+        <p class="form-wide">
+          确认后将按实际确认日期（北京时间）计入发货统计，保留原计划日期。不扣减库存、不触发物流下单，确认后不可编辑或删除。请确认货物确已发出。
+        </p>
+        <p
+          v-if="dispatchError"
+          class="data-state data-state--error form-wide"
+          role="alert"
+        >
+          {{ dispatchError }}
+        </p>
+        <button
+          type="button"
+          class="secondary-button"
+          :disabled="saving"
+          @click="closeDispatch"
+        >
+          取消
+        </button>
+        <button
+          type="submit"
+          :disabled="saving"
+        >
+          {{ saving ? '确认中…' : '确认已发货' }}
+        </button>
+      </form>
     </div>
   </section>
 </template>

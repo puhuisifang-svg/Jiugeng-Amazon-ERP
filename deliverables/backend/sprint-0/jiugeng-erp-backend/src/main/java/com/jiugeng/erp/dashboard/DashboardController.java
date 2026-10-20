@@ -173,9 +173,9 @@ class DashboardController {
 
     record ShipmentRequest(@NotNull LocalDate date,@NotBlank @Size(max=36) String productId,@Size(max=36) String imageId,
                            @Positive int quantity,@Positive int boxCount,@Size(max=500) String remark,
-                           @NotNull LocalDateTime latestShipTime){
+                           @NotNull LocalDateTime latestShipTime,@NotBlank @Size(max=36) String variantId,@NotBlank @Size(max=36) String customerProductId){
         ShipmentInput input(){return new ShipmentInput(date,productId,imageId,quantity,boxCount,remark,
-                latestShipTime.atZone(DashboardService.BUSINESS_ZONE).toInstant());}}
+                latestShipTime.atZone(DashboardService.BUSINESS_ZONE).toInstant(),variantId,customerProductId,null);}}
     record ShipmentUpdateRequest(@Valid @NotNull ShipmentRequest shipment,@Min(0) long version,@Size(max=500) String correctionReason){}
     record TransferRequest(@Positive int quantity,@Positive int boxCount,@Size(max=500) String remark,
                            @NotNull LocalDateTime latestShipTime,@Size(max=36) String imageId,@Min(0) long version){

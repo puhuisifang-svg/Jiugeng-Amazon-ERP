@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CatalogDeleteDialog from '@/components/CatalogDeleteDialog.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, reactive, ref, toRaw, watch } from 'vue'
@@ -34,6 +35,23 @@ const rows = ref<SkuListItemDto[]>([]); const products = ref<ProductDetailDto[]>
 const total = ref(0); const page = ref(0); const size = ref(20); const loading = ref(true); const saving = ref(false)
 const error = ref(''); const success = ref(''); const selected = ref<string[]>([])
 const expanded = ref<string[]>([])
+const deleteTarget = ref<{ product: ProductDetailDto; variant?: ProductVariantDto }>()
+const deleteError = ref(''), deleting = ref(false)
+function requestDelete(product: ProductDetailDto, variant?: ProductVariantDto) {
+  deleteError.value = ''; deleteTarget.value = variant ? { product, variant } : { product }
+}
+async function confirmDelete() {
+  if (deleting.value || !deleteTarget.value) return
+  const { product, variant } = deleteTarget.value; deleting.value = true; deleteError.value = ''
+  try {
+    if (variant?.id) await domainApi.deleteSku(product.id, variant.id, product.version, variant.version ?? 0)
+    else await domainApi.deleteProduct(product.id, product.version)
+    deleteTarget.value = undefined; selected.value = []; page.value = 0
+    success.value = variant ? 'SKU 及未使用的客户商品已删除。' : '父体、全部 SKU 及未使用的客户商品已删除。'
+    await load()
+  } catch (e) { deleteError.value = apiMessage(e, '删除失败，请重试。') }
+  finally { deleting.value = false }
+}
 const appliedFilters = ref({ field: 'KEYWORD', q: '', exact: false, status: '', productStatus: '', productType: '', stock: '', hasImage: '', hasSupplier: '', hasMaterial: '', sort: 'updatedAt', direction: 'desc' })
 const showCreate = ref(false); const showColumns = ref(false); const showBatch = ref(false); const showDetail = ref(false); const showEdit = ref(false); const showExport = ref(false)
 const showAddSku = ref(false); const addSkuProductId = ref('')
@@ -62,7 +80,7 @@ function dimensionLabel(variant: ProductVariantDto) {
   return variant.itemDimensions || variant.packageDimensions || '—'
 }
 function toInput(product: ProductDetailDto): ProductInput {
-  return { productCode: product.productCode, productName: product.productName, productType: product.productType, description: product.description, status: product.status, version: product.version, variants: product.variants.map(variant => ({ id: variant.id, skuCode: variant.skuCode, variantName: variant.variantName, itemDimensions: variant.itemDimensions, packageDimensions: variant.packageDimensions, itemLengthCm: variant.itemLengthCm, itemWidthCm: variant.itemWidthCm, itemHeightCm: variant.itemHeightCm, packageLengthCm: variant.packageLengthCm, packageWidthCm: variant.packageWidthCm, packageHeightCm: variant.packageHeightCm, packageWeightGrams: variant.packageWeightGrams, status: variant.status, imageAssetId: variant.imageAssetId, imageUrl: variant.imageUrl, version: variant.version, suppliers: structuredClone(toRaw(variant.suppliers)), materials: structuredClone(toRaw(variant.materials)) })) }
+  return { imageAssetId: product.imageAssetId, productCode: product.productCode, productName: product.productName, productType: product.productType, description: product.description, status: product.status, version: product.version, variants: product.variants.map(variant => ({ id: variant.id, customs: variant.customs, skuCode: variant.skuCode, variantName: variant.variantName, itemDimensions: variant.itemDimensions, packageDimensions: variant.packageDimensions, itemLengthCm: variant.itemLengthCm, itemWidthCm: variant.itemWidthCm, itemHeightCm: variant.itemHeightCm, packageLengthCm: variant.packageLengthCm, packageWidthCm: variant.packageWidthCm, packageHeightCm: variant.packageHeightCm, packageWeightGrams: variant.packageWeightGrams, status: variant.status, imageAssetId: variant.imageAssetId, imageUrl: variant.imageUrl, version: variant.version, suppliers: structuredClone(toRaw(variant.suppliers)), materials: structuredClone(toRaw(variant.materials)) })) }
 }
 function apiMessage(exception: unknown, fallback: string) { return exception instanceof ApiError || exception instanceof Error ? exception.message : fallback }
 let loadSequence = 0
@@ -149,7 +167,7 @@ async function copySku(row: SkuListItemDto) {
   try {
     const product = await domainApi.product(row.productId); const source = product.variants.find(item => item.id === row.variant.id) ?? row.variant
     const duplicate = structuredClone(toRaw(source))
-    delete duplicate.id; delete duplicate.version
+    delete duplicate.id; delete duplicate.version; delete duplicate.customs
     Object.assign(duplicate, { skuCode: '', variantName: `${source.variantName} 副本`, status: 'DRAFT' as const, suppliers: [], materials: [] })
     editProduct.value = { ...product, variants: [...product.variants, duplicate] }; focusVariantId.value = '__NEW__'; showEdit.value = true
   } catch (exception) { error.value = apiMessage(exception, '复制 SKU 失败。') } finally { saving.value = false }
@@ -287,6 +305,17 @@ onMounted(load)
         </button>
       </div>
     </section>
+    <CatalogDeleteDialog
+      v-if="deleteTarget"
+      :title="deleteTarget.variant ? '删除 SKU' : '删除父体'"
+      :name="deleteTarget.variant ? deleteTarget.variant.skuCode + ' · ' + deleteTarget.variant.variantName : deleteTarget.product.productCode + ' · ' + deleteTarget.product.productName"
+      notice="采用逻辑删除，保留图片、资料和历史单据；已有采购及发货仍可继续处理，不再用于新建业务。原编码保留，删除后暂不支持页面恢复。"
+      :description="deleteTarget.variant ? '将从列表隐藏此 SKU 及对应客户商品，不影响父体或其他 SKU。' : '将从列表隐藏此父体、全部 SKU 及对应客户商品。'"
+      :busy="deleting"
+      :error="deleteError"
+      @cancel="!deleting && (deleteTarget = undefined)"
+      @confirm="confirmDelete"
+    />
     <SuccessToast :message="success" />
     <p
       v-if="error"
@@ -381,10 +410,24 @@ onMounted(load)
                     >
                       {{ expanded.includes(group.product.id) ? '▾' : '▸' }} {{ group.product.productCode }}<small>父体 · {{ group.children.length }} 个子体</small>
                     </button>
-                    <span
-                      v-else-if="key === 'image'"
-                      class="product-thumbnail"
-                    >父</span>
+                    <template v-else-if="key === 'image'">
+                      <button
+                        v-if="group.product.imageAssetId"
+                        type="button"
+                        class="material-image-button"
+                        :aria-label="`查看父体 ${group.product.productName} 图片`"
+                        @click.stop="imagePreview = { imageAssetId: group.product.imageAssetId, variantName: group.product.productName }"
+                      >
+                        <AuthenticatedCatalogImage
+                          :image-id="group.product.imageAssetId"
+                          :alt="group.product.productName"
+                        />
+                      </button>
+                      <span
+                        v-else
+                        class="product-thumbnail"
+                      >父</span>
+                    </template>
                     <strong v-else-if="key === 'name'">{{ group.product.productName }}</strong>
                     <span v-else-if="key === 'product'">{{ group.product.productType || '—' }}</span>
                     <span
@@ -416,6 +459,15 @@ onMounted(load)
                         @click="editParent(group.product)"
                       >
                         编辑父体
+                      </button>
+                      <button
+                        v-if="writable"
+                        type="button"
+                        class="secondary-button"
+                        :disabled="saving || deleting"
+                        @click="requestDelete(group.product)"
+                      >
+                        删除父体
                       </button>
                       <button
                         v-if="writable"
@@ -534,6 +586,15 @@ onMounted(load)
                           @click="copySku(row)"
                         >
                           复制
+                        </button>
+                        <button
+                          v-if="writable"
+                          type="button"
+                          class="secondary-button"
+                          :disabled="saving || deleting"
+                          @click="requestDelete(group.product, row.variant)"
+                        >
+                          删除 SKU
                         </button>
                       </div>
                     </td>

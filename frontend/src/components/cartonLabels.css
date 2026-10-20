@@ -1,0 +1,11 @@
+.label-modal { width: min(1050px, calc(100vw - 36px)); max-height: calc(100dvh - 48px); padding: 24px; border: 0; border-radius: 14px; color: var(--ink); overflow: auto; }
+.label-modal::backdrop { background: #17213b88; }
+.label-modal header,.label-modal footer,.label-modal nav { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 18px; }
+.label-modal h2 { margin: 0; font-size: 20px; }.label-modal p { color: var(--muted); line-height: 1.6; }
+.label-modal button { border: 0; border-radius: 7px; padding: 9px 14px; cursor: pointer; }.label-modal button:disabled { opacity: .5; cursor: not-allowed; }
+.label-modal fieldset { border: 0; padding: 0; min-width: 0; }.label-fields { display: grid; grid-template-columns: repeat(auto-fit,minmax(200px,1fr)); gap: 14px; }
+.label-modal label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }.label-modal input:not([type=checkbox]),.label-modal select,.label-modal textarea { padding: 8px; border: 1px solid #d6dbe4; border-radius: 6px; width: 100%; box-sizing: border-box; }
+.label-template-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto auto; gap: 12px; align-items: end; margin: 14px 0; }
+.label-modal .label-error { color: #b42318; }.label-warning { padding: 12px; background: #fff4df; }.label-pdf { width: 100%; height: 520px; border: 1px solid #d6dbe4; border-radius: 8px; }
+.label-modal .primary-button { background: #ff8a25; color: white; }.label-card { border: 1px solid #d6dbe4; border-radius: 10px; padding: 16px; margin: 14px 0; }
+@media(max-width:650px) { .label-template-row { grid-template-columns: 1fr 1fr; }.label-pdf { height: 380px; } }

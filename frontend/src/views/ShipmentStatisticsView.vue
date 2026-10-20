@@ -101,7 +101,7 @@ onMounted(() => void load(true))
           <span>发货箱数（箱）</span><strong>{{ number(result.summary.boxCount) }}</strong><small>筛选范围内累计箱数</small>
         </article>
         <article class="summary-card">
-          <span>发货产品数</span><strong>{{ number(result.summary.products) }}</strong><small>按产品去重，不按 SKU 分摊</small>
+          <span>发货 SKU / 历史父体数</span><strong>{{ number(result.summary.products) }}</strong><small>新记录按 SKU 去重，旧父体记录单列</small>
         </article>
       </div>
       <div class="dispatch-breakdowns">
@@ -124,14 +124,14 @@ onMounted(() => void load(true))
           </TableViewport>
         </article>
         <article class="panel table-panel">
-          <h2>产品发货排行 · 前10名</h2><TableViewport>
+          <h2>SKU 发货排行 · 前10名</h2><TableViewport>
             <table class="data-table">
               <thead><tr><th>产品 / 编号</th><th>记录数</th><th>数量（套）</th><th>箱数</th></tr></thead><tbody>
                 <tr
                   v-for="product in result.products"
-                  :key="product.productId"
+                  :key="product.customerProduct?.id || product.variantId || product.productId"
                 >
-                  <td>{{ product.productName }}<small>{{ product.productCode }}</small></td><td>{{ number(product.records) }}</td><td>{{ number(product.quantity) }}</td><td>{{ number(product.boxCount) }}</td>
+                  <td>{{ product.productName }}<small>{{ product.customerProduct?.customerName || '历史记录（未绑定客户）' }}</small><small>{{ product.productCode }}{{ product.variantId ? '' : ' · 历史父体记录（未绑定 SKU）' }}</small></td><td>{{ number(product.records) }}</td><td>{{ number(product.quantity) }}</td><td>{{ number(product.boxCount) }}</td>
                 </tr><tr v-if="!result.products.length">
                   <td colspan="4">
                     暂无排行数据
@@ -146,13 +146,13 @@ onMounted(() => void load(true))
         <h2>已发货明细 <small>共 {{ number(result.details.totalElements) }} 条 · 发货时快照</small></h2>
         <TableViewport>
           <table class="data-table">
-            <thead><tr><th>确认发货时间</th><th>产品名称 / 编号</th><th>SKU（产品关联）</th><th>发货数量（套）</th><th>发货箱数</th><th>备注</th><th>操作人</th><th>发货记录号</th></tr></thead><tbody>
+            <thead><tr><th>确认发货时间</th><th>SKU 名称 / 编号</th><th>发货 SKU</th><th>发货数量（套）</th><th>发货箱数</th><th>备注</th><th>操作人</th><th>发货记录号</th></tr></thead><tbody>
               <tr
                 v-for="item in result.details.items"
                 :key="item.id"
               >
-                <td>{{ time(item.dispatchedAt) }}</td><td>{{ item.productName }}<small>{{ item.productCode }}</small></td><td class="shipment-remark">
-                  {{ item.skuCodes || '—' }}
+                <td>{{ time(item.dispatchedAt) }}</td><td>{{ item.productName }}<small>{{ item.customerProduct?.customerName || '历史记录（未绑定客户）' }} · {{ item.customerProduct?.customerProductCode || '未填客户编码' }}</small><small>{{ item.productCode }}</small></td><td class="shipment-remark">
+                  {{ item.variantId ? item.skuCodes : '历史父体记录（未绑定 SKU）' }}
                 </td><td>{{ number(item.quantity) }}</td><td>{{ number(item.boxCount) }}</td><td class="shipment-remark">
                   {{ item.remark || '—' }}
                 </td><td>{{ item.actorName }}</td><td>{{ item.id }}</td>

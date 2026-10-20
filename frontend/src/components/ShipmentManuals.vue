@@ -2,15 +2,15 @@
 import { ref, watch } from 'vue'
 import { catalogApi, type SkuDocument } from '@/api/catalog'
 import type { ProductDetailDto } from '@/api/domain'
-const props = defineProps<{ product: ProductDetailDto | undefined }>()
+const props = defineProps<{ product: ProductDetailDto | undefined; variantId?: string | null | undefined }>()
 const files = ref<Array<{ variantId: string; sku: string; document: SkuDocument }>>([])
 const error = ref(''); const busy = ref(false); const loading = ref(false)
-watch(() => props.product, async (product, _old, cleanup) => {
+watch(() => [props.product, props.variantId] as const, async ([product, variantId], _old, cleanup) => {
   files.value = []; error.value = ''; loading.value = false
-  if (!product) return
+  if (!product || !variantId) return
   let active = true; cleanup(() => { active = false }); loading.value = true
   try {
-    const result = await Promise.all(product.variants.filter(v => v.id).map(async v => (await catalogApi.documents(product.id, v.id!, 'MANUAL')).map(document => ({ variantId: v.id!, sku: v.skuCode, document }))))
+    const result = await Promise.all(product.variants.filter(v => v.id === variantId).map(async v => (await catalogApi.documents(product.id, v.id!, 'MANUAL')).map(document => ({ variantId: v.id!, sku: v.skuCode, document }))))
     if (active) files.value = result.flat()
   } catch { if (active) error.value = '说明书加载失败，请刷新重试。' }
   finally { if (active) loading.value = false }

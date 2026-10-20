@@ -1,6 +1,7 @@
 package com.jiugeng.erp.dashboard;
 
 import java.time.Instant;
+import com.jiugeng.erp.customer.CustomerProductLookup.ShippingProduct;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -31,13 +32,13 @@ final class DashboardTypes {
                          String imageId, int quantity, String quantityUnit, int boxCount, String remark,
                          Instant latestShipAt, TodayStatus status, String sourcePendingShipmentId, long version,
                          String createdBy, String updatedBy, String archivedBy, Instant archivedAt,
-                         String archiveReason, Instant createdAt, Instant updatedAt) {}
+                         String archiveReason, Instant createdAt, Instant updatedAt, String variantId, ShippingProduct customerProduct) {}
 
     record PendingShipment(String id, LocalDate plannedShipDate, String productId, String productCode,
                            String productName, String imageId, int quantity, String quantityUnit, int boxCount,
                            String remark, Instant latestShipAt, PendingShipmentStatus status, long version,
                            String createdBy, String updatedBy, String archivedBy, Instant archivedAt,
-                           String archiveReason, Instant createdAt, Instant updatedAt) {}
+                           String archiveReason, Instant createdAt, Instant updatedAt, String variantId, ShippingProduct customerProduct) {}
 
     record PendingProduct(String id, String productName, String imageId, int expectedQuantity, String quantityUnit,
                           String remark, LocalDate expectedCompletionDate, PendingProductStatus status, long version,
@@ -55,7 +56,7 @@ final class DashboardTypes {
                         long byteSize, int width, int height, String sha256) {}
 
     record ShipmentInput(LocalDate date, String productId, String imageId, int quantity, int boxCount,
-                         String remark, Instant latestShipAt) {}
+                         String remark, Instant latestShipAt, String variantId, String customerProductId, ShippingProduct customerProduct) {}
     record PendingProductInput(String productName, String imageId, int expectedQuantity, String remark,
                                LocalDate expectedCompletionDate) {}
     record Command(String actorId, String operation, String key, String payloadHash, String resourceType,

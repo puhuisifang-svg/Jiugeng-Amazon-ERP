@@ -1,0 +1,4 @@
+ALTER TABLE product ADD COLUMN deleted_at TIMESTAMP NULL;
+ALTER TABLE product ADD COLUMN deleted_by VARCHAR(36) NULL;
+ALTER TABLE product_variant ADD COLUMN deleted_at TIMESTAMP NULL;
+ALTER TABLE product_variant ADD COLUMN deleted_by VARCHAR(36) NULL;

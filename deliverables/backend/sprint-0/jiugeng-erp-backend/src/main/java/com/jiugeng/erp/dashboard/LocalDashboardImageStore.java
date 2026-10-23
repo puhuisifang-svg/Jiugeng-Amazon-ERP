@@ -25,6 +25,10 @@ import org.springframework.stereotype.Component;
 
 @Component
 class LocalDashboardImageStore implements DashboardImageStore {
+    private com.jiugeng.erp.objectstorage.PrivateObjectStorage objects =
+        new com.jiugeng.erp.objectstorage.PrivateObjectStorage(null, "", "erp/");
+    @org.springframework.beans.factory.annotation.Autowired
+    void configureStorage(com.jiugeng.erp.objectstorage.PrivateObjectStorage storage) { this.objects = storage; }
     static final int MAX_BYTES = 5 * 1024 * 1024;
     static final int MAX_DIMENSION = 4096;
     static final long MAX_PIXELS = 16_000_000L;
@@ -69,6 +73,8 @@ class LocalDashboardImageStore implements DashboardImageStore {
     @Override
     public byte[] read(String key) throws IOException {
         Path file = resolve(key);
+        var remote = objects.read("dashboard-images", key);
+        if (remote.isPresent()) return remote.get();
         if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(file)) {
             throw new IOException("Dashboard image file is missing");
         }
@@ -77,6 +83,8 @@ class LocalDashboardImageStore implements DashboardImageStore {
 
     @Override
     public void delete(String key) throws IOException {
+        resolve(key);
+        objects.delete("dashboard-images", key);
         try { Files.deleteIfExists(resolve(key)); }
         catch (IllegalArgumentException exception) { throw new IOException("Invalid dashboard image key", exception); }
     }
@@ -139,6 +147,7 @@ class LocalDashboardImageStore implements DashboardImageStore {
 
     private void writeAtomically(String key, byte[] bytes) throws IOException {
         Path target = resolve(key);
+        objects.put("dashboard-images", key, bytes);
         Path temporary = root.resolve(key + ".tmp").normalize();
         if (!temporary.startsWith(root)) throw new IOException("Invalid image path");
         try {

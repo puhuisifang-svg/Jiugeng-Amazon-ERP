@@ -14,6 +14,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 class LabelService {
+    private com.jiugeng.erp.objectstorage.PrivateObjectStorage objects =
+        new com.jiugeng.erp.objectstorage.PrivateObjectStorage(null, "", "erp/");
+    @org.springframework.beans.factory.annotation.Autowired
+    void configureStorage(com.jiugeng.erp.objectstorage.PrivateObjectStorage storage) { this.objects = storage; }
     private final JdbcClient jdbc;private final ObjectMapper json;private final AuditTrail audit;private final LabelPdf pdf;
     LabelService(JdbcClient jdbc,ObjectMapper json,AuditTrail audit,LabelPdf pdf) {this.jdbc=jdbc;this.json=json;this.audit=audit;this.pdf=pdf;}
     static Failure invalid(String message) {return new Failure(400,"CARTON_LABEL_INVALID",message);}
@@ -120,6 +124,7 @@ class LabelService {
         var snapshots=snapshots(batch);byte[] content=pdf.render(snapshots);int pages=snapshots.stream().mapToInt(Snapshot::pages).sum();
         if(content.length>20*1024*1024)throw invalid("PDF 文件过大，请分批导出");
         String id=UUID.randomUUID().toString();
+        objects.putDocument("carton-label-exports", id, content);
         jdbc.sql("INSERT INTO carton_label_export(id,request_key,request_hash,page_count,content,created_by) VALUES(:id,:key,:hash,:pages,:bytes,:actor)")
             .param("id",id).param("key",batch.requestKey()).param("hash",hash).param("pages",pages).param("bytes",content).param("actor",actor.userId()).update();
         for(var s:snapshots)jdbc.sql("INSERT INTO carton_label_export_item(export_id,shipment_id,snapshot) VALUES(:id,:shipment,:snapshot)")
@@ -139,6 +144,7 @@ class LabelService {
     }
     @Transactional(readOnly=true)
     byte[] download(String id) {
-        return jdbc.sql("SELECT content FROM carton_label_export WHERE id=:id").param("id",id).query(byte[].class).optional().orElseThrow(this::missing);
+        byte[] legacy = jdbc.sql("SELECT content FROM carton_label_export WHERE id=:id").param("id",id).query(byte[].class).optional().orElseThrow(this::missing);
+        return objects.readOrLegacy("carton-label-exports", id, legacy);
     }
 }

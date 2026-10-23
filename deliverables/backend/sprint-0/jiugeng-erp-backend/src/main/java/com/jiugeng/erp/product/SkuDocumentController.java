@@ -25,6 +25,10 @@ import org.springframework.web.multipart.MultipartFile;
 @Profile("!mock")
 @RequestMapping("/api/v1/products/{productId}/skus/{variantId}/documents")
 class SkuDocumentController {
+    private com.jiugeng.erp.objectstorage.PrivateObjectStorage objects =
+        new com.jiugeng.erp.objectstorage.PrivateObjectStorage(null, "", "erp/");
+    @org.springframework.beans.factory.annotation.Autowired
+    void configureStorage(com.jiugeng.erp.objectstorage.PrivateObjectStorage storage) { this.objects = storage; }
     enum Kind { MANUAL, LABEL }
     record Document(String id, String kind, String fileName, long byteSize, String uploadedAt) {}
     private final JdbcTemplate jdbc;
@@ -67,6 +71,7 @@ class SkuDocumentController {
             || ((lower.endsWith(".txt") || lower.endsWith(".zpl")) && validText(bytes));
         if (!valid) throw new ProductException(400, "SKU_DOCUMENT_TYPE_INVALID", "支持 PDF、PNG、JPG、DOCX、XLSX、TXT、ZPL，请检查文件格式及内容");
         String id = UUID.randomUUID().toString();
+        objects.putDocument("sku-documents", id, bytes);
         jdbc.update("INSERT INTO sku_document(id,variant_id,kind,file_name,byte_size,content,uploaded_by) VALUES(?,?,?,?,?,?,?)",
             id, variantId, kind.name(), name, bytes.length, bytes, actor.userId());
         audit.record(new AuditTrail.BusinessOperation(actor.userId(), actor.loginName(), actor.displayName(), "SKU_DOCUMENT_UPLOAD", "PRODUCT", productId, true,
@@ -82,7 +87,7 @@ class SkuDocumentController {
             ResponseEntity.ok().contentType(MediaType.APPLICATION_OCTET_STREAM).cacheControl(CacheControl.noStore())
                 .header("X-Content-Type-Options", "nosniff")
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(rs.getString("file_name"), StandardCharsets.UTF_8).build().toString())
-                .body(rs.getBytes("content")), documentId, variantId).stream().findFirst()
+                .body(objects.readOrLegacy("sku-documents", documentId, rs.getBytes("content"))), documentId, variantId).stream().findFirst()
             .orElseThrow(() -> new ProductException(404, "SKU_DOCUMENT_NOT_FOUND", "文件不存在或不属于当前 SKU"));
     }
     private boolean starts(byte[] bytes, String prefix) {

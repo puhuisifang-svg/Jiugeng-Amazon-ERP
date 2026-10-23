@@ -27,6 +27,13 @@ server:
   forward-headers-strategy: framework
 
 app:
+  storage:
+    provider: ${ERP_STORAGE_PROVIDER:local}
+    endpoint: ${ERP_OSS_ENDPOINT:}
+    region: ${ERP_OSS_REGION:}
+    bucket: ${ERP_OSS_BUCKET:}
+    prefix: ${ERP_OSS_PREFIX:erp/}
+    credentials-file: ${ERP_OSS_CREDENTIALS_FILE:}
   catalog:
     image-dir: ${ERP_CATALOG_IMAGE_DIR:${user.home}/.jiugeng-erp/catalog-images}
     image-orphan-hours: ${ERP_CATALOG_IMAGE_ORPHAN_HOURS:24}

@@ -25,6 +25,10 @@ import org.springframework.web.multipart.MultipartFile;
 @Profile("!mock")
 @RequestMapping("/api/v1/shipment-documents")
 class ShipmentDocumentController {
+    private com.jiugeng.erp.objectstorage.PrivateObjectStorage objects =
+        new com.jiugeng.erp.objectstorage.PrivateObjectStorage(null, "", "erp/");
+    @org.springframework.beans.factory.annotation.Autowired
+    void configureStorage(com.jiugeng.erp.objectstorage.PrivateObjectStorage storage) { this.objects = storage; }
     enum Kind { LABEL, CARTON_LABEL }
     record Document(String id, String kind, String fileName, long byteSize, String uploadedAt) {}
     record Owner(String todayId, String productId, String variantId, String customerProductId) {}
@@ -77,6 +81,7 @@ class ShipmentDocumentController {
             || ((lower.endsWith(".txt") || lower.endsWith(".zpl")) && validText(bytes));
         if(!valid)throw new DashboardException(400,"DOCUMENT_TYPE_INVALID","支持 PDF、PNG、JPG、TXT、ZPL，请检查文件格式及内容");
         String id=UUID.randomUUID().toString();
+        objects.putDocument("shipment-documents", id, bytes);
         jdbc.update("INSERT INTO dashboard_shipment_document(id,today_shipment_id,product_id,kind,file_name,byte_size,content,uploaded_by,variant_id,customer_product_id) VALUES(?,?,?,?,?,?,?,?,?,?)",
             id,owner.todayId(),owner.productId(),kind.name(),name,bytes.length,bytes,actor.userId(),owner.variantId(),owner.customerProductId());
         audit.record(new AuditTrail.BusinessOperation(actor.userId(),actor.loginName(),actor.displayName(),"SHIPMENT_DOCUMENT_UPLOAD","TODAY_SHIPMENT",shipmentId,true,
@@ -92,7 +97,7 @@ class ShipmentDocumentController {
             ResponseEntity.ok().contentType(MediaType.APPLICATION_OCTET_STREAM).cacheControl(CacheControl.noStore())
                 .header("X-Content-Type-Options","nosniff")
                 .header(HttpHeaders.CONTENT_DISPOSITION,ContentDisposition.attachment().filename(rs.getString("file_name"),StandardCharsets.UTF_8).build().toString())
-                .body(rs.getBytes("content")),documentId,owner.todayId(),owner.productId(),owner.variantId(),owner.variantId(),owner.customerProductId(),owner.customerProductId()).stream().findFirst().orElseThrow(()->missing());
+                .body(objects.readOrLegacy("shipment-documents", documentId, rs.getBytes("content"))),documentId,owner.todayId(),owner.productId(),owner.variantId(),owner.variantId(),owner.customerProductId(),owner.customerProductId()).stream().findFirst().orElseThrow(()->missing());
     }
     private boolean starts(byte[] bytes,byte[] prefix) { return bytes.length>=prefix.length && java.util.Arrays.equals(java.util.Arrays.copyOf(bytes,prefix.length),prefix); }
     private boolean validText(byte[] bytes) {

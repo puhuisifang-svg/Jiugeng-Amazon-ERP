@@ -25,6 +25,10 @@ import org.springframework.stereotype.Component;
 
 @Component
 class LocalCatalogImageStore implements CatalogImageStore {
+    private com.jiugeng.erp.objectstorage.PrivateObjectStorage objects =
+        new com.jiugeng.erp.objectstorage.PrivateObjectStorage(null, "", "erp/");
+    @org.springframework.beans.factory.annotation.Autowired
+    void configureStorage(com.jiugeng.erp.objectstorage.PrivateObjectStorage storage) { this.objects = storage; }
     static final int MAX_BYTES=5*1024*1024, MAX_DIMENSION=4096;
     static final long MAX_PIXELS=16_000_000L;
     private static final int THUMBNAIL_BOUND=320;
@@ -40,8 +44,8 @@ class LocalCatalogImageStore implements CatalogImageStore {
         String id=UUID.randomUUID().toString(),ok=id+"-original.png",tk=id+"-thumbnail.png";
         try{write(ok,original);write(tk,thumbnail);}catch(IOException e){delete(ok);delete(tk);throw e;}
         return new StoredImage(ok,tk,"image/png",decoded.mediaType,source.length,sha(source),decoded.image.getWidth(),decoded.image.getHeight());}
-    public byte[] read(String key)throws IOException{Path file=resolve(key);if(!Files.isRegularFile(file,LinkOption.NOFOLLOW_LINKS)||Files.isSymbolicLink(file))throw new IOException("Image missing");return Files.readAllBytes(file);}
-    public void delete(String key)throws IOException{try{Files.deleteIfExists(resolve(key));}catch(IllegalArgumentException e){throw new IOException("Invalid image key",e);}}
+    public byte[] read(String key)throws IOException{Path file=resolve(key);var remote=objects.read("catalog-images",key);if(remote.isPresent())return remote.get();if(!Files.isRegularFile(file,LinkOption.NOFOLLOW_LINKS)||Files.isSymbolicLink(file))throw new IOException("Image missing");return Files.readAllBytes(file);}
+    public void delete(String key)throws IOException{try{resolve(key);objects.delete("catalog-images",key);Files.deleteIfExists(resolve(key));}catch(IllegalArgumentException e){throw new IOException("Invalid image key",e);}}
     private Decoded decode(byte[] source)throws IOException{try(ImageInputStream stream=ImageIO.createImageInputStream(new ByteArrayInputStream(source))){
         if(stream==null)throw invalid();var readers=ImageIO.getImageReaders(stream);if(!readers.hasNext())throw invalid();ImageReader reader=readers.next();try{
             reader.setInput(stream,true,true);String format=reader.getFormatName().toLowerCase(Locale.ROOT);String media=switch(format){case"jpeg","jpg"->"image/jpeg";case"png"->"image/png";case"webp"->"image/webp";default->throw invalid();};
@@ -50,7 +54,7 @@ class LocalCatalogImageStore implements CatalogImageStore {
         catch(CatalogImageException e){throw e;}catch(RuntimeException e){throw invalid();}}
     private BufferedImage thumbnail(BufferedImage source){double scale=Math.min(1d,(double)THUMBNAIL_BOUND/Math.max(source.getWidth(),source.getHeight()));int w=Math.max(1,(int)Math.round(source.getWidth()*scale)),h=Math.max(1,(int)Math.round(source.getHeight()*scale));BufferedImage out=new BufferedImage(w,h,BufferedImage.TYPE_INT_ARGB);Graphics2D g=out.createGraphics();try{g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,RenderingHints.VALUE_INTERPOLATION_BICUBIC);g.drawImage(source,0,0,w,h,null);}finally{g.dispose();}return out;}
     private byte[] png(BufferedImage image)throws IOException{ByteArrayOutputStream out=new ByteArrayOutputStream();if(!ImageIO.write(image,"png",out))throw new IOException("PNG writer unavailable");return out.toByteArray();}
-    private void write(String key,byte[] bytes)throws IOException{Path target=resolve(key),tmp=root.resolve(key+".tmp").normalize();try{Files.write(tmp,bytes);permissions(tmp,Set.of(PosixFilePermission.OWNER_READ,PosixFilePermission.OWNER_WRITE));try{Files.move(tmp,target,StandardCopyOption.ATOMIC_MOVE);}catch(java.nio.file.AtomicMoveNotSupportedException e){Files.move(tmp,target);}}finally{Files.deleteIfExists(tmp);}}
+    private void write(String key,byte[] bytes)throws IOException{Path target=resolve(key),tmp=root.resolve(key+".tmp").normalize();objects.put("catalog-images",key,bytes);try{Files.write(tmp,bytes);permissions(tmp,Set.of(PosixFilePermission.OWNER_READ,PosixFilePermission.OWNER_WRITE));try{Files.move(tmp,target,StandardCopyOption.ATOMIC_MOVE);}catch(java.nio.file.AtomicMoveNotSupportedException e){Files.move(tmp,target);}}finally{Files.deleteIfExists(tmp);}}
     private Path resolve(String key){if(key==null||!key.matches("[0-9a-fA-F-]{36}-(?:original|thumbnail)\\.png"))throw new IllegalArgumentException("Invalid image key");Path path=root.resolve(key).normalize();if(!path.startsWith(root))throw new IllegalArgumentException("Invalid image key");return path;}
     private CatalogImageException invalid(){return new CatalogImageException(400,"CATALOG_IMAGE_INVALID","仅支持可正常解码的 JPG、PNG 或 WebP 图片");}
     private String sha(byte[] value){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value));}catch(NoSuchAlgorithmException e){throw new IllegalStateException(e);}}

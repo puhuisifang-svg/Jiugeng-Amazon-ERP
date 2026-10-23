@@ -16,6 +16,10 @@ import org.springframework.stereotype.Component;
 
 @Component
 class LocalImportFileStore implements ImportFileStore {
+    private com.jiugeng.erp.objectstorage.PrivateObjectStorage objects =
+        new com.jiugeng.erp.objectstorage.PrivateObjectStorage(null, "", "erp/");
+    @org.springframework.beans.factory.annotation.Autowired
+    void configureStorage(com.jiugeng.erp.objectstorage.PrivateObjectStorage storage) { this.objects = storage; }
     private final Path root;
     LocalImportFileStore(@Value("${app.imports.staging-dir}") String directory) {
         try {
@@ -37,15 +41,19 @@ class LocalImportFileStore implements ImportFileStore {
         Path target = resolve(key);
         Files.copy(input, target);
         setPermissions(target, Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
+        try { objects.put("imports", key, Files.readAllBytes(target)); }
+        catch (IOException failure) { Files.deleteIfExists(target); throw failure; }
         return key;
     }
     @Override public InputStream read(String key) throws IOException {
         Path file = resolve(key);
+        var remote = objects.read("imports", key);
+        if (remote.isPresent()) return new java.io.ByteArrayInputStream(remote.get());
         if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(file))
             throw new IOException("Stored import file missing");
         return Files.newInputStream(file);
     }
-    @Override public void delete(String key) { try { Files.deleteIfExists(resolve(key)); } catch (IOException ignored) {} }
+    @Override public void delete(String key) { try { Path file = resolve(key); objects.delete("imports", key); Files.deleteIfExists(file); } catch (IOException ignored) {} }
 
     CleanupResult cleanup(Set<String> protectedKeys, Instant cutoff) {
         int deleted = 0;
@@ -56,8 +64,10 @@ class LocalImportFileStore implements ImportFileStore {
                 if (!key.matches("[0-9a-fA-F-]{36}\\.(?:xlsx|csv)") || protectedKeys.contains(key)) continue;
                 try {
                     if (Files.isSymbolicLink(candidate) || !Files.isRegularFile(candidate, LinkOption.NOFOLLOW_LINKS)) continue;
-                    if (Files.getLastModifiedTime(candidate, LinkOption.NOFOLLOW_LINKS).toInstant().isBefore(cutoff)
-                            && Files.deleteIfExists(candidate)) deleted++;
+                    if (Files.getLastModifiedTime(candidate, LinkOption.NOFOLLOW_LINKS).toInstant().isBefore(cutoff)) {
+                        objects.delete("imports", key);
+                        if (Files.deleteIfExists(candidate)) deleted++;
+                    }
                 } catch (IOException exception) {
                     failures.add(key);
                 }

@@ -29,6 +29,37 @@ async function setup(path = '/home', allowed = ref<string[] | null>(null)) {
 }
 
 describe('horizontal navigation shell', () => {
+  it('centers the measured panel, clamps viewport edges and repositions on resize', async () => {
+    const { wrapper } = await setup()
+    let left = 900
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      return { left: this.matches('.mega-panel') ? 0 : left, top: 50, width: this.matches('.mega-panel') ? 570 : 72 } as DOMRect
+    })
+    await wrapper.get('[data-domain="设置"]').trigger('click')
+    await nextTick()
+    expect(wrapper.get<HTMLElement>('.mega-panel').element.style.left).toBe(`${window.innerWidth - 578}px`)
+    left = 400
+    window.dispatchEvent(new Event('resize'))
+    await nextTick()
+    expect(wrapper.get<HTMLElement>('.mega-panel').element.style.left).toBe('151px')
+    left = 10
+    await wrapper.get('.domain-nav').trigger('scroll')
+    expect(wrapper.get<HTMLElement>('.mega-panel').element.style.left).toBe('8px')
+    expect(wrapper.get<HTMLElement>('.mega-panel').element.style.getPropertyValue('--menu-max-height')).toBe(`${window.innerHeight - 58}px`)
+  })
+  it('cancels pending dismissal when switching domains and dismisses over the brand', async () => {
+    const { wrapper } = await setup()
+    vi.useFakeTimers()
+    try {
+      await wrapper.get('[data-domain="商品"]').trigger('mouseenter')
+      await wrapper.get('.erp-navigation').trigger('mouseleave')
+      await wrapper.get('[data-domain="客户"]').trigger('mouseenter')
+      await vi.advanceTimersByTimeAsync(200)
+      expect(wrapper.get('.mega-panel').text()).toContain('客户信息')
+      await wrapper.get('.erp-brand').trigger('mouseenter')
+      expect(wrapper.find('.mega-panel').exists()).toBe(false)
+    } finally { vi.useRealTimers() }
+  })
   it('opens menus on hover and permits moving into the second level', async () => {
     const { wrapper } = await setup('/products')
     await wrapper.get('[data-domain="商品"]').trigger('mouseenter')

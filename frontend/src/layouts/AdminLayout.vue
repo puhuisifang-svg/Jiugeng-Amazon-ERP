@@ -13,15 +13,25 @@ const openDomain = ref('')
 const visited = ref<string[]>([])
 const tabMenu = ref<{ path: string; x: number; y: number }>()
 const tabMenuElement = ref<HTMLElement>()
-const menuLeft = ref(16)
+const menuLeft = ref(8)
+const menuPanel = ref<HTMLElement>()
+const menuMaxHeight = ref(400)
 let hoverTimer: ReturnType<typeof setTimeout> | undefined
 function cancelHoverClose() { clearTimeout(hoverTimer) }
 function leaveNavigation() { cancelHoverClose(); hoverTimer = setTimeout(() => closeMenu(), 180) }
-function hoverDomain(title: string, event?: MouseEvent) {
+function positionMenu() {
+  const panel = menuPanel.value
+  const trigger = navigation.value?.querySelector<HTMLElement>(`[data-domain="${openDomain.value}"]`)
+  if (!panel || !trigger) return
+  const rect = trigger.getBoundingClientRect()
+  const width = panel.getBoundingClientRect().width
+  // Center on the trigger like the reference, then keep both edges inside the viewport.
+  menuLeft.value = Math.max(8, Math.min(rect.left + rect.width / 2 - width / 2, window.innerWidth - width - 8))
+  menuMaxHeight.value = Math.max(0, window.innerHeight - panel.getBoundingClientRect().top - 8)
+}
+function hoverDomain(title: string) {
   cancelHoverClose(); openDomain.value = title
-  const trigger = event?.currentTarget as HTMLElement | undefined
-  const rect = (trigger ?? navigation.value?.querySelector<HTMLElement>(`[data-domain="${title}"]`))?.getBoundingClientRect()
-  menuLeft.value = Math.max(8, Math.min(rect?.left ?? 16, window.innerWidth - Math.min(460, window.innerWidth - 32) - 16))
+  void nextTick(positionMenu)
 }
 async function openTabMenu(event: MouseEvent | KeyboardEvent, path: string) {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
@@ -125,11 +135,13 @@ async function logout() {
 onMounted(() => {
   document.addEventListener('pointerdown', onOutside)
   document.addEventListener('keydown', onEscape)
+  window.addEventListener('resize', positionMenu)
 })
 onBeforeUnmount(() => {
   cancelHoverClose()
   document.removeEventListener('pointerdown', onOutside)
   document.removeEventListener('keydown', onEscape)
+  window.removeEventListener('resize', positionMenu)
 })
 </script>
 
@@ -152,6 +164,7 @@ onBeforeUnmount(() => {
           to="/home"
           aria-label="九更亚马逊 ERP"
           @click="closeMenu()"
+          @mouseenter="closeMenu()"
         >
           <span class="erp-brand__mark">九</span>
           <span>九更 <strong>ERP</strong></span>
@@ -159,6 +172,7 @@ onBeforeUnmount(() => {
         <nav
           class="domain-nav"
           aria-label="主菜单"
+          @scroll="positionMenu"
         >
           <button
             v-for="domain in domains"
@@ -168,8 +182,8 @@ onBeforeUnmount(() => {
             :class="{ 'is-active': activeDomain === domain.title, 'is-open': openDomain === domain.title }"
             :aria-expanded="openDomain === domain.title"
             :aria-controls="openDomain === domain.title ? 'navigation-panel' : undefined"
-            @mouseenter="hoverDomain(domain.title, $event)"
-            @click="hoverDomain(domain.title, $event)"
+            @mouseenter="hoverDomain(domain.title)"
+            @click="hoverDomain(domain.title)"
             @keydown.down.prevent="focusPanel(domain.title)"
           >
             {{ domain.title }} <span
@@ -181,29 +195,32 @@ onBeforeUnmount(() => {
         <div
           v-if="expanded"
           id="navigation-panel"
+          ref="menuPanel"
           class="mega-panel"
-          :style="{ left: `${menuLeft}px` }"
+          :style="{ left: `${menuLeft}px`, '--menu-max-height': `${menuMaxHeight}px` }"
           :aria-label="`${expanded.title}功能`"
         >
-          <section
-            v-for="row in expanded.rows"
-            :key="row.group"
-            class="mega-row"
-          >
-            <h2><span aria-hidden="true">{{ expanded.icon }}</span>{{ row.group }}</h2>
-            <div class="mega-links">
-              <RouterLink
-                v-for="item in row.items"
-                :key="item.path"
-                :to="`/${item.path}`"
-                :class="{ 'is-current': currentEntry?.path === item.path }"
-                :aria-current="currentEntry?.path === item.path ? 'page' : undefined"
-                @click="closeMenu()"
-              >
-                {{ item.meta?.title }}
-              </RouterLink>
-            </div>
-          </section>
+          <div class="mega-panel__body">
+            <section
+              v-for="row in expanded.rows"
+              :key="row.group"
+              class="mega-row"
+            >
+              <h2><span aria-hidden="true">{{ expanded.icon }}</span>{{ row.group }}</h2>
+              <div class="mega-links">
+                <RouterLink
+                  v-for="item in row.items"
+                  :key="item.path"
+                  :to="`/${item.path}`"
+                  :class="{ 'is-current': currentEntry?.path === item.path }"
+                  :aria-current="currentEntry?.path === item.path ? 'page' : undefined"
+                  @click="closeMenu()"
+                >
+                  {{ item.meta?.title }}
+                </RouterLink>
+              </div>
+            </section>
+          </div>
         </div>
       </div>
       <div class="erp-account">
@@ -343,13 +360,15 @@ onBeforeUnmount(() => {
 .erp-account { display: flex; flex: 0 0 auto; align-items: center; gap: 18px; padding: 0 20px; font-size: 12px; }
 .platform-label { padding: 6px 12px; color: #cbd4ec; background: #283451; border-radius: 16px; }
 .erp-account button { padding: 8px 0; color: #d7dff0; border: 0; background: transparent; cursor: pointer; }
-.mega-panel { position: absolute; top: 100%; left: 16px; width: min(460px, calc(100vw - 32px)); max-height: calc(100vh - 130px); overflow-y: auto; padding: 8px 12px; color: white; background: #232c48; border: 1px solid #34405b; border-radius: 7px; box-shadow: 0 12px 24px #10172b40; }
-.mega-row { display: grid; grid-template-columns: 120px minmax(0, 1fr); align-items: start; padding: 8px 0; }
+.mega-panel { position: absolute; top: calc(100% + 6px); width: max-content; min-width: min(570px, calc(100vw - 16px)); max-width: calc(100vw - 16px); color: white; background: #232c48; border-radius: 4px; box-shadow: 0 6px 12px #10172b40; }
+.mega-panel::before { position: absolute; inset: -6px 0 auto; height: 6px; content: ''; }
+.mega-panel__body { max-height: var(--menu-max-height); overflow-y: auto; padding: 0 16px; border-radius: inherit; }
+.mega-row { display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: center; min-height: 49px; padding: 8px 0; }
 .mega-row + .mega-row { border-top: 1px dashed #46516a; }
-.mega-row h2 { display: flex; align-items: center; gap: 12px; margin: 8px 16px 8px 0; color: #b8c1d5; border-right: 1px solid #46516a; font-size: 14px; line-height: 24px; }
-.mega-row h2 span { color: #ffb448; font-size: 22px; }
-.mega-links { display: flex; flex-wrap: wrap; gap: 4px 8px; }
-.mega-links a { padding: 6px 10px; border-radius: 4px; font-size: 13px; line-height: 20px; text-decoration: none; }
+.mega-row h2 { display: flex; align-items: center; gap: 8px; margin: 0; padding-right: 12px; color: #b8c1d5; border-right: 1px solid #46516a; font-size: 12px; line-height: 16px; white-space: nowrap; }
+.mega-row h2 span { color: #ffb448; font-size: 16px; }
+.mega-links { display: flex; flex-wrap: wrap; gap: 0; min-width: 0; }
+.mega-links a { padding: 6px 12px; border-radius: 2px; font-size: 12px; font-weight: 600; line-height: 20px; white-space: nowrap; text-decoration: none; }
 .tab-context-menu { position: fixed; z-index: 25; width: 160px; padding: 4px; border: 1px solid var(--line); border-radius: 6px; background: white; box-shadow: 0 6px 24px #17203326; }
 .tab-context-menu button { display: block; width: 100%; min-height: 36px; padding: 0 12px; text-align: left; border: 0; border-radius: 4px; background: white; color: var(--ink); cursor: pointer; font-size: 13px; }
 .tab-context-menu button:hover { background: var(--accent-soft); }
@@ -387,9 +406,8 @@ onBeforeUnmount(() => {
   .domain-nav { flex: 1; }
   .domain-nav button { min-width: 70px; padding-inline: 10px; }
   .erp-account { justify-content: flex-end; width: 100%; min-height: 32px; background: #192746; }
-  .mega-panel { left: 8px; width: calc(100vw - 16px); padding-inline: 12px; }
-  .mega-row { grid-template-columns: 1fr; padding-block: 10px; }
-  .mega-row h2 { border: 0; margin: 4px 0; }
+  .mega-panel__body { padding-inline: 12px; }
+  .mega-row { grid-template-columns: 96px minmax(0, 1fr); }
   .page-heading { padding: 3px 8px; }
   .erp-content { padding: 8px; }
   .page-heading__brand { display: none; }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProductNameEditor from './ProductNameEditor.vue'
 import { computed, nextTick, onMounted, reactive, ref, toRaw } from 'vue'
 import { RouterLink } from 'vue-router'
 import { catalogApi } from '@/api/catalog'
@@ -320,19 +321,11 @@ onMounted(loadReferences)
                 required
                 maxlength="64"
               ></label>
-              <label>SKU 名称<textarea
+              <ProductNameEditor
                 v-model="variant.variantName"
-                class="product-display-name"
-                :class="{ 'product-display-name--highlighted': variant.nameHighlighted }"
-                required
-                maxlength="200"
-                rows="2"
-                placeholder="可按 Enter 换行"
-              /></label>
-              <label class="checkbox-label sku-name-highlight"><input
-                v-model="variant.nameHighlighted"
-                type="checkbox"
-              >名称标红</label>
+                v-model:styles="variant.nameStyles"
+                :highlighted="variant.nameHighlighted"
+              />
               <label>状态<select v-model="variant.status"><option value="ACTIVE">启用</option><option value="DRAFT">待定</option><option value="DISABLED">停用</option></select></label>
             </div>
             <section

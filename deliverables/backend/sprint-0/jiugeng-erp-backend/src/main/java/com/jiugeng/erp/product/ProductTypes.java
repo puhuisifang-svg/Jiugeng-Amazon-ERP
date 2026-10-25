@@ -18,7 +18,7 @@ final class ProductTypes {
             BigDecimal packageLengthCm,BigDecimal packageWidthCm,BigDecimal packageHeightCm,BigDecimal packageWeight,
             String packageWeightUnit,BigDecimal packageWeightGrams,VariantStatus status,String imageAssetId,String imageUrl,
             long version,List<AttributeView> attributes,List<SupplierAssignment> suppliers,
-            List<MaterialAssignment> materials,CustomsProfile customs,boolean nameHighlighted){}
+            List<MaterialAssignment> materials,CustomsProfile customs,boolean nameHighlighted,List<NameStyleSpan> nameStyles){}
     record ProductView(String id,String productCode,String productName,String nameZh,String nameEn,String brand,
             String internalCategory,String productType,String description,ProductStatus status,long version,
             List<VariantView> variants,int skuCount,boolean supplierDetailsAvailable,Instant createdAt,Instant updatedAt,String imageAssetId){}

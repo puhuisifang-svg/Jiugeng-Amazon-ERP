@@ -617,6 +617,46 @@ class ProductControllerTest {
                 .andExpect(jsonPath("$.variants[0].nameHighlighted").value(false));
     }
 
+    @Test
+    void partialNameFormattingRoundTripsAndInvalidWritesRollBack() throws Exception {
+        String token = createUserAndLogin("rich-name-owner", "PRODUCT_MATERIAL");
+        var input = objectMapper.valueToTree(product("RICH-P", "合成父体", "RICH-S", "合成"));
+        var variant = (com.fasterxml.jackson.databind.node.ObjectNode) input.path("variants").get(0);
+        variant.put("variantName", "黑色名称\n610cm*40.5cm");
+        variant.set("nameStyles", objectMapper.readTree("[{\"start\":0,\"end\":5,\"color\":\"BLACK\",\"bold\":true},{\"start\":5,\"end\":17,\"color\":\"RED\",\"bold\":true}]"));
+        JsonNode created = objectMapper.readTree(mvc.perform(post("/api/v1/products")
+                .header("Authorization", bearer(token)).contentType(MediaType.APPLICATION_JSON).content(input.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.variants[0].nameStyles[1].color").value("RED"))
+                .andReturn().getResponse().getContentAsString());
+        String id = created.path("id").asText();
+        mvc.perform(get("/api/v1/products/" + id).header("Authorization", bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.variants[0].nameStyles[0].color").value("BLACK"))
+                .andExpect(jsonPath("$.variants[0].nameStyles[1].bold").value(true));
+        String reader = createUserAndLogin("rich-name-reader", "SELECTION");
+        mvc.perform(put("/api/v1/products/" + id).header("Authorization", bearer(reader))
+                .contentType(MediaType.APPLICATION_JSON).content(created.toString())).andExpect(status().isForbidden());
+        var changed = (com.fasterxml.jackson.databind.node.ObjectNode) created.path("variants").get(0);
+        ((com.fasterxml.jackson.databind.node.ObjectNode) changed.path("nameStyles").get(1)).put("end", 201);
+        mvc.perform(put("/api/v1/products/" + id).header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).content(created.toString())).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/products/" + id).header("Authorization", bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.version").value(created.path("version").asInt()))
+                .andExpect(jsonPath("$.variants[0].nameStyles[1].end").value(17));
+        changed.remove("nameStyles"); // Old clients preserve formatting when the name is unchanged.
+        JsonNode preserved = objectMapper.readTree(mvc.perform(put("/api/v1/products/" + id)
+                .header("Authorization", bearer(token)).contentType(MediaType.APPLICATION_JSON).content(created.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.variants[0].nameStyles[1].color").value("RED"))
+                .andReturn().getResponse().getContentAsString());
+        mvc.perform(put("/api/v1/products/" + id).header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).content(created.toString())).andExpect(status().isConflict());
+        var changedAgain = (com.fasterxml.jackson.databind.node.ObjectNode) preserved.path("variants").get(0);
+        ((com.fasterxml.jackson.databind.node.ObjectNode) changedAgain.path("nameStyles").get(1)).put("color", "BLACK").put("bold", false);
+        mvc.perform(put("/api/v1/products/" + id).header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).content(preserved.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.variants[0].nameStyles[1].color").value("BLACK"))
+                .andExpect(jsonPath("$.variants[0].nameStyles[1].bold").value(false));
+    }
+
     private String uploadCatalogImage(String token,String purpose) throws Exception {
         var bytes=new java.io.ByteArrayOutputStream();
         javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(2,2,java.awt.image.BufferedImage.TYPE_INT_RGB),"png",bytes);

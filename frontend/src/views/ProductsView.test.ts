@@ -42,7 +42,7 @@ describe('ProductsView', () => {
     expect(wrapper.get('.parent-toggle .product-display-name').text()).toContain('测试产品')
     await wrapper.get('.parent-toggle').trigger('click')
     expect(wrapper.get('.sku-code-button .product-display-name').element.textContent).toBe('合成名称\n规格补充')
-    expect(wrapper.get('.sku-code-button .product-display-name').classes()).toContain('product-display-name--highlighted')
+    expect(wrapper.get('.sku-code-button .product-display-name span').attributes('style')).toContain('color: rgb(198, 40, 40)')
     expect(wrapper.get('.sku-code-button .product-display-code').text()).toBe('SKU-1')
     vi.mocked(domainApi.product).mockResolvedValueOnce(highlighted as Awaited<ReturnType<typeof domainApi.product>>)
     await wrapper.findAll('button').find(b => b.text() === '编辑父体')!.trigger('click'); await flushPromises()

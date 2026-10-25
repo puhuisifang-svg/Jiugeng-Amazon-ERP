@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProductName from '@/components/ProductName.vue'
 import ListPagination from '@/components/ListPagination.vue'
 import RowMoreActions from '@/components/RowMoreActions.vue'
 import CatalogDeleteDialog from '@/components/CatalogDeleteDialog.vue'
@@ -86,7 +87,7 @@ function dimensionLabel(variant: ProductVariantDto) {
   return variant.itemDimensions || variant.packageDimensions || '—'
 }
 function toInput(product: ProductDetailDto): ProductInput {
-  return { imageAssetId: product.imageAssetId, productCode: product.productCode, productName: product.productName, productType: product.productType, description: product.description, status: product.status, version: product.version, variants: product.variants.map(variant => ({ id: variant.id, customs: variant.customs, skuCode: variant.skuCode, variantName: variant.variantName, nameHighlighted: variant.nameHighlighted, itemDimensions: variant.itemDimensions, packageDimensions: variant.packageDimensions, itemLengthCm: variant.itemLengthCm, itemWidthCm: variant.itemWidthCm, itemHeightCm: variant.itemHeightCm, packageLengthCm: variant.packageLengthCm, packageWidthCm: variant.packageWidthCm, packageHeightCm: variant.packageHeightCm, packageWeightGrams: variant.packageWeightGrams, status: variant.status, imageAssetId: variant.imageAssetId, imageUrl: variant.imageUrl, version: variant.version, suppliers: structuredClone(toRaw(variant.suppliers)), materials: structuredClone(toRaw(variant.materials)) })) }
+  return { imageAssetId: product.imageAssetId, productCode: product.productCode, productName: product.productName, productType: product.productType, description: product.description, status: product.status, version: product.version, variants: product.variants.map(variant => ({ id: variant.id, customs: variant.customs, skuCode: variant.skuCode, variantName: variant.variantName, nameHighlighted: variant.nameHighlighted, nameStyles: variant.nameStyles, itemDimensions: variant.itemDimensions, packageDimensions: variant.packageDimensions, itemLengthCm: variant.itemLengthCm, itemWidthCm: variant.itemWidthCm, itemHeightCm: variant.itemHeightCm, packageLengthCm: variant.packageLengthCm, packageWidthCm: variant.packageWidthCm, packageHeightCm: variant.packageHeightCm, packageWeightGrams: variant.packageWeightGrams, status: variant.status, imageAssetId: variant.imageAssetId, imageUrl: variant.imageUrl, version: variant.version, suppliers: structuredClone(toRaw(variant.suppliers)), materials: structuredClone(toRaw(variant.materials)) })) }
 }
 function apiMessage(exception: unknown, fallback: string) { return exception instanceof ApiError || exception instanceof Error ? exception.message : fallback }
 let loadSequence = 0
@@ -534,10 +535,11 @@ onMounted(load)
                         type="button"
                         @click="openDetail(row)"
                       >
-                        <span
-                          class="product-display-name"
-                          :class="{ 'product-display-name--highlighted': row.variant.nameHighlighted }"
-                        >{{ row.variant.variantName }}</span><small class="product-display-code">{{ row.variant.skuCode }}</small>
+                        <ProductName
+                          :text="row.variant.variantName"
+                          :styles="row.variant.nameStyles"
+                          :highlighted="row.variant.nameHighlighted"
+                        /><small class="product-display-code">{{ row.variant.skuCode }}</small>
                       </button>
                       <span
                         v-else-if="key === 'stock'"

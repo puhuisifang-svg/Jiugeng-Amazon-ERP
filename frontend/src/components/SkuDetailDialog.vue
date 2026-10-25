@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProductName from './ProductName.vue'
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { domainApi, type SkuListItemDto, type ProductHistoryDto, type ProductVariantDto } from '@/api/domain'
@@ -57,11 +58,12 @@ watch(() => props.detailRow, async row => {
           v-else
           class="product-thumbnail product-thumbnail--placeholder"
         >图</span><div>
-          <h2
-            class="product-display-name"
-            :class="{ 'product-display-name--highlighted': detailVariant?.nameHighlighted }"
-          >
-            {{ detailVariant?.variantName }}
+          <h2>
+            <ProductName
+              :text="detailVariant?.variantName ?? ''"
+              :styles="detailVariant?.nameStyles"
+              :highlighted="detailVariant?.nameHighlighted"
+            />
           </h2><p
             v-if="error"
             class="data-state data-state--error"
@@ -85,11 +87,12 @@ watch(() => props.detailRow, async row => {
         v-if="detailTab === 'basic'"
         class="sku-detail-grid"
       >
-        <dt>SKU</dt><dd>{{ detailVariant?.skuCode }}</dd><dt>品名</dt><dd
-          class="product-display-name"
-          :class="{ 'product-display-name--highlighted': detailVariant?.nameHighlighted }"
-        >
-          {{ detailVariant?.variantName }}
+        <dt>SKU</dt><dd>{{ detailVariant?.skuCode }}</dd><dt>品名</dt><dd>
+          <ProductName
+            :text="detailVariant?.variantName ?? ''"
+            :styles="detailVariant?.nameStyles"
+            :highlighted="detailVariant?.nameHighlighted"
+          />
         </dd><dt>SKU 状态</dt><dd>{{ labelStatus(detailVariant?.status ?? '') }}</dd><dt>产品状态</dt><dd>{{ labelStatus(detailRow.productStatus) }}</dd>
       </dl>
       <div

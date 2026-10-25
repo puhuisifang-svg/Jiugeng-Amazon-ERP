@@ -6,13 +6,14 @@ import { catalogApi } from '@/api/catalog'
 describe('ProductForm', () => {
   it('round-trips multiline names and highlight without changing existing statuses', async () => {
     const wrapper = mount(ProductForm, { props: { submitLabel: '保存', initial: { productCode: 'SYN', productName: '合成父体', status: 'DISABLED', variants: [{ skuCode: 'SYN-S', variantName: '第一行\n第二行', nameHighlighted: true, status: 'DRAFT', suppliers: [], materials: [] }] } } })
-    expect(wrapper.get('textarea[required]').classes()).toContain('product-display-name--highlighted')
+    expect(wrapper.get('.product-name-editor__preview .product-display-name span').attributes('style')).toContain('color: rgb(198, 40, 40)')
     await wrapper.get('textarea[required]').setValue('修改品名\n规格补充')
     await wrapper.get('form').trigger('submit')
     expect(wrapper.emitted('submit')?.[0]?.[0]).toMatchObject({ status: 'DISABLED', variants: [{ variantName: '修改品名\n规格补充', nameHighlighted: true, status: 'DRAFT' }] })
-    await wrapper.get('.checkbox-label input').setValue(false)
+    await wrapper.findAll('button').find(b => b.text() === '全选名称')!.trigger('click')
+    await wrapper.findAll('button').find(b => b.text() === '黑色')!.trigger('click')
     await wrapper.get('form').trigger('submit')
-    expect(wrapper.emitted('submit')?.[1]?.[0]).toMatchObject({ variants: [{ nameHighlighted: false }] })
+    expect(wrapper.emitted('submit')?.[1]?.[0]).toMatchObject({ variants: [{ nameStyles: [{ start: 0, end: 9, color: 'BLACK', bold: true }] }] })
     await wrapper.findAll('button').find(button => button.text() === '新增 SKU')!.trigger('click')
     expect((wrapper.findAll('.variant-editor')[1]!.get('select').element as HTMLSelectElement).value).toBe('ACTIVE')
     wrapper.unmount()

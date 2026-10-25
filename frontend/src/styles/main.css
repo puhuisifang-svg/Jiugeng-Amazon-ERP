@@ -11,6 +11,13 @@
   --line: #e5e8ef;
   --surface: #ffffff;
   --sidebar: #151b2b;
+  /* ERP-080: docs/ui/UI_STANDARD.md is the normative density contract. */
+  --ui-header-height: 44px;
+  --ui-tabs-height: 32px;
+  --ui-breadcrumb-height: 28px;
+  --ui-control-height: 32px;
+  --ui-page-padding: 12px;
+  --ui-section-gap: 8px;
 }
 
 * { box-sizing: border-box; }
@@ -452,16 +459,29 @@ select:disabled { color: #8a93a5; background-color: #f3f5f8; cursor: not-allowed
 .purchase-timeline span, .purchase-timeline small { display: block; margin-top: 4px; color: var(--muted); }
 .empty-state--compact { min-height: 120px; }
 /* Compact, persistent search controls; editing forms keep their original spacing. */
-.erp-content .page-stack { gap: 12px; }
+.erp-content .page-stack { gap: var(--ui-section-gap); }
 .erp-content :is(.filter-panel, .audit-filters, .dashboard-filters, .monitor-filters, .sku-filter-card) {
   position: sticky; top: 0; z-index: 6;
-  min-height: 0; padding: 10px 14px; gap: 8px 12px;
+  min-height: 0; padding: 8px 12px; gap: 8px 12px;
   background: white; box-shadow: 0 2px 6px #23395808;
 }
 .erp-content :is(.filter-panel, .audit-filters, .dashboard-filters, .monitor-filters, .sku-filter-card) label { gap: 4px; font-size: 12px; }
 .erp-content :is(.filter-panel, .audit-filters, .dashboard-filters, .monitor-filters, .sku-filter-card) :is(input:not([type="checkbox"]), select, button) { height: 32px; min-height: 32px; }
 .erp-content .monitor-search { width: auto; flex: 1 1 360px; }
-.erp-content .material-toolbar { padding: 10px 14px; }
+.erp-content .material-toolbar { padding: 8px 12px; flex-wrap: wrap; gap: 8px; }
+.erp-content :is(.monitor-toolbar, .monitor-pagination) { padding: 8px 12px; gap: 8px; }
+.erp-content :is(.material-toolbar, .page-actions, .monitor-toolbar) :is(button, .primary-link, .toolbar-link, .secondary-action) { min-height: var(--ui-control-height); padding-inline: 12px; font-size: 13px; }
+.erp-content :is(.material-toolbar, .page-actions, .monitor-toolbar) > div { flex-wrap: wrap; gap: 8px; }
+.erp-content .page-actions { flex-wrap: wrap; gap: 8px; font-size: 13px; }
+.erp-content .page-stack > .page-heading { padding: 10px 12px; gap: 8px; box-shadow: none; }
+.erp-content .page-stack > .page-heading h1 { margin: 0 0 4px; font-size: 16px; }
+.erp-content .page-stack > .page-heading p { font-size: 13px; }
+.erp-content .pagination { gap: 8px; padding: 8px 12px; font-size: 13px; flex-wrap: wrap; }
+.erp-content .pagination button { min-height: var(--ui-control-height); padding-inline: 12px; }
+@media (min-width: 1001px) {
+  .erp-content :is(.filter-panel, .audit-filters, .dashboard-filters, .sku-filter-grid) label { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .erp-content :is(.filter-panel, .audit-filters, .dashboard-filters, .sku-filter-grid) label :is(input:not([type="checkbox"]):not([type="radio"]), select) { flex: 1; width: 0; min-width: 0; }
+}
 @media (max-width: 640px) {
   .erp-content :is(.filter-panel, .audit-filters, .dashboard-filters) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .erp-content :is(.filter-panel, .audit-filters, .dashboard-filters, .monitor-filters, .sku-filter-card) { max-height: 35dvh; overflow: auto; }

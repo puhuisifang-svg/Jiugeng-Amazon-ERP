@@ -220,7 +220,10 @@ onBeforeUnmount(() => {
         class="tabs-hint"
       >从上方菜单打开功能，最近访问的页面将在这里显示</span>
     </nav>
-    <div class="page-heading">
+    <nav
+      class="page-heading"
+      aria-label="面包屑"
+    >
       <div class="page-heading__trail">
         <template
           v-for="(item, index) in breadcrumbs"
@@ -239,8 +242,7 @@ onBeforeUnmount(() => {
           </h1><span v-else>{{ item.title }}</span>
         </template>
       </div>
-      <span class="page-heading__brand">九更亚马逊 ERP</span>
-    </div>
+    </nav>
     <main
       id="main-content"
       ref="content"
@@ -255,14 +257,14 @@ onBeforeUnmount(() => {
 <style scoped>
 .erp-shell { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); height: 100vh; height: 100dvh; overflow: hidden; background: #f0f2f7; }
 .erp-shell > * { min-width: 0; }
-.erp-header { position: relative; z-index: 12; display: flex; align-items: stretch; justify-content: space-between; min-height: 56px; color: #e4e9f5; background: #101c3b; }
+.erp-header { position: relative; z-index: 12; display: flex; align-items: stretch; justify-content: space-between; min-height: var(--ui-header-height); color: #e4e9f5; background: #101c3b; }
 .erp-navigation { display: flex; min-width: 0; align-items: stretch; }
 .erp-brand { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; padding: 0 24px 0 20px; color: inherit; white-space: nowrap; font-size: 17px; text-decoration: none; }
 .erp-brand:hover { color: white; background: #192746; }
 .erp-brand strong { font-size: 13px; color: #9eaccb; font-weight: 500; }
 .erp-brand__mark { display: grid; width: 30px; height: 30px; place-items: center; color: #101c3b; background: #ffb448; border-radius: 8px; font-weight: 800; }
 .domain-nav { display: flex; overflow-x: auto; }
-.domain-nav button { position: relative; flex: 0 0 auto; min-width: 90px; padding: 0 20px; color: #c8d0e3; border: 0; background: transparent; cursor: pointer; font-weight: 600; }
+.domain-nav button { position: relative; flex: 0 0 auto; min-width: 72px; padding: 0 14px; color: #c8d0e3; border: 0; background: transparent; cursor: pointer; font-size: 14px; font-weight: 600; }
 .domain-nav button:hover, .domain-nav button.is-open { color: white; background: #293858; }
 .domain-nav button.is-active::after { position: absolute; bottom: 0; left: 20px; right: 20px; height: 3px; background: #ffb448; content: ''; }
 .domain-chevron { margin-left: 6px; color: #8d9bb9; font-size: 12px; }
@@ -277,22 +279,22 @@ onBeforeUnmount(() => {
 .mega-links { display: flex; flex-wrap: wrap; gap: 4px 8px; }
 .mega-links a { padding: 10px 14px; border-radius: 4px; font-size: 14px; line-height: 20px; text-decoration: none; }
 .mega-links a:hover, .mega-links a.is-current { color: #ffb448; background: #3a435d; }
-.workspace-tabs { display: flex; align-items: stretch; min-height: 38px; padding: 4px 16px 0; overflow-x: auto; color: #d8e0f6; background: #2b4083; }
+.workspace-tabs { display: flex; align-items: stretch; min-height: var(--ui-tabs-height); padding: 2px 12px 0; overflow-x: auto; color: #d8e0f6; background: #2b4083; }
 .home-tab { display: grid; flex: 0 0 44px; place-items: center; margin-right: 8px; border-radius: 6px 6px 0 0; text-decoration: none; font-size: 23px; }
 .workspace-tab { display: flex; flex: 0 0 auto; align-items: center; margin-right: 4px; border-radius: 6px 6px 0 0; font-size: 13px; }
-.workspace-tab a { display: flex; align-items: center; height: 100%; padding: 7px 10px 7px 14px; text-decoration: none; }
+.workspace-tab a { display: flex; align-items: center; height: 100%; padding: 4px 8px 4px 12px; text-decoration: none; }
 .workspace-tab button { margin-right: 7px; width: 24px; height: 24px; color: inherit; background: transparent; border: 0; border-radius: 4px; cursor: pointer; }
 .workspace-tab button:hover { background: #8191bd40; }
 .workspace-tab:hover, .home-tab:hover { background: #405597; }
 .workspace-tab.is-current, .home-tab.is-current { color: #233b79; background: white; }
-.tabs-hint { padding: 7px 12px; color: #b0bfe4; font-size: 12px; white-space: nowrap; }
-.page-heading { display: flex; align-items: center; justify-content: space-between; min-height: 60px; padding: 12px 24px; background: white; border-bottom: 1px solid #e5e8ef; }
+.tabs-hint { padding: 4px 12px; color: #b0bfe4; font-size: 12px; white-space: nowrap; }
+.page-heading { display: flex; align-items: center; min-height: var(--ui-breadcrumb-height); padding: 3px 12px; background: white; border-bottom: 1px solid #e5e8ef; }
 .page-heading__trail { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; min-width: 0; color: #8992a4; font-size: 13px; }
 .page-heading__trail a { color: #53617a; font-weight: 700; text-decoration: none; }
 .page-heading__trail a:hover { color: #ff8a34; }
-.page-heading h1 { margin: 0; color: #202c43; font-size: 17px; font-weight: 600; }
+.page-heading h1 { margin: 0; color: #202c43; font-size: 13px; font-weight: 600; }
 .page-heading__brand { color: #8a94a6; font-size: 12px; }
-.erp-content { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 20px 24px; outline: none; }
+.erp-content { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: var(--ui-page-padding); outline: none; }
 .erp-shell :is(a, button):focus-visible { outline: 2px solid #ffb448; outline-offset: -3px; }
 .skip-navigation { position: fixed; z-index: 30; top: -60px; left: 16px; padding: 12px; color: #101c3b; background: #ffb448; }
 .skip-navigation:focus { top: 4px; }
@@ -304,7 +306,7 @@ onBeforeUnmount(() => {
 }
 @media (max-width: 720px) {
   .erp-header { flex-wrap: wrap; }
-  .erp-navigation { width: 100%; min-height: 54px; }
+  .erp-navigation { width: 100%; min-height: var(--ui-header-height); }
   .erp-brand { font-size: 14px; padding-inline: 12px; }
   .erp-brand strong { display: none; }
   .domain-nav { flex: 1; }
@@ -313,7 +315,8 @@ onBeforeUnmount(() => {
   .mega-panel { left: 8px; width: calc(100vw - 16px); padding-inline: 12px; }
   .mega-row { grid-template-columns: 1fr; padding-block: 10px; }
   .mega-row h2 { border: 0; margin: 4px 0; }
-  .page-heading, .erp-content { padding: 14px; }
+  .page-heading { padding: 3px 8px; }
+  .erp-content { padding: 8px; }
   .page-heading__brand { display: none; }
 }
 </style>

@@ -29,6 +29,13 @@ async function setup(path = '/home', allowed = ref<string[] | null>(null)) {
 }
 
 describe('horizontal navigation shell', () => {
+  it('keeps compact navigation and an accessible breadcrumb without a repeated brand strip', async () => {
+    const { wrapper } = await setup('/products')
+    expect(wrapper.get('nav[aria-label="面包屑"] h1').text()).toBe('产品管理')
+    expect(wrapper.find('.page-heading__brand').exists()).toBe(false)
+    expect(wrapper.find('nav[aria-label="主菜单"]').exists()).toBe(true)
+    expect(wrapper.find('nav[aria-label="最近访问页面"]').exists()).toBe(true)
+  })
   it('groups customer information and products under permission-gated customer management', async () => {
     const allowed = ref<string[] | null>(['customers.read'])
     const { wrapper } = await setup('/customers/info', allowed)

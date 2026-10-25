@@ -32,6 +32,8 @@ This repository is a shared working directory used by the Jiugeng project-manage
 
 ## Required workflow
 
+- All UI work must read and follow `docs/ui/UI_STANDARD.md`. Reuse shared density tokens and controls; record and justify any exception. Do not regress compact navigation, filters, action bars, sticky table headers, or responsive button visibility.
+
 1. Read this file, the assigned ERP plan, and the directly relevant code/tests.
 2. Confirm the task scope, current branch, base SHA, and clean worktree.
 3. For a multi-file or cross-layer change, produce a short implementation plan before editing.

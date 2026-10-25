@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ListPagination from '@/components/ListPagination.vue'
 import CatalogDeleteDialog from '@/components/CatalogDeleteDialog.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
@@ -610,26 +611,17 @@ onMounted(load)
           </table>
         </TableViewport>
       </div>
-      <footer class="sku-pagination">
-        <span>已选 {{ selected.length }} 个 SKU，共 {{ total }} 个父体 / {{ matchingSkuCount }} 个子体</span><div>
-          <label>每页<select
-            v-model.number="size"
-            @change="page = 0; load()"
-          ><option :value="20">20</option><option :value="50">50</option><option :value="100">100</option></select></label><button
-            type="button"
-            :disabled="page === 0"
-            @click="changePage(page - 1)"
-          >
-            上一页
-          </button><span>{{ page + 1 }} / {{ totalPages }}</span><button
-            type="button"
-            :disabled="page + 1 >= totalPages"
-            @click="changePage(page + 1)"
-          >
-            下一页
-          </button>
-        </div>
-      </footer>
+      <ListPagination
+        v-model:page-size="size"
+        :page="page + 1"
+        :total="total"
+        :disabled="loading"
+        @update:page="changePage($event - 1)"
+      >
+        <template #summary>
+          已选 {{ selected.length }} 个 SKU，共 {{ total }} 个父体 / {{ matchingSkuCount }} 个子体
+        </template>
+      </ListPagination>
     </article>
 
     <div

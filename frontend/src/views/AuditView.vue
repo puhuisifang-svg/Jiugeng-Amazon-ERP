@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ListPagination from '@/components/ListPagination.vue'
 import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, ref } from 'vue'
 
@@ -147,11 +148,7 @@ onMounted(() => load())
             </table>
           </TableViewport>
         </div>
-        <div v-if="result.totalPages > 1" class="pagination">
-          <button :disabled="loading || result.page === 0" type="button" @click="load(result.page - 1)">上一页</button>
-          <span>第 {{ result.page + 1 }} / {{ result.totalPages }} 页</span>
-          <button :disabled="loading || result.page + 1 >= result.totalPages" type="button" @click="load(result.page + 1)">下一页</button>
-        </div>
+        <ListPagination v-model:page-size="result.size" :page="result.page + 1" :total="result.totalElements" :disabled="loading" @update:page="load($event - 1)" />
       </div>
     </template>
   </section>

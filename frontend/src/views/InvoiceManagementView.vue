@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ListPagination from '@/components/ListPagination.vue'
+const listSize = ref(20)
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { invoicesApi, type Invoice, type InvoiceInput } from '@/api/invoices'
@@ -29,7 +31,7 @@ const message = (e: unknown) => e instanceof Error ? e.message : '请求失败�
 async function load() {
   const seq = ++loadSequence; loading.value = true; error.value = ''
   try {
-    const result = await invoicesApi.list({ q: query.value.trim(), shipped: shipped.value, invoiced: invoiced.value, page: page.value })
+    const result = await invoicesApi.list({ q: query.value.trim(), shipped: shipped.value, invoiced: invoiced.value, page: page.value, size: listSize.value })
     if (seq !== loadSequence) return
     rows.value = result.items; total.value = result.totalCount
   } catch (e) { if (seq === loadSequence) { rows.value = []; total.value = 0; error.value = message(e) } }
@@ -184,21 +186,13 @@ onMounted(load)
       >
         {{ error ? '加载失败，请重试。' : '暂无发票信息。' }}
       </p>
-      <div class="pagination">
-        <button
-          type="button"
-          :disabled="loading || page === 0"
-          @click="turnPage(-1)"
-        >
-          上一页
-        </button><span>第 {{ page + 1 }} / {{ Math.max(1, Math.ceil(total / 20)) }} 页 · {{ total }} 条</span><button
-          type="button"
-          :disabled="loading || (page + 1) * 20 >= total"
-          @click="turnPage(1)"
-        >
-          下一页
-        </button>
-      </div>
+      <ListPagination
+        v-model:page-size="listSize"
+        :page="page + 1"
+        :total="total"
+        :disabled="loading"
+        @update:page="turnPage($event - 1 - page)"
+      />
     </article>
     <dialog
       v-if="opened"

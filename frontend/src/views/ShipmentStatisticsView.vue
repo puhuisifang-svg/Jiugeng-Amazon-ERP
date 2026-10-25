@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ListPagination from '@/components/ListPagination.vue'
+const listSize = ref(20)
 import { onMounted, reactive, ref } from 'vue'
 import { dashboardApi, type ShipmentStatistics } from '@/api/dashboard'
 import { ApiError } from '@/api/client'
@@ -17,7 +19,7 @@ async function load(search = false) {
     page.value = 0; applied.value = { ...filters }
   }
   const request = ++sequence; loading.value = true; error.value = ''
-  try { const data = await dashboardApi.statistics({ ...applied.value, page: page.value, size: 20 }); if (request === sequence) result.value = data }
+  try { const data = await dashboardApi.statistics({ ...applied.value, page: page.value, size: listSize.value }); if (request === sequence) result.value = data }
   catch (e) { if (request === sequence) { result.value = undefined; errorKey.value++; error.value = e instanceof ApiError ? e.message : '统计加载失败，请重试。' } }
   finally { if (request === sequence) loading.value = false }
 }
@@ -164,21 +166,13 @@ onMounted(() => void load(true))
             </tbody>
           </table>
         </TableViewport>
-        <div class="pagination">
-          <span>第 {{ page + 1 }} / {{ Math.max(1, result.details.totalPages) }} 页</span><button
-            type="button"
-            :disabled="page === 0 || loading"
-            @click="page--; load()"
-          >
-            上一页
-          </button><button
-            type="button"
-            :disabled="page + 1 >= result.details.totalPages || loading"
-            @click="page++; load()"
-          >
-            下一页
-          </button>
-        </div>
+        <ListPagination
+          v-model:page-size="listSize"
+          :page="page + 1"
+          :total="result.details.totalElements"
+          :disabled="loading"
+          @update:page="page = $event - 1; load()"
+        />
       </article>
     </template>
     <p

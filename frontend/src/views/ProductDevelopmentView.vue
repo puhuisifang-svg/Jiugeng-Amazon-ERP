@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ListPagination from '@/components/ListPagination.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
@@ -248,33 +249,13 @@ watch(id, () => {
             </table>
           </TableViewport>
         </div>
-        <footer class="development-pagination">
-          <span>共 {{ result.total }} 条</span><select
-            v-model.number="size"
-            aria-label="每页条数"
-            @change="search"
-          >
-            <option :value="20">
-              20 条/页
-            </option><option :value="50">
-              50 条/页
-            </option><option :value="100">
-              100 条/页
-            </option>
-          </select><button
-            type="button"
-            :disabled="loading || page <= 0"
-            @click="changePage(page - 1)"
-          >
-            上一页
-          </button><span>第 {{ page + 1 }} 页</span><button
-            type="button"
-            :disabled="loading || (page + 1) * size >= result.total"
-            @click="changePage(page + 1)"
-          >
-            下一页
-          </button>
-        </footer>
+        <ListPagination
+          v-model:page-size="size"
+          :page="page + 1"
+          :total="result.total"
+          :disabled="loading"
+          @update:page="changePage($event - 1)"
+        />
       </section>
     </template>
     <p

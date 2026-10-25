@@ -84,7 +84,7 @@ describe('客户管理', () => {
     await wrapper.get('input[placeholder*="1688"]').setValue('buyer')
     await wrapper.get('form.filter-bar').trigger('submit'); await flushPromises()
     expect(mocks.list).toHaveBeenLastCalledWith(expect.objectContaining({ q: 'buyer', page: 0 }))
-    await wrapper.findAll('.pagination button')[1]!.trigger('click'); await flushPromises()
+    await wrapper.get('[aria-label="下一页"]').trigger('click'); await flushPromises()
     expect(mocks.list).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 }))
     wrapper.unmount()
   })

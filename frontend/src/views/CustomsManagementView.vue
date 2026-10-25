@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ListPagination from '@/components/ListPagination.vue'
+const listSize = ref(20)
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { onBeforeRouteLeave, RouterLink } from 'vue-router'
 import { customsApi, blankCustoms, type CustomsProfile, type CustomsRow } from '@/api/customs'
@@ -15,7 +17,7 @@ let sequence = 0
 const message = (e: unknown) => e instanceof Error ? e.message : '请求失败，请重试。'
 async function load() {
   const seq = ++sequence; loading.value = true; error.value = ''
-  try { const result = await customsApi.list(query.value.trim(), state.value, page.value); if (seq === sequence) { rows.value = result.items; total.value = result.totalCount } }
+  try { const result = await customsApi.list(query.value.trim(), state.value, page.value, listSize.value); if (seq === sequence) { rows.value = result.items; total.value = result.totalCount } }
   catch (e) { if (seq === sequence) { rows.value = []; total.value = 0; error.value = message(e) } }
   finally { if (seq === sequence) loading.value = false }
 }
@@ -104,21 +106,13 @@ onMounted(load)
         class="data-state"
       >
         {{ error ? '加载失败，请重试。' : '暂无符合条件的SKU；新增产品后将自动出现在此列表。' }}
-      </p><div class="pagination">
-        <button
-          type="button"
-          :disabled="loading || page === 0"
-          @click="turn(-1)"
-        >
-          上一页
-        </button><span>第 {{ page + 1 }} / {{ Math.max(1, Math.ceil(total / 20)) }} 页 · {{ total }} 条</span><button
-          type="button"
-          :disabled="loading || (page + 1) * 20 >= total"
-          @click="turn(1)"
-        >
-          下一页
-        </button>
-      </div>
+      </p><ListPagination
+        v-model:page-size="listSize"
+        :page="page + 1"
+        :total="total"
+        :disabled="loading"
+        @update:page="turn($event - 1 - page)"
+      />
     </article>
     <dialog
       v-if="editing"

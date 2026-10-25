@@ -55,7 +55,7 @@ describe('MaterialsView merged material management', () => {
     expect(wrapper.findAll('tbody tr')).toHaveLength(20)
     await wrapper.get('[aria-label="选择本页全部辅料"]').setValue(true)
     expect(wrapper.get('.material-toolbar').text()).toContain('删除（20）')
-    await wrapper.get('.list-pagination').findAll('button')[1]!.trigger('click')
+    await wrapper.get('[aria-label="下一页"]').trigger('click')
     expect(wrapper.findAll('tbody tr')).toHaveLength(1)
     expect(wrapper.get('.material-toolbar').text()).not.toContain('删除')
     await wrapper.get('[aria-label="每页条数"]').setValue(50)

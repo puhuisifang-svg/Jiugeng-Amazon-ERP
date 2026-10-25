@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ListPagination from '@/components/ListPagination.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
@@ -387,32 +388,13 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
             </table>
           </TableViewport>
         </div>
-        <div class="monitor-pagination">
-          <span>共 {{ total }} 条</span><span class="monitor-spacer" /><button
-            :disabled="filters.page === 0 || loading || busy"
-            @click="turnPage(-1)"
-          >
-            上一页
-          </button><span>第 {{ filters.page + 1 }} 页</span><button
-            :disabled="(filters.page + 1) * filters.size >= total || loading || busy"
-            @click="turnPage(1)"
-          >
-            下一页
-          </button><select
-            v-model.number="filters.size"
-            aria-label="每页条数"
-            :disabled="busy"
-            @change="search"
-          >
-            <option :value="20">
-              20 条/页
-            </option><option :value="50">
-              50 条/页
-            </option><option :value="100">
-              100 条/页
-            </option>
-          </select>
-        </div>
+        <ListPagination
+          v-model:page-size="filters.size"
+          :page="filters.page + 1"
+          :total="total"
+          :disabled="loading || busy"
+          @update:page="turnPage($event - 1 - filters.page)"
+        />
       </article>
     </template>
     <template v-else-if="detail">
@@ -488,19 +470,14 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
               <dt>{{ fieldLabels[field] }}</dt><dd>{{ display(snapshot.fields[field]) }}</dd>
             </div>
           </dl>
-        </details><div class="monitor-pagination">
-          <span>共 {{ historyTotal }} 次观测 · 第 {{ historyPage + 1 }} 页</span><span class="monitor-spacer" /><button
-            :disabled="historyPage === 0 || loading"
-            @click="historyTurn(-1)"
-          >
-            上一页
-          </button><button
-            :disabled="(historyPage + 1) * 20 >= historyTotal || loading"
-            @click="historyTurn(1)"
-          >
-            下一页
-          </button>
-        </div>
+        </details><ListPagination
+          :page="historyPage + 1"
+          :page-size="20"
+          :sizes="[20]"
+          :total="historyTotal"
+          :disabled="loading"
+          @update:page="historyTurn($event - 1 - historyPage)"
+        />
       </article>
     </template>
     <p

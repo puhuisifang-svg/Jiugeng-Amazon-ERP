@@ -11,6 +11,6 @@ export function customsInput(value: CustomsProfile): CustomsProfile {
 }
 export interface CustomsRow { productId: string; productCode: string; productName: string; variantId: string; skuCode: string; skuName: string; productStatus: string; skuStatus: string; customs: CustomsProfile | null }
 export const customsApi = {
-  list: (q: string, state: string, page: number) => apiRequest<{ items: CustomsRow[]; totalCount: number }>(`/v1/product-customs?${new URLSearchParams({ q, state, page: String(page), size: '20' })}`),
+  list: (q: string, state: string, page: number, size = 20) => apiRequest<{ items: CustomsRow[]; totalCount: number }>(`/v1/product-customs?${new URLSearchParams({ q, state, page: String(page), size: String(size) })}`),
   save: (id: string, value: CustomsProfile) => apiRequest<CustomsProfile>(`/v1/product-customs/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(customsInput(value)) }),
 }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ListPagination from '@/components/ListPagination.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, reactive, ref, watch } from 'vue'
@@ -243,26 +244,14 @@ onMounted(load)
           </table>
         </TableViewport>
       </div>
-      <footer class="purchase-pagination">
-        <span>共 {{ filtered.length }} 单</span><label>每页 <select
-          v-model.number="size"
-          aria-label="每页条数"
-        ><option :value="20">20</option><option :value="50">50</option><option :value="100">100</option></select></label><button
-          type="button"
-          class="secondary-button"
-          :disabled="page <= 1"
-          @click="page--"
-        >
-          上一页
-        </button><span>{{ page }} / {{ pageCount }}</span><button
-          type="button"
-          class="secondary-button"
-          :disabled="page >= pageCount"
-          @click="page++"
-        >
-          下一页
-        </button>
-      </footer>
+      <ListPagination
+        v-model:page-size="size"
+        class="purchase-pagination"
+        :page="page"
+        :total="filtered.length"
+        :disabled="loading"
+        @update:page="page = $event"
+      />
     </section>
     <div
       v-if="showOrderForm"

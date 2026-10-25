@@ -29,7 +29,7 @@ describe('product monitoring workflow', () => {
     expect(w.text()).toContain('待首次观测')
     await w.get('[aria-label="选择 B0TEST0001"]').setValue(true)
     expect(w.text()).toContain('已选 1 条')
-    await w.findAll('button').find(b => b.text() === '下一页')!.trigger('click'); await flushPromises()
+    await w.get('[aria-label="下一页"]').trigger('click'); await flushPromises()
     expect(w.text()).toContain('已选 0 条')
     expect(monitoringApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 }))
   })

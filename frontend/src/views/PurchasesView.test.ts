@@ -82,7 +82,7 @@ describe('purchase order workspace', () => {
   it('resets pagination when filters or tab change', async () => {
     vi.mocked(purchaseApi.orders).mockResolvedValue(Array.from({ length: 25 }, (_, i) => ({ ...order, id: `order-${i}`, orderNo: `PO-${i}` })))
     const { wrapper } = await setup('?type=MATERIAL')
-    await wrapper.findAll('button').find(button => button.text() === '下一页')!.trigger('click')
+    await wrapper.get('[aria-label="下一页"]').trigger('click')
     expect(wrapper.get('.purchase-pagination').text()).toContain('2 / 2')
     await wrapper.get('[aria-label="搜索采购单"]').setValue('PO-24')
     expect(wrapper.get('.purchase-pagination').text()).toContain('1 / 1')

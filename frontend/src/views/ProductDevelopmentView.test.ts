@@ -85,7 +85,7 @@ describe('candidate-linked development', () => {
   it('uses server-side search, status and pagination with candidate provenance', async () => {
     await open('/product-development')
     expect(wrapper.text()).toContain('ND-B0DEV33001')
-    await button('下一页').trigger('click'); await flushPromises()
+    await wrapper.get('[aria-label="下一页"]').trigger('click'); await flushPromises()
     expect(developmentApi.list).toHaveBeenLastCalledWith('', '', 1, 20)
     await button('进行中').trigger('click'); await flushPromises()
     expect(developmentApi.list).toHaveBeenLastCalledWith('', 'IN_PROGRESS', 0, 20)

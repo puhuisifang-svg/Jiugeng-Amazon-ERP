@@ -230,7 +230,7 @@ describe('ProductsView', () => {
     expect(wrapper.findAll('.product-parent-row')).toHaveLength(20)
     await wrapper.get('.parent-toggle').trigger('click')
     expect(wrapper.findAll('.product-child-row')).toHaveLength(2)
-    await wrapper.findAll('button').find(button => button.text() === '下一页')!.trigger('click')
+    await wrapper.get('[aria-label="下一页"]').trigger('click')
     expect(wrapper.findAll('.product-parent-row')).toHaveLength(1)
     await wrapper.get('.parent-toggle').trigger('click')
     expect(wrapper.findAll('.product-child-row')).toHaveLength(2)

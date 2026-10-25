@@ -27,8 +27,8 @@ describe('发票管理', () => {
     await wrapper.get('.filter-bar input').setValue('合成')
     await wrapper.findAll('.filter-bar select')[1]!.setValue('false')
     await wrapper.get('.filter-bar').trigger('submit'); await flushPromises()
-    expect(mocks.list).toHaveBeenLastCalledWith({ q: '合成', shipped: '', invoiced: 'false', page: 0 })
-    await wrapper.findAll('.pagination button')[1]!.trigger('click'); await flushPromises()
+    expect(mocks.list).toHaveBeenLastCalledWith({ q: '合成', shipped: '', invoiced: 'false', page: 0, size: 20 })
+    await wrapper.get('[aria-label="下一页"]').trigger('click'); await flushPromises()
     expect(mocks.list).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 })); wrapper.unmount()
   })
   it('creates from customer billing snapshot at 1 percent with explicit net price and live total', async () => {

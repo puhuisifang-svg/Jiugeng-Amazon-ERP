@@ -12,8 +12,8 @@ export interface Invoice {
   netAmount: string; taxAmount: string; totalAmount: string; updatedAt: string
 }
 export const invoicesApi = {
-  list: (filters: { q: string; shipped: string; invoiced: string; page: number }) => {
-    const params = new URLSearchParams({ q: filters.q, page: String(filters.page), size: '20' })
+  list: (filters: { q: string; shipped: string; invoiced: string; page: number; size?: number }) => {
+    const params = new URLSearchParams({ q: filters.q, page: String(filters.page), size: String(filters.size ?? 20) })
     if (filters.shipped !== '') params.set('shipped', filters.shipped)
     if (filters.invoiced !== '') params.set('invoiced', filters.invoiced)
     return apiRequest<CustomerPage<Invoice>>(`/v1/customers/invoices?${params}`)

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ListPagination from '@/components/ListPagination.vue'
+const listSize = ref(20)
 import CartonLabelExport from '@/components/CartonLabelExport.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
@@ -138,7 +140,7 @@ async function load() {
   }
   loading.value = true; error.value = ''
   try {
-    const result = await dashboardApi.page<DashboardItem>(props.kind, { ...filters, page: page.value, size: 20 })
+    const result = await dashboardApi.page<DashboardItem>(props.kind, { ...filters, page: page.value, size: listSize.value })
     if (sequence !== loadSequence) return
     items.value = result.items; totalPages.value = result.totalPages; total.value = result.totalElements
   } catch (exception) {
@@ -656,19 +658,13 @@ onMounted(async () => {
               </tbody>
             </table>
           </TableViewport>
-        </div><div class="pagination">
-          <button
-            :disabled="page === 0"
-            @click="page--; load()"
-          >
-            上一页
-          </button><span>第 {{ page + 1 }} / {{ Math.max(totalPages, 1) }} 页</span><button
-            :disabled="page + 1 >= totalPages"
-            @click="page++; load()"
-          >
-            下一页
-          </button>
-        </div>
+        </div><ListPagination
+          v-model:page-size="listSize"
+          :page="page + 1"
+          :total="total"
+          :disabled="loading"
+          @update:page="page = $event - 1; load()"
+        />
       </article>
       <CartonLabelExport
         v-if="labelIds"

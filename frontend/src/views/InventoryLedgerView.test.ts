@@ -52,7 +52,7 @@ describe('InventoryLedgerView', () => {
     await flushPromises()
     expect(wrapper.findAll('tbody tr')).toHaveLength(20)
     expect(wrapper.get('tbody tr button').text()).toBe('已冲销')
-    await wrapper.get('.list-pagination').findAll('button')[1]!.trigger('click')
+    await wrapper.get('[aria-label="下一页"]').trigger('click')
     expect(wrapper.findAll('tbody tr')).toHaveLength(2)
     await wrapper.get('input').setValue('PAGE-20')
     expect(wrapper.findAll('tbody tr')).toHaveLength(1)

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ListPagination from '@/components/ListPagination.vue'
+const listSize = ref(20)
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, RouterLink, useRoute } from 'vue-router'
 import { customersApi, type Customer, type CustomerInput, type CustomerProduct, type CustomerProductInput, type CustomerStatus, type InvoiceTitle } from '@/api/customers'
@@ -49,7 +51,7 @@ function message(exception: unknown) { return exception instanceof Error ? excep
 async function load() {
   const sequence = ++loadSequence; loading.value = true; error.value = ''
   try {
-    const filters = { q: query.value.trim(), status: status.value, page: page.value, size: 20 }
+    const filters = { q: query.value.trim(), status: status.value, page: page.value, size: listSize.value }
     const result = isProduct.value ? await customersApi.products({ ...filters, customerId: customerFilter.value }) : await customersApi.list(filters)
     if (sequence !== loadSequence) return
     if (isProduct.value) productRows.value = result.items as CustomerProduct[]
@@ -330,21 +332,13 @@ watch(() => [props.kind, customerFilter.value], () => {
       >
         {{ error ? '加载失败，请点击查询重试。' : '暂无符合条件的记录。' }}
       </p>
-      <div class="pagination">
-        <button
-          type="button"
-          :disabled="loading || page === 0"
-          @click="turnPage(-1)"
-        >
-          上一页
-        </button><span>第 {{ page + 1 }} / {{ Math.max(1, Math.ceil(total / 20)) }} 页</span><button
-          type="button"
-          :disabled="loading || (page + 1) * 20 >= total"
-          @click="turnPage(1)"
-        >
-          下一页
-        </button>
-      </div>
+      <ListPagination
+        v-model:page-size="listSize"
+        :page="page + 1"
+        :total="total"
+        :disabled="loading"
+        @update:page="turnPage($event - 1 - page)"
+      />
     </article>
     <dialog
       v-if="opened"

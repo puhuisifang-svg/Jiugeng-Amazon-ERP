@@ -4,6 +4,19 @@ import ProductForm from './ProductForm.vue'
 import { catalogApi } from '@/api/catalog'
 
 describe('ProductForm', () => {
+  it('separates parent and SKU panels while retaining add/remove actions', async () => {
+    const wrapper = mount(ProductForm, { props: { submitLabel: '创建产品', showCancel: true } })
+    expect(wrapper.get('.product-form__parent').text()).toContain('产品基础信息')
+    expect(wrapper.get('.product-form__variants').findAll('.variant-editor')).toHaveLength(1)
+    await wrapper.findAll('button').find(b => b.text() === '新增 SKU')!.trigger('click')
+    expect(wrapper.get('.product-form__variants').findAll('.variant-editor')).toHaveLength(2)
+    expect(wrapper.get('.product-form__variants-heading').text()).toContain('共 2 个 SKU')
+    await wrapper.findAll('button').find(b => b.text() === '移除 SKU')!.trigger('click')
+    expect(wrapper.get('.product-form__variants').findAll('.variant-editor')).toHaveLength(1)
+    await wrapper.findAll('button').find(b => b.text() === '取消')!.trigger('click')
+    expect(wrapper.emitted('cancel')).toHaveLength(1)
+    wrapper.unmount()
+  })
   it('uploads a parent image independently, blocks saving during upload, and supports removal', async () => {
     const spy = vi.spyOn(catalogApi, 'uploadImage')
     let done!: (value: Awaited<ReturnType<typeof catalogApi.uploadImage>>) => void

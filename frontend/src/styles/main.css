@@ -292,7 +292,7 @@ select:disabled { color: #8a93a5; background-color: #f3f5f8; cursor: not-allowed
 .purchase-dialog h2 { margin: 0; padding-right: 48px; font-size: 19px; }
 .purchase-table { min-width: 860px; }
 .supplier-qr-thumbnail { display: block; width: 48px; height: 48px; object-fit: contain; background: white; border: 1px solid var(--line); border-radius: 8px; }
-.product-create-dialog { display: flex; width: min(1180px, 100%); min-height: 0; flex-direction: column; gap: 12px; padding: 24px; overflow: hidden; }
+.product-create-dialog { display: flex; width: min(1440px, 100%); min-height: 0; flex-direction: column; gap: 12px; padding: 24px; overflow: hidden; }
 .product-create-dialog > h2 { margin: 0; padding-right: 48px; font-size: 19px; }
 .product-create-dialog > p { margin: 0; color: var(--muted); }
 .product-create-form { display: grid; min-height: 0; flex: 1; grid-template-rows: minmax(0, 1fr) auto; gap: 0; overflow: hidden; }

@@ -11,6 +11,35 @@ const navigation = ref<HTMLElement>()
 const content = ref<HTMLElement>()
 const openDomain = ref('')
 const visited = ref<string[]>([])
+const tabMenu = ref<{ path: string; x: number; y: number }>()
+const tabMenuElement = ref<HTMLElement>()
+const menuLeft = ref(16)
+let hoverTimer: ReturnType<typeof setTimeout> | undefined
+function cancelHoverClose() { clearTimeout(hoverTimer) }
+function leaveNavigation() { cancelHoverClose(); hoverTimer = setTimeout(() => closeMenu(), 180) }
+function hoverDomain(title: string, event?: MouseEvent) {
+  cancelHoverClose(); openDomain.value = title
+  const trigger = event?.currentTarget as HTMLElement | undefined
+  const rect = (trigger ?? navigation.value?.querySelector<HTMLElement>(`[data-domain="${title}"]`))?.getBoundingClientRect()
+  menuLeft.value = Math.max(8, Math.min(rect?.left ?? 16, window.innerWidth - Math.min(460, window.innerWidth - 32) - 16))
+}
+async function openTabMenu(event: MouseEvent | KeyboardEvent, path: string) {
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  const x = 'clientX' in event ? event.clientX : rect.left
+  const y = 'clientY' in event ? event.clientY : rect.bottom
+  tabMenu.value = { path, x: Math.max(8, Math.min(x, window.innerWidth - 168)), y: Math.max(8, Math.min(y, window.innerHeight - 124)) }
+  await nextTick(); tabMenuElement.value?.querySelector<HTMLButtonElement>('button')?.focus()
+}
+async function closeTabs(mode: 'current' | 'others' | 'all') {
+  const path = tabMenu.value?.path
+  tabMenu.value = undefined
+  if (!path) return
+  if (mode === 'current') { await closeTab(path); return }
+  const target = mode === 'others' ? entries.value.find(item => item.path === path) : home.value ?? entries.value[0]
+  if (!target) return
+  if (currentEntry.value?.path !== target.path && await router.push(`/${target.path}`)) return
+  visited.value = target.path === 'home' ? [] : [target.path]
+}
 const definitions = [
   { title: '工作台', icon: '⌂', groups: ['工作台', '工作台维护'] },
   { title: '商品', icon: '◇', groups: ['产品管理'] },
@@ -42,6 +71,7 @@ const expanded = computed(() => domains.value.find(domain => domain.title === op
 
 watch([() => route.fullPath, entries], () => {
   openDomain.value = ''
+  tabMenu.value = undefined
   visited.value = visited.value.filter(path => entries.value.some(item => item.path === path))
   const entry = currentEntry.value
   if (entry && entry.path !== 'home' && !visited.value.includes(entry.path)) {
@@ -58,18 +88,21 @@ watch(() => route.fullPath, () => {
 }, { flush: 'post' })
 
 function closeMenu(restoreFocus = false) {
+  cancelHoverClose()
   const title = openDomain.value
   openDomain.value = ''
   if (restoreFocus) navigation.value?.querySelector<HTMLButtonElement>(`[data-domain="${title}"]`)?.focus()
 }
 function onOutside(event: PointerEvent) {
   if (event.target instanceof Node && !navigation.value?.contains(event.target)) closeMenu()
+  if (event.target instanceof Node && !tabMenuElement.value?.contains(event.target)) tabMenu.value = undefined
 }
 function onEscape(event: KeyboardEvent) {
+  if (event.key === 'Escape') tabMenu.value = undefined
   if (event.key === 'Escape' && openDomain.value) closeMenu(true)
 }
 async function focusPanel(title: string) {
-  openDomain.value = title
+  hoverDomain(title)
   await nextTick()
   navigation.value?.querySelector<HTMLAnchorElement>('.mega-panel a')?.focus()
 }
@@ -81,7 +114,7 @@ async function closeTab(path: string) {
     const remaining = tabs.value.filter(item => item.path !== path)
     const target = remaining.at(-1) ?? home.value ?? entries.value.find(item => item.path !== path)
     if (!target) return
-    await router.push(`/${target.path}`)
+    if (await router.push(`/${target.path}`)) return
   }
   visited.value = visited.value.filter(item => item !== path)
 }
@@ -94,6 +127,7 @@ onMounted(() => {
   document.addEventListener('keydown', onEscape)
 })
 onBeforeUnmount(() => {
+  cancelHoverClose()
   document.removeEventListener('pointerdown', onOutside)
   document.removeEventListener('keydown', onEscape)
 })
@@ -110,6 +144,8 @@ onBeforeUnmount(() => {
         ref="navigation"
         class="erp-navigation"
         @focusout="onFocusOut"
+        @mouseenter="cancelHoverClose"
+        @mouseleave="leaveNavigation"
       >
         <RouterLink
           class="erp-brand"
@@ -132,7 +168,8 @@ onBeforeUnmount(() => {
             :class="{ 'is-active': activeDomain === domain.title, 'is-open': openDomain === domain.title }"
             :aria-expanded="openDomain === domain.title"
             :aria-controls="openDomain === domain.title ? 'navigation-panel' : undefined"
-            @click="openDomain = openDomain === domain.title ? '' : domain.title"
+            @mouseenter="hoverDomain(domain.title, $event)"
+            @click="hoverDomain(domain.title, $event)"
             @keydown.down.prevent="focusPanel(domain.title)"
           >
             {{ domain.title }} <span
@@ -145,6 +182,7 @@ onBeforeUnmount(() => {
           v-if="expanded"
           id="navigation-panel"
           class="mega-panel"
+          :style="{ left: `${menuLeft}px` }"
           :aria-label="`${expanded.title}功能`"
         >
           <section
@@ -200,6 +238,8 @@ onBeforeUnmount(() => {
         :key="item.path"
         class="workspace-tab"
         :class="{ 'is-current': currentEntry?.path === item.path }"
+        @contextmenu.prevent="openTabMenu($event, item.path)"
+        @keydown.shift.f10.prevent="openTabMenu($event, item.path)"
       >
         <RouterLink
           :to="`/${item.path}`"
@@ -220,6 +260,32 @@ onBeforeUnmount(() => {
         class="tabs-hint"
       >从上方菜单打开功能，最近访问的页面将在这里显示</span>
     </nav>
+    <div
+      v-if="tabMenu"
+      ref="tabMenuElement"
+      class="tab-context-menu"
+      :style="{ left: `${tabMenu.x}px`, top: `${tabMenu.y}px` }"
+      aria-label="页签操作"
+    >
+      <button
+        type="button"
+        @click="closeTabs('current')"
+      >
+        关闭页签
+      </button>
+      <button
+        type="button"
+        @click="closeTabs('others')"
+      >
+        关闭其他
+      </button>
+      <button
+        type="button"
+        @click="closeTabs('all')"
+      >
+        关闭全部
+      </button>
+    </div>
     <nav
       class="page-heading"
       aria-label="面包屑"
@@ -277,13 +343,16 @@ onBeforeUnmount(() => {
 .erp-account { display: flex; flex: 0 0 auto; align-items: center; gap: 18px; padding: 0 20px; font-size: 12px; }
 .platform-label { padding: 6px 12px; color: #cbd4ec; background: #283451; border-radius: 16px; }
 .erp-account button { padding: 8px 0; color: #d7dff0; border: 0; background: transparent; cursor: pointer; }
-.mega-panel { position: absolute; top: calc(100% + 5px); left: 16px; width: min(860px, calc(100vw - 32px)); max-height: calc(100vh - 130px); overflow-y: auto; padding: 8px 20px; color: white; background: #232c48; border: 1px solid #34405b; border-radius: 7px; box-shadow: 0 12px 24px #10172b40; }
-.mega-row { display: grid; grid-template-columns: 150px minmax(0, 1fr); align-items: start; padding: 16px 0; }
+.mega-panel { position: absolute; top: 100%; left: 16px; width: min(460px, calc(100vw - 32px)); max-height: calc(100vh - 130px); overflow-y: auto; padding: 8px 12px; color: white; background: #232c48; border: 1px solid #34405b; border-radius: 7px; box-shadow: 0 12px 24px #10172b40; }
+.mega-row { display: grid; grid-template-columns: 120px minmax(0, 1fr); align-items: start; padding: 8px 0; }
 .mega-row + .mega-row { border-top: 1px dashed #46516a; }
 .mega-row h2 { display: flex; align-items: center; gap: 12px; margin: 8px 16px 8px 0; color: #b8c1d5; border-right: 1px solid #46516a; font-size: 14px; line-height: 24px; }
 .mega-row h2 span { color: #ffb448; font-size: 22px; }
 .mega-links { display: flex; flex-wrap: wrap; gap: 4px 8px; }
-.mega-links a { padding: 10px 14px; border-radius: 4px; font-size: 14px; line-height: 20px; text-decoration: none; }
+.mega-links a { padding: 6px 10px; border-radius: 4px; font-size: 13px; line-height: 20px; text-decoration: none; }
+.tab-context-menu { position: fixed; z-index: 25; width: 160px; padding: 4px; border: 1px solid var(--line); border-radius: 6px; background: white; box-shadow: 0 6px 24px #17203326; }
+.tab-context-menu button { display: block; width: 100%; min-height: 36px; padding: 0 12px; text-align: left; border: 0; border-radius: 4px; background: white; color: var(--ink); cursor: pointer; font-size: 13px; }
+.tab-context-menu button:hover { background: var(--accent-soft); }
 .mega-links a:hover, .mega-links a.is-current { color: #ffb448; background: #3a435d; }
 .workspace-tabs { display: flex; align-items: stretch; min-height: var(--ui-tabs-height); padding: 2px 12px 0; overflow-x: auto; color: #d8e0f6; background: #2b4083; }
 .home-tab { display: grid; flex: 0 0 44px; place-items: center; margin-right: 8px; border-radius: 6px 6px 0 0; text-decoration: none; font-size: 23px; }

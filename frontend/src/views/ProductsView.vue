@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ListPagination from '@/components/ListPagination.vue'
+import RowMoreActions from '@/components/RowMoreActions.vue'
 import CatalogDeleteDialog from '@/components/CatalogDeleteDialog.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
@@ -69,6 +70,12 @@ const writable = computed(() => session.canAccess(['products.write']))
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / size.value)))
 const allSelected = computed(() => pageRows.value.length > 0 && pageRows.value.every(row => selected.value.includes(row.variant.id ?? '')))
 const selectedRows = computed(() => rows.value.filter(row => selected.value.includes(row.variant.id ?? '')))
+const selectedProducts = computed(() => products.value.filter(product => selectedRows.value.some(row => row.productId === product.id)))
+function openAddSku() {
+  if (!selectedProducts.value.length) return
+  addSkuProductId.value = selectedProducts.value.length === 1 ? selectedProducts.value[0]!.id : ''
+  error.value = ''; showAddSku.value = true
+}
 const historyError = ref('')
 const detailVariant = computed(() => detailRow.value?.variant)
 function hasColumn(key: ColumnKey) { return visibleColumns.value.includes(key) && (key !== 'supplier' || session.canAccess(['suppliers.read'])) }
@@ -264,17 +271,10 @@ onMounted(load)
           v-if="writable"
           class="secondary-button"
           type="button"
-          @click="addSkuProductId = ''; showAddSku = true"
+          :disabled="!selected.length || loading || saving"
+          @click="openAddSku"
         >
-          为产品添加 SKU
-        </button><button
-          v-if="writable"
-          class="secondary-button"
-          type="button"
-          :disabled="!selected.length"
-          @click="resetBatch(); error = ''; showBatch = true"
-        >
-          批量修改
+          添加SKU
         </button><RouterLink
           class="toolbar-link"
           to="/products/imports"
@@ -290,7 +290,7 @@ onMounted(load)
         </button>
       </div>
       <div>
-        <span class="toolbar-hint">已选 {{ selected.length }} 项</span><button
+        <button
           class="secondary-button"
           type="button"
           @click="openColumns"
@@ -446,39 +446,43 @@ onMounted(load)
                     @click.stop
                   >
                     <div class="table-actions">
-                      <button
-                        type="button"
-                        class="secondary-button"
-                        @click="toggleParent(group.product.id)"
+                      <RouterLink
+                        :to="`/products/${group.product.id}`"
+                        class="row-detail-link"
                       >
-                        {{ expanded.includes(group.product.id) ? '收起子体' : '展开子体' }}
-                      </button>
-                      <button
+                        详情
+                      </RouterLink>
+                      <RowMoreActions
                         v-if="writable"
-                        type="button"
-                        :disabled="saving"
-                        @click="editParent(group.product)"
+                        :label="`父体 ${group.product.productCode} 更多操作`"
                       >
-                        编辑父体
-                      </button>
-                      <button
-                        v-if="writable"
-                        type="button"
-                        class="secondary-button"
-                        :disabled="saving || deleting"
-                        @click="requestDelete(group.product)"
-                      >
-                        删除父体
-                      </button>
-                      <button
-                        v-if="writable"
-                        type="button"
-                        class="secondary-button"
-                        :disabled="saving"
-                        @click="addSkuProductId = group.product.id; addSkuToProduct()"
-                      >
-                        添加子体
-                      </button>
+                        <button
+                          v-if="writable"
+                          type="button"
+                          :disabled="saving"
+                          @click="editParent(group.product)"
+                        >
+                          编辑父体
+                        </button>
+                        <button
+                          v-if="writable"
+                          type="button"
+                          class="secondary-button"
+                          :disabled="saving || deleting"
+                          @click="requestDelete(group.product)"
+                        >
+                          删除父体
+                        </button>
+                        <button
+                          v-if="writable"
+                          type="button"
+                          class="secondary-button"
+                          :disabled="saving"
+                          @click="addSkuProductId = group.product.id; addSkuToProduct()"
+                        >
+                          添加子体
+                        </button>
+                      </RowMoreActions>
                     </div>
                   </td>
                 </tr>
@@ -571,32 +575,37 @@ onMounted(load)
                         >
                           详情
                         </button>
-                        <button
+                        <RowMoreActions
                           v-if="writable"
-                          type="button"
-                          :disabled="saving"
-                          @click="openEdit(row)"
+                          :label="`SKU ${row.variant.skuCode} 更多操作`"
                         >
-                          编辑
-                        </button>
-                        <button
-                          v-if="writable"
-                          type="button"
-                          class="secondary-button"
-                          :disabled="saving"
-                          @click="copySku(row)"
-                        >
-                          复制
-                        </button>
-                        <button
-                          v-if="writable"
-                          type="button"
-                          class="secondary-button"
-                          :disabled="saving || deleting"
-                          @click="requestDelete(group.product, row.variant)"
-                        >
-                          删除 SKU
-                        </button>
+                          <button
+                            v-if="writable"
+                            type="button"
+                            :disabled="saving"
+                            @click="openEdit(row)"
+                          >
+                            编辑
+                          </button>
+                          <button
+                            v-if="writable"
+                            type="button"
+                            class="secondary-button"
+                            :disabled="saving"
+                            @click="copySku(row)"
+                          >
+                            复制
+                          </button>
+                          <button
+                            v-if="writable"
+                            type="button"
+                            class="secondary-button"
+                            :disabled="saving || deleting"
+                            @click="requestDelete(group.product, row.variant)"
+                          >
+                            删除 SKU
+                          </button>
+                        </RowMoreActions>
                       </div>
                     </td>
                   </tr>
@@ -643,7 +652,7 @@ onMounted(load)
           @click="showAddSku = false"
         >
           ×
-        </button><h2>为产品添加 SKU</h2><p
+        </button><h2>添加SKU</h2><p
           v-if="error"
           class="data-state data-state--error"
           role="alert"
@@ -654,7 +663,7 @@ onMounted(load)
           v-model="addSkuProductId"
           required
         ><option value="">请选择产品</option><option
-          v-for="product in products"
+          v-for="product in selectedProducts"
           :key="product.id"
           :value="product.id"
         >{{ product.productCode }} · {{ product.productName }}</option></select></label>

@@ -31,6 +31,18 @@ import ProductForm from '@/components/ProductForm.vue'
 const RouterLink = { props: ['to'], template: '<a :href="to"><slot /></a>' }
 
 describe('ProductsView', () => {
+  it('shows only details and more in the parent action column', async () => {
+    const wrapper = mount(ProductsView, { global: { stubs: { RouterLink, Teleport: true } } })
+    await flushPromises()
+    const cell = wrapper.get('.product-parent-row .sticky-action')
+    expect(cell.get('a').attributes('href')).toBe('/products/p1')
+    expect(cell.text()).not.toContain('展开子体')
+    expect(cell.get('.row-more-actions__menu').isVisible()).toBe(false)
+    await cell.get('.row-more-actions__trigger').trigger('click'); await flushPromises()
+    expect(cell.get('.row-more-actions__menu').isVisible()).toBe(true)
+    expect(cell.get('.row-more-actions__menu').text()).toContain('删除父体')
+    wrapper.unmount()
+  })
   it('opens imports in product management instead of materials', async () => {
     const wrapper = mount(ProductsView, { global: { stubs: { RouterLink } } })
     await flushPromises()
@@ -183,15 +195,19 @@ describe('ProductsView', () => {
     expect(wrapper.text()).toContain('暂无匹配的产品')
   })
 
-  it('selects children from the parent and submits their versions atomically', async () => {
+  it('enables Add SKU only after selection and removes duplicate toolbar actions', async () => {
     const wrapper = mount(ProductsView, { global: { stubs: { RouterLink } } })
     await flushPromises()
+    const add = wrapper.findAll('.sku-toolbar button').find(button => button.text() === '添加SKU')!
+    expect(add.attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.sku-toolbar').text()).not.toContain('已选')
+    expect(wrapper.get('.sku-toolbar').text()).not.toContain('批量修改')
     await wrapper.get('input[aria-label="选择父体 P-1"]').setValue(true)
-    await wrapper.findAll('button').find(button => button.text() === '批量修改')!.trigger('click')
-    await wrapper.get('.batch-dialog input[type="checkbox"]').setValue(true)
-    await wrapper.get('.batch-dialog').trigger('submit')
-    await flushPromises()
-    expect(domainApi.batchUpdateSkus).toHaveBeenCalledWith([expect.objectContaining({ productId: 'p1', variantId: 'v1', productVersion: 0, variantVersion: 0, statusSelected: true, status: 'ACTIVE' })])
+    expect(add.attributes('disabled')).toBeUndefined()
+    await add.trigger('click')
+    expect((wrapper.get('.batch-dialog select').element as HTMLSelectElement).value).toBe('p1')
+    expect(wrapper.get('.batch-dialog').text()).toContain('P-1')
+    wrapper.unmount()
   })
 
   it('shows API errors inside the editor and keeps the user input', async () => {

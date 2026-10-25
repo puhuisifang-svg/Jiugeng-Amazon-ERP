@@ -29,6 +29,46 @@ async function setup(path = '/home', allowed = ref<string[] | null>(null)) {
 }
 
 describe('horizontal navigation shell', () => {
+  it('opens menus on hover and permits moving into the second level', async () => {
+    const { wrapper } = await setup('/products')
+    await wrapper.get('[data-domain="商品"]').trigger('mouseenter')
+    expect(wrapper.get('.mega-panel').text()).toContain('产品管理')
+    await wrapper.get('[data-domain="客户"]').trigger('mouseenter')
+    expect(wrapper.get('.mega-panel').text()).toContain('客户信息')
+    await wrapper.get('.erp-navigation').trigger('mouseleave')
+    await wrapper.get('.erp-navigation').trigger('mouseenter')
+    expect(wrapper.find('.mega-panel').exists()).toBe(true)
+    vi.useFakeTimers()
+    try {
+      await wrapper.get('.erp-navigation').trigger('mouseleave')
+      await vi.advanceTimersByTimeAsync(200)
+      expect(wrapper.find('.mega-panel').exists()).toBe(false)
+    } finally { vi.useRealTimers() }
+  })
+  it('offers close, close others and close all on tab context menus', async () => {
+    const { wrapper, router } = await setup('/products')
+    await router.push('/materials')
+    await wrapper.findAll('.workspace-tab')[0]!.trigger('contextmenu', { clientX: 200, clientY: 70 })
+    expect(wrapper.get('.tab-context-menu').text()).toContain('关闭页签')
+    await wrapper.get('.tab-context-menu').findAll('button')[1]!.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/products')
+    expect(wrapper.findAll('.workspace-tab')).toHaveLength(1)
+    await wrapper.get('.workspace-tab').trigger('contextmenu')
+    await wrapper.get('.tab-context-menu').findAll('button')[2]!.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/home')
+    expect(wrapper.findAll('.workspace-tab')).toHaveLength(0)
+  })
+  it('does not remove tabs if navigation is blocked by unsaved changes', async () => {
+    const { wrapper, router } = await setup('/products')
+    router.beforeEach(() => false)
+    await wrapper.get('.workspace-tab').trigger('contextmenu')
+    await wrapper.get('.tab-context-menu').findAll('button')[2]!.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/products')
+    expect(wrapper.findAll('.workspace-tab')).toHaveLength(1)
+  })
   it('keeps compact navigation and an accessible breadcrumb without a repeated brand strip', async () => {
     const { wrapper } = await setup('/products')
     expect(wrapper.get('nav[aria-label="面包屑"] h1').text()).toBe('产品管理')

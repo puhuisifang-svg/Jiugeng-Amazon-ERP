@@ -31,21 +31,49 @@ async function setup(path = '/products/p1') {
   return { wrapper, router }
 }
 describe('parent product details', () => {
-  it('shows overview, previews the parent image and exposes return navigation', async () => {
+  it('opens the exact selected SKU using the existing dialog and closes back to overview', async () => {
+    vi.mocked(domainApi.product).mockResolvedValue({ ...product, variants: [...product.variants, { ...product.variants[0]!, id: 'v2', skuCode: 'SECOND-SKU', variantName: '第二子体' }] })
+    const { wrapper } = await setup()
+    await wrapper.findAll('.sku-overview-link')[1]!.trigger('click'); await flushPromises()
+    expect(wrapper.get('[role="dialog"]').text()).toContain('SECOND-SKU')
+    expect(wrapper.get('[role="dialog"]').text()).toContain('第二子体')
+    expect(wrapper.get('[role="dialog"]').text()).not.toContain('查看产品完整资料')
+    await wrapper.get('[aria-label="关闭"]').trigger('click')
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('SKU 概览')
+  })
+  it('opens the selected SKU editor without switching to another child', async () => {
+    const { wrapper } = await setup()
+    await wrapper.get('.sku-overview-link').trigger('click'); await flushPromises()
+    await wrapper.findAll('button').find(b => b.text() === '编辑 SKU')!.trigger('click')
+    expect(wrapper.getComponent(ProductForm).props('focusVariantId')).toBe('v1')
+  })
+  it.each(['variants', 'materials', 'documents', 'changes'])('shows only basics for legacy section %s without fetching removed content', async section => {
+    const { wrapper } = await setup('/products/p1/' + section)
+    expect(wrapper.text()).toContain('SKU 概览')
+    expect(wrapper.find('.detail-tabs').exists()).toBe(false)
+    expect(domainApi.productHistory).not.toHaveBeenCalled()
+    expect(domainApi.supplier).not.toHaveBeenCalled()
+    expect(domainApi.productMaterialRelations).not.toHaveBeenCalled()
+  })
+  it('does not offer parent or SKU editing without write permission', async () => {
+    vi.mocked(session.canAccess).mockReturnValue(false)
+    const { wrapper } = await setup()
+    expect(wrapper.findAll('button').some(b => b.text() === '编辑')).toBe(false)
+    await wrapper.get('.sku-overview-link').trigger('click'); await flushPromises()
+    expect(wrapper.findAll('button').some(b => b.text() === '编辑 SKU')).toBe(false)
+  })
+  it('shows only parent basics and overview without redundant navigation', async () => {
     const { wrapper } = await setup()
     expect(wrapper.text()).toContain('SKU 概览')
     expect(wrapper.text()).toContain('合成父体')
-    expect(wrapper.get('a[href="/products"]').text()).toBe('返回产品管理')
+    expect(wrapper.text()).not.toContain('返回产品管理')
+    expect(wrapper.findAll('button').some(b => b.text() === '刷新')).toBe(false)
+    expect(wrapper.find('.detail-tabs').exists()).toBe(false)
     await wrapper.get('[aria-label="查看父体图片"]').trigger('click')
     expect(wrapper.get('[aria-label="产品图片预览"]').text()).toContain('合成父体')
     await wrapper.get('[aria-label="关闭图片预览"]').trigger('click')
     expect(wrapper.find('[aria-label="产品图片预览"]').exists()).toBe(false)
-  })
-  it('shows structured dimensions, supplier names and customs data', async () => {
-    const { wrapper } = await setup('/products/p1/variants')
-    expect(wrapper.text()).toContain('10 × 20 × 30 cm')
-    expect(wrapper.text()).toContain('合成供应商')
-    expect(wrapper.text()).toContain('测试申报品名')
   })
   it('preserves parent image and customs during edit, supports cancel and keeps failed edits open', async () => {
     const { wrapper } = await setup()
@@ -60,21 +88,6 @@ describe('parent product details', () => {
     expect(wrapper.findComponent(ProductForm).exists()).toBe(true)
     form.vm.$emit('cancel'); await flushPromises()
     expect(wrapper.findComponent(ProductForm).exists()).toBe(false)
-  })
-  it('loads actual history and offers retry after failure', async () => {
-    vi.mocked(domainApi.productHistory).mockRejectedValueOnce(new Error('记录暂不可用')).mockResolvedValueOnce([{ id: 'h1', action: 'UPDATE', actorLoginName: 'tester', detail: '数量 3 → 5', occurredAt: '2026-01-01' }])
-    const { wrapper } = await setup('/products/p1/changes')
-    expect(wrapper.text()).toContain('记录暂不可用')
-    await wrapper.findAll('button').find(b => b.text() === '重试')!.trigger('click'); await flushPromises()
-    expect(wrapper.text()).toContain('数量 3 → 5')
-  })
-  it('does not fetch protected references or show edit actions without permission', async () => {
-    vi.mocked(session.canAccess).mockImplementation(caps => !caps?.some(c => ['products.write', 'suppliers.read', 'materials.read'].includes(c)))
-    const { wrapper } = await setup('/products/p1/variants')
-    expect(wrapper.text()).toContain('无查看权限')
-    expect(domainApi.supplier).not.toHaveBeenCalled()
-    expect(domainApi.productMaterialRelations).not.toHaveBeenCalled()
-    expect(wrapper.findAll('button').some(b => b.text() === '编辑')).toBe(false)
   })
   it('reloads for another parent and does not show stale data on failure', async () => {
     const { wrapper, router } = await setup()
@@ -91,11 +104,5 @@ describe('parent product details', () => {
     await wrapper.findAll('button').find(b => b.text() === '确认停用')!.trigger('click'); await flushPromises()
     expect(domainApi.disableProduct).toHaveBeenCalledWith('p1')
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
-  })
-  it('mounts SKU documents only in the documents tab', async () => {
-    const { wrapper, router } = await setup()
-    expect(wrapper.find('sku-documents-panel-stub').exists()).toBe(false)
-    await router.push('/products/p1/documents'); await flushPromises()
-    expect(wrapper.findAll('sku-documents-panel-stub').map(e => e.attributes('kind'))).toEqual(['MANUAL', 'LABEL'])
   })
 })

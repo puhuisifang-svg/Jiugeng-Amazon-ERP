@@ -8,9 +8,9 @@ import { computed, onMounted, reactive, ref, toRaw, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { ApiError } from '@/api/client'
-import { domainApi, type BatchVariantPatchInput, type ProductDetailDto, type ProductHistoryDto, type ProductInput, type ProductVariantDto, type SkuListItemDto, type VariantStatus } from '@/api/domain'
+import { domainApi, type BatchVariantPatchInput, type ProductDetailDto, type ProductInput, type ProductVariantDto, type SkuListItemDto, type VariantStatus } from '@/api/domain'
 import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vue'
-import SkuDocumentsPanel from '@/components/SkuDocumentsPanel.vue'
+import SkuDetailDialog from '@/components/SkuDetailDialog.vue'
 import ProductForm from '@/components/ProductForm.vue'
 import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import { runtimeConfig } from '@/config/runtime'
@@ -60,7 +60,6 @@ const showAddSku = ref(false); const addSkuProductId = ref('')
 const showBatchSearch = ref(false); const batchSearchText = ref('')
 const exportScope = ref<'FILTERED' | 'SELECTED'>('FILTERED')
 const detailRow = ref<SkuListItemDto | null>(null); const editProduct = ref<ProductDetailDto | null>(null); const focusVariantId = ref<string>()
-const detailTab = ref<'basic' | 'purchase' | 'specs' | 'materials' | 'image' | 'history' | 'manual' | 'label'>('basic'); const detailHistory = ref<ProductHistoryDto[]>([])
 const visibleColumns = ref<ColumnKey[]>(restoredColumns())
 const columnDraft = ref<ColumnKey[]>([...visibleColumns.value])
 const columnSearch = ref(''); const filteredColumns = computed(() => columns.filter(column => column.label.includes(columnSearch.value.trim()) && (column.key !== 'supplier' || session.canAccess(['suppliers.read']))))
@@ -76,8 +75,6 @@ function openAddSku() {
   addSkuProductId.value = selectedProducts.value.length === 1 ? selectedProducts.value[0]!.id : ''
   error.value = ''; showAddSku.value = true
 }
-const historyError = ref('')
-const detailVariant = computed(() => detailRow.value?.variant)
 function hasColumn(key: ColumnKey) { return visibleColumns.value.includes(key) && (key !== 'supplier' || session.canAccess(['suppliers.read'])) }
 function labelStatus(status: string) { return status === 'ACTIVE' ? '启用' : status === 'DRAFT' ? '待定' : '停用' }
 function dimensionLabel(variant: ProductVariantDto) {
@@ -164,7 +161,7 @@ function openColumns() { error.value = ''; columnDraft.value = [...visibleColumn
 function closeColumns() { columnDraft.value = [...visibleColumns.value]; showColumns.value = false }
 function persistColumns() { if (!columnDraft.value.includes('sku')) columnDraft.value.unshift('sku'); visibleColumns.value = [...columnDraft.value]; try { localStorage.setItem(storageKey.value, JSON.stringify(visibleColumns.value)) } catch { success.value = '列设置已应用，浏览器未允许持久保存。' } showColumns.value = false }
 function moveColumn(index: number, direction: number) { const next = index + direction; if (next < 0 || next >= columnDraft.value.length) return; const copy = [...columnDraft.value]; [copy[index], copy[next]] = [copy[next]!, copy[index]!]; columnDraft.value = copy }
-async function openDetail(row: SkuListItemDto) { detailRow.value = row; detailTab.value = 'basic'; detailHistory.value = []; historyError.value = ''; showDetail.value = true; try { detailHistory.value = await domainApi.productHistory(row.productId) } catch { historyError.value = '操作日志加载失败，请重新打开详情重试。' } }
+function openDetail(row: SkuListItemDto) { detailRow.value = row; showDetail.value = true }
 async function openEdit(row: SkuListItemDto) {
   saving.value = true; error.value = ''
   try { editProduct.value = await domainApi.product(row.productId); focusVariantId.value = row.variant.id; showEdit.value = true }
@@ -797,160 +794,14 @@ onMounted(load)
         />
       </section>
     </div>
-    <div
+    <SkuDetailDialog
       v-if="showDetail && detailRow"
-      class="operation-dialog"
-      role="dialog"
-      aria-modal="true"
-      @click.self="showDetail = false"
-      @keydown.esc="showDetail = false"
-    >
-      <section class="panel operation-dialog__card sku-detail-dialog">
-        <button
-          class="operation-dialog__close"
-          type="button"
-          aria-label="关闭"
-          @click="showDetail = false"
-        >
-          ×
-        </button><header class="sku-detail-header">
-          <AuthenticatedCatalogImage
-            v-if="detailVariant?.imageAssetId"
-            :image-id="detailVariant.imageAssetId"
-            :alt="`${detailVariant.variantName}主图`"
-          /><img
-            v-else-if="detailVariant?.imageUrl"
-            class="product-thumbnail"
-            :src="detailVariant.imageUrl"
-            alt="SKU主图"
-          ><span
-            v-else
-            class="product-thumbnail product-thumbnail--placeholder"
-          >图</span><div>
-            <h2>{{ detailVariant?.variantName }}</h2><p
-              v-if="error"
-              class="data-state data-state--error"
-              role="alert"
-            >
-              {{ error }}
-            </p><p>{{ detailVariant?.skuCode }} · {{ detailRow.productName }}（{{ detailRow.productCode }}）</p>
-          </div>
-        </header><nav class="product-editor-tabs">
-          <button
-            v-for="tab in ([['basic','基础信息'],['purchase','采购信息'],['specs','规格信息'],['materials','关联辅料'],['image','图片管理'],['manual','说明书管理'],['label','商品标签管理'],['history','操作日志']] as const)"
-            :key="tab[0]"
-            type="button"
-            :class="{ active: detailTab === tab[0] }"
-            @click="detailTab = tab[0]"
-          >
-            {{ tab[1] }}
-          </button>
-        </nav>
-        <dl
-          v-if="detailTab === 'basic'"
-          class="sku-detail-grid"
-        >
-          <dt>SKU</dt><dd>{{ detailVariant?.skuCode }}</dd><dt>品名</dt><dd>{{ detailVariant?.variantName }}</dd><dt>SKU 状态</dt><dd>{{ labelStatus(detailVariant?.status ?? '') }}</dd><dt>产品状态</dt><dd>{{ labelStatus(detailRow.productStatus) }}</dd>
-        </dl>
-        <div
-          v-else-if="detailTab === 'purchase'"
-          class="detail-list"
-        >
-          <p v-if="!detailVariant?.suppliers.length">
-            未关联供应商。
-          </p><p
-            v-for="supplier in detailVariant?.suppliers"
-            :key="supplier.supplierId"
-          >
-            {{ supplier.primary ? '主供应商' : '供应商' }}：{{ supplier.supplierId }} <a
-              v-if="supplier.purchaseUrl"
-              :href="supplier.purchaseUrl"
-              target="_blank"
-              rel="noopener"
-            >采购链接</a>
-          </p>
-        </div>
-        <dl
-          v-else-if="detailTab === 'specs'"
-          class="sku-detail-grid"
-        >
-          <dt>产品规格</dt><dd>{{ detailVariant ? dimensionLabel(detailVariant) : '—' }}</dd><dt>包装规格</dt><dd>{{ [detailVariant?.packageLengthCm, detailVariant?.packageWidthCm, detailVariant?.packageHeightCm].every(value => value != null) ? `${detailVariant?.packageLengthCm}×${detailVariant?.packageWidthCm}×${detailVariant?.packageHeightCm} cm` : detailVariant?.packageDimensions || '—' }}</dd><dt>包装重量</dt><dd>{{ detailVariant?.packageWeightGrams != null ? `${detailVariant.packageWeightGrams} g` : '—' }}</dd>
-        </dl>
-        <div
-          v-else-if="detailTab === 'materials'"
-          class="detail-list"
-        >
-          <p v-if="!detailVariant?.materials.length">
-            未关联辅料。
-          </p><p
-            v-for="material in detailVariant?.materials"
-            :key="material.materialId"
-          >
-            {{ material.materialId }} · {{ material.standardQuantity }} {{ material.unit }} · 损耗率 {{ material.lossRate }}
-          </p>
-        </div>
-        <div
-          v-else-if="detailTab === 'image'"
-          class="sku-detail-image"
-        >
-          <AuthenticatedCatalogImage
-            v-if="detailVariant?.imageAssetId"
-            :image-id="detailVariant.imageAssetId"
-            :alt="`${detailVariant.variantName}主图`"
-          /><img
-            v-else-if="detailVariant?.imageUrl"
-            :src="detailVariant.imageUrl"
-            alt="SKU主图"
-          ><p v-else>
-            暂无图片。
-          </p>
-        </div>
-        <SkuDocumentsPanel
-          v-else-if="(detailTab === 'manual' || detailTab === 'label') && detailVariant?.id"
-          :key="`${detailVariant.id}-${detailTab}`"
-          :product-id="detailRow.productId"
-          :variant-id="detailVariant.id"
-          :kind="detailTab === 'manual' ? 'MANUAL' : 'LABEL'"
-        />
-        <div
-          v-else
-          class="detail-list operation-history"
-        >
-          <p
-            v-if="historyError"
-            class="data-state data-state--error"
-            role="alert"
-          >
-            {{ historyError }}
-          </p><p v-else-if="!detailHistory.length">
-            暂无可见操作日志。
-          </p>
-          <TableViewport v-else>
-            <table class="data-table">
-              <thead><tr><th>操作时间</th><th>操作人</th><th>操作类型</th><th>操作内容</th></tr></thead><tbody>
-                <tr
-                  v-for="event in detailHistory"
-                  :key="event.id"
-                >
-                  <td>{{ event.occurredAt }}</td><td>{{ event.actorDisplayName || event.actorLoginName }}</td><td>{{ event.action }}</td><td>{{ event.detail || '—' }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </TableViewport>
-        </div>
-        <footer class="dialog-footer">
-          <RouterLink :to="`/products/${detailRow.productId}`">
-            查看产品完整资料
-          </RouterLink><button
-            v-if="writable"
-            type="button"
-            @click="showDetail = false; openEdit(detailRow)"
-          >
-            编辑 SKU
-          </button>
-        </footer>
-      </section>
-    </div>
+      :detail-row="detailRow"
+      :writable="writable"
+      :error="error"
+      @close="showDetail = false"
+      @edit="showDetail = false; openEdit($event)"
+    />
     <div
       v-if="showColumns"
       class="operation-dialog"

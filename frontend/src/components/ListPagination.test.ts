@@ -1,8 +1,32 @@
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import ListPagination from './ListPagination.vue'
 
 describe('unified list pagination', () => {
+  it('docks page pagination outside the scrolling content and removes it on unmount', async () => {
+    const host = document.createElement('div')
+    host.className = 'erp-shell'
+    host.innerHTML = '<main class="erp-content"></main><div id="workspace-pagination"></div>'
+    document.body.append(host)
+    const wrapper = mount(ListPagination, { attachTo: host.querySelector('main')!, props: { total: 1, page: 1, pageSize: 20 }, attrs: { class: 'test-pager' } })
+    await flushPromises()
+    expect(host.querySelector('.erp-content .list-pagination')).toBeNull()
+    expect(host.querySelector('#workspace-pagination .test-pager')).not.toBeNull()
+    wrapper.unmount()
+    expect(host.querySelector('#workspace-pagination .list-pagination')).toBeNull()
+    host.remove()
+  })
+  it('keeps dialog pagination inside the dialog', async () => {
+    const host = document.createElement('div')
+    host.className = 'erp-shell'
+    host.innerHTML = '<main class="erp-content"><div role="dialog"></div></main><div id="workspace-pagination"></div>'
+    document.body.append(host)
+    const wrapper = mount(ListPagination, { attachTo: host.querySelector('[role="dialog"]')!, props: { total: 1, page: 1, pageSize: 20 } })
+    await flushPromises()
+    expect(host.querySelector('[role="dialog"] .list-pagination')).not.toBeNull()
+    expect(host.querySelector('#workspace-pagination .list-pagination')).toBeNull()
+    wrapper.unmount(); host.remove()
+  })
   it('bounds navigation and resets the page when changing page size', async () => {
     const wrapper = mount(ListPagination, { props: { total: 41, page: 1, pageSize: 20 } })
     expect(wrapper.get('[aria-label="上一页"]').attributes('disabled')).toBeDefined()

@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+defineOptions({ inheritAttrs: false })
+const pagination = ref<HTMLElement>()
+const dock = ref<HTMLElement>()
+onMounted(() => {
+  const element = pagination.value
+  if (!element || element.closest('dialog, [role="dialog"], .operation-dialog')) return
+  const shell = element.closest('.erp-shell')
+  if (element.closest('.erp-content')) dock.value = shell?.querySelector<HTMLElement>('#workspace-pagination') ?? undefined
+})
 const props = withDefaults(defineProps<{ total: number; page: number; pageSize: number; disabled?: boolean; sizes?: number[] }>(), { disabled: false, sizes: () => [10, 20, 50, 100] })
 const emit = defineEmits<{ 'update:page': [number]; 'update:pageSize': [number] }>()
 const pages = computed(() => Math.max(1, Math.ceil(Math.max(0, props.total) / Math.max(1, props.pageSize))))
@@ -35,77 +44,84 @@ function resize(event: Event) {
 </script>
 
 <template>
-  <nav
-    class="pagination list-pagination"
-    aria-label="列表分页"
+  <Teleport
+    :to="dock ?? 'body'"
+    :disabled="!dock"
   >
-    <div class="list-pagination__summary">
-      <slot name="summary">
-        共 {{ total }} 条
-      </slot>
-    </div>
-    <div class="list-pagination__controls">
-      <button
-        type="button"
-        :disabled="disabled || current <= 1"
-        aria-label="上一页"
-        @click="go(current - 1)"
-      >
-        <span aria-hidden="true">‹</span>
-      </button>
-      <template
-        v-for="number in numbers"
-        :key="number"
-      >
+    <nav
+      ref="pagination"
+      v-bind="$attrs"
+      class="pagination list-pagination"
+      aria-label="列表分页"
+    >
+      <div class="list-pagination__summary">
+        <slot name="summary">
+          共 {{ total }} 条
+        </slot>
+      </div>
+      <div class="list-pagination__controls">
         <button
-          v-if="typeof number === 'number'"
           type="button"
-          :disabled="disabled"
-          :aria-label="`第 ${number} 页`"
-          :aria-current="number === current ? 'page' : undefined"
-          @click="go(number)"
+          :disabled="disabled || current <= 1"
+          aria-label="上一页"
+          @click="go(current - 1)"
         >
-          {{ number }}
+          <span aria-hidden="true">‹</span>
         </button>
-        <span
-          v-else
-          class="list-pagination__ellipsis"
-          aria-hidden="true"
-        >…</span>
-      </template>
-      <button
-        type="button"
-        :disabled="disabled || current >= pages"
-        aria-label="下一页"
-        @click="go(current + 1)"
-      >
-        <span aria-hidden="true">›</span>
-      </button>
-      <select
-        :value="pageSize"
-        aria-label="每页条数"
-        :disabled="disabled || sizes.length < 2"
-        @change="resize"
-      >
-        <option
-          v-for="size in sizes"
-          :key="size"
-          :value="size"
+        <template
+          v-for="number in numbers"
+          :key="number"
         >
-          {{ size }} 条/页
-        </option>
-      </select>
-      <span class="sr-only">{{ current }} / {{ pages }}</span>
-      <label class="list-pagination__jump">前往<input
-        v-model="jump"
-        inputmode="numeric"
-        aria-label="跳转页码"
-        :disabled="disabled || pages <= 1"
-        @keydown.enter.prevent="jumpTo"
-        @change="jumpTo"
-      >页</label>
-    </div>
-  </nav>
+          <button
+            v-if="typeof number === 'number'"
+            type="button"
+            :disabled="disabled"
+            :aria-label="`第 ${number} 页`"
+            :aria-current="number === current ? 'page' : undefined"
+            @click="go(number)"
+          >
+            {{ number }}
+          </button>
+          <span
+            v-else
+            class="list-pagination__ellipsis"
+            aria-hidden="true"
+          >…</span>
+        </template>
+        <button
+          type="button"
+          :disabled="disabled || current >= pages"
+          aria-label="下一页"
+          @click="go(current + 1)"
+        >
+          <span aria-hidden="true">›</span>
+        </button>
+        <select
+          :value="pageSize"
+          aria-label="每页条数"
+          :disabled="disabled || sizes.length < 2"
+          @change="resize"
+        >
+          <option
+            v-for="size in sizes"
+            :key="size"
+            :value="size"
+          >
+            {{ size }} 条/页
+          </option>
+        </select>
+        <span class="sr-only">{{ current }} / {{ pages }}</span>
+        <label class="list-pagination__jump">前往<input
+          v-model="jump"
+          inputmode="numeric"
+          aria-label="跳转页码"
+          :disabled="disabled || pages <= 1"
+          @keydown.enter.prevent="jumpTo"
+          @change="jumpTo"
+        >页</label>
+      </div>
+    </nav>
+  </Teleport>
 </template>
 
 <style scoped>

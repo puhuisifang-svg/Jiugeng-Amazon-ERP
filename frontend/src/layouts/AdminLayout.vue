@@ -251,11 +251,17 @@ onBeforeUnmount(() => {
     >
       <RouterView />
     </main>
+    <div
+      id="workspace-pagination"
+      class="workspace-pagination"
+    />
   </div>
 </template>
 
 <style scoped>
-.erp-shell { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); height: 100vh; height: 100dvh; overflow: hidden; background: #f0f2f7; }
+.erp-shell { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto; height: 100vh; height: 100dvh; overflow: hidden; background: #f0f2f7; }
+.workspace-pagination { position: relative; z-index: 7; min-width: 0; background: white; }
+.workspace-pagination:empty { display: none; }
 .erp-shell > * { min-width: 0; }
 .erp-header { position: relative; z-index: 12; display: flex; align-items: stretch; justify-content: space-between; min-height: var(--ui-header-height); color: #e4e9f5; background: #101c3b; }
 .erp-navigation { display: flex; min-width: 0; align-items: stretch; }

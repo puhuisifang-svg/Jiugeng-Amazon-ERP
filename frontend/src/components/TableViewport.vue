@@ -13,7 +13,12 @@ function measure() {
   const bottom = Math.min(window.innerHeight, boundary?.getBoundingClientRect().bottom ?? window.innerHeight)
   // Ignore outer scrolling: scrolling the page must not resize the table under the pointer.
   const top = element.getBoundingClientRect().top + (boundary?.scrollTop ?? 0)
-  height.value = `${Math.max(180, bottom - top - 72)}px`
+  // Docked pagination has its own shell row; its actual (possibly wrapped)
+  // height is already excluded from the content boundary.
+  const dock = boundary?.classList.contains('erp-content')
+    ? boundary.closest('.erp-shell')?.querySelector('#workspace-pagination') : undefined
+  const reserved = dock?.querySelector('.list-pagination') ? 16 : 72
+  height.value = `${Math.max(180, bottom - top - reserved)}px`
 }
 function schedule() {
   cancelAnimationFrame(frame)

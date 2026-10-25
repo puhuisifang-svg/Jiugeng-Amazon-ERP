@@ -6,6 +6,18 @@ import TableViewport from './TableViewport.vue'
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 describe('TableViewport', () => {
+  it('uses the content boundary without reserving a second pagination bar when docked', async () => {
+    const host = document.createElement('div')
+    host.className = 'erp-shell'
+    host.innerHTML = '<main class="erp-content"></main><div id="workspace-pagination"><nav class="list-pagination"></nav></div>'
+    document.body.append(host)
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ top: 240, bottom: 751 } as DOMRect)
+    vi.stubGlobal('innerHeight', 800)
+    const wrapper = mount(TableViewport, { attachTo: host.querySelector('main')! })
+    await nextTick()
+    expect(wrapper.attributes('style')).toContain('495px')
+    wrapper.unmount(); host.remove()
+  })
   it('retains a semantic table in a keyboard-accessible scroll region', () => {
     const wrapper = mount(TableViewport, { slots: { default: '<table><thead><tr><th>数量</th></tr></thead><tbody><tr><td>12</td></tr></tbody></table>' } })
     expect(wrapper.attributes('tabindex')).toBe('0')

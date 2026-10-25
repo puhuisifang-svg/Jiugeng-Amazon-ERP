@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProductName from '@/components/ProductName.vue'
 import ListPagination from '@/components/ListPagination.vue'
 const listSize = ref(20)
 import { onMounted, reactive, ref } from 'vue'
@@ -133,7 +134,13 @@ onMounted(() => void load(true))
                   v-for="product in result.products"
                   :key="product.customerProduct?.id || product.variantId || product.productId"
                 >
-                  <td>{{ product.productName }}<small>{{ product.customerProduct?.customerName || '历史记录（未绑定客户）' }}</small><small>{{ product.productCode }}{{ product.variantId ? '' : ' · 历史父体记录（未绑定 SKU）' }}</small></td><td>{{ number(product.records) }}</td><td>{{ number(product.quantity) }}</td><td>{{ number(product.boxCount) }}</td>
+                  <td>
+                    <ProductName
+                      :text="product.productName"
+                      :styles="product.namePresentation?.styles"
+                      :highlighted="product.namePresentation?.highlighted"
+                    /><small>{{ product.customerProduct?.customerName || '历史记录（未绑定客户）' }}</small><small>{{ product.productCode }}{{ product.variantId ? '' : ' · 历史父体记录（未绑定 SKU）' }}</small>
+                  </td><td>{{ number(product.records) }}</td><td>{{ number(product.quantity) }}</td><td>{{ number(product.boxCount) }}</td>
                 </tr><tr v-if="!result.products.length">
                   <td colspan="4">
                     暂无排行数据
@@ -153,7 +160,13 @@ onMounted(() => void load(true))
                 v-for="item in result.details.items"
                 :key="item.id"
               >
-                <td>{{ time(item.dispatchedAt) }}</td><td>{{ item.productName }}<small>{{ item.customerProduct?.customerName || '历史记录（未绑定客户）' }} · {{ item.customerProduct?.customerProductCode || '未填客户编码' }}</small><small>{{ item.productCode }}</small></td><td class="shipment-remark">
+                <td>{{ time(item.dispatchedAt) }}</td><td>
+                  <ProductName
+                    :text="item.productName"
+                    :styles="item.namePresentation?.styles"
+                    :highlighted="item.namePresentation?.highlighted"
+                  /><small>{{ item.customerProduct?.customerName || '历史记录（未绑定客户）' }} · {{ item.customerProduct?.customerProductCode || '未填客户编码' }}</small><small>{{ item.productCode }}</small>
+                </td><td class="shipment-remark">
                   {{ item.variantId ? item.skuCodes : '历史父体记录（未绑定 SKU）' }}
                 </td><td>{{ number(item.quantity) }}</td><td>{{ number(item.boxCount) }}</td><td class="shipment-remark">
                   {{ item.remark || '—' }}

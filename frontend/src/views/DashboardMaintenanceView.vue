@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProductName from '@/components/ProductName.vue'
 import ListPagination from '@/components/ListPagination.vue'
 const listSize = ref(20)
 import CartonLabelExport from '@/components/CartonLabelExport.vue'
@@ -569,7 +570,11 @@ onMounted(async () => {
                       :alt="item.productName"
                     />
                   </td><td class="shipment-product-cell">
-                    {{ item.productName }}<small v-if="'customerProduct' in item && item.customerProduct">客户：{{ item.customerProduct.customerName }} · 客户编码：{{ item.customerProduct.customerProductCode || '未填' }}<br>特殊需求：{{ item.customerProduct.requirements || '无' }}</small><small v-if="'productCode' in item">{{ item.variantId ? `SKU：${item.productCode}` : '历史父体记录 · 待补选 SKU' }}</small>
+                    <ProductName
+                      :text="item.productName"
+                      :styles="'namePresentation' in item ? item.namePresentation?.styles : undefined"
+                      :highlighted="'namePresentation' in item ? item.namePresentation?.highlighted : false"
+                    /><small v-if="'customerProduct' in item && item.customerProduct">客户：{{ item.customerProduct.customerName }} · 客户编码：{{ item.customerProduct.customerProductCode || '未填' }}<br>特殊需求：{{ item.customerProduct.requirements || '无' }}</small><small v-if="'productCode' in item">{{ item.variantId ? `SKU：${item.productCode}` : '历史父体记录 · 待补选 SKU' }}</small>
                   </td><td v-if="kind === 'pending-shipments'">
                     {{ 'latestShipAt' in item ? localDate(item.latestShipAt) : '—' }}
                   </td><td>{{ ('expectedQuantity' in item ? item.expectedQuantity : item.quantity).toLocaleString() }} 套</td><td>{{ 'boxCount' in item ? item.boxCount : '—' }}</td><td class="shipment-remark">

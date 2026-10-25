@@ -1,9 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createShipmentImage, wrapExportText } from './shipmentExport'
+import { createShipmentImage, wrapExportText, wrapShipmentName } from './shipmentExport'
 import type { TodayShipment } from '@/api/dashboard'
 vi.mock('@/api/domain', () => ({ domainApi: { product: vi.fn(async () => ({ variants: [] })) } }))
 afterEach(() => vi.restoreAllMocks())
 describe('shipment image export', () => {
+  it('retains mixed color and weight across manual and automatic wrapping', () => {
+    const context = { font: '', measureText: (text: string) => ({ width: [...text].length * 10 } as TextMetrics) }
+    const item = { productName: '黑色\n610cm', namePresentation: { highlighted: false, styles: [{ start: 0, end: 3, color: 'BLACK', bold: true }, { start: 3, end: 8, color: 'RED', bold: false }] } } as TodayShipment
+    const lines = wrapShipmentName(context, item, 30)
+    expect(lines[0]![0]).toMatchObject({ text: '黑色', color: '#172033', font: 'bold 26px sans-serif' })
+    expect(lines[1]![0]).toMatchObject({ text: '610', color: '#c62828', font: 'normal 26px sans-serif' })
+    expect(lines[2]![0]).toMatchObject({ text: 'cm', color: '#c62828' })
+    expect(lines.flat().every(run => run.x + run.width <= 30)).toBe(true)
+  })
   it('rejects legacy records without guessing a SKU', async () => {
     await expect(createShipmentImage([{ productId: 'p1' } as TodayShipment], '2026-10-17')).rejects.toThrow('未绑定客户商品')
   })

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProductName from './ProductName.vue'
 import { ref, watch } from 'vue'
 import { domainApi, type ProductDetailDto } from '@/api/domain'
 import type { TodayShipment, PendingShipment } from '@/api/dashboard'
@@ -49,7 +50,11 @@ function date(value: string) { return new Intl.DateTimeFormat('en-CA', { timeZon
       >{{ error ? '图片不可用' : '加载中…' }}</span>
     </td>
     <td class="shipment-product-cell">
-      <strong>{{ item.productName }}</strong><small v-if="item.customerProduct">客户：{{ item.customerProduct.customerName }} · 客户编码：{{ item.customerProduct.customerProductCode || '未填' }}</small><small v-else>历史记录 · 未绑定客户商品</small><small>{{ item.variantId ? `SKU：${item.productCode}` : '历史父体记录 · 待补选 SKU' }}</small><small
+      <ProductName
+        :text="item.productName"
+        :styles="item.namePresentation?.styles"
+        :highlighted="item.namePresentation?.highlighted"
+      /><small v-if="item.customerProduct">客户：{{ item.customerProduct.customerName }} · 客户编码：{{ item.customerProduct.customerProductCode || '未填' }}</small><small v-else>历史记录 · 未绑定客户商品</small><small>{{ item.variantId ? `SKU：${item.productCode}` : '历史父体记录 · 待补选 SKU' }}</small><small
         v-if="error"
         role="alert"
       >{{ error }}</small>

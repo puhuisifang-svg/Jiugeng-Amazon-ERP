@@ -32,13 +32,13 @@ final class DashboardTypes {
                          String imageId, int quantity, String quantityUnit, int boxCount, String remark,
                          Instant latestShipAt, TodayStatus status, String sourcePendingShipmentId, long version,
                          String createdBy, String updatedBy, String archivedBy, Instant archivedAt,
-                         String archiveReason, Instant createdAt, Instant updatedAt, String variantId, ShippingProduct customerProduct) {}
+                         String archiveReason, Instant createdAt, Instant updatedAt, String variantId, ShippingProduct customerProduct, com.jiugeng.erp.product.ProductLookup.NamePresentation namePresentation) {}
 
     record PendingShipment(String id, LocalDate plannedShipDate, String productId, String productCode,
                            String productName, String imageId, int quantity, String quantityUnit, int boxCount,
                            String remark, Instant latestShipAt, PendingShipmentStatus status, long version,
                            String createdBy, String updatedBy, String archivedBy, Instant archivedAt,
-                           String archiveReason, Instant createdAt, Instant updatedAt, String variantId, ShippingProduct customerProduct) {}
+                           String archiveReason, Instant createdAt, Instant updatedAt, String variantId, ShippingProduct customerProduct, com.jiugeng.erp.product.ProductLookup.NamePresentation namePresentation) {}
 
     record PendingProduct(String id, String productName, String imageId, int expectedQuantity, String quantityUnit,
                           String remark, LocalDate expectedCompletionDate, PendingProductStatus status, long version,

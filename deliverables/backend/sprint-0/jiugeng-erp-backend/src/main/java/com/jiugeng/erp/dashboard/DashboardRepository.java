@@ -17,7 +17,8 @@ import org.springframework.stereotype.Repository;
 class DashboardRepository {
     private final JdbcClient jdbc;
     private final com.fasterxml.jackson.databind.ObjectMapper mapper;
-    DashboardRepository(JdbcClient jdbc, com.fasterxml.jackson.databind.ObjectMapper mapper) { this.jdbc = jdbc; this.mapper=mapper; }
+    private final com.jiugeng.erp.product.ProductLookup products;
+    DashboardRepository(JdbcClient jdbc, com.fasterxml.jackson.databind.ObjectMapper mapper, com.jiugeng.erp.product.ProductLookup products) { this.jdbc = jdbc; this.mapper=mapper; this.products=products; }
     String customerJson(com.jiugeng.erp.customer.CustomerProductLookup.ShippingProduct value) {
         if(value==null)return null;
         try{return mapper.writeValueAsString(value);}catch(com.fasterxml.jackson.core.JsonProcessingException e){throw new IllegalStateException(e);}
@@ -363,14 +364,14 @@ class DashboardRepository {
             rs.getString("quantity_unit"),rs.getInt("box_count"),rs.getString("remark"),instant(rs,"latest_ship_at"),
             TodayStatus.valueOf(rs.getString("status")),rs.getString("source_pending_shipment_id"),rs.getLong("version"),
             rs.getString("created_by"),rs.getString("updated_by"),rs.getString("archived_by"),nullableInstant(rs,"archived_at"),
-            rs.getString("archive_reason"),instant(rs,"created_at"),instant(rs,"updated_at"),rs.getString("variant_id"),customerSnapshot(rs.getString("customer_snapshot"))); }
+            rs.getString("archive_reason"),instant(rs,"created_at"),instant(rs,"updated_at"),rs.getString("variant_id"),customerSnapshot(rs.getString("customer_snapshot")),products.namePresentation(rs.getString("product_id"),rs.getString("variant_id"),rs.getString("product_name_snapshot"))); }
     private PendingShipment mapPendingShipment(ResultSet rs,int n)throws SQLException { return new PendingShipment(rs.getString("id"),
             rs.getDate("planned_ship_date").toLocalDate(),rs.getString("product_id"),rs.getString("product_code_snapshot"),
             rs.getString("product_name_snapshot"),rs.getString("image_asset_id"),rs.getInt("quantity"),
             rs.getString("quantity_unit"),rs.getInt("box_count"),rs.getString("remark"),instant(rs,"latest_ship_at"),
             PendingShipmentStatus.valueOf(rs.getString("status")),rs.getLong("version"),rs.getString("created_by"),
             rs.getString("updated_by"),rs.getString("archived_by"),nullableInstant(rs,"archived_at"),rs.getString("archive_reason"),
-            instant(rs,"created_at"),instant(rs,"updated_at"),rs.getString("variant_id"),customerSnapshot(rs.getString("customer_snapshot"))); }
+            instant(rs,"created_at"),instant(rs,"updated_at"),rs.getString("variant_id"),customerSnapshot(rs.getString("customer_snapshot")),products.namePresentation(rs.getString("product_id"),rs.getString("variant_id"),rs.getString("product_name_snapshot"))); }
     private PendingProduct mapPendingProduct(ResultSet rs,int n)throws SQLException { return new PendingProduct(rs.getString("id"),
             rs.getString("product_name"),rs.getString("image_asset_id"),rs.getInt("expected_quantity"),
             rs.getString("quantity_unit"),rs.getString("remark"),rs.getDate("expected_completion_date").toLocalDate(),

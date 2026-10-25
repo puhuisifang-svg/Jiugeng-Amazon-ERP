@@ -19,10 +19,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class ShipmentDispatchService {
     record Dispatch(String id,String todayShipmentId,String productId,String productCode,String productName,String skuCodes,
-                    long quantity,long boxCount,String remark,LocalDate plannedDate,LocalDate businessDate,Instant dispatchedAt,String actorName,String variantId,com.jiugeng.erp.customer.CustomerProductLookup.ShippingProduct customerProduct) {}
+                    long quantity,long boxCount,String remark,LocalDate plannedDate,LocalDate businessDate,Instant dispatchedAt,String actorName,String variantId,com.jiugeng.erp.customer.CustomerProductLookup.ShippingProduct customerProduct,ProductLookup.NamePresentation namePresentation) {}
     record Summary(long records,long quantity,long boxCount,long products) {}
     record Daily(LocalDate date,long records,long quantity,long boxCount) {}
-    record ProductTotal(String productId,String productCode,String productName,long records,long quantity,long boxCount,String variantId,com.jiugeng.erp.customer.CustomerProductLookup.ShippingProduct customerProduct) {}
+    record ProductTotal(String productId,String productCode,String productName,long records,long quantity,long boxCount,String variantId,com.jiugeng.erp.customer.CustomerProductLookup.ShippingProduct customerProduct,ProductLookup.NamePresentation namePresentation) {}
     record Statistics(Summary summary,List<Daily> daily,List<ProductTotal> products,DashboardTypes.Page<Dispatch> details) {}
     private final JdbcClient jdbc;
     private final DashboardRepository repository;
@@ -90,13 +90,13 @@ class ShipmentDispatchService {
         var daily=jdbc.sql("SELECT business_date,COUNT(*) records,SUM(quantity) quantity,SUM(box_count) boxes"+table+" GROUP BY business_date ORDER BY business_date DESC")
             .params(params).query((rs,n)->new Daily(rs.getDate("business_date").toLocalDate(),rs.getLong("records"),rs.getLong("quantity"),rs.getLong("boxes"))).list();
         var grouped=jdbc.sql("SELECT product_id,variant_id,customer_product_id,MAX(customer_snapshot) customer_snapshot,MAX(product_code) code,MAX(product_name) name,COUNT(*) records,SUM(quantity) quantity,SUM(box_count) boxes"+table+" GROUP BY product_id,variant_id,customer_product_id ORDER BY quantity DESC,product_id,variant_id,customer_product_id LIMIT 10")
-            .params(params).query((rs,n)->new ProductTotal(rs.getString("product_id"),rs.getString("code"),rs.getString("name"),rs.getLong("records"),rs.getLong("quantity"),rs.getLong("boxes"),rs.getString("variant_id"),repository.customerSnapshot(rs.getString("customer_snapshot")))).list();
+            .params(params).query((rs,n)->new ProductTotal(rs.getString("product_id"),rs.getString("code"),rs.getString("name"),rs.getLong("records"),rs.getLong("quantity"),rs.getLong("boxes"),rs.getString("variant_id"),repository.customerSnapshot(rs.getString("customer_snapshot")),products.namePresentation(rs.getString("product_id"),rs.getString("variant_id"),rs.getString("name")))).list();
         params.put("limit",size);params.put("offset",(long)page*size);
         var rows=jdbc.sql("SELECT *"+table+" ORDER BY dispatched_at DESC,id LIMIT :limit OFFSET :offset").params(params).query(this::map).list();
         return new Statistics(summary,daily,grouped,DashboardTypes.Page.of(rows,page,size,summary.records()));
     }
     private Dispatch map(ResultSet rs,int index) throws SQLException {
         return new Dispatch(rs.getString("id"),rs.getString("today_shipment_id"),rs.getString("product_id"),rs.getString("product_code"),rs.getString("product_name"),rs.getString("sku_codes"),
-            rs.getLong("quantity"),rs.getLong("box_count"),rs.getString("remark"),rs.getDate("planned_date").toLocalDate(),rs.getDate("business_date").toLocalDate(),rs.getTimestamp("dispatched_at").toInstant(),rs.getString("actor_name"),rs.getString("variant_id"),repository.customerSnapshot(rs.getString("customer_snapshot")));
+            rs.getLong("quantity"),rs.getLong("box_count"),rs.getString("remark"),rs.getDate("planned_date").toLocalDate(),rs.getDate("business_date").toLocalDate(),rs.getTimestamp("dispatched_at").toInstant(),rs.getString("actor_name"),rs.getString("variant_id"),repository.customerSnapshot(rs.getString("customer_snapshot")),products.namePresentation(rs.getString("product_id"),rs.getString("variant_id"),rs.getString("product_name")));
     }
 }

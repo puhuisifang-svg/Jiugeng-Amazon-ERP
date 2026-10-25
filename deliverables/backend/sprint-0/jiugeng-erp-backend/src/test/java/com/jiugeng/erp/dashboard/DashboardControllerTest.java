@@ -95,6 +95,32 @@ class DashboardControllerTest {
             .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("version",version)))).andExpect(status().isConflict());
     }
     @Test
+    void shipmentPresentationFollowsMatchingSkuWithoutRenamingSnapshots() throws Exception {
+        String parent=createProduct("FORMAT-P", "名称\n规格");
+        String sku=jdbc.queryForObject("SELECT id FROM product_variant WHERE product_id=?",String.class,parent);
+        String format="{\"text\":\"名称\\n规格\",\"spans\":[{\"start\":3,\"end\":5,\"color\":\"RED\",\"bold\":true}]}";
+        jdbc.update("UPDATE product_variant SET name_styles=? WHERE id=?",format,sku);
+        String token=user("format-shipper","PRODUCT_MATERIAL");
+        LocalDate date=LocalDate.now(ZoneId.of("Asia/Shanghai"));
+        var input=shipment(date,parent,3,1,date.atTime(23,59));
+        String path="/api/v1/dashboard-maintenance/today-shipments";
+        String created=mvc.perform(post(path).header("Authorization",bearer(token)).header("Idempotency-Key","format-create")
+            .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(input)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.namePresentation.styles[0].color").value("RED"))
+            .andReturn().getResponse().getContentAsString();
+        mvc.perform(get("/api/v1/dashboard/today-shipments").header("Authorization",bearer(token)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].namePresentation.styles[0].start").value(3));
+        String id=json.readTree(created).path("id").asText();
+        mvc.perform(post(path+"/"+id+"/transfer-to-pending").header("Authorization",bearer(token)).header("Idempotency-Key","format-pending")
+            .contentType(MediaType.APPLICATION_JSON).content("{\"version\":0,\"reason\":\"合成测试\"}"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.namePresentation.styles[0].color").value("RED"));
+        jdbc.update("UPDATE product_variant SET variant_name='改名后的商品' WHERE id=?",sku);
+        mvc.perform(get("/api/v1/dashboard/pending-shipments").header("Authorization",bearer(token)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].productName").value("名称\n规格"))
+            .andExpect(jsonPath("$.items[0].namePresentation").isEmpty());
+    }
+
+    @Test
     void bindsExactSkuRejectsInvalidSelectionsAndKeepsLegacyUnbound() throws Exception {
         String parent=createProduct("SKU-PARENT","父体不应当作 SKU 名称");
         String sku=createSku(parent,"SKU-SECOND","第二款".repeat(50));

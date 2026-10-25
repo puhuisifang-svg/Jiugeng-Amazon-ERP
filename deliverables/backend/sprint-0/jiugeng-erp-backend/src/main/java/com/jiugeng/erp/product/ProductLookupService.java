@@ -12,6 +12,18 @@ class ProductLookupService implements ProductLookup {
     ProductLookupService(ProductRepository repository,org.springframework.jdbc.core.simple.JdbcClient jdbc) { this.repository = repository;this.jdbc=jdbc; }
 
     @Override
+    public NamePresentation namePresentation(String productId, String variantId, String snapshotName) {
+        if (variantId == null) return null;
+        return jdbc.sql("SELECT variant_name,name_highlighted,name_styles FROM product_variant WHERE product_id=:product AND id=:variant")
+            .param("product", productId).param("variant", variantId).query((r,n) -> {
+                if (!java.util.Objects.equals(snapshotName, r.getString(1))) return null;
+                var spans = ProductNameStyleService.decode(r.getString(3), snapshotName);
+                return new NamePresentation(r.getBoolean(2), spans == null ? null : spans.stream()
+                    .map(s -> new NameSpan(s.start(), s.end(), s.color().name(), s.bold())).toList());
+            }).optional().orElse(null);
+    }
+
+    @Override
     public Optional<SkuReference> findExistingSku(String productId,String variantId) {
         return jdbc.sql("SELECT v.id,v.sku_code,v.variant_name,p.status,v.lifecycle_status FROM product_variant v JOIN product p ON p.id=v.product_id WHERE p.id=:product AND v.id=:variant")
             .param("product",productId).param("variant",variantId).query((r,n)->new SkuReference(r.getString(1),r.getString(2),r.getString(3),"ACTIVE".equals(r.getString(4)) && "ACTIVE".equals(r.getString(5)))).optional();

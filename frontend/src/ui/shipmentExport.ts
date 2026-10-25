@@ -1,6 +1,31 @@
 import { domainApi } from '@/api/domain'
 import { catalogApi } from '@/api/catalog'
 import type { TodayShipment } from '@/api/dashboard'
+import { nameRuns } from '@/utils/productName'
+
+type ExportRun = { text: string; color: string; font: string; x: number; width: number }
+export function wrapShipmentName(context: Pick<CanvasRenderingContext2D, 'measureText' | 'font'>, item: TodayShipment, width: number): ExportRun[][] {
+  const runs = nameRuns(item.productName, item.namePresentation?.styles, item.namePresentation?.highlighted)
+    .map(run => ({ text: run.text, color: run.color === 'RED' ? '#c62828' : '#172033', font: `${run.bold ? 'bold' : 'normal'} 26px sans-serif` }))
+  runs.push({ text: `\n客户：${item.customerProduct?.customerName ?? ''}\n客户编码：${item.customerProduct?.customerProductCode || '未填'}`, color: '#172033', font: 'bold 26px sans-serif' })
+  const lines: ExportRun[][] = [[]]; let x = 0
+  for (const run of runs) {
+    context.font = run.font
+    for (const character of run.text) {
+      if (character === '\n') { lines.push([]); x = 0; continue }
+      let line = lines[lines.length - 1]!
+      let last = line.at(-1)
+      let same = last?.font === run.font && last?.color === run.color
+      let measured = context.measureText((same ? last!.text : '') + character).width
+      if (x > 0 && x + measured - (same ? last!.width : 0) > width) {
+        lines.push([]); line = lines[lines.length - 1]!; x = 0; last = undefined; same = false; measured = context.measureText(character).width
+      }
+      if (same && last) { x += measured - last.width; last.text += character; last.width = measured }
+      else { line.push({ text: character, font: run.font, color: run.color, x, width: measured }); x += measured }
+    }
+  }
+  return lines
+}
 
 export function wrapExportText(context: Pick<CanvasRenderingContext2D, 'measureText'>, text: string, width: number): string[] {
   const lines: string[] = []
@@ -44,7 +69,8 @@ export async function createShipmentImage(items: TodayShipment[], date: string):
     if (!imageCache.has(imageKey)) imageCache.set(imageKey, productImage(item.productId, item.variantId!))
     const image = await imageCache.get(imageKey)
     context.font = 'bold 26px sans-serif'
-    const name = wrapExportText(context, `${item.productName}\n客户：${item.customerProduct?.customerName ?? ''}\n客户编码：${item.customerProduct?.customerProductCode || '未填'}`, 400)
+    const name = wrapShipmentName(context, item, 400)
+    context.font = 'bold 26px sans-serif'
     const remark = wrapExportText(context, [item.remark, item.customerProduct?.requirements ? `特殊需求：${item.customerProduct.requirements}` : ''].filter(Boolean).join('\n') || '—', 580)
     return { item, image, name, remark, height: Math.max(160, Math.max(name.length, remark.length) * 36 + 40) }
   }))
@@ -64,7 +90,11 @@ export async function createShipmentImage(items: TodayShipment[], date: string):
     if (index % 2 === 1) { context.fillStyle = '#f8fafc'; context.fillRect(40, y, 1520, row.height) }
     context.fillStyle = '#172033'; context.font = 'bold 26px sans-serif'
     const center = y + row.height / 2
-    row.name.forEach((line, i) => context.fillText(line, 220, center + (i - (row.name.length - 1) / 2) * 36))
+    row.name.forEach((line, i) => line.forEach(run => {
+      context.fillStyle = run.color; context.font = run.font
+      context.fillText(run.text, 220 + run.x, center + (i - (row.name.length - 1) / 2) * 36)
+    }))
+    context.fillStyle = '#172033'; context.font = 'bold 26px sans-serif'
     context.fillText(`${row.item.quantity} 套`, 650, center); context.fillText(`${row.item.boxCount} 箱`, 800, center)
     context.fillStyle = '#dc2626'
     row.remark.forEach((line, i) => context.fillText(line, 960, center + (i - (row.remark.length - 1) / 2) * 36))

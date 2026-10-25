@@ -8,7 +8,9 @@ export type WorklistKind = DashboardKind
 export interface ShipmentDocument { id: string; kind: 'LABEL' | 'CARTON_LABEL'; fileName: string; byteSize: number; uploadedAt: string }
 export type PendingProductStatus = 'PENDING' | 'COMPLETED' | 'ARCHIVED'
 export interface ShippingCustomerProduct { id: string; customerId: string; customerName: string; productId: string; variantId: string; customerProductCode: string; requirements: string }
+export interface NamePresentation { highlighted: boolean; styles?: import('@/utils/productName').NameStyleSpan[] | null }
 export interface TodayShipment {
+  namePresentation?: NamePresentation | null
   variantId?: string | null
   customerProduct?: ShippingCustomerProduct | null
   id: string; shipDate: string; productId: string; productCode: string; productName: string; imageId?: string
@@ -16,6 +18,7 @@ export interface TodayShipment {
   status: 'ACTIVE' | 'ARCHIVED' | 'SHIPPED'; sourcePendingShipmentId?: string; version: number; createdAt: string; updatedAt: string
 }
 export interface PendingShipment {
+  namePresentation?: NamePresentation | null
   variantId?: string | null
   customerProduct?: ShippingCustomerProduct | null
   id: string; plannedShipDate: string; productId: string; productCode: string; productName: string; imageId?: string
@@ -28,6 +31,7 @@ export interface PendingProduct {
 }
 export type DashboardItem = TodayShipment | PendingShipment | PendingProduct
 export interface ShipmentDispatch {
+  namePresentation?: NamePresentation | null
   variantId?: string | null
   customerProduct?: ShippingCustomerProduct | null
   id: string; todayShipmentId: string; productId: string; productCode: string; productName: string; skuCodes: string
@@ -37,7 +41,7 @@ export interface DispatchTotals { records: number; quantity: number; boxCount: n
 export interface ShipmentStatistics {
   summary: DispatchTotals & { products: number }
   daily: Array<DispatchTotals & { date: string }>
-  products: Array<DispatchTotals & { productId: string; productCode: string; productName: string; variantId?: string | null; customerProduct?: ShippingCustomerProduct | null }>
+  products: Array<DispatchTotals & { namePresentation?: NamePresentation | null; productId: string; productCode: string; productName: string; variantId?: string | null; customerProduct?: ShippingCustomerProduct | null }>
   details: Page<ShipmentDispatch>
 }
 export interface HomeSlice<T> { items: T[]; totalCount: number; truncated: boolean; businessDate: string; generatedAt: string }

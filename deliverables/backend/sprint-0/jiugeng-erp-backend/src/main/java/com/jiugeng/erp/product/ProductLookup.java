@@ -4,6 +4,10 @@ import java.util.Optional;
 
 /** Public, read-only product boundary for other application modules. */
 public interface ProductLookup {
+    /** Presentation only; never changes a document's stored name or identity. */
+    default NamePresentation namePresentation(String productId, String variantId, String snapshotName) { return null; }
+    record NamePresentation(boolean highlighted, java.util.List<NameSpan> styles) {}
+    record NameSpan(int start, int end, String color, boolean bold) {}
     Optional<ProductReference> findById(String productId);
     default Optional<SkuReference> findSku(String productId, String variantId) { return Optional.empty(); }
     /** For an existing document only; deleted identities remain available, disabled status is still enforced. */

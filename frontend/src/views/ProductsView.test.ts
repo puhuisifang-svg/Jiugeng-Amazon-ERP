@@ -31,6 +31,24 @@ import ProductForm from '@/components/ProductForm.vue'
 const RouterLink = { props: ['to'], template: '<a :href="to"><slot /></a>' }
 
 describe('ProductsView', () => {
+  it('keeps name/code first with legacy column preferences and preserves multiline highlighting', async () => {
+    localStorage.setItem('jiugeng.product-management.columns.v2.user-1', JSON.stringify(['image', 'name', 'sku', 'status']))
+    const highlighted = { ...product, variants: [{ ...product.variants[0]!, variantName: '合成名称\n规格补充', nameHighlighted: true }] }
+    vi.mocked(domainApi.products).mockResolvedValueOnce({ items: [highlighted], mockData: false } as Awaited<ReturnType<typeof domainApi.products>>)
+    const wrapper = mount(ProductsView, { global: { stubs: { RouterLink } } })
+    await flushPromises()
+    expect(wrapper.findAll('thead th')[1]!.text()).toContain('品名 / SKU编码')
+    expect(wrapper.findAll('thead th').some(th => th.text() === '品名')).toBe(false)
+    expect(wrapper.get('.parent-toggle .product-display-name').text()).toContain('测试产品')
+    await wrapper.get('.parent-toggle').trigger('click')
+    expect(wrapper.get('.sku-code-button .product-display-name').element.textContent).toBe('合成名称\n规格补充')
+    expect(wrapper.get('.sku-code-button .product-display-name').classes()).toContain('product-display-name--highlighted')
+    expect(wrapper.get('.sku-code-button .product-display-code').text()).toBe('SKU-1')
+    vi.mocked(domainApi.product).mockResolvedValueOnce(highlighted as Awaited<ReturnType<typeof domainApi.product>>)
+    await wrapper.findAll('button').find(b => b.text() === '编辑父体')!.trigger('click'); await flushPromises()
+    expect(wrapper.findComponent(ProductForm).props('initial')?.variants[0]).toMatchObject({ nameHighlighted: true, variantName: '合成名称\n规格补充' })
+    wrapper.unmount()
+  })
   it('uses a compact text reset action and clears search filters', async () => {
     const wrapper = mount(ProductsView, { global: { stubs: { RouterLink } } })
     await flushPromises()
@@ -142,14 +160,14 @@ describe('ProductsView', () => {
     const productInputs = dialog.find('.product-form').findAll('input')
     await productInputs[0]!.setValue('P-2')
     await productInputs[1]!.setValue('新产品')
-    const skuInputs = dialog.find('.variant-editor').findAll('input[required]')
+    const skuInputs = dialog.find('.variant-editor').findAll('input[required], textarea[required]')
     await skuInputs[0]!.setValue('SKU-2')
     await skuInputs[1]!.setValue('标准款')
     await dialog.get('form.product-create-form').trigger('submit')
     await flushPromises()
 
     expect(createProduct).toHaveBeenCalledWith(expect.objectContaining({
-      productCode: 'P-2', productName: '新产品', status: 'DRAFT', variants: [expect.objectContaining({ skuCode: 'SKU-2', variantName: '标准款', status: 'DRAFT' })],
+      productCode: 'P-2', productName: '新产品', status: 'ACTIVE', variants: [expect.objectContaining({ skuCode: 'SKU-2', variantName: '标准款', status: 'ACTIVE' })],
     }))
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('产品及 SKU 已创建')
@@ -191,7 +209,7 @@ describe('ProductsView', () => {
     const form = wrapper.getComponent(ProductForm)
     expect(form.props('focusVariantId')).toBe('__NEW__')
     expect(form.props('initial')?.variants).toHaveLength(2)
-    expect(form.props('initial')?.variants[1]).toMatchObject({ skuCode: '', status: 'DRAFT', suppliers: [], materials: [] })
+    expect(form.props('initial')?.variants[1]).toMatchObject({ skuCode: '', status: 'ACTIVE', suppliers: [], materials: [] })
   })
 
   it('filters child SKU and automatically expands its matching parent', async () => {
@@ -234,7 +252,7 @@ describe('ProductsView', () => {
     localStorage.setItem('jiugeng.product-management.columns.v2.user-1', JSON.stringify(['name', 'sku', 'status']))
     const wrapper = mount(ProductsView, { global: { stubs: { RouterLink } } })
     await flushPromises()
-    expect(wrapper.findAll('thead th').map(cell => cell.text())).toEqual(['', '品名', '产品编码 / SKU', '状态', '操作'])
+    expect(wrapper.findAll('thead th').map(cell => cell.text())).toEqual(['', '品名 / SKU编码', '状态', '操作'])
   })
 
   it('adds a child from its parent without changing existing siblings', async () => {

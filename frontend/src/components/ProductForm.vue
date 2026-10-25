@@ -19,8 +19,8 @@ const activeTabs = ref<Record<number, 'basic' | 'purchase' | 'specs' | 'material
 function activeTab(index: number) { return activeTabs.value[index] ?? 'basic' }
 function setTab(index: number, value: 'basic' | 'purchase' | 'specs' | 'materials' | 'image' | 'customs') { if (value === 'customs' && !model.variants[index]!.customs) model.variants[index]!.customs = blankCustoms(); activeTabs.value[index] = value }
 const supplierAccess = computed(() => session.canAccess(['suppliers.read']))
-function blankVariant(): ProductVariantInput { return { skuCode: '', variantName: '', status: 'DRAFT', suppliers: [], materials: [] } }
-const model = reactive<ProductInput>(JSON.parse(JSON.stringify(props.initial ?? { productCode: '', productName: '', status: 'DRAFT', variants: [blankVariant()] })))
+function blankVariant(): ProductVariantInput { return { skuCode: '', variantName: '', nameHighlighted: false, status: 'ACTIVE', suppliers: [], materials: [] } }
+const model = reactive<ProductInput>(JSON.parse(JSON.stringify(props.initial ?? { productCode: '', productName: '', status: 'ACTIVE', variants: [blankVariant()] })))
 function addVariant() { model.variants.push(blankVariant()) }
 function removeVariant(index: number) { if (model.variants.length > 1) model.variants.splice(index, 1) }
 function supplierName(id: string) { return suppliers.value.find(item => item.id === id)?.name ?? id }
@@ -320,11 +320,19 @@ onMounted(loadReferences)
                 required
                 maxlength="64"
               ></label>
-              <label>SKU 名称<input
+              <label>SKU 名称<textarea
                 v-model="variant.variantName"
+                class="product-display-name"
+                :class="{ 'product-display-name--highlighted': variant.nameHighlighted }"
                 required
-                maxlength="128"
-              ></label>
+                maxlength="200"
+                rows="2"
+                placeholder="可按 Enter 换行"
+              /></label>
+              <label class="checkbox-label sku-name-highlight"><input
+                v-model="variant.nameHighlighted"
+                type="checkbox"
+              >名称标红</label>
               <label>状态<select v-model="variant.status"><option value="ACTIVE">启用</option><option value="DRAFT">待定</option><option value="DISABLED">停用</option></select></label>
             </div>
             <section

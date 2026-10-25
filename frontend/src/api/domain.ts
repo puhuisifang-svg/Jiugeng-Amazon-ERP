@@ -14,6 +14,7 @@ export interface ProductVariantDto {
   id?: string
   skuCode: string
   variantName: string
+  nameHighlighted?: boolean | undefined
   barcode?: string
   material?: string
   specification?: string
@@ -38,7 +39,7 @@ export interface ProductVariantDto {
 }
 export interface ProductVariantInput {
   customs?: CustomsProfile | null | undefined
-  id?: string | undefined; skuCode: string; variantName: string; itemDimensions?: string | undefined; packageDimensions?: string | undefined
+  id?: string | undefined; skuCode: string; variantName: string; nameHighlighted?: boolean | undefined; itemDimensions?: string | undefined; packageDimensions?: string | undefined
   itemLengthCm?: number | undefined; itemWidthCm?: number | undefined; itemHeightCm?: number | undefined
   packageLengthCm?: number | undefined; packageWidthCm?: number | undefined; packageHeightCm?: number | undefined
   packageWeightGrams?: number | undefined; status: VariantStatus; imageAssetId?: string | undefined; imageUrl?: string | undefined; version?: number | undefined

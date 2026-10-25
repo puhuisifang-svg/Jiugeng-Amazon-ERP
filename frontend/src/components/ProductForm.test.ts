@@ -4,6 +4,19 @@ import ProductForm from './ProductForm.vue'
 import { catalogApi } from '@/api/catalog'
 
 describe('ProductForm', () => {
+  it('round-trips multiline names and highlight without changing existing statuses', async () => {
+    const wrapper = mount(ProductForm, { props: { submitLabel: '保存', initial: { productCode: 'SYN', productName: '合成父体', status: 'DISABLED', variants: [{ skuCode: 'SYN-S', variantName: '第一行\n第二行', nameHighlighted: true, status: 'DRAFT', suppliers: [], materials: [] }] } } })
+    expect(wrapper.get('textarea[required]').classes()).toContain('product-display-name--highlighted')
+    await wrapper.get('textarea[required]').setValue('修改品名\n规格补充')
+    await wrapper.get('form').trigger('submit')
+    expect(wrapper.emitted('submit')?.[0]?.[0]).toMatchObject({ status: 'DISABLED', variants: [{ variantName: '修改品名\n规格补充', nameHighlighted: true, status: 'DRAFT' }] })
+    await wrapper.get('.checkbox-label input').setValue(false)
+    await wrapper.get('form').trigger('submit')
+    expect(wrapper.emitted('submit')?.[1]?.[0]).toMatchObject({ variants: [{ nameHighlighted: false }] })
+    await wrapper.findAll('button').find(button => button.text() === '新增 SKU')!.trigger('click')
+    expect((wrapper.findAll('.variant-editor')[1]!.get('select').element as HTMLSelectElement).value).toBe('ACTIVE')
+    wrapper.unmount()
+  })
   it('separates parent and SKU panels while retaining add/remove actions', async () => {
     const wrapper = mount(ProductForm, { props: { submitLabel: '创建产品', showCancel: true } })
     expect(wrapper.get('.product-form__parent').text()).toContain('产品基础信息')
@@ -54,16 +67,16 @@ describe('ProductForm', () => {
     wrapper.unmount()
   })
 
-  it('submits the unified product name with draft product and SKU defaults', async () => {
+  it('submits the unified product name with active product and SKU defaults', async () => {
     const wrapper = mount(ProductForm, { props: { submitLabel: '创建产品' } })
     const productInputs = wrapper.find('.product-form').findAll('input')
     await productInputs[0]!.setValue('PROD-001'); await productInputs[1]!.setValue('旅行收纳袋')
-    const skuInputs = wrapper.find('.variant-editor').findAll('input[required]')
+    const skuInputs = wrapper.find('.variant-editor').findAll('input[required], textarea[required]')
     await skuInputs[0]!.setValue('SKU-001-BLK'); await skuInputs[1]!.setValue('黑色款')
     await wrapper.get('form').trigger('submit')
-    expect(wrapper.emitted('submit')?.[0]?.[0]).toMatchObject({ productCode: 'PROD-001', productName: '旅行收纳袋', status: 'DRAFT', variants: [{ skuCode: 'SKU-001-BLK', variantName: '黑色款', status: 'DRAFT', suppliers: [], materials: [] }] })
-    expect((wrapper.get('.product-form select').element as HTMLSelectElement).value).toBe('DRAFT')
-    expect((wrapper.get('.nested-form select').element as HTMLSelectElement).value).toBe('DRAFT')
+    expect(wrapper.emitted('submit')?.[0]?.[0]).toMatchObject({ productCode: 'PROD-001', productName: '旅行收纳袋', status: 'ACTIVE', variants: [{ skuCode: 'SKU-001-BLK', variantName: '黑色款', status: 'ACTIVE', suppliers: [], materials: [] }] })
+    expect((wrapper.get('.product-form select').element as HTMLSelectElement).value).toBe('ACTIVE')
+    expect((wrapper.get('.nested-form select').element as HTMLSelectElement).value).toBe('ACTIVE')
     expect(wrapper.text()).not.toContain('动态属性')
     expect(wrapper.text()).not.toContain('重量单位')
   })
@@ -84,7 +97,7 @@ describe('ProductForm', () => {
   it('accepts an HTTPS SKU image URL as an alternative to upload', async () => {
     const wrapper = mount(ProductForm, { props: { submitLabel: '创建产品' } })
     await wrapper.get('input[aria-label="SKU 1 图片 URL"]').setValue('https://images.example.com/sku-1.png')
-    const skuInputs = wrapper.find('.variant-editor').findAll('input[required]')
+    const skuInputs = wrapper.find('.variant-editor').findAll('input[required], textarea[required]')
     await skuInputs[0]!.setValue('SKU-URL')
     await skuInputs[1]!.setValue('URL 图片款')
     const productInputs = wrapper.find('.product-form').findAll('input')

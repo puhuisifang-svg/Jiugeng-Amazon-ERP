@@ -40,7 +40,7 @@ function statusLabel(value: string) { return ({ ACTIVE: '启用', DRAFT: '待定
 const formValue = computed<ProductInput | undefined>(() => product.value ? ({
   imageAssetId: product.value.imageAssetId, productCode: product.value.productCode, productName: product.value.productName, productType: product.value.productType,
   description: product.value.description, status: product.value.status, version: product.value.version,
-  variants: product.value.variants.map(item => ({ id: item.id, customs: item.customs, skuCode: item.skuCode, variantName: item.variantName,
+  variants: product.value.variants.map(item => ({ id: item.id, customs: item.customs, skuCode: item.skuCode, variantName: item.variantName, nameHighlighted: item.nameHighlighted,
     itemDimensions: item.itemDimensions, packageDimensions: item.packageDimensions, packageWeightGrams: item.packageWeightGrams,
     itemLengthCm: item.itemLengthCm, itemWidthCm: item.itemWidthCm, itemHeightCm: item.itemHeightCm,
     packageLengthCm: item.packageLengthCm, packageWidthCm: item.packageWidthCm, packageHeightCm: item.packageHeightCm,
@@ -179,7 +179,12 @@ watch([section, () => product.value?.id, () => product.value?.updatedAt, () => p
                   >
                     {{ variant.skuCode }}
                   </button>
-                </td><td>{{ variant.variantName }}</td><td>{{ statusLabel(variant.status) }}</td><td>{{ variant.packageWeightGrams == null ? '—' : variant.packageWeightGrams + ' g' }}</td>
+                </td><td
+                  class="product-display-name"
+                  :class="{ 'product-display-name--highlighted': variant.nameHighlighted }"
+                >
+                  {{ variant.variantName }}
+                </td><td>{{ statusLabel(variant.status) }}</td><td>{{ variant.packageWeightGrams == null ? '—' : variant.packageWeightGrams + ' g' }}</td>
               </tr>
             </tbody>
           </table>

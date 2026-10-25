@@ -57,7 +57,12 @@ watch(() => props.detailRow, async row => {
           v-else
           class="product-thumbnail product-thumbnail--placeholder"
         >图</span><div>
-          <h2>{{ detailVariant?.variantName }}</h2><p
+          <h2
+            class="product-display-name"
+            :class="{ 'product-display-name--highlighted': detailVariant?.nameHighlighted }"
+          >
+            {{ detailVariant?.variantName }}
+          </h2><p
             v-if="error"
             class="data-state data-state--error"
             role="alert"
@@ -80,7 +85,12 @@ watch(() => props.detailRow, async row => {
         v-if="detailTab === 'basic'"
         class="sku-detail-grid"
       >
-        <dt>SKU</dt><dd>{{ detailVariant?.skuCode }}</dd><dt>品名</dt><dd>{{ detailVariant?.variantName }}</dd><dt>SKU 状态</dt><dd>{{ labelStatus(detailVariant?.status ?? '') }}</dd><dt>产品状态</dt><dd>{{ labelStatus(detailRow.productStatus) }}</dd>
+        <dt>SKU</dt><dd>{{ detailVariant?.skuCode }}</dd><dt>品名</dt><dd
+          class="product-display-name"
+          :class="{ 'product-display-name--highlighted': detailVariant?.nameHighlighted }"
+        >
+          {{ detailVariant?.variantName }}
+        </dd><dt>SKU 状态</dt><dd>{{ labelStatus(detailVariant?.status ?? '') }}</dd><dt>产品状态</dt><dd>{{ labelStatus(detailRow.productStatus) }}</dd>
       </dl>
       <div
         v-else-if="detailTab === 'purchase'"

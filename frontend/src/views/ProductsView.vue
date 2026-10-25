@@ -18,19 +18,19 @@ import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
 
 const imagePreview = ref<{ imageAssetId?: string | undefined; imageUrl?: string | undefined; variantName: string } | null>(null)
-type ColumnKey = 'image' | 'sku' | 'name' | 'product' | 'status' | 'dimensions' | 'weight' | 'supplier' | 'material' | 'updated' | 'stock'
+type ColumnKey = 'image' | 'sku' | 'product' | 'status' | 'dimensions' | 'weight' | 'supplier' | 'material' | 'updated' | 'stock'
 const columns: Array<{ key: ColumnKey; label: string }> = [
-  { key: 'image', label: '图片' }, { key: 'sku', label: 'SKU' }, { key: 'name', label: '品名' },
+  { key: 'image', label: '图片' }, { key: 'sku', label: '品名 / SKU编码' },
   { key: 'product', label: '产品类型' }, { key: 'status', label: '状态' }, { key: 'dimensions', label: '规格' },
   { key: 'weight', label: '包装重量' }, { key: 'supplier', label: '供应商' }, { key: 'material', label: '辅料' }, { key: 'updated', label: '更新时间' }, { key: 'stock', label: '库存状态' },
 ]
-const defaultColumns: ColumnKey[] = ['sku', 'image', 'name', 'product', 'status', 'stock', 'dimensions', 'weight']
+const defaultColumns: ColumnKey[] = ['sku', 'image', 'product', 'status', 'stock', 'dimensions', 'weight']
 const storageKey = computed(() => `jiugeng.product-management.columns.v2.${session.user.value?.id ?? 'current'}`)
 function restoredColumns(): ColumnKey[] {
   try {
     const values = JSON.parse(localStorage.getItem(storageKey.value) ?? '[]') as ColumnKey[]
     const valid = Array.isArray(values) ? [...new Set(values.filter(key => columns.some(column => column.key === key)))] : []
-    return valid.length ? (valid.includes('sku') ? valid : ['sku', ...valid]) : defaultColumns
+    return valid.length ? ['sku', ...valid.filter(key => key !== 'sku')] : defaultColumns
   } catch { return defaultColumns }
 }
 
@@ -86,11 +86,11 @@ function dimensionLabel(variant: ProductVariantDto) {
   return variant.itemDimensions || variant.packageDimensions || '—'
 }
 function toInput(product: ProductDetailDto): ProductInput {
-  return { imageAssetId: product.imageAssetId, productCode: product.productCode, productName: product.productName, productType: product.productType, description: product.description, status: product.status, version: product.version, variants: product.variants.map(variant => ({ id: variant.id, customs: variant.customs, skuCode: variant.skuCode, variantName: variant.variantName, itemDimensions: variant.itemDimensions, packageDimensions: variant.packageDimensions, itemLengthCm: variant.itemLengthCm, itemWidthCm: variant.itemWidthCm, itemHeightCm: variant.itemHeightCm, packageLengthCm: variant.packageLengthCm, packageWidthCm: variant.packageWidthCm, packageHeightCm: variant.packageHeightCm, packageWeightGrams: variant.packageWeightGrams, status: variant.status, imageAssetId: variant.imageAssetId, imageUrl: variant.imageUrl, version: variant.version, suppliers: structuredClone(toRaw(variant.suppliers)), materials: structuredClone(toRaw(variant.materials)) })) }
+  return { imageAssetId: product.imageAssetId, productCode: product.productCode, productName: product.productName, productType: product.productType, description: product.description, status: product.status, version: product.version, variants: product.variants.map(variant => ({ id: variant.id, customs: variant.customs, skuCode: variant.skuCode, variantName: variant.variantName, nameHighlighted: variant.nameHighlighted, itemDimensions: variant.itemDimensions, packageDimensions: variant.packageDimensions, itemLengthCm: variant.itemLengthCm, itemWidthCm: variant.itemWidthCm, itemHeightCm: variant.itemHeightCm, packageLengthCm: variant.packageLengthCm, packageWidthCm: variant.packageWidthCm, packageHeightCm: variant.packageHeightCm, packageWeightGrams: variant.packageWeightGrams, status: variant.status, imageAssetId: variant.imageAssetId, imageUrl: variant.imageUrl, version: variant.version, suppliers: structuredClone(toRaw(variant.suppliers)), materials: structuredClone(toRaw(variant.materials)) })) }
 }
 function apiMessage(exception: unknown, fallback: string) { return exception instanceof ApiError || exception instanceof Error ? exception.message : fallback }
 let loadSequence = 0
-const displayedColumns = computed(() => visibleColumns.value.filter(key => hasColumn(key)))
+const displayedColumns = computed(() => (['sku', ...visibleColumns.value.filter(key => key !== 'sku')] as ColumnKey[]).filter(key => hasColumn(key)))
 const productTypes = computed(() => [...new Set(products.value.map(product => product.productType).filter((value): value is string => Boolean(value)))].sort())
 const groups = computed(() => {
   const f = appliedFilters.value
@@ -174,7 +174,7 @@ async function copySku(row: SkuListItemDto) {
     const product = await domainApi.product(row.productId); const source = product.variants.find(item => item.id === row.variant.id) ?? row.variant
     const duplicate = structuredClone(toRaw(source))
     delete duplicate.id; delete duplicate.version; delete duplicate.customs
-    Object.assign(duplicate, { skuCode: '', variantName: `${source.variantName} 副本`, status: 'DRAFT' as const, suppliers: [], materials: [] })
+    Object.assign(duplicate, { skuCode: '', variantName: `${source.variantName} 副本`, status: 'ACTIVE' as const, suppliers: [], materials: [] })
     editProduct.value = { ...product, variants: [...product.variants, duplicate] }; focusVariantId.value = '__NEW__'; showEdit.value = true
   } catch (exception) { error.value = apiMessage(exception, '复制 SKU 失败。') } finally { saving.value = false }
 }
@@ -183,7 +183,7 @@ async function addSkuToProduct() {
   saving.value = true; error.value = ''
   try {
     const product = await domainApi.product(addSkuProductId.value)
-    editProduct.value = { ...product, variants: [...product.variants, { skuCode: '', variantName: '', status: 'DRAFT', attributes: [], suppliers: [], materials: [] }] }
+    editProduct.value = { ...product, variants: [...product.variants, { skuCode: '', variantName: '', status: 'ACTIVE', attributes: [], suppliers: [], materials: [] }] }
     focusVariantId.value = '__NEW__'; showAddSku.value = false; showEdit.value = true
   } catch (exception) { error.value = apiMessage(exception, '产品加载失败。') } finally { saving.value = false }
 }
@@ -369,7 +369,7 @@ onMounted(load)
                     type="button"
                     @click="toggleSort(key === 'sku' ? 'sku' : 'updatedAt')"
                   >
-                    {{ key === 'sku' ? '产品编码 / SKU' : '更新时间' }} {{ filters.sort === (key === 'sku' ? 'sku' : 'updatedAt') ? (filters.direction === 'asc' ? '↑' : '↓') : '' }}
+                    {{ key === 'sku' ? '品名 / SKU编码' : '更新时间' }} {{ filters.sort === (key === 'sku' ? 'sku' : 'updatedAt') ? (filters.direction === 'asc' ? '↑' : '↓') : '' }}
                   </button><template v-else>
                     {{ columns.find(column => column.key === key)?.label }}
                   </template>
@@ -408,7 +408,7 @@ onMounted(load)
                       :aria-expanded="expanded.includes(group.product.id)"
                       @click.stop="toggleParent(group.product.id)"
                     >
-                      {{ expanded.includes(group.product.id) ? '▾' : '▸' }} {{ group.product.productCode }}<small>父体 · {{ group.children.length }} 个子体</small>
+                      <span class="product-display-name">{{ expanded.includes(group.product.id) ? '▾' : '▸' }} {{ group.product.productName }}</span><small class="product-display-code">{{ group.product.productCode }} · 父体 · {{ group.children.length }} 个子体</small>
                     </button>
                     <template v-else-if="key === 'image'">
                       <button
@@ -428,7 +428,6 @@ onMounted(load)
                         class="product-thumbnail"
                       >父</span>
                     </template>
-                    <strong v-else-if="key === 'name'">{{ group.product.productName }}</strong>
                     <span v-else-if="key === 'product'">{{ group.product.productType || '—' }}</span>
                     <span
                       v-else-if="key === 'status'"
@@ -535,14 +534,15 @@ onMounted(load)
                         type="button"
                         @click="openDetail(row)"
                       >
-                        ↳ {{ row.variant.skuCode }}
+                        <span
+                          class="product-display-name"
+                          :class="{ 'product-display-name--highlighted': row.variant.nameHighlighted }"
+                        >{{ row.variant.variantName }}</span><small class="product-display-code">{{ row.variant.skuCode }}</small>
                       </button>
                       <span
                         v-else-if="key === 'stock'"
                         class="stock-uninitialized"
-                      >未建账</span><template v-else-if="key === 'name'">
-                        {{ row.variant.variantName }}
-                      </template>
+                      >未建账</span>
                       <template v-else-if="key === 'product'">
                         {{ row.productType || '—' }}
                       </template>

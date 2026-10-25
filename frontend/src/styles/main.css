@@ -377,6 +377,15 @@ select:disabled { color: #8a93a5; background-color: #f3f5f8; cursor: not-allowed
 .sku-master-table .catalog-image, .sku-master-table .product-thumbnail { width: 80px; height: 80px; object-fit: contain; background: white; }
 .sku-master-table .material-image-button { display: block; width: 80px; height: 80px; min-height: 0; padding: 0; border: 0; background: transparent; cursor: zoom-in; }
 .sku-code-button, .link-button { min-height: 0; padding: 0; color: var(--accent); background: transparent; border: 0; font-weight: 700; cursor: pointer; }
+.product-display-name { white-space: pre-wrap; overflow-wrap: anywhere; }
+.product-display-name--highlighted { color: #c62828; }
+.product-editor-form label.sku-name-highlight { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+.product-editor-form textarea.product-display-name, .product-sku-page .operation-dialog__card textarea.product-display-name { min-height: 68px; height: auto; line-height: 1.5; resize: vertical; }
+.product-editor-form textarea.product-display-name--highlighted, .product-sku-page .operation-dialog__card textarea.product-display-name--highlighted { color: #c62828; }
+.product-editor-form .product-editor-tabs button { flex-shrink: 0; white-space: nowrap; }
+.product-sku-page .hierarchy-cell .product-display-name { display: block; max-width: 360px; color: #172033; font-weight: 600; }
+.product-sku-page .hierarchy-cell .product-display-name--highlighted { color: #c62828; }
+.product-sku-page .hierarchy-cell .product-display-code { display: block; margin-top: 4px; color: #707b8d; font-size: 12px; font-weight: 400; overflow-wrap: anywhere; white-space: normal; }
 .sort-button { min-height: 0; padding: 0; color: inherit; background: transparent; border: 0; font-weight: inherit; cursor: pointer; }
 .sku-master-table .sticky-action { position: sticky; z-index: 2; right: 0; min-width: 150px; background: white; box-shadow: -8px 0 12px rgba(32, 42, 62, .05); }
 .sku-master-table thead .sticky-action { z-index: 3; background: #f8f9fb; }

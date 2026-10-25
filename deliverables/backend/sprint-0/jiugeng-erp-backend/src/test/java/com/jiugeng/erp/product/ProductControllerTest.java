@@ -580,6 +580,43 @@ class ProductControllerTest {
             .param("purpose","PRODUCT_MAIN").header("Authorization",bearer(token))).andExpect(status().isBadRequest());
     }
 
+    @Test
+    void multilineNameStyleIsPersistentPermissionCheckedAndVersioned() throws Exception {
+        String token = createUserAndLogin("style-owner", "PRODUCT_MATERIAL");
+        var input = objectMapper.valueToTree(product("STYLE-P", "合成父体", "STYLE-S", "合成"));
+        var variant = (com.fasterxml.jackson.databind.node.ObjectNode) input.path("variants").get(0);
+        variant.put("variantName", "合成名称\n第二行");
+        JsonNode created = objectMapper.readTree(mvc.perform(post("/api/v1/products")
+                .header("Authorization", bearer(token)).contentType(MediaType.APPLICATION_JSON).content(input.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.variants[0].nameHighlighted").value(false))
+                .andReturn().getResponse().getContentAsString());
+        String id = created.path("id").asText();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) created.path("variants").get(0)).put("nameHighlighted", true);
+        String reader = createUserAndLogin("style-reader", "SELECTION");
+        mvc.perform(put("/api/v1/products/" + id).header("Authorization", bearer(reader))
+                .contentType(MediaType.APPLICATION_JSON).content(created.toString())).andExpect(status().isForbidden());
+        JsonNode updated = objectMapper.readTree(mvc.perform(put("/api/v1/products/" + id)
+                .header("Authorization", bearer(token)).contentType(MediaType.APPLICATION_JSON).content(created.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.variants[0].nameHighlighted").value(true))
+                .andExpect(jsonPath("$.variants[0].variantName").value("合成名称\n第二行"))
+                .andReturn().getResponse().getContentAsString());
+        ((com.fasterxml.jackson.databind.node.ObjectNode) created.path("variants").get(0)).put("nameHighlighted", false);
+        mvc.perform(put("/api/v1/products/" + id).header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).content(created.toString())).andExpect(status().isConflict());
+        ((com.fasterxml.jackson.databind.node.ObjectNode) updated.path("variants").get(0)).remove("nameHighlighted");
+        JsonNode preserved = objectMapper.readTree(mvc.perform(put("/api/v1/products/" + id)
+                .header("Authorization", bearer(token)).contentType(MediaType.APPLICATION_JSON).content(updated.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.variants[0].nameHighlighted").value(true))
+                .andReturn().getResponse().getContentAsString());
+        ((com.fasterxml.jackson.databind.node.ObjectNode) preserved.path("variants").get(0)).put("nameHighlighted", false);
+        mvc.perform(put("/api/v1/products/" + id).header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).content(preserved.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.variants[0].nameHighlighted").value(false));
+        mvc.perform(get("/api/v1/products/" + id).header("Authorization", bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.variants[0].variantName").value("合成名称\n第二行"))
+                .andExpect(jsonPath("$.variants[0].nameHighlighted").value(false));
+    }
+
     private String uploadCatalogImage(String token,String purpose) throws Exception {
         var bytes=new java.io.ByteArrayOutputStream();
         javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(2,2,java.awt.image.BufferedImage.TYPE_INT_RGB),"png",bytes);

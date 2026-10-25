@@ -9,6 +9,18 @@ import { appRoutes, refreshAccessIfStale } from './index'
 afterEach(() => vi.restoreAllMocks())
 
 describe('application routes', () => {
+  it('keeps product import list and detail in product navigation without changing materials imports', () => {
+    const router = createRouter({ history: createMemoryHistory(), routes: appRoutes })
+    for (const path of ['/products/imports', '/products/imports/batch-1']) {
+      const route = router.resolve(path)
+      expect(route.meta.parentPath).toBe('/products')
+      expect(route.meta.breadcrumbs?.some(item => item.title === '产品管理')).toBe(true)
+      expect(route.meta.capabilities).toEqual(['imports.read'])
+    }
+    expect(router.resolve('/products/imports').name).toBe('product-imports')
+    expect(router.resolve('/imports').meta.parentPath).toBe('/materials')
+    expect(router.resolve('/imports/batch-1').meta.parentPath).toBe('/materials')
+  })
   it('places candidate-linked development under product management using existing product access', () => {
     const routes = appRoutes.find(route => route.path === '/')?.children?.filter(route => route.path.startsWith('product-development')) ?? []
     expect(routes).toHaveLength(3)

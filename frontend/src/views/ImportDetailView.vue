@@ -9,6 +9,7 @@ import { importsApi, type ImportBatch, type ImportIssue, type ImportPreview, typ
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
 
+const props = withDefaults(defineProps<{ importBasePath?: string }>(), { importBasePath: '/imports' })
 const route = useRoute(); const router = useRouter(); const id = computed(() => String(route.params.batchId))
 const batch = ref<ImportBatch | null>(null); const issues = ref<ImportIssue[]>([]); const preview = ref<ImportPreview | null>(null)
 const result = ref<ImportResult | null>(null); const warningsAccepted = ref(false)
@@ -48,7 +49,7 @@ async function cancel() {
 }
 async function revalidate() {
   saving.value = true; error.value = ''
-  try { const receipt = await importsApi.revalidate(id.value); await router.push(`/imports/${receipt.batch.id}`) }
+  try { const receipt = await importsApi.revalidate(id.value); await router.push(`${props.importBasePath}/${receipt.batch.id}`) }
   catch (exception) { error.value = exception instanceof ApiError ? exception.message : '重新校验失败。' }
   finally { saving.value = false }
 }
@@ -70,7 +71,7 @@ onMounted(load)
         </p><h1>批次详情</h1><p>逐工作表、行和字段定位问题；已注册类型通过全量校验后整批原子提交。</p>
       </div><RouterLink
         class="primary-link"
-        to="/imports"
+        :to="props.importBasePath"
       >
         返回导入中心
       </RouterLink>

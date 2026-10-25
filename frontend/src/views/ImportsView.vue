@@ -10,6 +10,7 @@ import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
 
+const props = withDefaults(defineProps<{ importBasePath?: string }>(), { importBasePath: '/imports' })
 const batches = ref<ImportBatch[]>([])
 const type = ref<ImportType>('PRODUCTS')
 const file = ref<File | null>(null)
@@ -126,7 +127,7 @@ onMounted(load)
               :key="item.id"
             >
               <td>{{ new Date(item.createdAt).toLocaleString() }}</td><td>{{ labels[item.importType] }}</td><td>{{ item.status }}</td><td>{{ item.percent }}%</td><td>{{ item.errorCount }} / {{ item.warningCount }}</td><td>
-                <RouterLink :to="`/imports/${item.id}`">
+                <RouterLink :to="`${props.importBasePath}/${item.id}`">
                   查看
                 </RouterLink>
               </td>

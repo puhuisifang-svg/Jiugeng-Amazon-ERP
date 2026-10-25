@@ -13,6 +13,13 @@ vi.mock('@/api/imports', async (importOriginal) => {
 import ImportsView from './ImportsView.vue'
 
 describe('ImportsView', () => {
+  it('retains the originating product route when opening a batch', async () => {
+    list.mockResolvedValueOnce([{ id: 'batch-1', importType: 'PRODUCTS', status: 'VALIDATED' }])
+    const wrapper = mount(ImportsView, { props: { importBasePath: '/products/imports' }, global: { stubs: { RouterLink: { props: ['to'], template: '<a :href="to"><slot /></a>' } } } })
+    await flushPromises()
+    expect(wrapper.find('a[href="/products/imports/batch-1"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
   beforeEach(() => {
     list.mockReset().mockResolvedValue([])
     upload.mockReset().mockResolvedValue({ batch: { id: 'b1' }, replayed: false })

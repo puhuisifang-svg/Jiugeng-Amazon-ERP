@@ -31,6 +31,12 @@ import ProductForm from '@/components/ProductForm.vue'
 const RouterLink = { props: ['to'], template: '<a :href="to"><slot /></a>' }
 
 describe('ProductsView', () => {
+  it('opens imports in product management instead of materials', async () => {
+    const wrapper = mount(ProductsView, { global: { stubs: { RouterLink } } })
+    await flushPromises()
+    expect(wrapper.findAll('a').find(link => link.text() === '导入')!.attributes('href')).toBe('/products/imports')
+    wrapper.unmount()
+  })
   it('shows parent thumbnail, opens its preview and preserves it in the parent editor', async () => {
     vi.mocked(domainApi.products).mockResolvedValueOnce({ items: [{ ...product, imageAssetId: 'parent-asset' }], mockData: false } as Awaited<ReturnType<typeof domainApi.products>>)
     const wrapper = mount(ProductsView, { global: { stubs: { RouterLink, AuthenticatedCatalogImage: true } } })

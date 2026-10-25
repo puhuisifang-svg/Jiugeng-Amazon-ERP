@@ -276,7 +276,7 @@ onMounted(load)
           批量修改
         </button><RouterLink
           class="toolbar-link"
-          to="/imports"
+          to="/products/imports"
         >
           导入
         </RouterLink><button

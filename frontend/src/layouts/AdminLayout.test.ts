@@ -29,6 +29,13 @@ async function setup(path = '/home', allowed = ref<string[] | null>(null)) {
 }
 
 describe('horizontal navigation shell', () => {
+  it.each(['/products/example', '/products/example/variants', '/products/example/documents'])('links product detail breadcrumbs back to products: %s', async path => {
+    const { wrapper, router } = await setup(path)
+    expect(wrapper.get('.page-heading__trail').text()).toBe('商品/产品管理/产品详情')
+    await wrapper.get('.page-heading__trail a[href="/products"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/products')
+  })
   it('centers the measured panel, clamps viewport edges and repositions on resize', async () => {
     const { wrapper } = await setup()
     let left = 900

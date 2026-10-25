@@ -249,7 +249,8 @@ onMounted(load)
       <label>库存状态<select v-model="filters.stock"><option value="">全部库存</option><option value="UNINITIALIZED">未建账</option></select></label>
       <button
         type="button"
-        class="secondary-button"
+        class="filter-reset-button"
+        :disabled="loading"
         @click="reset"
       >
         重置

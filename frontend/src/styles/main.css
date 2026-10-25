@@ -342,6 +342,10 @@ select:disabled { color: #8a93a5; background-color: #f3f5f8; cursor: not-allowed
 .product-sku-page .product-child-row td { background: #fcfdff; }
 .product-sku-page .stock-uninitialized { color: var(--muted); font-size: 12px; }
 .product-management-filters { align-items: end; }
+.filter-panel .filter-reset-button { flex: 0 0 auto; min-height: 32px; padding: 0 8px; color: var(--ink); background: transparent; border: 0; border-radius: 4px; font-weight: 400; cursor: pointer; }
+.filter-panel .filter-reset-button:hover:not(:disabled) { color: var(--accent); background: var(--accent-soft); }
+.filter-panel .filter-reset-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.filter-panel .filter-reset-button:disabled { opacity: .5; cursor: not-allowed; }
 .sku-documents { padding-top: 16px; min-height: 200px; }
 .sku-documents .material-toolbar { padding: 0; }
 .sku-documents h3 { margin: 0; font-size: 16px; }

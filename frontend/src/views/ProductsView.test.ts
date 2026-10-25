@@ -31,6 +31,16 @@ import ProductForm from '@/components/ProductForm.vue'
 const RouterLink = { props: ['to'], template: '<a :href="to"><slot /></a>' }
 
 describe('ProductsView', () => {
+  it('uses a compact text reset action and clears search filters', async () => {
+    const wrapper = mount(ProductsView, { global: { stubs: { RouterLink } } })
+    await flushPromises()
+    await wrapper.get('input[type="search"]').setValue('no-match')
+    expect(wrapper.find('.product-parent-row').exists()).toBe(false)
+    await wrapper.get('.filter-reset-button').trigger('click'); await flushPromises()
+    expect((wrapper.get('input[type="search"]').element as HTMLInputElement).value).toBe('')
+    expect(wrapper.find('.product-parent-row').exists()).toBe(true)
+    wrapper.unmount()
+  })
   it('shows only details and more in the parent action column', async () => {
     const wrapper = mount(ProductsView, { global: { stubs: { RouterLink, Teleport: true } } })
     await flushPromises()

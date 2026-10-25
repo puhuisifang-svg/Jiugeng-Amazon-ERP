@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
-import { domainApi, type ProductDetailDto, type ProductInput, type ProductVariantDto, type SkuListItemDto } from '@/api/domain'
+import { RouterLink, useRoute } from 'vue-router'
+import { domainApi, type ProductHistoryDto, type ProductDetailDto, type ProductInput, type ProductVariantDto, type SkuListItemDto } from '@/api/domain'
 import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vue'
-import ProductForm from '@/components/ProductForm.vue'
+import ProductEditDialog from '@/components/ProductEditDialog.vue'
+import { productActionLabel } from '@/utils/productHistory'
 import SkuDetailDialog from '@/components/SkuDetailDialog.vue'
 import SuccessToast from '@/components/SuccessToast.vue'
 import TableViewport from '@/components/TableViewport.vue'
@@ -17,6 +18,18 @@ const error = ref(''), success = ref(''), confirmDisable = ref(false)
 const writable = computed(() => runtimeConfig.authMode === 'password' && session.canAccess(['products.write']))
 const selectedSku = ref<SkuListItemDto>()
 const focusVariantId = ref<string>()
+const section = computed(() => route.params.section === 'changes' ? 'changes' : 'overview')
+const history = ref<ProductHistoryDto[]>([]), historyLoading = ref(false), historyError = ref('')
+let historySequence = 0
+async function loadHistory() {
+  const request = ++historySequence, id = product.value?.id
+  history.value = []; historyError.value = ''; historyLoading.value = false
+  if (!id || section.value !== 'changes') return
+  historyLoading.value = true
+  try { const result = await domainApi.productHistory(id); if (request === historySequence) history.value = result }
+  catch (exception) { if (request === historySequence) historyError.value = exception instanceof Error ? exception.message : '变更记录加载失败。' }
+  finally { if (request === historySequence) historyLoading.value = false }
+}
 function openSku(variant: ProductVariantDto) {
   if (!product.value) return
   selectedSku.value = { productId: product.value.id, productCode: product.value.productCode, productName: product.value.productName, productStatus: product.value.status, variant, businessAvailable: product.value.status === 'ACTIVE' && variant.status === 'ACTIVE' }
@@ -61,6 +74,7 @@ async function disable() {
   finally { busy.value = false }
 }
 watch(() => route.params.productId, load, { immediate: true })
+watch([section, () => product.value?.id, () => product.value?.updatedAt, () => product.value?.version], loadHistory)
 </script>
 
 <template>
@@ -80,16 +94,6 @@ watch(() => route.params.productId, load, { immediate: true })
     >
       正在加载…
     </p>
-    <ProductForm
-      v-else-if="editing && formValue"
-      :initial="formValue"
-      :focus-variant-id="focusVariantId"
-      :busy="busy"
-      submit-label="保存修改"
-      show-cancel
-      @submit="save"
-      @cancel="editing = false"
-    />
     <template v-else-if="product">
       <article class="panel compact-panel">
         <div class="detail-summary">
@@ -129,7 +133,25 @@ watch(() => route.params.productId, load, { immediate: true })
           </div>
         </div>
       </article>
+      <nav
+        class="detail-tabs"
+        aria-label="父体详情页签"
+      >
+        <RouterLink
+          :to="'/products/' + product.id + '/overview'"
+          :class="{ 'is-current': section === 'overview' }"
+        >
+          基础信息
+        </RouterLink>
+        <RouterLink
+          :to="'/products/' + product.id + '/changes'"
+          :class="{ 'is-current': section === 'changes' }"
+        >
+          变更记录
+        </RouterLink>
+      </nav>
       <article
+        v-if="section === 'overview'"
         class="panel compact-panel"
       >
         <h2>基础信息</h2>
@@ -169,7 +191,63 @@ watch(() => route.params.productId, load, { immediate: true })
           暂无 SKU。
         </p>
       </article>
+      <article
+        v-else
+        class="panel compact-panel"
+      >
+        <h2>变更记录</h2>
+        <p
+          v-if="historyLoading"
+          class="data-state"
+        >
+          正在加载变更记录…
+        </p>
+        <p
+          v-else-if="historyError"
+          role="alert"
+        >
+          {{ historyError }} <button
+            type="button"
+            class="secondary-action"
+            @click="loadHistory"
+          >
+            重试
+          </button>
+        </p>
+        <TableViewport v-else-if="history.length">
+          <table class="data-table">
+            <thead><tr><th>时间</th><th>操作人</th><th>操作</th><th>变更内容</th></tr></thead><tbody>
+              <tr
+                v-for="item in history"
+                :key="item.id"
+              >
+                <td>{{ item.occurredAt }}</td><td>{{ item.actorDisplayName || item.actorLoginName }}</td><td :title="item.action">
+                  {{ productActionLabel(item.action) }}
+                </td><td class="history-detail">
+                  {{ item.detail || '—' }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </TableViewport>
+        <p
+          v-else
+          class="data-state"
+        >
+          暂无变更记录。
+        </p>
+      </article>
     </template>
+    <ProductEditDialog
+      v-if="editing && formValue"
+      :key="focusVariantId ?? 'parent'"
+      :initial="formValue"
+      :focus-variant-id="focusVariantId"
+      :busy="busy"
+      :error="error"
+      @close="editing = false"
+      @submit="save"
+    />
     <SkuDetailDialog
       v-if="selectedSku"
       :detail-row="selectedSku"
@@ -254,6 +332,8 @@ watch(() => route.params.productId, load, { immediate: true })
 .detail-fields dt { color: var(--muted); font-size: 12px; }
 .detail-fields dd { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .detail-wide { grid-column: 1 / -1; }
+.detail-tabs .is-current { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
+.history-detail { white-space: pre-wrap; min-width: 200px; overflow-wrap: anywhere; }
 .detail-preview :deep(img) { display: block; width: 100%; height: auto; max-height: 70vh; object-fit: contain; }
 @media (max-width: 800px) { .detail-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 480px) { .detail-fields { grid-template-columns: 1fr; } .detail-summary .table-actions { margin-left: 0; } }

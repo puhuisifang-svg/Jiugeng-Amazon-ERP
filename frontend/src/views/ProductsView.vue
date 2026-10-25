@@ -12,6 +12,7 @@ import { domainApi, type BatchVariantPatchInput, type ProductDetailDto, type Pro
 import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vue'
 import SkuDetailDialog from '@/components/SkuDetailDialog.vue'
 import ProductForm from '@/components/ProductForm.vue'
+import ProductEditDialog from '@/components/ProductEditDialog.vue'
 import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
@@ -759,41 +760,16 @@ onMounted(load)
         />
       </section>
     </div>
-    <div
+    <ProductEditDialog
       v-if="showEdit && editProduct"
-      class="operation-dialog"
-      role="dialog"
-      aria-modal="true"
-      @click.self="showEdit = false"
-      @keydown.esc="showEdit = false"
-    >
-      <section class="panel operation-dialog__card product-create-dialog">
-        <button
-          class="operation-dialog__close"
-          type="button"
-          aria-label="关闭"
-          @click="showEdit = false"
-        >
-          ×
-        </button><h2>编辑 SKU</h2><p
-          v-if="error"
-          class="data-state data-state--error"
-          role="alert"
-        >
-          {{ error }}
-        </p><p>{{ focusVariantId === '__NEW__' ? '填写新子体的唯一 SKU 编码。' : focusVariantId ? '编辑当前子体，保存时保留其他子体。' : '维护父体资料及其全部子体。' }}</p><ProductForm
-          :key="`${editProduct.id}-${focusVariantId ?? 'copy'}`"
-          class="product-create-form"
-          :initial="toInput(editProduct)"
-          :focus-variant-id="focusVariantId"
-          :busy="saving"
-          submit-label="保存"
-          show-cancel
-          @cancel="showEdit = false"
-          @submit="update"
-        />
-      </section>
-    </div>
+      :key="`${editProduct.id}-${focusVariantId ?? 'parent'}`"
+      :initial="toInput(editProduct)"
+      :focus-variant-id="focusVariantId"
+      :busy="saving"
+      :error="error"
+      @close="showEdit = false"
+      @submit="update"
+    />
     <SkuDetailDialog
       v-if="showDetail && detailRow"
       :detail-row="detailRow"

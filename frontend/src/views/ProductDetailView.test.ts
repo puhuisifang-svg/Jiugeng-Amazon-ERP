@@ -31,6 +31,29 @@ async function setup(path = '/products/p1') {
   return { wrapper, router }
 }
 describe('parent product details', () => {
+  it('restores real history with semantic operations, empty states and retry', async () => {
+    vi.mocked(domainApi.productHistory).mockRejectedValueOnce(new Error('加载失败')).mockResolvedValueOnce([
+      { id: 'h1', action: 'PRODUCT_UPDATE', actorLoginName: 'tester', detail: '修改描述', occurredAt: '2026-01-01' },
+      { id: 'h2', action: 'FUTURE_ACTION', actorLoginName: 'tester', occurredAt: '2026-01-02' },
+    ])
+    const { wrapper, router } = await setup('/products/p1/changes')
+    expect(wrapper.text()).toContain('加载失败')
+    await wrapper.findAll('button').find(b => b.text() === '重试')!.trigger('click'); await flushPromises()
+    expect(wrapper.text()).toContain('修改产品资料')
+    expect(wrapper.text()).toContain('其他操作')
+    expect(wrapper.get('td[title="FUTURE_ACTION"]').text()).toBe('其他操作')
+    expect(wrapper.text()).not.toContain('PRODUCT_UPDATE')
+    await router.push('/products/p1/overview'); await flushPromises()
+    expect(wrapper.text()).toContain('SKU 概览')
+  })
+  it('uses the shared edit dialog without replacing the detail page', async () => {
+    const { wrapper } = await setup()
+    await wrapper.findAll('button').find(b => b.text() === '编辑')!.trigger('click')
+    expect(wrapper.get('[role="dialog"][aria-label="编辑产品"]').find('.product-create-dialog .product-create-form').exists()).toBe(true)
+    expect(wrapper.text()).toContain('SKU 概览')
+    await wrapper.get('[aria-label="关闭编辑"]').trigger('click')
+    expect(wrapper.findComponent(ProductForm).exists()).toBe(false)
+  })
   it('opens the exact selected SKU using the existing dialog and closes back to overview', async () => {
     vi.mocked(domainApi.product).mockResolvedValue({ ...product, variants: [...product.variants, { ...product.variants[0]!, id: 'v2', skuCode: 'SECOND-SKU', variantName: '第二子体' }] })
     const { wrapper } = await setup()
@@ -48,10 +71,10 @@ describe('parent product details', () => {
     await wrapper.findAll('button').find(b => b.text() === '编辑 SKU')!.trigger('click')
     expect(wrapper.getComponent(ProductForm).props('focusVariantId')).toBe('v1')
   })
-  it.each(['variants', 'materials', 'documents', 'changes'])('shows only basics for legacy section %s without fetching removed content', async section => {
+  it.each(['variants', 'materials', 'documents'])('shows only basics for legacy section %s without fetching removed content', async section => {
     const { wrapper } = await setup('/products/p1/' + section)
     expect(wrapper.text()).toContain('SKU 概览')
-    expect(wrapper.find('.detail-tabs').exists()).toBe(false)
+    expect(wrapper.findAll('.detail-tabs a').map(a => a.text())).toEqual(['基础信息', '变更记录'])
     expect(domainApi.productHistory).not.toHaveBeenCalled()
     expect(domainApi.supplier).not.toHaveBeenCalled()
     expect(domainApi.productMaterialRelations).not.toHaveBeenCalled()
@@ -69,7 +92,7 @@ describe('parent product details', () => {
     expect(wrapper.text()).toContain('合成父体')
     expect(wrapper.text()).not.toContain('返回产品管理')
     expect(wrapper.findAll('button').some(b => b.text() === '刷新')).toBe(false)
-    expect(wrapper.find('.detail-tabs').exists()).toBe(false)
+    expect(wrapper.findAll('.detail-tabs a').map(a => a.text())).toEqual(['基础信息', '变更记录'])
     await wrapper.get('[aria-label="查看父体图片"]').trigger('click')
     expect(wrapper.get('[aria-label="产品图片预览"]').text()).toContain('合成父体')
     await wrapper.get('[aria-label="关闭图片预览"]').trigger('click')

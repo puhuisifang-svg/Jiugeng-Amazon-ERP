@@ -5,6 +5,7 @@ import { domainApi, type SkuListItemDto, type ProductHistoryDto, type ProductVar
 import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vue'
 import SkuDocumentsPanel from '@/components/SkuDocumentsPanel.vue'
 import TableViewport from '@/components/TableViewport.vue'
+import { productActionLabel } from '@/utils/productHistory'
 const props = defineProps<{ detailRow: SkuListItemDto; writable: boolean; error?: string; hideParentLink?: boolean }>()
 const emit = defineEmits<{ close: []; edit: [row: SkuListItemDto] }>()
 const detailVariant = computed(() => props.detailRow.variant)
@@ -161,7 +162,9 @@ watch(() => props.detailRow, async row => {
                 v-for="event in detailHistory"
                 :key="event.id"
               >
-                <td>{{ event.occurredAt }}</td><td>{{ event.actorDisplayName || event.actorLoginName }}</td><td>{{ event.action }}</td><td>{{ event.detail || '—' }}</td>
+                <td>{{ event.occurredAt }}</td><td>{{ event.actorDisplayName || event.actorLoginName }}</td><td :title="event.action">
+                  {{ productActionLabel(event.action) }}
+                </td><td>{{ event.detail || '—' }}</td>
               </tr>
             </tbody>
           </table>

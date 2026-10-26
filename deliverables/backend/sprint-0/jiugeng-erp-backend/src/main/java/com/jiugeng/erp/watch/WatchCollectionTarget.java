@@ -14,8 +14,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Component @Profile("!mock")
 class WatchCollectionTarget implements CollectionTarget {
-    private final JdbcClient jdbc;private final WatchRepository repository;
-    WatchCollectionTarget(JdbcClient jdbc,WatchRepository repository){this.jdbc=jdbc;this.repository=repository;}
+    private final JdbcClient jdbc;private final WatchRepository repository;private final com.fasterxml.jackson.databind.ObjectMapper mapper;
+    WatchCollectionTarget(JdbcClient jdbc,WatchRepository repository,com.fasterxml.jackson.databind.ObjectMapper mapper){this.jdbc=jdbc;this.repository=repository;this.mapper=mapper;}
     public String kind(){return "STORE";}
     public CollectionAdapter.Target prepare(String id){
         repository.lockStore(id);var store=repository.store(id).orElseThrow();
@@ -35,7 +35,9 @@ class WatchCollectionTarget implements CollectionTarget {
         if(last.isPresent()&&!o.observedAt().isAfter(last.get()))return "";
         String runId=job;
         repository.insertRun(runId,target.id(),job,job,"SUCCEEDED",seen.size(),seen.size(),pages,true,job,"COMPLETE","PROMOTED","EXTERNAL_COMPLETE",o.observedAt(),"SYSTEM");
-        jdbc.sql("UPDATE watch_run SET adapter_name=:provider WHERE id=:id").param("provider",provider).param("id",runId).update();
+        var coverage=mapper.createObjectNode().put("inventoryComplete",!provider.equals("amazon-public-us")&&o.fields().path("inventoryComplete").asBoolean(true)).put("pageCount",pages).put("itemCount",items).put("coverage",o.fields().path("coverage").asText("ADAPTER_CONTRACT"));
+        if(o.fields().has("visitedPages"))coverage.set("visitedPages",o.fields().get("visitedPages"));
+        jdbc.sql("UPDATE watch_run SET adapter_name=:provider,coverage_json=:coverage WHERE id=:id").param("coverage",coverage.toString()).param("provider",provider).param("id",runId).update();
         // Automatic snapshots are isolated from MANUAL store baselines and prior manual source history.
         var existing=new HashSet<>(jdbc.sql("SELECT asin FROM watch_presence WHERE store_id=:id AND provider=:source").param("id",target.id()).param("source",provider).query(String.class).list());
         int events=0;LocalDate day=o.observedAt().atZone(ZoneId.of("America/Los_Angeles")).toLocalDate();
@@ -56,7 +58,9 @@ class WatchCollectionTarget implements CollectionTarget {
             }
         }
         int missing=0;
-        for(String asin:existing)if(!seen.containsKey(asin)){
+        // Public search coverage cannot establish absence from a seller inventory.
+        boolean inventoryComplete=!provider.equals("amazon-public-us")&&o.fields().path("inventoryComplete").asBoolean(true);
+        for(String asin:existing)if(inventoryComplete&&!seen.containsKey(asin)){
             var prior=jdbc.sql("SELECT missing_count,missing_day FROM watch_presence WHERE store_id=:id AND provider=:source AND asin=:asin").param("id",target.id()).param("source",provider).param("asin",asin).query((r,n)->new Object[]{r.getInt(1),r.getDate(2)}).single();
             java.sql.Date previous=(java.sql.Date)prior[1];int count=(Integer)prior[0];
             if(previous==null||day.isAfter(previous.toLocalDate())){count++;if(count==2)missing++;

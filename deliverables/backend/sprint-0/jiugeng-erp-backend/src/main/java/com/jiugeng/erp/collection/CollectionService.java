@@ -86,9 +86,10 @@ public class CollectionService {
                 try{target=port(current.kind()).prepare(current.targetId());}catch(ResponseStatusException e){cancel(claim.job().id());return;}
                 if(adapter(current.provider(),current.kind()).isEmpty()||!current.enabled()||current.version()!=claim.job().scheduleVersion()||target.version()!=claim.job().targetVersion()){cancel(claim.job().id());return;}
                 if(observation==null||observation.observedAt()==null||observation.observedAt().isAfter(Instant.now().plusSeconds(60))||observation.observedAt().isBefore(Instant.parse("2000-01-01T00:00:00Z")))throw error(400,"来源观测时间无效");
-                if(!"COMPLETE".equals(observation.quality())||!observation.pagesComplete()){finish(claim,"PARTIAL","分页或字段不完整，保留原基线");notify(claim,"采集不完整，保留原基线");return;}
+                boolean partialProduct=current.kind().equals("PRODUCT")&&current.provider().equals(AmazonPublicAdapter.SOURCE)&&"PARTIAL".equals(observation.quality());
+                if((!"COMPLETE".equals(observation.quality())&&!partialProduct)||!observation.pagesComplete()){finish(claim,"PARTIAL","分页或字段不完整，保留原基线");notify(claim,"采集不完整，保留原基线");return;}
                 String message=port(current.kind()).apply(target,current.provider(),claim.job().id(),observation);
-                finish(claim,"SUCCEEDED","");if(message!=null&&!message.isBlank())notify(claim,message);
+                finish(claim,partialProduct?"PARTIAL":"SUCCEEDED",partialProduct?"部分字段未观测，保留其历史值；已更新本次可见字段":"");if(message!=null&&!message.isBlank())notify(claim,message);
             });
         }catch(Exception e){tx.executeWithoutResult(s->{lock();if(!owns(claim))return;
             boolean retry=e instanceof CollectionAdapter.CollectionFailure f&&f.retryable()&&claim.job().attempts()<3;

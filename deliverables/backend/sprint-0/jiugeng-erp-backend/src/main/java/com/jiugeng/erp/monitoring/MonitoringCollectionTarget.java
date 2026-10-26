@@ -19,7 +19,7 @@ class MonitoringCollectionTarget implements CollectionTarget {
         }).optional().orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"目标不存在"));
     }
     public String apply(CollectionAdapter.Target target,String provider,String jobId,CollectionAdapter.Observation o){
-        var saved=service.snapshotValidated(target.id(),new MonitoringTypes.SnapshotInput(jobId,target.version(),o.observedAt(),"EXTERNAL:"+provider,o.quality(),o.fields(),""),true);
+        var saved=service.snapshotValidated(target.id(),new MonitoringTypes.SnapshotInput(jobId,target.version(),o.observedAt(),"EXTERNAL:"+provider,o.quality(),o.fields(),o.quality().equals("PARTIAL")?"部分字段未观测，保留其历史值":""),true);
         return saved.decision().equals("CHANGED")?"监控商品有新的字段变化":"";
     }
 }

@@ -25,6 +25,8 @@ class MonitoringControllerTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper mapper;
     @Autowired JdbcTemplate jdbc;
+    @Autowired MonitoringService monitoring;
+    @Autowired org.springframework.transaction.support.TransactionTemplate tx;
     @BeforeEach void clean(){jdbc.update("DELETE FROM monitor_snapshot");jdbc.update("DELETE FROM monitor_target");jdbc.update("DELETE FROM monitor_request");jdbc.update("DELETE FROM monitor_preference");}
 
     @Test void allRolesCanWriteButAnonymousCannotAndNoBusinessAuditIsCreated()throws Exception {
@@ -124,6 +126,16 @@ class MonitoringControllerTest {
         create(token,"B0TEST0002");
         mvc.perform(post(ROOT+"/batch").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("targets",List.of(Map.of("id",id,"version",1)),"action","ENABLE")))).andExpect(jsonPath("$[0].status").value("LIMIT"));
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM monitor_target WHERE enabled=TRUE",Integer.class)).isEqualTo(1000);
+    }
+
+    @Test void absentPublicPricePreservesHistoricalValueWithoutFalseChange() throws Exception {
+        String token=login("ADMIN"),id=create(token,"B0TEST0999");
+        tx.executeWithoutResult(t->monitoring.snapshotValidated(id,new MonitoringTypes.SnapshotInput("public-first",0,java.time.Instant.parse("2026-01-01T00:00:00Z"),"EXTERNAL:amazon-public-us","COMPLETE",mapper.valueToTree(fields("First",19)),""),true));
+        var observed=mapper.createObjectNode().put("title","Second");
+        var snapshot=tx.execute(t->monitoring.snapshotValidated(id,new MonitoringTypes.SnapshotInput("public-second",1,java.time.Instant.parse("2026-01-02T00:00:00Z"),"EXTERNAL:amazon-public-us","PARTIAL",observed,"Price not observed"),true));
+        var stored=mapper.readTree(jdbc.queryForObject("SELECT baseline_json FROM monitor_target WHERE id=?",String.class,id));
+        assertThat(stored.path("price").asInt()).isEqualTo(19);assertThat(stored.path("title").asText()).isEqualTo("Second");
+        assertThat(snapshot.fields().has("price")).isFalse();assertThat(snapshot.changes().size()).isEqualTo(1);assertThat(snapshot.changes().get(0).path("field").asText()).isEqualTo("title");
     }
 
     private Map<String,Object> fields(String title,int price){Map<String,Object> f=new LinkedHashMap<>();f.put("title",title);f.put("brand",null);f.put("imageUrl",null);f.put("bullets",List.of("One","Two"));f.put("price",price);f.put("currency","USD");f.put("availability","AVAILABLE");return f;}

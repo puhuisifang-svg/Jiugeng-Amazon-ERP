@@ -36,18 +36,19 @@ class AmazonPublicAdapter implements CollectionAdapter {
         if(target.kind().equals("PRODUCT")){
             if(!target.key().matches("[A-Z0-9]{10}"))throw failure("ASIN无效",false);
             Document doc=fetch(URI.create("https://www.amazon.com/dp/"+target.key()));
-            return new Observation(Instant.now(),"COMPLETE",true,product(doc,target.key()));
+            ObjectNode fields=product(doc,target.key());
+            return new Observation(Instant.now(),fields.size()==7?"COMPLETE":"PARTIAL",true,fields);
         }
         if(!target.kind().equals("STORE")||!target.key().matches("[A-Z0-9]{8,30}"))throw failure("请填写有效的亚马逊美国站seller店铺地址",false);
-        return store(target.key());
+        return store(target.key(),this::fetch);
     }
-    private Observation store(String seller){
+    Observation store(String seller,java.util.function.Function<URI,Document> reader){
         URI uri=URI.create("https://www.amazon.com/s?me="+seller+"&marketplaceID=ATVPDKIKX0DER");
         Set<String> visited=new HashSet<>(),pageSignatures=new HashSet<>();var products=new LinkedHashMap<String,ObjectNode>();
         Instant started=Instant.now();int pages=0;
         while(uri!=null){
             if(++pages>20||Duration.between(started,Instant.now()).toSeconds()>200||!visited.add(uri.toString()))throw failure("店铺分页超出单次范围或出现循环，未更新基线",false);
-            Document doc=fetch(uri);var rows=doc.select("[data-component-type=s-search-result][data-asin]");
+            Document doc=reader.apply(uri);checkPage(doc);var rows=doc.select("[data-component-type=s-search-result][data-asin]");
             if(rows.isEmpty())throw failure("未识别到店铺商品列表，保留原基线",false);
             Set<String> pageAsins=new TreeSet<>();
             for(Element row:rows){String asin=row.attr("data-asin");if(!asin.matches("[A-Z0-9]{10}"))continue;
@@ -64,7 +65,7 @@ class AmazonPublicAdapter implements CollectionAdapter {
             else if(doc.selectFirst(".s-pagination-next.s-pagination-disabled, .a-pagination .a-last.a-disabled")!=null)uri=null;
             else throw failure("无法确认店铺最后一页，未更新基线",false);
         }
-        ObjectNode fields=mapper.createObjectNode();var array=fields.putArray("products");products.values().forEach(array::add);fields.put("pageCount",pages).put("itemCount",products.size());
+        ObjectNode fields=mapper.createObjectNode();var array=fields.putArray("products");products.values().forEach(array::add);fields.put("pageCount",pages).put("itemCount",products.size()).put("inventoryComplete",false).put("coverage","PUBLIC_SEARCH_PAGES");var coverage=fields.putArray("visitedPages");visited.stream().sorted().forEach(coverage::add);
         return new Observation(Instant.now(),"COMPLETE",true,fields);
     }
     ObjectNode product(Document doc,String asin){
@@ -73,7 +74,7 @@ class AmazonPublicAdapter implements CollectionAdapter {
         if(actual==null)actual=attr(doc,"input[name=ASIN]","value");
         if(title==null||!asin.equalsIgnoreCase(actual))throw failure("未识别到对应ASIN的完整商品页",false);
         ObjectNode fields=mapper.createObjectNode();
-        for(String name:List.of("title","brand","imageUrl","bullets","price","currency","availability"))fields.putNull(name);
+        // Absent nodes mean unobserved, not an explicit null observation.
         fields.put("title",title);String brand=text(doc,"#bylineInfo");if(brand!=null)fields.put("brand",brand.replaceFirst("^Visit the ","").replaceFirst(" Store$","").replaceFirst("^Brand: *","").substring(0,Math.min(180,brand.replaceFirst("^Visit the ","").replaceFirst(" Store$","").replaceFirst("^Brand: *","").length())));
         String image=attr(doc,"#landingImage","data-old-hires");if(image==null)image=attr(doc,"#landingImage","src");if(image!=null&&image.startsWith("https://"))fields.put("imageUrl",image);
         var bullets=doc.select("#feature-bullets li span.a-list-item");if(!bullets.isEmpty()){var out=fields.putArray("bullets");bullets.stream().map(Element::text).map(String::trim).filter(v->!v.isEmpty()).limit(5).forEach(v->out.add(v.substring(0,Math.min(2000,v.length()))));}
@@ -83,23 +84,42 @@ class AmazonPublicAdapter implements CollectionAdapter {
         return fields;
     }
     private synchronized Document fetch(URI initial){
-        URI uri=initial;
+        URI uri=initial;long deadline=System.nanoTime()+Duration.ofSeconds(25).toNanos();
         try{
             for(int redirects=0;redirects<4;redirects++){
                 validate(uri);long pause=1500-(System.currentTimeMillis()-lastRequest);if(pause>0)Thread.sleep(pause);lastRequest=System.currentTimeMillis();
                 var request=HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(25)).header("User-Agent","JiugengERP-Monitor/0.1").header("Accept-Language","en-US").GET().build();
-                var response=client.send(request,HttpResponse.BodyHandlers.ofInputStream());
-                try(var body=response.body()){
-                    int status=response.statusCode();
-                    if(status>=300&&status<400){uri=uri.resolve(response.headers().firstValue("Location").orElseThrow());continue;}
-                    if(status==429)throw new CollectionFailure("亚马逊限流，等待重试",true,300);
-                    if(status!=200)throw failure("亚马逊返回HTTP "+status,status>=500);
-                    byte[] bytes=body.readNBytes(4_000_001);if(bytes.length>4_000_000)throw failure("网页超过大小限制",false);
-                    Document doc=Jsoup.parse(new String(bytes,StandardCharsets.UTF_8),uri.toString());checkPage(doc);return doc;
-                }
+                HttpResponse<byte[]> response=readResponse(client,request,Duration.ofNanos(Math.max(1,deadline-System.nanoTime())));
+                int status=response.statusCode();
+                if(status>=300&&status<400){uri=uri.resolve(response.headers().firstValue("Location").orElseThrow());continue;}
+                if(status==429)throw new CollectionFailure("亚马逊限流，等待重试",true,300);
+                if(status!=200)throw failure("亚马逊返回HTTP "+status,status>=500);
+                Document doc=Jsoup.parse(new String(response.body(),StandardCharsets.UTF_8),uri.toString());checkPage(doc);return doc;
             }
             throw failure("页面重定向过多",false);
         }catch(CollectionFailure e){throw e;}catch(InterruptedException e){Thread.currentThread().interrupt();throw failure("采集任务被中断",true);}catch(Exception e){throw failure("亚马逊前台连接失败或超时",true);}
+    }
+    static HttpResponse<byte[]> readResponse(HttpClient client,HttpRequest request,Duration timeout) throws Exception {
+        var body=new BoundedBody(4_000_000);var pending=client.sendAsync(request,info->body);
+        try{return pending.get(timeout.toNanos(),java.util.concurrent.TimeUnit.NANOSECONDS);}
+        catch(Exception e){body.cancel();pending.cancel(true);throw e;}
+    }
+    /** Bounded streaming subscriber: cancellation closes stalled bodies as well as headers. */
+    static final class BoundedBody implements HttpResponse.BodySubscriber<byte[]> {
+        private final int limit; private final java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();
+        private final java.util.concurrent.CompletableFuture<byte[]> result=new java.util.concurrent.CompletableFuture<>();
+        private java.util.concurrent.Flow.Subscription subscription; private boolean cancelled;
+        BoundedBody(int limit){this.limit=limit;}
+        public java.util.concurrent.CompletionStage<byte[]> getBody(){return result;}
+        public synchronized void onSubscribe(java.util.concurrent.Flow.Subscription s){subscription=s;if(cancelled)s.cancel();else s.request(1);}
+        public synchronized void onNext(List<java.nio.ByteBuffer> chunks){
+            if(cancelled)return;
+            for(var chunk:chunks){if(chunk.remaining()>limit-bytes.size()){cancel();return;}byte[] b=new byte[chunk.remaining()];chunk.get(b);bytes.writeBytes(b);}
+            subscription.request(1);
+        }
+        public void onError(Throwable t){result.completeExceptionally(t);}
+        public synchronized void onComplete(){if(!cancelled)result.complete(bytes.toByteArray());}
+        synchronized void cancel(){cancelled=true;if(subscription!=null)subscription.cancel();result.completeExceptionally(failure("网页读取超时或超过大小限制",true));}
     }
     static void validate(URI uri){if(!"https".equals(uri.getScheme())||!Set.of("www.amazon.com","amazon.com").contains(uri.getHost())||uri.getUserInfo()!=null||(uri.getPort()!=-1&&uri.getPort()!=443)||!(uri.getPath().startsWith("/dp/")||uri.getPath().equals("/s")))throw failure("页面跳转超出亚马逊公开商品/店铺范围",false);}
     static void checkPage(Document doc){if(doc.selectFirst("form[action*=validateCaptcha], input#captchacharacters")!=null||doc.title().toLowerCase(Locale.ROOT).contains("robot check")||doc.text().contains("Enter the characters you see below"))throw failure("亚马逊要求验证码，已停止采集",false);}

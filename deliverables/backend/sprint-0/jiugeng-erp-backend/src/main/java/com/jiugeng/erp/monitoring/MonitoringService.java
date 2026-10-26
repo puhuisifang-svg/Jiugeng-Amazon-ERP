@@ -146,14 +146,20 @@ class MonitoringService {
         conflict(target.version()==input.version(),"记录已更新，请刷新后重新提交");
         String decision=input.quality();
         var changes=mapper.createArrayNode(); boolean promote=false;
-        if(input.quality().equals("COMPLETE")) {
+        boolean partialPublic=external&&input.source().equals("EXTERNAL:amazon-public-us")&&input.quality().equals("PARTIAL");
+        ObjectNode promotedFields=(ObjectNode)fields.deepCopy();
+        if(partialPublic && Objects.equals(target.source(),input.source())) {
+            promotedFields=(ObjectNode)target.fields().deepCopy();
+            promotedFields.setAll((ObjectNode)fields);
+        }
+        if(input.quality().equals("COMPLETE")||partialPublic) {
             if(target.observedAt()!=null && !input.observedAt().isAfter(target.observedAt())) decision="OUT_OF_ORDER";
             else {
                 promote=true;
                 if(target.observedAt()==null) decision="BASELINE";
                 else if(!Objects.equals(target.source(),input.source())) decision="SOURCE_BASELINE";
                 else {
-                    for(String field:FIELDS) if(!Objects.equals(target.fields().get(field),fields.get(field))) {
+                    for(String field:FIELDS) if((!partialPublic||fields.has(field))&&!Objects.equals(target.fields().get(field),fields.get(field))) {
                         ObjectNode change=mapper.createObjectNode();change.put("field",field);
                         change.set("before",target.fields().get(field));change.set("after",fields.get(field));changes.add(change);
                     }
@@ -167,7 +173,7 @@ class MonitoringService {
                 .param("source",input.source()).param("quality",input.quality()).param("decision",decision).param("reason",reason)
                 .param("fields",json(fields)).param("changes",json(changes)).update();
         if(promote) jdbc.sql("UPDATE monitor_target SET baseline_json=:fields,baseline_source=:source,baseline_at=:at WHERE id=:id")
-                .param("fields",json(fields)).param("source",input.source()).param("at",Timestamp.from(input.observedAt())).param("id",id).update();
+                .param("fields",json(promotedFields)).param("source",input.source()).param("at",Timestamp.from(input.observedAt())).param("id",id).update();
         jdbc.sql("UPDATE monitor_target SET last_status=:status,last_reason=:reason,last_attempt_at=CURRENT_TIMESTAMP(6),version=version+1 WHERE id=:id")
                 .param("status",decision).param("reason",reason).param("id",id).update();
         return jdbc.sql("SELECT * FROM monitor_snapshot WHERE id=:id").param("id",sid).query(this::snapshotRow).single();

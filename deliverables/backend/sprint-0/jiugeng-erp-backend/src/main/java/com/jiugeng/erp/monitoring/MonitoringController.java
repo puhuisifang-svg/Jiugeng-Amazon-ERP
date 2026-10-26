@@ -26,9 +26,9 @@ class MonitoringController {
                       @AuthenticationPrincipal AuthenticatedActor actor) {
         return service.list(q, searchBy, status, owner, tag, followed, page, size, actor.userId());
     }
-    @PostMapping List<RowResult> create(@RequestBody CreateInput input, @AuthenticationPrincipal AuthenticatedActor actor) { var result=service.create(input, actor);result.stream().filter(r->r.id()!=null).forEach(r->collection.enqueue("PRODUCT",r.id()));return result; }
+    @PostMapping List<RowResult> create(@RequestBody CreateInput input, @AuthenticationPrincipal AuthenticatedActor actor) { var result=service.create(input, actor);result.stream().filter(r->r.id()!=null&&r.status().equals("CREATED")).forEach(r->collection.enqueue("PRODUCT",r.id()));return result; }
     @PostMapping("/{id}/collect") void collect(@PathVariable String id){collection.enqueue("PRODUCT",id);}
-    @PostMapping("/batch") List<RowResult> batch(@RequestBody BatchInput input, @AuthenticationPrincipal AuthenticatedActor actor) { return service.batch(input, actor); }
+    @PostMapping("/batch") List<RowResult> batch(@RequestBody BatchInput input, @AuthenticationPrincipal AuthenticatedActor actor) { var result=service.batch(input, actor);if("ENABLE".equals(input.action()))result.stream().filter(r->r.status().equals("UPDATED")).forEach(r->collection.enqueue("PRODUCT",r.id()));return result; }
     @GetMapping("/preferences") Preferences preferences(@AuthenticationPrincipal AuthenticatedActor actor) { return service.preferences(actor.userId()); }
     @PutMapping("/preferences") Preferences preferences(@RequestBody ColumnInput input, @AuthenticationPrincipal AuthenticatedActor actor) { return service.columns(actor.userId(), input.columns()); }
     @GetMapping("/{id}") Detail detail(@PathVariable String id, @AuthenticationPrincipal AuthenticatedActor actor) { return service.detail(id, actor.userId()); }

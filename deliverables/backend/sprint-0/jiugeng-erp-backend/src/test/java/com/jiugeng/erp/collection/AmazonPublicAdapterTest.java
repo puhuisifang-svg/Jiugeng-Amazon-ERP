@@ -36,6 +36,13 @@ class AmazonPublicAdapterTest {
   body.onNext(java.util.List.of(java.nio.ByteBuffer.wrap(new byte[3])));
   assertThat(cancelled).isTrue();assertThat(body.getBody().toCompletableFuture().isCompletedExceptionally()).isTrue();
  }
+ @Test void readsNameOnlyFromMatchingSellerSearchScope(){
+  var doc=Jsoup.parse("<select><option value='me=OTHERSELLER'>Other store</option><option value='me=TESTSELLER'>Example &amp; Store</option></select>");
+  assertThat(AmazonPublicAdapter.storeName(doc,"TESTSELLER")).isEqualTo("Example & Store");
+  assertThat(AmazonPublicAdapter.storeName(doc,"UNKNOWNSELLER")).isNull();
+  var result=adapter.store("TESTSELLER",uri->Jsoup.parse(doc.html()+searchPage("B0TEST0001",null)));
+  assertThat(result.fields().path("storeName").asText()).isEqualTo("Example & Store");
+ }
  private String searchPage(String asin,String next){return "<div data-component-type='s-search-result' data-asin='"+asin+"'><h2>Synthetic item</h2></div>"+(next==null?"<span class='s-pagination-next s-pagination-disabled'>Next</span>":"<a class='s-pagination-next' href='"+next+"'>Next</a>");}
  @Test void traversesPagesButDoesNotClaimInventoryCoverage(){
   var result=adapter.store("TESTSELLER",uri->Jsoup.parse(searchPage(uri.toString().contains("page=2")?"B0TEST0002":"B0TEST0001",uri.toString().contains("page=2")?null:"/s?me=TESTSELLER&page=2")));

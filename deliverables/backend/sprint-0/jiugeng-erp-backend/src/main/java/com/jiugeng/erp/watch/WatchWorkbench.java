@@ -32,10 +32,27 @@ class WatchWorkbench {
     @PutMapping("/stores/{id}") @PreAuthorize("hasAuthority('watch.write')")
     WatchTypes.StoreView edit(@PathVariable String id,@RequestBody StoreEdit in,@AuthenticationPrincipal AuthenticatedActor actor){
         repository.lockStore(id);var store=repository.store(id).orElseThrow();version(in.version(),store.version());
+        if(jdbc.sql("SELECT removed FROM watch_store WHERE id=:id").param("id",id).query(Boolean.class).single())throw error(409,"店铺已移除，请重新添加");
         if(in.name()==null||in.name().isBlank()||in.name().length()>200||in.owner()!=null&&in.owner().length()>100||in.remark()!=null&&in.remark().length()>1000)throw error(400,"名称必填，名称/监控人/备注长度超限");
         jdbc.sql("UPDATE watch_store SET store_name=:name,owner_name=:owner,remark=:remark,status=:status,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=:id")
             .param("id",id).param("name",in.name().trim()).param("owner",in.owner()).param("remark",in.remark()).param("status",in.enabled()?"ACTIVE":"DISABLED").update();
         record(actor,"WATCH_STORE_UPDATE",id);return repository.store(id).orElseThrow();
+    }
+    record RemarkEdit(Long version,String remark){}
+    @PatchMapping("/stores/{id}/remark") @PreAuthorize("hasAuthority('watch.write')")
+    WatchTypes.StoreView remark(@PathVariable String id,@RequestBody RemarkEdit in,@AuthenticationPrincipal AuthenticatedActor actor){
+        repository.lockStore(id);var store=repository.store(id).orElseThrow();version(in.version(),store.version());
+        if(in.remark()==null||in.remark().length()>1000)throw error(400,"备注不能超过1000字");
+        jdbc.sql("UPDATE watch_store SET remark=:remark,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=:id AND removed=FALSE")
+            .param("remark",in.remark()).param("id",id).update();
+        record(actor,"WATCH_STORE_REMARK",id);return repository.store(id).orElseThrow();
+    }
+    @DeleteMapping("/stores/{id}") @PreAuthorize("hasAuthority('watch.write')")
+    void remove(@PathVariable String id,@RequestParam Long version,@AuthenticationPrincipal AuthenticatedActor actor){
+        repository.lockStore(id);var store=repository.store(id).orElseThrow();version(version,store.version());
+        jdbc.sql("UPDATE watch_store SET removed=TRUE,status='DISABLED',version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=:id")
+            .param("id",id).update();
+        record(actor,"WATCH_STORE_REMOVE",id);
     }
     @PutMapping("/events/{id}/handling") @PreAuthorize("hasAuthority('watch.write')")
     WatchTypes.EventView handling(@PathVariable String id,@RequestBody EventEdit in,@AuthenticationPrincipal AuthenticatedActor actor){

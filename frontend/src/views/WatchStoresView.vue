@@ -4,6 +4,7 @@ import { RouterLink, onBeforeRouteLeave } from 'vue-router'
 import { apiRequest } from '@/api/client'
 import { domainApi, type WatchRunMode } from '@/api/domain'
 import type { WatchStoreDto, WatchEventDto } from '@/api/resources'
+import { confirmAction } from '@/state/uiConfirmation'
 import { session } from '@/state/session'
 import { runtimeConfig } from '@/config/runtime'
 import { useCollectionStatus } from '@/composables/useCollectionStatus'
@@ -25,11 +26,20 @@ const filtered = computed(() => items.value.filter(s=>(!status.value||s.status==
 const visible = computed(() => filtered.value.slice((page.value-1)*pageSize.value,page.value*pageSize.value))
 const collection = useCollectionStatus('STORE', () => { if (!selectedStore.value) void load() })
 const addDialog = ref<HTMLDialogElement>(), addOpen = ref(false), urls = ref(''), storeName = ref(''), addOwner = ref(''), saving = ref(false), addError = ref(''), unsaved = ref(false)
+const todayProducts=ref<WatchEventDto[]>()
+const remarkDialog=ref<HTMLDialogElement>(), remarkStore=ref<WatchStoreDto>(), remarkDraft=ref(''), remarkError=ref(''), remarkBusy=ref(false), remarkUnsaved=ref(false)
 const snapshots = ref<Record<string,string>>({})
 watch([query,status,owner,pageSize],()=>{page.value=1;selected.value=[]})
 function time(value?: string) { return value ? new Date(value).toLocaleString('zh-CN',{hour12:false}) : '—' }
 const today = () => new Intl.DateTimeFormat('en-CA',{timeZone:'America/Los_Angeles'}).format(new Date())
-function newCount(id: string) { return events.value.filter(e=>e.storeId===id&&new Intl.DateTimeFormat('en-CA',{timeZone:'America/Los_Angeles'}).format(new Date(e.detectedAt))===today()).length }
+function newProducts(id: string) { return events.value.filter(e=>e.storeId===id&&new Intl.DateTimeFormat('en-CA',{timeZone:'America/Los_Angeles'}).format(new Date(e.detectedAt))===today()) }
+function newCount(id:string){return newProducts(id).length}
+function showDetail(item:WatchStoreDto,todayOnly=false){todayProducts.value=todayOnly?newProducts(item.id):undefined;selectedStore.value=item}
+async function showRemark(item:WatchStoreDto){remarkStore.value=item;remarkDraft.value=item.remark??'';remarkError.value='';await nextTick();remarkDialog.value?.showModal()}
+function discardRemark(){remarkUnsaved.value=false;remarkDialog.value?.close();remarkStore.value=undefined}
+function closeRemark(){if(remarkBusy.value)return;if(remarkDraft.value!==(remarkStore.value?.remark??'')){remarkUnsaved.value=true;return}discardRemark()}
+async function saveRemark(){if(!remarkStore.value)return;remarkBusy.value=true;remarkError.value='';try{await apiRequest(`/v1/watch/stores/${remarkStore.value.id}/remark`,{method:'PATCH',body:JSON.stringify({version:remarkStore.value.version,remark:remarkDraft.value})});discardRemark();success.value='备注已保存';await load()}catch(e){remarkError.value=e instanceof Error?e.message:'备注保存失败'}finally{remarkBusy.value=false}}
+async function removeStore(item:WatchStoreDto){if(!await confirmAction(`移除店铺“${item.storeName}”？将停止监控并从列表移出，历史记录保留，重新添加同一地址可恢复。`))return;busyId.value=item.id;error.value='';try{await apiRequest(`/v1/watch/stores/${item.id}?version=${item.version}`,{method:'DELETE'});selected.value=selected.value.filter(id=>id!==item.id);success.value='店铺已移除';await load();page.value=Math.min(page.value,Math.max(1,Math.ceil(filtered.value.length/pageSize.value)))}catch(e){error.value=e instanceof Error?e.message:'移除失败'}finally{busyId.value=''}}
 async function load() {
  loading.value=true
  try { items.value=(await domainApi.watchStores()).items; if(formal) events.value=await apiRequest<WatchEventDto[]>('/v1/watch/events') }
@@ -43,7 +53,7 @@ async function toggle(item: WatchStoreDto) {
 async function showAdd() {addError.value='';urls.value='';storeName.value='';addOwner.value=session.user.value?.displayName??'';addOpen.value=true;await nextTick();addDialog.value?.showModal()}
 function closeAdd(){if(saving.value)return;if(urls.value.trim()||storeName.value.trim()){unsaved.value=true;return}discardAdd()}
 function discardAdd(){unsaved.value=false;addOpen.value=false;addDialog.value?.close()}
-onBeforeRouteLeave(()=>{if(addOpen.value&&(saving.value||urls.value.trim()||storeName.value.trim())){unsaved.value=true;return false}return true})
+onBeforeRouteLeave(()=>{if(remarkStore.value&&(remarkBusy.value||remarkDraft.value!==(remarkStore.value.remark??''))){remarkUnsaved.value=true;return false}if(addOpen.value&&(saving.value||urls.value.trim()||storeName.value.trim())){unsaved.value=true;return false}return true})
 async function createStore(){
  const lines=[...new Set(urls.value.split(/\n/).map(v=>v.trim()).filter(Boolean))]
  if(!lines.length||lines.length>20){addError.value='每次请填写 1–20 个店铺地址，一行一个。';return}
@@ -176,18 +186,19 @@ onMounted(load)
               <td>
                 <button
                   class="mw-link"
-                  @click="selectedStore=item"
+                  @click="showDetail(item)"
                 >
                   {{ item.storeName }}
                 </button><small>{{ item.storeKey }}</small>
               </td>
               <td>美国</td><td>
-                <RouterLink
+                <button
                   class="mw-link"
-                  :to="`/watch/events?storeId=${item.id}`"
+                  :aria-label="`${item.storeName} 今日上新 ${newCount(item.id)}`"
+                  @click="showDetail(item,true)"
                 >
                   {{ newCount(item.id) }}
-                </RouterLink>
+                </button>
               </td>
               <td>
                 <span
@@ -197,12 +208,28 @@ onMounted(load)
                 >{{ item.status!=='ACTIVE'?'已暂停':collection.label(item.id) }}</span>
               </td>
               <td>{{ time(item.createdAt) }}</td><td>{{ time(item.lastRunAt) }}</td><td :title="item.remark">
-                {{ item.remark ? item.remark.slice(0,30) : '—' }}
+                {{ item.remark ? item.remark.slice(0,30) : '—' }}<button
+                  v-if="writable&&formal"
+                  class="mw-link mw-remark-edit"
+                  :aria-label="`编辑 ${item.storeName} 备注`"
+                  title="编辑备注"
+                  @click="showRemark(item)"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    aria-hidden="true"
+                  ><path d="m16 3 5 5-12 12-6 1 1-6L16 3Z M13 6l5 5" /></svg>
+                </button>
               </td><td>{{ item.owner||'未分配' }}</td>
               <td>
                 <button
                   class="mw-link"
-                  @click="selectedStore=item"
+                  @click="showDetail(item)"
                 >
                   详情
                 </button><button
@@ -212,6 +239,13 @@ onMounted(load)
                   @click="collection.collect(item.id)"
                 >
                   更新
+                </button><button
+                  v-if="writable&&formal"
+                  class="mw-link"
+                  :disabled="!!busyId"
+                  @click="removeStore(item)"
+                >
+                  移除
                 </button>
               </td>
             </tr>
@@ -236,6 +270,7 @@ onMounted(load)
     <WatchStoreDetail
       v-if="formal"
       :store="selectedStore"
+      :new-products="todayProducts"
       :writable="writable"
       @close="selectedStore=undefined"
       @changed="load"
@@ -290,7 +325,7 @@ onMounted(load)
           placeholder="添加多个店铺请换行，一行一个"
           :disabled="saving"
         /></label>
-        <label>店铺名称（单个店铺可填）<input
+        <label>店铺名称（可选，留空自动获取）<input
           v-model="storeName"
           maxlength="200"
           :disabled="saving"
@@ -320,6 +355,60 @@ onMounted(load)
         </button>
       </footer>
     </dialog>
+    <dialog
+      ref="remarkDialog"
+      class="mw-dialog"
+      aria-label="编辑店铺备注"
+      @cancel.prevent="closeRemark"
+    >
+      <header>
+        <h2>编辑备注</h2><button
+          :disabled="remarkBusy"
+          aria-label="关闭备注编辑"
+          @click="closeRemark"
+        >
+          ✕
+        </button>
+      </header>
+      <form
+        id="watch-remark-form"
+        class="mw-dialog-body"
+        @submit.prevent="saveRemark"
+      >
+        <p>{{ remarkStore?.storeName }}</p><label>备注<textarea
+          v-model="remarkDraft"
+          maxlength="1000"
+          :disabled="remarkBusy"
+          placeholder="填写店铺备注"
+        /></label><p>{{ remarkDraft.length }} / 1000</p><p
+          v-if="remarkError"
+          class="mw-error"
+          role="alert"
+        >
+          {{ remarkError }}
+        </p>
+      </form>
+      <footer>
+        <button
+          :disabled="remarkBusy"
+          @click="closeRemark"
+        >
+          取消
+        </button><button
+          class="mw-primary"
+          type="submit"
+          form="watch-remark-form"
+          :disabled="remarkBusy"
+        >
+          {{ remarkBusy?'保存中…':'保存' }}
+        </button>
+      </footer>
+    </dialog>
+    <UnsavedChangesDialog
+      v-if="remarkUnsaved"
+      @keep="remarkUnsaved=false"
+      @discard="discardRemark"
+    />
     <UnsavedChangesDialog
       v-if="unsaved"
       @keep="unsaved=false"

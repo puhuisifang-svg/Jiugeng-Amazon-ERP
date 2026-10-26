@@ -1,0 +1,39 @@
+import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { apiRequest } from '@/api/client'
+import { confirmAction } from '@/state/uiConfirmation'
+import WatchStoresView from './WatchStoresView.vue'
+vi.mock('@/config/runtime',()=>({runtimeConfig:{authMode:'password'}}))
+vi.mock('@/state/session',()=>({session:{canAccess:()=>true,user:{value:{displayName:'Tester'}}}}))
+vi.mock('@/state/uiConfirmation',()=>({confirmAction:vi.fn()}))
+vi.mock('@/api/client',()=>({apiRequest:vi.fn()}))
+vi.mock('@/composables/useCollectionStatus',()=>({useCollectionStatus:()=>({error:{value:''},enabled:{value:true},state:()=>undefined,label:()=>'',pending:()=>false,refresh:vi.fn()})}))
+const store={id:'store1',storeKey:'TESTSELLER',storeName:'Test Store',status:'ACTIVE',version:3,remark:'Original'}
+async function setup(){
+ HTMLDialogElement.prototype.showModal=vi.fn();HTMLDialogElement.prototype.close=vi.fn()
+ const w=mount(WatchStoresView,{global:{stubs:{RouterLink:RouterLinkStub,WatchStoreDetail:true,CollectionPanel:true}}});await flushPromises();return w
+}
+beforeEach(()=>{vi.clearAllMocks();vi.mocked(apiRequest).mockImplementation(async(path)=>path==='/v1/watch/stores'?[store]:path==='/v1/watch/events'?[]:store)})
+describe('watch list actions',()=>{
+ it('edits only the remark with optimistic version and keeps input on failure',async()=>{
+  const w=await setup();await w.get('[aria-label="编辑 Test Store 备注"]').trigger('click')
+  await w.get('#watch-remark-form textarea').setValue('New note')
+  vi.mocked(apiRequest).mockRejectedValueOnce(new Error('记录已更新'))
+  await w.get('#watch-remark-form').trigger('submit');await flushPromises()
+  expect(w.text()).toContain('记录已更新');expect((w.get('#watch-remark-form textarea').element as HTMLTextAreaElement).value).toBe('New note')
+  await w.get('#watch-remark-form').trigger('submit');await flushPromises()
+  expect(apiRequest).toHaveBeenCalledWith('/v1/watch/stores/store1/remark',{method:'PATCH',body:JSON.stringify({version:3,remark:'New note'})});w.unmount()
+ })
+ it('does not remove on cancel and sends the version after confirmation',async()=>{
+  const w=await setup();const remove=w.findAll('button').find(b=>b.text()==='移除')!
+  vi.mocked(confirmAction).mockResolvedValueOnce(false);await remove.trigger('click');await flushPromises()
+  expect(vi.mocked(apiRequest).mock.calls.some(c=>c[1]?.method==='DELETE')).toBe(false)
+  vi.mocked(confirmAction).mockResolvedValueOnce(true);await remove.trigger('click');await flushPromises()
+  expect(apiRequest).toHaveBeenCalledWith('/v1/watch/stores/store1?version=3',{method:'DELETE'});w.unmount()
+ })
+ it('opens today products in the shared detail instead of navigating to events',async()=>{
+  const w=await setup();await w.get('[aria-label="Test Store 今日上新 0"]').trigger('click')
+  expect(w.findComponent({name:'WatchStoreDetail'}).props('newProducts')).toEqual([])
+  expect(w.findComponent({name:'WatchStoreDetail'}).props('store')).toEqual(store);w.unmount()
+ })
+})

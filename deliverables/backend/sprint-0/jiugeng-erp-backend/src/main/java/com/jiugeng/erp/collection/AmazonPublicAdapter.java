@@ -45,10 +45,10 @@ class AmazonPublicAdapter implements CollectionAdapter {
     Observation store(String seller,java.util.function.Function<URI,Document> reader){
         URI uri=URI.create("https://www.amazon.com/s?me="+seller+"&marketplaceID=ATVPDKIKX0DER");
         Set<String> visited=new HashSet<>(),pageSignatures=new HashSet<>();var products=new LinkedHashMap<String,ObjectNode>();
-        Instant started=Instant.now();int pages=0;
+        Instant started=Instant.now();int pages=0;String storeName=null;
         while(uri!=null){
             if(++pages>20||Duration.between(started,Instant.now()).toSeconds()>200||!visited.add(uri.toString()))throw failure("店铺分页超出单次范围或出现循环，未更新基线",false);
-            Document doc=reader.apply(uri);checkPage(doc);var rows=doc.select("[data-component-type=s-search-result][data-asin]");
+            Document doc=reader.apply(uri);checkPage(doc);if(storeName==null)storeName=storeName(doc,seller);var rows=doc.select("[data-component-type=s-search-result][data-asin]");
             if(rows.isEmpty())throw failure("未识别到店铺商品列表，保留原基线",false);
             Set<String> pageAsins=new TreeSet<>();
             for(Element row:rows){String asin=row.attr("data-asin");if(!asin.matches("[A-Z0-9]{10}"))continue;
@@ -65,8 +65,18 @@ class AmazonPublicAdapter implements CollectionAdapter {
             else if(doc.selectFirst(".s-pagination-next.s-pagination-disabled, .a-pagination .a-last.a-disabled")!=null)uri=null;
             else throw failure("无法确认店铺最后一页，未更新基线",false);
         }
-        ObjectNode fields=mapper.createObjectNode();var array=fields.putArray("products");products.values().forEach(array::add);fields.put("pageCount",pages).put("itemCount",products.size()).put("inventoryComplete",false).put("coverage","PUBLIC_SEARCH_PAGES");var coverage=fields.putArray("visitedPages");visited.stream().sorted().forEach(coverage::add);
+        ObjectNode fields=mapper.createObjectNode();if(storeName!=null)fields.put("storeName",storeName);var array=fields.putArray("products");products.values().forEach(array::add);fields.put("pageCount",pages).put("itemCount",products.size()).put("inventoryComplete",false).put("coverage","PUBLIC_SEARCH_PAGES");var coverage=fields.putArray("visitedPages");visited.stream().sorted().forEach(coverage::add);
         return new Observation(Instant.now(),"COMPLETE",true,fields);
+    }
+    static String storeName(Document doc,String seller){
+        // Search scope is tied to this seller, unlike product brands or generic page titles.
+        for(Element option:doc.select("select option[value]")){
+            if(option.attr("value").equals("me="+seller)){
+                String name=option.text().trim();
+                if(!name.isBlank()&&name.length()<=200&&!name.equalsIgnoreCase("Amazon.com")&&!name.equals(seller))return name;
+            }
+        }
+        return null;
     }
     ObjectNode product(Document doc,String asin){
         checkPage(doc);

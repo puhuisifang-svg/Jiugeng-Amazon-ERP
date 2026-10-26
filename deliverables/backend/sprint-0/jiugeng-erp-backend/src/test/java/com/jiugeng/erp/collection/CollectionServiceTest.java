@@ -95,5 +95,18 @@ class CollectionServiceTest {
         assertThat(jdbc.queryForObject("SELECT price FROM watch_presence WHERE store_id=?",java.math.BigDecimal.class,store)).isEqualByComparingTo("19.99");
         assertThat(jdbc.queryForObject("SELECT image_url FROM watch_presence WHERE store_id=?",String.class,store)).isEqualTo("https://example.com/image.jpg");
     }
+    @Test void resolvesIdPlaceholderButPreservesCustomStoreName() throws Exception {
+        jdbc.update("UPDATE watch_store SET store_name=store_key WHERE id=?",store);
+        service.configure("STORE",store,adapter.provider(),true,null);
+        var fields=json.createObjectNode().put("pageCount",1).put("itemCount",1).put("storeName","Example Store");
+        fields.putArray("products").addObject().put("asin","B0AUTO0001").put("title","Synthetic");
+        adapter.result=new CollectionAdapter.Observation(Instant.parse("2026-10-21T12:00:00Z"),"COMPLETE",true,fields);
+        service.tick();
+        assertThat(jdbc.queryForObject("SELECT store_name FROM watch_store WHERE id=?",String.class,store)).isEqualTo("Example Store");
+        jdbc.update("UPDATE watch_store SET store_name='Custom name' WHERE id=?",store);
+        adapter.result=new CollectionAdapter.Observation(Instant.parse("2026-10-22T12:00:00Z"),"COMPLETE",true,fields);
+        jdbc.update("UPDATE collection_schedule SET next_at=TIMESTAMP '2000-01-01 00:00:00'");service.tick();
+        assertThat(jdbc.queryForObject("SELECT store_name FROM watch_store WHERE id=?",String.class,store)).isEqualTo("Custom name");
+    }
     long count(String table){return jdbc.queryForObject("SELECT COUNT(*) FROM "+table+" WHERE store_id=?",Long.class,store);}
 }

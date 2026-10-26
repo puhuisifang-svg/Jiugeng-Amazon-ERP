@@ -5,11 +5,11 @@ import { monitoringApi } from '@/api/monitoring'
 import SuccessToast from './SuccessToast.vue'
 import '@/styles/monitoringWorkbench.css'
 import { apiRequest } from '@/api/client'
-import type { WatchStoreDto } from '@/api/resources'
+import type { WatchStoreDto, WatchEventDto } from '@/api/resources'
 import ListPagination from './ListPagination.vue'
 import TableViewport from './TableViewport.vue'
 import UnsavedChangesDialog from './UnsavedChangesDialog.vue'
-const props = defineProps<{ store: WatchStoreDto | undefined; writable: boolean }>()
+const props = defineProps<{ store: WatchStoreDto | undefined; writable: boolean; newProducts?: WatchEventDto[] | undefined }>()
 const emit = defineEmits<{ close: []; changed: [] }>()
 interface Detail { store: WatchStoreDto; runs: { id: string; completedAt: string; decision: string; reasonCode: string }[]; products: { asin: string; firstDetectedAt: string; online: boolean; source: string }[]; automaticProducts: { provider: string; asin: string; title: string; firstAt: string; lastAt: string; missingCount: number; missingAt: string | null; imageUrl?: string; price?: number; rating?: string }[] }
 const detail = ref<Detail>(), dialog = ref<HTMLDialogElement>(), error = ref(''), busy = ref(false), tab = ref('online'), q = ref(''), page = ref(1), size = ref(20), unsaved = ref(false)
@@ -19,7 +19,8 @@ function date(value:string){return new Date(value).toLocaleString('zh-CN',{hour1
 async function monitor(asins:string[]){if(!props.writable)return;busy.value=true;error.value='';try{const result=await monitoringApi.create({requestId:crypto.randomUUID(),asins,tags:[],remark:''});notice.value=`已添加 ${result.filter(r=>r.status==='CREATED').length} 个，已存在 ${result.filter(r=>r.status==='EXISTS').length} 个`;const failed=result.filter(r=>!['CREATED','EXISTS'].includes(r.status));if(failed.length)error.value=failed.map(r=>r.message).join('；');chosen.value=[]}catch(e){error.value=e instanceof Error?e.message:'添加监控失败'}finally{busy.value=false}}
 const draft = ref({ name: '', owner: '', remark: '', enabled: true }), baseline = ref('')
 const products = computed(() => detail.value?.products.filter(p => !q.value || p.asin.includes(q.value.toUpperCase())) ?? [])
-const auto = computed(() => detail.value?.automaticProducts.filter(p => (tab.value === 'missing' ? p.missingCount >= 2 : p.missingCount < 2) && (!q.value || p.asin.includes(q.value.toUpperCase()) || p.title.toLowerCase().includes(q.value.toLowerCase())) && (!from.value || day(p.firstAt)>=from.value) && (!to.value || day(p.firstAt)<=to.value)) ?? [])
+const sourceProducts=computed(()=>props.newProducts===undefined?detail.value?.automaticProducts??[]:props.newProducts.map(event=>detail.value?.automaticProducts.find(p=>p.asin===event.asin)??{asin:event.asin,title:event.title??event.asin,firstAt:event.detectedAt,lastAt:event.detectedAt,missingCount:0,missingAt:null,provider:'',imageUrl:undefined,price:undefined,rating:undefined}))
+const auto = computed(() => sourceProducts.value.filter(p => (props.newProducts!==undefined || (tab.value === 'missing' ? p.missingCount >= 2 : p.missingCount < 2)) && (!q.value || p.asin.includes(q.value.toUpperCase()) || p.title.toLowerCase().includes(q.value.toLowerCase())) && (!from.value || day(p.firstAt)>=from.value) && (!to.value || day(p.firstAt)<=to.value)) ?? [])
 const total = computed(() => tab.value === 'manual' ? products.value.length : auto.value.length)
 watch([q, tab, size, from, to], () => { page.value = 1; chosen.value = [] })
 watch(page, () => { chosen.value = [] })
@@ -48,7 +49,7 @@ async function save() {
   >
     <header>
       <div>
-        <h2>店铺监控详情</h2><p class="store-subtitle">
+        <h2>{{ newProducts===undefined?'店铺监控详情':'今日上新' }}</h2><p class="store-subtitle">
           {{ store?.storeName }} · 美国站
         </p>
       </div><button
@@ -66,7 +67,10 @@ async function save() {
       >
         {{ error }}
       </p>
-      <div class="ui-section-tabs">
+      <div
+        v-if="newProducts===undefined"
+        class="ui-section-tabs"
+      >
         <button
           v-for="t in [{id:'online',label:'在线产品'},{id:'missing',label:'疑似下架产品'},{id:'runs',label:'更新记录'},{id:'settings',label:'店铺设置'},{id:'manual',label:'人工记录'}]"
           :key="t.id"
@@ -103,7 +107,7 @@ async function save() {
           >
         </div>
         <p class="store-hint">
-          {{ tab==='manual' ? '人工快照记录，保留历史来源。' : '首次发现为本系统观测时间。公开搜索未出现的商品不据此判定下架。' }}
+          {{ tab==='manual' ? '人工快照记录，保留历史来源。' : newProducts===undefined ? '首次发现为本系统观测时间。公开搜索未出现的商品不据此判定下架。' : '当前店铺今日发现的新品，按美国太平洋时区统计。' }}
         </p>
         <TableViewport>
           <table class="mw-table ui-action-table">

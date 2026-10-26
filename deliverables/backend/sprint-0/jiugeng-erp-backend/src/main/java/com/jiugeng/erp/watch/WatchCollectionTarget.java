@@ -66,6 +66,10 @@ class WatchCollectionTarget implements CollectionTarget {
             jdbc.sql("UPDATE watch_presence SET image_url=COALESCE(:image,image_url),price=COALESCE(:price,price),rating=COALESCE(:rating,rating) WHERE store_id=:store AND provider=:source AND asin=:asin")
                 .param("image",image).param("price",price).param("rating",rating).param("store",target.id()).param("source",provider).param("asin",product.path("asin").asText()).update();
         }
+        String observedName=o.fields().path("storeName").asText("").trim();
+        if(!observedName.isEmpty()&&observedName.length()<=200)
+            jdbc.sql("UPDATE watch_store SET store_name=:name,updated_at=CURRENT_TIMESTAMP WHERE id=:id AND store_name=store_key")
+                .param("name",observedName).param("id",target.id()).update();
         int missing=0;
         // Public search coverage cannot establish absence from a seller inventory.
         boolean inventoryComplete=!provider.equals("amazon-public-us")&&o.fields().path("inventoryComplete").asBoolean(true);

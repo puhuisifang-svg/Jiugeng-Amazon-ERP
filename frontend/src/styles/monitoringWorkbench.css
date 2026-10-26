@@ -37,3 +37,5 @@
 .monitor-workbench .mw-cell-product a{text-decoration:none}
 
 .monitor-workbench .mw-filters .monitor-check{flex:0 0 auto;flex-direction:row;gap:8px}.monitor-workbench .mw-filters input[type=checkbox]{width:16px;height:16px;min-height:16px}
+
+.monitor-workbench .mw-remark-edit{display:inline-flex;align-items:center;justify-content:center;min-width:28px;min-height:28px;margin-left:6px;vertical-align:middle}

@@ -2,7 +2,7 @@ import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import WatchStoreDetail from './WatchStoreDetail.vue'
 import { monitoringApi } from '@/api/monitoring'
-import type { WatchStoreDto } from '@/api/resources'
+import type { WatchStoreDto, WatchEventDto } from '@/api/resources'
 vi.mock('@/api/client', () => ({ apiRequest: vi.fn(async () => ({ products: [], runs: [], automaticProducts: [{ asin: 'B000000001', title: 'Test product', firstAt: '2026-10-26T12:00:00Z', lastAt: '2026-10-26T12:00:00Z', missingCount: 0 }] })) }))
 vi.mock('@/api/monitoring', () => ({ monitoringApi: { create: vi.fn(async () => [{ asin: 'B000000001', status: 'CREATED' }]) } }))
 const store = { id: 'test-store', storeName: 'Test store', status: 'ACTIVE' } as WatchStoreDto
@@ -13,6 +13,17 @@ async function open(writable: boolean) {
   return wrapper
 }
 describe('store product monitoring', () => {
+  it('renders only today event products with the same product table, including empty days', async () => {
+    const wrapper = await open(true)
+    await wrapper.setProps({newProducts:[{asin:'B000000002',title:'Today item',detectedAt:'2026-10-27T12:00:00Z'} as WatchEventDto]})
+    expect(wrapper.text()).toContain('今日上新')
+    expect(wrapper.text()).toContain('Today item')
+    expect(wrapper.text()).not.toContain('Test product')
+    expect(wrapper.find('table.mw-table').exists()).toBe(true)
+    await wrapper.setProps({newProducts:[]})
+    expect(wrapper.findAll('tbody input[type=checkbox]')).toHaveLength(0)
+    wrapper.unmount()
+  })
   it('clears selected products when filters or tabs change', async () => {
     const wrapper = await open(true)
     const batch = () => wrapper.findAll('button').find(b => b.text() === '批量添加产品监控')!

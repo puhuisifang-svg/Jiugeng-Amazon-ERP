@@ -7,7 +7,7 @@ import static com.jiugeng.erp.watch.WatchTypes.*;import com.jiugeng.erp.iam.Auth
  @PostMapping("/stores/from-url") @PreAuthorize("hasAuthority('watch.write')") StoreView fromUrl(@RequestBody java.util.Map<String,String> r,@AuthenticationPrincipal AuthenticatedActor a){
   String seller=seller(r.get("url"));String name=r.getOrDefault("name","");
   var existing=service.stores().stream().filter(v->v.storeKey().equals(seller)).findFirst();
-  var store=existing.orElseGet(()->service.createStore(seller,name.isBlank()?seller:name,"https://www.amazon.com/sp?seller="+seller,a));collection.enqueue("STORE",store.id());return store;
+  var store=existing.or(()->service.restoreStore(seller,a)).orElseGet(()->service.createStore(seller,name.isBlank()?seller:name,"https://www.amazon.com/sp?seller="+seller,a));collection.enqueue("STORE",store.id());return store;
  }
  @PostMapping("/stores/{id}/collect") @PreAuthorize("hasAuthority('watch.write')") void collect(@PathVariable String id){collection.enqueue("STORE",id);}
  static String seller(String value){try{var uri=java.net.URI.create(value);if(!"https".equals(uri.getScheme())||!java.util.Set.of("www.amazon.com","amazon.com").contains(uri.getHost())||uri.getUserInfo()!=null||(uri.getPort()!=-1&&uri.getPort()!=443))throw new IllegalArgumentException();

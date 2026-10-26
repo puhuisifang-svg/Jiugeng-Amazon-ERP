@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { RouterLink } from 'vue-router'
 import CollectionPanel from '@/components/CollectionPanel.vue'
 import WatchStoreDetail from '@/components/WatchStoreDetail.vue'
 import ListPagination from '@/components/ListPagination.vue'
@@ -63,6 +64,11 @@ onMounted(load)
 
 <template>
   <section class="page-stack">
+    <div class="panel inline-actions">
+      <span>监控亚马逊对标店铺的上新商品；商品持续变化请使用产品监控。</span><RouterLink to="/watch/events">
+        查看上新记录
+      </RouterLink>
+    </div>
     <SyntheticNotice v-if="!formal" />
     <CollectionPanel
       v-if="formal"
@@ -112,11 +118,11 @@ onMounted(load)
         required
         maxlength="200"
       ></label>
-      <label class="form-wide">获批公开来源<input
+      <label class="form-wide">亚马逊店铺地址<input
         v-model="sourceUrl"
         required
         type="url"
-        placeholder="https://..."
+        placeholder="https://www.amazon.com/sp?seller=..."
       ></label>
       <button type="submit">
         登记店铺

@@ -38,6 +38,9 @@ onMounted(load)
 </script>
 <template>
   <section class="page-stack">
+    <RouterLink to="/watch/stores">
+      ← 返回上新监控（对标店铺）
+    </RouterLink>
     <SyntheticNotice v-if="!formal" />
     <p>美国站 · 首次发现为监控观测时间，不等于亚马逊上架日期。</p>
     <div class="panel filter-panel operation-form ui-filter-row">

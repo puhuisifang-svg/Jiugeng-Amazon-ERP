@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { session } from '@/state/session'
@@ -29,7 +29,7 @@ describe('WatchStoresView', () => {
     vi.stubGlobal('fetch', fetchMock)
     await session.login('SELECTION')
 
-    const wrapper = mount(WatchStoresView)
+    const wrapper = mount(WatchStoresView, { global: { stubs: { RouterLink: RouterLinkStub } } })
     await flushPromises()
     await wrapper.get('button').trigger('click')
     await flushPromises()

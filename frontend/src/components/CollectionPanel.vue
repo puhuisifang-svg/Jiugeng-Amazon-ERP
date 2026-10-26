@@ -31,8 +31,8 @@ onMounted(load)
 </script>
 <template>
   <details class="panel compact-panel">
-    <summary>自动监控：{{ state === 'CONFIGURED' ? '来源已配置' : '待接入真实数据源' }} · 任务与站内通知</summary>
-    <p>美国站 · America/Los_Angeles · 每日调度。来源未接入时不会发起采集，人工快照保持独立。</p>
+    <summary>自动监控：{{ state === 'CONFIGURED' ? '来源已配置' : '亚马逊前台采集尚未启用' }} · 任务与站内通知</summary>
+    <p>美国站 · America/Los_Angeles · 每日调度。目标为亚马逊公开商品页及店铺页。采集尚未启用时仅登记监控对象，不会自动产生数据。</p>
     <p
       v-if="error"
       role="alert"

@@ -195,8 +195,7 @@ describe('horizontal navigation shell', () => {
   })
 
   it.each([
-    ['/watch/stores', '店铺监控'],
-    ['/watch/events', '上新监控'],
+    ['/watch/stores', '上新监控'],
   ])('uses consistent selection labels for %s', async (path, title) => {
     const { wrapper } = await setup(path)
     expect(wrapper.get('.page-heading__trail').text()).toBe(`选品/${title}`)
@@ -204,6 +203,8 @@ describe('horizontal navigation shell', () => {
     await wrapper.get('[data-domain="选品"]').trigger('click')
     expect(wrapper.get(`.mega-panel a[href="${path}"]`).text()).toBe(title)
     expect(wrapper.findAll('.mega-row')).toHaveLength(1)
+    expect(wrapper.find('.mega-panel a[href="/watch/events"]').exists()).toBe(false)
+    expect(wrapper.get('.mega-panel').text()).not.toContain('店铺监控')
   })
 
   it('keeps the purchase detail breadcrumb linked to purchase management', async () => {

@@ -37,10 +37,11 @@ public class CollectionService {
     /** Business action: enqueue a bounded public-page read; never performs network I/O in the request. */
     public void enqueue(String kind,String targetId){
         if(adapter(AmazonPublicAdapter.SOURCE,kind).isEmpty())return;
-        tx.executeWithoutResult(s->{lock();port(kind).prepare(targetId);
+        tx.executeWithoutResult(s->{lock();var target=port(kind).prepare(targetId);
             var existing=schedules().stream().filter(v->v.kind().equals(kind)&&v.targetId().equals(targetId)).findFirst();
             if(existing.isEmpty()){configure(kind,targetId,AmazonPublicAdapter.SOURCE,true,null);return;}
             var schedule=existing.get();
+            jdbc.sql("UPDATE collection_job SET status='CANCELLED',reason='目标设置已更新' WHERE schedule_id=:id AND target_version<>:version AND status IN ('QUEUED','RUNNING','RETRY')").param("id",schedule.id()).param("version",target.version()).update();
             if(!schedule.provider().equals(AmazonPublicAdapter.SOURCE)||!schedule.enabled()){configure(kind,targetId,AmazonPublicAdapter.SOURCE,true,schedule.version());return;}
             if(jdbc.sql("SELECT COUNT(*) FROM collection_job WHERE schedule_id=:id AND status IN ('QUEUED','RUNNING','RETRY')").param("id",schedule.id()).query(Long.class).single()==0)
                 jdbc.sql("UPDATE collection_schedule SET next_at=:now WHERE id=:id").param("id",schedule.id()).param("now",Timestamp.from(Instant.now())).update();

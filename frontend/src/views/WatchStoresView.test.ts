@@ -31,7 +31,7 @@ describe('WatchStoresView', () => {
 
     const wrapper = mount(WatchStoresView, { global: { stubs: { RouterLink: RouterLinkStub } } })
     await flushPromises()
-    await wrapper.get('button').trigger('click')
+    await wrapper.findAll('button').find(b=>b.text()==='模拟完整快照')!.trigger('click')
     await flushPromises()
 
     expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining('/watch/stores/watch-store-1/runs'), expect.objectContaining({
@@ -39,6 +39,6 @@ describe('WatchStoresView', () => {
       body: JSON.stringify({ mode: 'COMPLETE' }),
     }))
     expect(wrapper.text()).toContain('完整快照已提升为基线，本次没有新增事件')
-    expect(wrapper.text()).toContain('有效基线：run-1')
+    expect(wrapper.text()).toContain('有效基线：run-1');wrapper.unmount()
   })
 })

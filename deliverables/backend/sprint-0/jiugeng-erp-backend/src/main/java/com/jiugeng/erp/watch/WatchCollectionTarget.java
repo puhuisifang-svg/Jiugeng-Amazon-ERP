@@ -57,6 +57,15 @@ class WatchCollectionTarget implements CollectionTarget {
                 }
             }
         }
+        for(JsonNode product:products){
+            String image=product.path("imageUrl").asText(null),rating=product.path("rating").asText(null);
+            if(image!=null&&(!image.startsWith("https://")||image.length()>2000))image=null;
+            if(rating!=null&&rating.length()>100)rating=null;
+            var price=product.path("price").isNumber()?product.path("price").decimalValue():null;
+            if(price!=null&&(price.signum()<0||price.compareTo(new java.math.BigDecimal("999999999999.99"))>0))price=null;
+            jdbc.sql("UPDATE watch_presence SET image_url=COALESCE(:image,image_url),price=COALESCE(:price,price),rating=COALESCE(:rating,rating) WHERE store_id=:store AND provider=:source AND asin=:asin")
+                .param("image",image).param("price",price).param("rating",rating).param("store",target.id()).param("source",provider).param("asin",product.path("asin").asText()).update();
+        }
         int missing=0;
         // Public search coverage cannot establish absence from a seller inventory.
         boolean inventoryComplete=!provider.equals("amazon-public-us")&&o.fields().path("inventoryComplete").asBoolean(true);

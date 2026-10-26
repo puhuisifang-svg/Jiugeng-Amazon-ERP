@@ -1,0 +1,3 @@
+ALTER TABLE watch_presence ADD COLUMN image_url VARCHAR(2000) NULL;
+ALTER TABLE watch_presence ADD COLUMN price DECIMAL(14,2) NULL;
+ALTER TABLE watch_presence ADD COLUMN rating VARCHAR(100) NULL;

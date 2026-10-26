@@ -25,7 +25,7 @@ async function setup(path = '/product-monitoring') {
 describe('product monitoring workflow', () => {
   it('shows honest source status and clears selection when paging', async () => {
     const w = await setup()
-    expect(w.text()).toContain('亚马逊前台观测')
+    expect(w.find('[title="亚马逊前台观测 · 每日更新"]').exists()).toBe(true)
     expect(w.text()).toContain('待首次观测')
     await w.get('[aria-label="选择 B0TEST0001"]').setValue(true)
     expect(w.text()).toContain('已选 1 条')
@@ -65,13 +65,13 @@ describe('product monitoring workflow', () => {
   it('disables observation for a paused target and keeps history visible', async () => {
     vi.mocked(monitoringApi.detail).mockResolvedValue({ target: { ...row, enabled: false }, snapshots: [] })
     const w = await setup('/product-monitoring/one')
-    expect(w.findAll('button').find(b => b.text() === '录入观测')!.attributes('disabled')).toBeDefined()
+    expect(w.findAll('button').find(b => b.text() === '人工补录')!.attributes('disabled')).toBeDefined()
     expect(w.text()).toContain('商品变化与历史快照')
     expect(w.text()).not.toContain('操作日志')
   })
   it('keeps explicit unknown fields in a submitted observation', async () => {
     const w = await setup('/product-monitoring/one')
-    await w.findAll('button').find(b => b.text() === '录入观测')!.trigger('click')
+    await w.findAll('button').find(b => b.text() === '人工补录')!.trigger('click')
     await w.get('#field-title').setValue('测试商品')
     vi.mocked(monitoringApi.snapshot).mockRejectedValue(new Error('校验失败'))
     await w.get('dialog form').trigger('submit'); await flushPromises()

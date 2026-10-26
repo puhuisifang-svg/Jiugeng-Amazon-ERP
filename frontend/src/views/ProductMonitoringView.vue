@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import PublicCollectionStatus from '@/components/PublicCollectionStatus.vue'
+import { useCollectionStatus } from '@/composables/useCollectionStatus'
+import '@/styles/monitoringWorkbench.css'
 import CollectionPanel from '@/components/CollectionPanel.vue'
 import ListPagination from '@/components/ListPagination.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
@@ -9,6 +10,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import { monitoringApi, type FieldName, type MonitorDetail, type MonitorFields, type MonitorResult, type MonitorSnapshot, type MonitorTarget, type SnapshotInput } from '@/api/monitoring'
 import { session } from '@/state/session'
 
+const collection = useCollectionStatus('PRODUCT', () => { if (!busy.value && !selected.value.length) void load() })
 const route = useRoute()
 const rows = ref<MonitorTarget[]>([]), total = ref(0), active = ref(0)
 const loading = ref(false), busy = ref(false), error = ref(''), notice = ref('')
@@ -31,7 +33,7 @@ const isDetail = computed(() => typeof route.params.id === 'string')
 const selectedRows = computed(() => rows.value.filter(row => selected.value.includes(row.id)))
 const allSelected = computed(() => rows.value.length > 0 && selected.value.length === rows.value.length)
 const statusLabels: Record<string, string> = { PENDING: '待首次观测', BASELINE: '已建立基线', SOURCE_BASELINE: '来源切换，重建基线', CHANGED: '发现变化', UNCHANGED: '无变化', PARTIAL: '部分观测', FAILED: '更新失败', OUT_OF_ORDER: '旧观测未采纳' }
-const sourceLabel = (source: string | null) => source === 'MANUAL' ? '人工观测' : source === 'SYNTHETIC' ? '合成演示' : source?.startsWith('EXTERNAL:') ? `外部观测（${source.slice(9)}）` : '暂无数据'
+const sourceLabel = (source: string | null) => source === 'EXTERNAL:amazon-public-us' ? '亚马逊前台' : source === 'MANUAL' ? '人工观测' : source === 'SYNTHETIC' ? '合成演示' : source?.startsWith('EXTERNAL:') ? `外部观测（${source.slice(9)}）` : '暂无数据'
 const formatTime = (value: string | null) => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—'
 const display = (value: unknown) => value === undefined ? '未观测' : value === null ? '未知' : Array.isArray(value) ? (value.join('\n') || '明确为空') : value === 'AVAILABLE' ? '可售' : value === 'UNAVAILABLE' ? '不可售' : String(value)
 const stale = (row: MonitorTarget) => row.observedAt && Date.now() - Date.parse(row.observedAt) > 48 * 3600000
@@ -151,31 +153,18 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
 </script>
 
 <template>
-  <section class="monitor-page page-stack">
-    <PublicCollectionStatus
-      :writable="true"
-      kind="PRODUCT"
-      :targets="(isDetail && detail ? [detail.target] : rows).map(r=>({id:r.id,label:r.asin,enabled:r.enabled}))"
-      @updated="!busy && !selected.length && load()"
-    />
-    <CollectionPanel
-      kind="PRODUCT"
-      :targets="rows.map(r => ({id:r.id,label:r.asin}))"
-    />
-    <div class="monitor-intro">
-      <div><span class="monitor-eyebrow">AMAZON · US</span><h2>{{ isDetail ? '商品观测详情' : '产品监控' }}</h2><p>持续记录商品变化，让每一次判断都有依据。</p></div><span class="monitor-source-note">亚马逊前台观测 · 每日更新 · 失败状态可查</span>
-    </div>
+  <section class="monitor-page page-stack monitor-workbench">
     <SuccessToast :message="notice" />
     <p
-      v-if="error"
+      v-if="error || collection.error.value"
       class="data-state data-state--error"
       role="alert"
     >
-      {{ error }}
+      {{ error || collection.error.value }}
     </p>
     <template v-if="!isDetail">
       <form
-        class="panel monitor-filters"
+        class="panel monitor-filters mw-filters"
         @submit.prevent="search"
       >
         <label>站点<select disabled><option>美国 · USD</option></select></label>
@@ -217,14 +206,17 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
         </div>
       </form>
       <article class="panel monitor-list">
-        <div class="monitor-toolbar">
+        <div class="monitor-toolbar mw-toolbar">
           <button
             class="primary"
             :disabled="busy"
             @click="show('create')"
           >
             ＋ 添加监控
-          </button><span class="monitor-quota">启用目标 <strong>{{ active }}</strong> / 1,000</span><span class="monitor-spacer" /><button
+          </button><span
+            class="monitor-quota"
+            title="亚马逊前台观测 · 每日更新"
+          >启用目标 <strong>{{ active }}</strong> / 1,000</span><span class="monitor-spacer" /><button
             :disabled="busy"
             @click="show('columns')"
           >
@@ -234,7 +226,12 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
             @click="load"
           >
             刷新列表
-          </button>
+          </button><details>
+            <summary>更多</summary><CollectionPanel
+              kind="PRODUCT"
+              :targets="rows.map(r=>({id:r.id,label:r.asin}))"
+            />
+          </details>
         </div>
         <div class="monitor-batch">
           <span>已选 {{ selected.length }} 条</span><select
@@ -287,7 +284,7 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
           class="monitor-table-wrap"
         >
           <TableViewport>
-            <table class="monitor-table">
+            <table class="monitor-table ui-action-table">
               <thead>
                 <tr>
                   <th>
@@ -300,7 +297,7 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
                     >
                   </th><th>监控 / 关注</th><th class="monitor-product-col">
                     商品 / ASIN
-                  </th><th>最新状态</th><th
+                  </th><th>更新状态</th><th
                     v-for="col in columns"
                     :key="col"
                   >
@@ -348,7 +345,11 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
                       </div>
                     </div>
                   </td><td>
-                    <span>{{ statusLabels[row.lastStatus] ?? row.lastStatus }}</span><small
+                    <span
+                      class="mw-status"
+                      :class="{good:collection.state(row.id)?.status==='SUCCEEDED',warn:['PARTIAL','FAILED'].includes(collection.state(row.id)?.status??'')}"
+                      :title="collection.state(row.id)?.reason??row.lastReason??''"
+                    >{{ row.enabled ? (collection.state(row.id) ? collection.label(row.id) : statusLabels[row.lastStatus]) : '已暂停' }}</span><small
                       v-if="stale(row)"
                       class="monitor-stale"
                     >数据已超过 48 小时</small>
@@ -380,6 +381,12 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
                       详情
                     </RouterLink><button
                       class="monitor-text-button"
+                      :disabled="!row.enabled||collection.pending(row.id)||!collection.enabled.value"
+                      @click="collection.collect(row.id)"
+                    >
+                      更新
+                    </button><button
+                      class="monitor-text-button"
                       :disabled="busy"
                       @click="batch(row.enabled ? 'PAUSE' : 'ENABLE', [row])"
                     >
@@ -410,7 +417,7 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
       </article>
     </template>
     <template v-else-if="detail">
-      <div class="monitor-toolbar">
+      <div class="monitor-toolbar mw-toolbar">
         <RouterLink to="/product-monitoring">
           ← 返回监控清单
         </RouterLink><span class="monitor-spacer" /><button
@@ -424,11 +431,16 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
         >
           {{ detail.target.enabled ? '暂停监控' : '恢复监控' }}
         </button><button
-          class="primary"
           :disabled="!detail.target.enabled || busy || loading"
           @click="show('snapshot')"
         >
-          录入观测
+          人工补录
+        </button><button
+          class="primary"
+          :disabled="!detail.target.enabled||collection.pending(detail.target.id)||!collection.enabled.value"
+          @click="collection.collect(detail.target.id)"
+        >
+          立即更新
         </button>
       </div>
       <article class="panel monitor-detail">
@@ -445,11 +457,12 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
           v-if="stale(detail.target)"
           class="monitor-stale"
         >
-          数据已超过 48 小时，请补充最新观测。
+          数据已超过 48 小时，可点击立即更新重试。
         </p><dl class="monitor-field-grid">
           <div
-            v-for="field in fieldNames.filter(f => f !== 'imageUrl')"
+            v-for="field in fieldNames.filter(f => !['imageUrl','title','bullets'].includes(f)).concat('bullets')"
             :key="field"
+            :class="{ 'monitor-field-wide': field === 'bullets' }"
           >
             <dt>{{ fieldLabels[field] }}</dt><dd>{{ display(detail.target.fields[field]) }}</dd>
           </div>
@@ -462,7 +475,7 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
           v-if="!history.length"
           class="monitor-empty"
         >
-          尚无快照。录入完整观测以建立基线。
+          尚无快照，等待首次自动采集。
         </div><details
           v-for="snapshot in history"
           :key="snapshot.id"
@@ -721,4 +734,9 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
 .monitor-page .monitor-text-button { border: 0; color: #456db8; background: none; }
 .monitor-page .monitor-dialog-heading button { border: 0; font-size: 24px; }
 .monitor-page .monitor-input-row select { min-width: 0; }
+
+.monitor-workbench .monitor-filters{padding:8px 12px;gap:8px 16px}.monitor-workbench .monitor-filters label{flex-direction:row;align-items:center;gap:8px}.monitor-workbench .monitor-search{width:auto;flex:1 1 400px;min-width:0}.monitor-workbench .monitor-search input{min-width:110px}.monitor-workbench .monitor-toolbar,.monitor-workbench .monitor-batch{padding:8px 12px;gap:8px}.monitor-workbench .monitor-batch{border-bottom:1px solid #e7ebf0;background:#fafbfd}.monitor-workbench .monitor-table th{padding:8px 12px;height:36px}.monitor-workbench .monitor-table td{padding:10px 12px}.monitor-workbench .monitor-product a{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.5}.monitor-workbench .monitor-detail{padding:16px}.monitor-workbench .monitor-field-grid{gap:12px}.monitor-workbench .monitor-detail h2{font-size:18px}.monitor-workbench .monitor-table td:last-child{min-width:150px}.monitor-workbench .monitor-dialog{border-radius:8px}.monitor-workbench .monitor-dialog-heading{padding:14px 20px}.monitor-workbench .monitor-form{padding:20px}
+@media(max-width:800px){.monitor-workbench .monitor-filters label{flex-direction:column;align-items:flex-start}.monitor-workbench .monitor-search{min-width:100%;flex-wrap:wrap}.monitor-workbench .monitor-filters input{width:140px}}
+.monitor-workbench .monitor-detail{min-height:0}.monitor-workbench .monitor-detail .monitor-product p{font-size:13px;color:#728097;margin:8px 0}.monitor-workbench .monitor-detail .monitor-product h2{line-height:1.5}.monitor-workbench .monitor-field-grid{grid-template-columns:repeat(4,minmax(0,1fr));border-top:1px solid #e7ebf0;padding-top:16px}.monitor-workbench .monitor-field-wide{grid-column:1 / -1}.monitor-workbench .monitor-field-grid dd{line-height:1.6}.monitor-workbench .monitor-product a{text-decoration:none}@media(max-width:800px){.monitor-workbench .monitor-field-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.monitor-workbench .monitor-product{min-width:0}.monitor-workbench .monitor-detail .monitor-product{align-items:flex-start}.monitor-workbench .monitor-detail .monitor-product img{width:56px;height:64px}}
+.monitor-workbench .monitor-filters label.monitor-check{flex:0 0 auto;flex-direction:row;align-items:center;gap:8px}.monitor-workbench .monitor-filters label.monitor-check input{width:16px;height:16px;min-height:16px}
 </style>

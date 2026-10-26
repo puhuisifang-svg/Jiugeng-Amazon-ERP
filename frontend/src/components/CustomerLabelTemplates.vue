@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import './cartonLabels.css'
+import UnsavedChangesDialog from './UnsavedChangesDialog.vue'
 import SuccessToast from './SuccessToast.vue'
 import { onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { cartonLabelsApi, defaultLabelConfig, type LabelTemplate, type LabelTemplateInput } from '@/api/cartonLabels'
@@ -50,22 +51,12 @@ onBeforeUnmount(clearPreview)
         关闭
       </button>
     </header>
-    <div
+    <UnsavedChangesDialog
       v-if="discard"
-      class="label-warning"
-    >
-      当前修改尚未保存。<button
-        type="button"
-        @click="discard = false"
-      >
-        继续编辑
-      </button><button
-        type="button"
-        @click="emit('close')"
-      >
-        放弃修改并关闭
-      </button>
-    </div>
+      message="本次模板修改尚未保存。关闭后将丢失这些修改，已保存的模板和历史 PDF 不受影响。"
+      @keep="discard = false"
+      @discard="emit('close')"
+    />
     <p
       v-if="error"
       role="alert"

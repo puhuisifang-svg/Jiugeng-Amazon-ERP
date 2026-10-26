@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import './cartonLabels.css'
+import UnsavedChangesDialog from './UnsavedChangesDialog.vue'
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { cartonLabelsApi, downloadLabelBlob, type LabelDraft, type LabelEntry, type LabelExport } from '@/api/cartonLabels'
 const props = defineProps<{ shipmentIds: string[] }>()
@@ -79,22 +80,12 @@ onBeforeUnmount(clearPreview)
         关闭
       </button>
     </header>
-    <div
+    <UnsavedChangesDialog
       v-if="discard"
-      class="label-warning"
-    >
-      填写的内容尚未保存。<button
-        type="button"
-        @click="discard = false"
-      >
-        继续填写
-      </button><button
-        type="button"
-        @click="emit('close')"
-      >
-        放弃并关闭
-      </button>
-    </div>
+      message="本次填写的外箱标信息尚未生成。关闭后需要重新填写，已生成的 PDF 和导出历史不受影响。"
+      @keep="discard = false"
+      @discard="emit('close')"
+    />
     <p
       v-if="error"
       role="alert"

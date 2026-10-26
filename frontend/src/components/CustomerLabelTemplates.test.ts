@@ -5,6 +5,7 @@ import { cartonLabelsApi, defaultLabelConfig } from '@/api/cartonLabels'
 vi.mock('@/api/cartonLabels', async (original) => ({ ...await original<object>(), cartonLabelsApi: { templates: vi.fn(), saveTemplate: vi.fn(), templatePreview: vi.fn() } }))
 beforeEach(() => {
   vi.clearAllMocks(); HTMLDialogElement.prototype.showModal = function () { this.open = true }
+  HTMLDialogElement.prototype.close = function () { this.open = false }
   URL.createObjectURL = vi.fn(() => 'blob:template'); URL.revokeObjectURL = vi.fn()
   vi.mocked(cartonLabelsApi.templates).mockResolvedValue([])
   vi.mocked(cartonLabelsApi.saveTemplate).mockResolvedValue({ id: 't', customerId: 'c', name: '模板', config: defaultLabelConfig(), enabled: true, defaultTemplate: true, version: 0 })
@@ -18,7 +19,7 @@ it('saves customer template and protects unsaved edits from closing or switching
   expect(wrapper.get('[role="alert"]').text()).toContain('请先保存')
   await wrapper.get('dialog').trigger('cancel')
   expect(wrapper.emitted('close')).toBeUndefined()
-  await wrapper.findAll('button').find(b => b.text() === '继续编辑')!.trigger('click')
+  await wrapper.findAll('button').find(b => b.text() === '继续填写')!.trigger('click')
   await wrapper.get('form').trigger('submit'); await flushPromises()
   expect(cartonLabelsApi.saveTemplate).toHaveBeenCalledWith('c', undefined, expect.objectContaining({ name: '修改模板', defaultTemplate: true, config: expect.objectContaining({ singlePage: true }) }))
   expect(wrapper.get('.success-toast[role="status"]').text()).toContain('模板已保存')

@@ -9,6 +9,7 @@ vi.mock('@/api/cartonLabels', async (original) => {
 beforeEach(() => {
   vi.clearAllMocks()
   HTMLDialogElement.prototype.showModal = function () { this.open = true }
+  HTMLDialogElement.prototype.close = function () { this.open = false }
   URL.createObjectURL = vi.fn(() => 'blob:synthetic-label')
   URL.revokeObjectURL = vi.fn()
   vi.mocked(cartonLabelsApi.draft).mockResolvedValue({ shipmentId: 's', shipmentVersion: 3, customerId: 'c', customerName: '合成客户', productName: '合成产品', customerCode: 'C001', quantity: 80, boxes: 2, unit: '套', previous: null,
@@ -43,7 +44,13 @@ it('does not discard form on backdrop or escape; edits invalidate old preview', 
   await wrapper.findAll('input')[3]!.setValue('采购人变化'); await flushPromises()
   expect(wrapper.find('iframe').exists()).toBe(false)
   await wrapper.get('dialog').trigger('cancel'); expect(wrapper.emitted('close')).toBeUndefined()
-  expect(wrapper.text()).toContain('填写的内容尚未保存')
+  expect(wrapper.get('[role="alertdialog"]').text()).toContain('本次填写的外箱标信息尚未生成')
+  await wrapper.get('[role="alertdialog"]').trigger('cancel')
+  expect(wrapper.find('[role="alertdialog"]').exists()).toBe(false)
+  expect(wrapper.findAll('input')[3]!.element.value).toBe('采购人变化')
+  await wrapper.get('dialog').trigger('cancel')
+  await wrapper.get('.unsaved-discard').trigger('click')
+  expect(wrapper.emitted('close')).toHaveLength(1)
   wrapper.unmount()
 })
 it('shows failure and prevents saving when preview fails', async () => {

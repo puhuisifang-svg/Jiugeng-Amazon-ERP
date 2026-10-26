@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import UnsavedChangesDialog from './UnsavedChangesDialog.vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { customersApi, type Customer, type CustomerProduct } from '@/api/customers'
 import type { CustomerOrder, OrderInput } from '@/api/orders'
@@ -68,23 +69,11 @@ onMounted(async () => {
       @submit.prevent="submit"
     >
       <h2>{{ props.initial ? '编辑客户订单' : '新增客户订单' }}</h2>
-      <p
+      <UnsavedChangesDialog
         v-if="discard"
-        role="alert"
-      >
-        是否放弃未保存内容？<button
-          type="button"
-          @click="discard = false"
-        >
-          继续填写
-        </button><button
-          type="button"
-          class="danger-button"
-          @click="emit('close')"
-        >
-          放弃修改
-        </button>
-      </p>
+        @keep="discard = false"
+        @discard="emit('close')"
+      />
       <div class="order-editor-body">
         <fieldset
           class="operation-form"

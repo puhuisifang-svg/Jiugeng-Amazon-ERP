@@ -9,6 +9,7 @@ import TableViewport from '@/components/TableViewport.vue'
 import SuccessToast from '@/components/SuccessToast.vue'
 import OrderDocuments from '@/components/OrderDocuments.vue'
 import ProductName from '@/components/ProductName.vue'
+import UnsavedChangesDialog from '@/components/UnsavedChangesDialog.vue'
 const route = useRoute(), router = useRouter(), legacy = ref(false)
 const writable = computed(() => session.canAccess(['customers.write']))
 const rows = ref<OrderInvoice[]>([]), selected = ref<OrderInvoice>(), page = ref(1), size = ref(20), total = ref(0), query = ref('')
@@ -116,22 +117,11 @@ onMounted(async () => { await load(); await openFromRoute() })
         class="panel operation-dialog__card invoice-card"
         @submit.prevent="save"
       >
-        <h2>订单发票</h2><p
+        <h2>订单发票</h2><UnsavedChangesDialog
           v-if="discard"
-          role="alert"
-        >
-          是否放弃未保存内容？<button
-            type="button"
-            @click="discard=false"
-          >
-            继续填写
-          </button><button
-            type="button"
-            @click="selected=undefined; discard=false"
-          >
-            放弃修改
-          </button>
-        </p>
+          @keep="discard=false"
+          @discard="selected=undefined; discard=false"
+        />
         <p>
           来源订单：<button
             type="button"

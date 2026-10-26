@@ -38,7 +38,7 @@ onMounted(load)
       class="panel table-panel"
     >
       <TableViewport>
-        <table class="data-table">
+        <table class="data-table ui-action-table">
           <thead><tr><th>店铺</th><th>ASIN</th><th>商品</th><th>来源运行</th><th>发现时间</th><th>状态</th><th>操作</th></tr></thead><tbody>
             <tr
               v-for="item in items"

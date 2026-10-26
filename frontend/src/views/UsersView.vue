@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '@/state/uiConfirmation'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
 import { onMounted, ref } from 'vue'
@@ -56,7 +57,7 @@ async function createUser() {
 }
 
 async function update(action: 'disable' | 'enable' | 'unlock', user: AppUser) {
-  if (action === 'disable' && !window.confirm(`确定停用 ${user.loginName}？该账号的活动会话会立即失效。`)) return
+  if (action === 'disable' && !await confirmAction(`确定停用 ${user.loginName}？该账号的活动会话会立即失效。`)) return
   errorMessage.value = ''
   successMessage.value = ''
   try {
@@ -114,7 +115,7 @@ async function changeRole(user: AppUser, event: Event) {
   const select = event.target as HTMLSelectElement
   const role = select.value as AppRole
   if (role === user.role) return
-  if (!window.confirm(`确定修改 ${user.loginName} 的角色？该账号的活动会话会立即失效。`)) {
+  if (!await confirmAction(`确定修改 ${user.loginName} 的角色？该账号的活动会话会立即失效。`)) {
     select.value = user.role
     return
   }
@@ -177,7 +178,7 @@ onMounted(load)
         <p v-if="loading && !users.length" class="data-state">正在加载…</p>
         <div v-else class="table-scroll">
           <TableViewport>
-            <table class="data-table">
+            <table class="data-table ui-action-table">
               <thead><tr><th>登录名</th><th>显示名称</th><th>找回方式</th><th>角色</th><th>状态</th><th>首次改密</th><th>操作</th></tr></thead>
               <tbody>
                 <tr v-for="user in users" :key="user.id">

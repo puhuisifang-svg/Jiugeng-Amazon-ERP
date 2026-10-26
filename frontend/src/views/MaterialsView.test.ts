@@ -267,7 +267,7 @@ describe('MaterialsView merged material management', () => {
 
   it('allows a disabled material to be enabled again', async () => {
     enableMaterial.mockResolvedValue({ id: 'm3', materialCode: 'MAT-3', name: '标签', materialType: '耗材', unit: '件', status: 'ACTIVE' })
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const { settleConfirmation } = await import('@/state/uiConfirmation')
     const wrapper = mount(MaterialsView, { global })
     await flushPromises()
 
@@ -275,6 +275,7 @@ describe('MaterialsView merged material management', () => {
     const enableButton = row.findAll('button').find(button => button.text() === '启用')!
     expect(enableButton.attributes('disabled')).toBeUndefined()
     await enableButton.trigger('click')
+    settleConfirmation('')
     await flushPromises()
 
     expect(enableMaterial).toHaveBeenCalledWith('m3')

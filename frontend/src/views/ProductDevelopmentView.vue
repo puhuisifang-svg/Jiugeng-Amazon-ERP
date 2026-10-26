@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '@/state/uiConfirmation'
 import ListPagination from '@/components/ListPagination.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
@@ -44,7 +45,7 @@ async function loadProducts() {
   catch { productError.value = '产品列表加载失败，可点击重试；不影响查看开发需求。' }
 }
 async function load(force = false) {
-  if (!force && dirty.value && !window.confirm('刷新会丢弃尚未保存的开发资料，确定刷新？')) return
+  if (!force && dirty.value && !await confirmAction('刷新会丢弃尚未保存的开发资料，确定刷新？')) return
   const request = ++sequence; loading.value = true; error.value = ''
   if (runtimeConfig.authMode === 'mock') { loading.value = false; error.value = '新品开发需要正式持久化模式，模拟候选不会创建开发需求。'; return }
   try {
@@ -99,7 +100,7 @@ function search() { page.value = 0; void load() }
 function reset() { q.value = ''; status.value = ''; search() }
 function changePage(value: number) { page.value = value; void load() }
 function changeStatus(value: DevelopmentStatus | '') { status.value = value; search() }
-function mayLeave() { return createdNavigation || (!saving.value && (!dirty.value || window.confirm('开发资料尚未保存，确定离开？'))) }
+async function mayLeave() { return createdNavigation || (!saving.value && (!dirty.value || await confirmAction('开发资料尚未保存，确定离开？'))) }
 function beforeUnload(event: BeforeUnloadEvent) { if (dirty.value || saving.value) { event.preventDefault(); event.returnValue = '' } }
 onMounted(() => window.addEventListener('beforeunload', beforeUnload))
 onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
@@ -187,6 +188,7 @@ watch(id, () => {
           搜索
         </button><button
           type="button"
+          class="filter-reset-button"
           @click="reset"
         >
           重置

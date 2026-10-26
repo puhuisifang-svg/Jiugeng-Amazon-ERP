@@ -166,6 +166,7 @@ onMounted(load)
           {{ formError }}
         </p><div class="operation-form__actions">
           <button
+            class="secondary-button"
             type="button"
             :disabled="saving"
             @click="requestClose"

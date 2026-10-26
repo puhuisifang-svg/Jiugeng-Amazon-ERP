@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '@/state/uiConfirmation'
 import SuccessToast from "@/components/SuccessToast.vue"
 import MaterialCostPriceDialog from '@/components/MaterialCostPriceDialog.vue'
 import TableViewport from "@/components/TableViewport.vue"
@@ -224,7 +225,7 @@ async function saveSafety(item: MaterialDetailDto) {
 }
 async function toggleStatus(item: MaterialDetailDto) {
   const enabling = item.status === 'DISABLED'
-  if (!window.confirm(`确认${enabling ? '启用' : '停用'}辅料 ${item.materialCode}？`)) return
+  if (!await confirmAction(`确认${enabling ? '启用' : '停用'}辅料 ${item.materialCode}？`)) return
   saving.value = true; error.value = ''; success.value = ''
   try {
     const updated = enabling ? await domainApi.enableMaterial(item.id) : await domainApi.disableMaterial(item.id)
@@ -306,7 +307,6 @@ onMounted(load)
       role="dialog"
       aria-modal="true"
       aria-labelledby="material-dialog-title"
-      @click.self="resetForm"
       @keydown.esc="resetForm"
     >
       <form
@@ -479,7 +479,6 @@ onMounted(load)
       role="dialog"
       aria-modal="true"
       aria-labelledby="inventory-dialog-title"
-      @click.self="showInventoryForm = false"
       @keydown.esc="showInventoryForm = false"
     >
       <form

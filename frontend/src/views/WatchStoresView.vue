@@ -117,7 +117,7 @@ onMounted(load)
       </p>
       <label
         v-if="formal && writable"
-        class="form-wide"
+        class="form-wide ui-snapshot-label"
       >人工 ASIN 快照（空格、逗号或换行分隔，最多 1000 行）
         <textarea
           v-model="snapshots[item.id]"

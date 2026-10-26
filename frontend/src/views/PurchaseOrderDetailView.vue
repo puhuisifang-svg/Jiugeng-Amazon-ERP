@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '@/state/uiConfirmation'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue'
@@ -26,7 +27,7 @@ async function load() {
   finally { if (sequence === loadSequence) loading.value = false }
 }
 async function submitOrder() {
-  if (!detail.value || saving.value || !window.confirm('确认下单后将锁定供应商、项目、数量和价格。请确认已与供应商核对；系统不会自动向供应商发送订单。')) return
+  if (!detail.value || saving.value || !await confirmAction('确认下单后将锁定供应商、项目、数量和价格。请确认已与供应商核对；系统不会自动向供应商发送订单。')) return
   saving.value = true; error.value = ''; success.value = ''
   try { await purchaseApi.submit(detail.value.order.id, detail.value.order.version); success.value = '采购单已确认，可分批登记收货。'; await load() }
   catch (exception) { error.value = message(exception, '下单结果未确认，请刷新单据检查状态。') }
@@ -73,7 +74,7 @@ async function receive() {
   } finally { saving.value = false }
 }
 watch(() => route.params.orderId, () => { detail.value = undefined; showReceipt.value = false; showCancel.value = false; pendingReceipt.value = undefined; receiptUncertain.value = false; success.value = ''; void load() }, { immediate: true })
-function mayLeave() { return !saving.value && (!pendingReceipt.value || window.confirm('本次收货结果未确认。离开后请先核对收货历史，勿直接重复登记。确定离开？')) }
+async function mayLeave() { return !saving.value && (!pendingReceipt.value || await confirmAction('本次收货结果未确认。离开后请先核对收货历史，勿直接重复登记。确定离开？')) }
 function beforeUnload(event: BeforeUnloadEvent) { if (saving.value || pendingReceipt.value) { event.preventDefault(); event.returnValue = '' } }
 onBeforeRouteLeave(mayLeave); onBeforeRouteUpdate(mayLeave)
 onMounted(() => window.addEventListener('beforeunload', beforeUnload))
@@ -196,7 +197,6 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
       role="dialog"
       aria-modal="true"
       aria-labelledby="receipt-title"
-      @click.self="closeReceipt"
       @keydown.esc="closeReceipt"
     >
       <form

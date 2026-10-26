@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '@/state/uiConfirmation'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, ref } from 'vue'
@@ -86,7 +87,7 @@ async function saveSessionPolicy() {
 async function changeLock(user: AppUser) {
   const action = user.lockedAt ? 'unlock' : 'lock'
   const verb = user.lockedAt ? '恢复' : '锁定'
-  if (!window.confirm(`确定${verb}账号 ${user.loginName}？`)) return
+  if (!await confirmAction(`确定${verb}账号 ${user.loginName}？`)) return
   begin()
   try {
     await usersApi[action](user.id)
@@ -160,7 +161,7 @@ onMounted(initialize)
         <h2 class="table-title">账号锁定与恢复</h2>
         <div class="table-scroll">
           <TableViewport>
-            <table class="data-table">
+            <table class="data-table ui-action-table">
               <thead><tr><th>登录名</th><th>显示名称</th><th>角色</th><th>状态</th><th>操作</th></tr></thead>
               <tbody>
                 <tr v-for="user in users" :key="user.id">

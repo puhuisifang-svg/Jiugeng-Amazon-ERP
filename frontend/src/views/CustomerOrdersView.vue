@@ -83,7 +83,7 @@ watch(() => route.params.id, load); onMounted(load)
     />
     <template v-if="!route.params.id">
       <form
-        class="panel filter-panel operation-form"
+        class="panel filter-panel operation-form ui-filter-row"
         @submit.prevent="search"
       >
         <label>关键词<input
@@ -461,15 +461,18 @@ watch(() => route.params.id, load); onMounted(load)
           role="alert"
         >
           {{ formError }}
-        </p><button
-          type="button"
-          :disabled="saving"
-          @click="logistics=undefined"
-        >
-          取消
-        </button><button :disabled="saving">
-          保存
-        </button>
+        </p><div class="form-footer">
+          <button
+            type="button"
+            class="secondary-action"
+            :disabled="saving"
+            @click="logistics=undefined"
+          >
+            取消
+          </button><button :disabled="saving">
+            保存
+          </button>
+        </div>
       </form>
     </div>
   </section>

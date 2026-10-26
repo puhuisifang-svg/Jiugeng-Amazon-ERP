@@ -159,7 +159,6 @@ onMounted(load)
       role="dialog"
       aria-modal="true"
       aria-labelledby="reversal-dialog-title"
-      @click.self="closeReversal"
       @keydown.esc="closeReversal"
     >
       <form

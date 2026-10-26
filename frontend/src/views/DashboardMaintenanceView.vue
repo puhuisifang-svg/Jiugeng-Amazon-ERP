@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction, promptReason } from '@/state/uiConfirmation'
 import { shipmentUnit } from '@/ui/shipmentUnits'
 import ProductName from '@/components/ProductName.vue'
 import ListPagination from '@/components/ListPagination.vue'
@@ -190,7 +191,7 @@ async function archive(item: DashboardItem, confirmed = false) {
   if (saving.value) return
   const deleting = !isProduct.value
   if (deleting && !confirmed) { deleteTarget.value = item; error.value = ''; return }
-  const reason = deleting ? '用户删除' : window.prompt('请输入归档原因')?.trim()
+  const reason = deleting ? '用户删除' : (await promptReason('请输入归档原因'))?.trim()
   if (!reason) return
   saving.value = true
   success.value = ''; error.value = ''
@@ -199,7 +200,7 @@ async function archive(item: DashboardItem, confirmed = false) {
   finally { saving.value = false }
 }
 async function complete(item: PendingProduct) {
-  if (!window.confirm('确认将该新品标记为已完成？')) return
+  if (!await confirmAction('确认将该新品标记为已完成？')) return
   saving.value = true; success.value = ''; error.value = ''
   try { await dashboardApi.completePendingProduct(item.id, item.version); success.value = '新品已标记完成。'; await load() }
   catch (exception) { error.value = exception instanceof ApiError ? exception.message : '操作失败。' }
@@ -343,7 +344,7 @@ onMounted(async () => {
           >
             ×
           </button>
-          <h2>{{ editing ? '编辑记录' : '新增记录' }}</h2>
+          <h2>{{ editing ? '编辑' : '新增' }}{{ isProduct ? '待开发产品' : kind === 'today-shipments' ? '今日发货' : '待发货' }}</h2>
           <template v-if="isProduct">
             <label>产品名称<input
               v-model="pendingProduct.productName"
@@ -428,21 +429,23 @@ onMounted(async () => {
             v-model="remarkModel"
             maxlength="500"
           ></label>
-          <button
-            :disabled="saving"
-            type="submit"
-          >
-            {{ saving ? '保存中…' : '保存' }}
-          </button>
-          <button
-            v-if="editing || !isProduct"
-            class="secondary-button"
-            type="button"
-            :disabled="saving"
-            @click="requestClose"
-          >
-            取消
-          </button>
+          <div class="operation-form__actions">
+            <button
+              :disabled="saving"
+              type="submit"
+            >
+              {{ saving ? '保存中…' : '保存' }}
+            </button>
+            <button
+              v-if="editing || !isProduct"
+              class="secondary-button"
+              type="button"
+              :disabled="saving"
+              @click="requestClose"
+            >
+              取消
+            </button>
+          </div>
           <p
             v-if="error && !isProduct"
             class="data-state data-state--error form-wide"

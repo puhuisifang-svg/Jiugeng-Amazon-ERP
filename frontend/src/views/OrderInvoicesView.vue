@@ -26,16 +26,19 @@ onMounted(async () => { await load(); await openFromRoute() })
 </script>
 <template>
   <section class="domain-grid order-invoices">
-    <div class="material-toolbar">
+    <div
+      class="ui-section-tabs"
+      aria-label="发票台账类型"
+    >
       <button
         type="button"
-        :disabled="!legacy"
+        :aria-pressed="!legacy"
         @click="legacy=false"
       >
         订单发票
       </button><button
         type="button"
-        :disabled="legacy"
+        :aria-pressed="legacy"
         @click="legacy=true"
       >
         历史手工台账
@@ -48,7 +51,7 @@ onMounted(async () => { await load(); await openFromRoute() })
         tone="error"
       />
       <form
-        class="panel filter-panel operation-form"
+        class="panel filter-panel operation-form ui-filter-row"
         @submit.prevent="page=1; load()"
       >
         <label>关键词<input
@@ -68,7 +71,7 @@ onMounted(async () => { await load(); await openFromRoute() })
         </RouterLink>
       </form>
       <TableViewport>
-        <table class="data-table">
+        <table class="data-table ui-action-table">
           <thead><tr><th>来源订单</th><th>客户名称</th><th>发票抬头</th><th>商品明细</th><th>不含税金额</th><th>税额</th><th>含税总价 RMB</th><th>开票状态</th><th>发票号码</th><th>开票日期</th><th>操作</th></tr></thead><tbody>
             <tr
               v-for="item in rows"
@@ -189,6 +192,7 @@ onMounted(async () => { await load(); await openFromRoute() })
         </p><footer class="form-footer">
           <button
             type="button"
+            class="secondary-action"
             :disabled="saving"
             @click="close"
           >

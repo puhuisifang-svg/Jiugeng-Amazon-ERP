@@ -22,7 +22,7 @@ async function download(item: typeof rows.value[number]) { busy.value = true; er
 watch(() => [props.orderId,props.scope], load); onMounted(load)
 </script>
 <template>
-  <section>
+  <section class="order-documents">
     <h3>{{ scope === 'ORDER' ? '合同 / 订单附件' : '发票附件' }}</h3><SuccessToast :message="success" /><p
       v-if="error"
       role="alert"
@@ -49,3 +49,6 @@ watch(() => [props.orderId,props.scope], load); onMounted(load)
     </p>
   </section>
 </template>
+<style scoped>
+.order-documents{min-width:0;margin-top:16px;padding:14px;border:1px solid var(--line);border-radius:7px;background:#f8f9fb}.order-documents h3{margin:0 0 12px;font-size:14px}.order-documents label{display:grid;gap:8px;color:var(--muted);font-size:13px}.order-documents input[type=file]{width:100%;max-width:100%;min-width:0;font-size:13px}.order-documents input::file-selector-button{padding:7px 12px;border:1px solid var(--line);border-radius:5px;background:white;color:var(--ink);cursor:pointer}.order-documents p{margin:10px 0 0;color:var(--muted);font-size:13px;overflow-wrap:anywhere}.order-documents button{max-width:100%;white-space:normal;overflow-wrap:anywhere;text-align:left}.order-documents [role=alert]{color:#b42318}
+</style>

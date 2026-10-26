@@ -114,7 +114,7 @@ onMounted(() => load())
         <label>结束时间<input v-model="to" type="datetime-local"></label>
         <div class="audit-filter-actions">
           <button :disabled="loading" type="submit">查询</button>
-          <button class="secondary-button" type="button" @click="resetFilters">清空</button>
+          <button class="filter-reset-button" type="button" @click="resetFilters">清空</button>
         </div>
       </form>
 

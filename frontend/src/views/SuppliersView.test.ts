@@ -15,6 +15,8 @@ vi.mock('@/api/domain', () => ({
 }))
 
 import SuppliersView from './SuppliersView.vue'
+import { domainApi } from '@/api/domain'
+import { settleConfirmation, uiConfirmation } from '@/state/uiConfirmation'
 
 const AuthenticatedCatalogImage = { props: ['imageId', 'alt'], template: '<span>{{ alt }}</span>' }
 
@@ -56,5 +58,16 @@ describe('SuppliersView', () => {
     await wrapper.get('button.image-button').trigger('click')
     const preview = wrapper.get('.image-dialog .supplier-qr-preview')
     expect(preview.attributes('src')).toBe('https://images.example.com/qr.png')
+  })
+  it('keeps form input on backdrop and cancels status confirmation without writes', async () => {
+    suppliers.mockResolvedValue({ items: [{ id: 's1', name: '合成供应商', status: 'ACTIVE', version: 0 }], totalCount: 1, page: 0, size: 100 })
+    const w = mount(SuppliersView); await flushPromises()
+    await w.findAll('button').find(b => b.text() === '停用')!.trigger('click')
+    expect(uiConfirmation.value?.message).toContain('合成供应商'); settleConfirmation(null); await flushPromises()
+    expect(domainApi.disableSupplier).not.toHaveBeenCalled()
+    await w.get('.material-toolbar button').trigger('click')
+    const name = w.get('[role="dialog"] input[required]'); await name.setValue('未保存合成输入')
+    await w.get('[role="dialog"]').trigger('click'); expect(name.element).toHaveProperty('value', '未保存合成输入')
+    expect(w.findAll('[role="dialog"] button').some(b => b.text() === '取消')).toBe(true); w.unmount()
   })
 })

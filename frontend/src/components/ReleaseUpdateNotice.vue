@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '@/state/uiConfirmation'
 import { onMounted, onBeforeUnmount, ref } from 'vue'
 import { hasNewRelease, moduleEntry } from '@/ui/releaseVersion'
 const changed = ref(false)
@@ -17,8 +18,8 @@ function preloadFailure(event: Event) {
   event.preventDefault()
   changed.value = true
 }
-function reload() {
-  if (window.confirm('请确认当前填写内容已保存。刷新将加载最新版本，未保存内容会丢失。')) window.location.reload()
+async function reload() {
+  if (await confirmAction('请确认当前填写内容已保存。刷新将加载最新版本，未保存内容会丢失。')) window.location.reload()
 }
 onMounted(() => {
   mounted = true

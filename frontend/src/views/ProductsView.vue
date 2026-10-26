@@ -735,7 +735,6 @@ onMounted(load)
       class="operation-dialog"
       role="dialog"
       aria-modal="true"
-      @click.self="showCreate = false"
       @keydown.esc="showCreate = false"
     >
       <section class="panel operation-dialog__card product-create-dialog">

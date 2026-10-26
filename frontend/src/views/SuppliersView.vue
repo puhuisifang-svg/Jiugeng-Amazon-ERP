@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '@/state/uiConfirmation'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, reactive, ref } from 'vue'
@@ -32,7 +33,7 @@ function supplierInput(): SupplierInput {
   }
 }
 async function save() { saving.value = true; error.value = ''; success.value = ''; try { const input = supplierInput(); const result = editing.value ? await domainApi.updateSupplier(editing.value.id, input) : await domainApi.createSupplier(input); items.value = editing.value ? items.value.map(item => item.id === result.id ? result : item) : [result, ...items.value]; success.value = editing.value ? '供应商已更新。' : '供应商已创建。'; reset() } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '供应商保存失败。' } finally { saving.value = false } }
-async function disable(item: SupplierDto) { if (!window.confirm(`确认停用供应商 ${item.name}？`)) return; saving.value = true; try { const result = await domainApi.disableSupplier(item.id, item.version); items.value = items.value.map(value => value.id === item.id ? result : value); success.value = '供应商已停用。' } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '供应商停用失败。' } finally { saving.value = false } }
+async function disable(item: SupplierDto) { if (!await confirmAction(`确认停用供应商 ${item.name}？`)) return; saving.value = true; try { const result = await domainApi.disableSupplier(item.id, item.version); items.value = items.value.map(value => value.id === item.id ? result : value); success.value = '供应商已停用。' } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '供应商停用失败。' } finally { saving.value = false } }
 onMounted(load)
 </script>
 
@@ -76,7 +77,6 @@ onMounted(load)
       role="dialog"
       aria-modal="true"
       aria-labelledby="supplier-dialog-title"
-      @click.self="reset"
       @keydown.esc="reset"
     >
       <form
@@ -172,7 +172,6 @@ onMounted(load)
           </button>
         </div><div class="operation-form__actions">
           <button
-            v-if="editing"
             type="button"
             class="secondary-button"
             @click="reset"
@@ -205,7 +204,10 @@ onMounted(load)
     >
       <div class="table-scroll">
         <TableViewport>
-          <table class="data-table">
+          <table
+            class="data-table"
+            :class="{ 'ui-action-table': writable }"
+          >
             <thead>
               <tr>
                 <th>二维码</th><th>名称</th><th>联系人</th><th>电话</th><th>微信号</th><th>1688</th><th>状态</th><th v-if="writable">

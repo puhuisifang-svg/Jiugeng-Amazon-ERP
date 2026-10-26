@@ -115,9 +115,9 @@ onMounted(load)
     </p>
     <div
       v-if="!loading"
-      class="panel operation-form"
+      class="panel operation-form filter-panel ui-filter-row"
     >
-      <h2>筛选候选</h2><label class="form-wide">搜索<input
+      <label class="form-wide">搜索<input
         v-model="query"
         placeholder="ASIN、标题、类目、负责人或标签"
       ></label><label>状态<select v-model="statusFilter"><option value="">全部状态</option><option value="NEW">NEW</option><option value="REVIEWING">REVIEWING</option><option value="APPROVED">APPROVED</option><option value="REJECTED">REJECTED</option></select></label><label>负责人<select v-model="ownerFilter"><option value="">全部负责人</option><option

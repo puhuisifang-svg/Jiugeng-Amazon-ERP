@@ -197,7 +197,7 @@ onMounted(load)
         class="table-scroll"
       >
         <TableViewport>
-          <table class="data-table">
+          <table class="data-table ui-action-table">
             <thead><tr><th>采购单 / 供应商</th><th>明细</th><th>采购金额</th><th>收货进度</th><th>预计到货</th><th>状态</th><th>操作</th></tr></thead>
             <tbody>
               <tr
@@ -259,7 +259,6 @@ onMounted(load)
       role="dialog"
       aria-modal="true"
       aria-labelledby="purchase-form-title"
-      @click.self="closeForm"
       @keydown.esc="closeForm"
     >
       <form

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { confirmAction } from '@/state/uiConfirmation'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, reactive, ref } from 'vue'
@@ -61,7 +62,7 @@ async function save() {
   finally { busy.value = false }
 }
 async function disable(item: ProductMaterialRelationDto) {
-  if (!window.confirm(`确认停用 ${item.skuCode} 与 ${item.materialCode} 的关系？`)) return
+  if (!await confirmAction(`确认停用 ${item.skuCode} 与 ${item.materialCode} 的关系？`)) return
   busy.value = true; error.value = ''; success.value = ''
   try {
     const disabled = await domainApi.disableProductMaterialRelation(item.id)

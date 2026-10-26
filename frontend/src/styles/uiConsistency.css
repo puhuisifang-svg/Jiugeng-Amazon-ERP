@@ -1,0 +1,61 @@
+/* ERP-096: shared UI safeguards. Low-specificity defaults keep specialized controls intact. */
+.erp-content :where(button:not([class]), .ui-button) {
+  min-height:var(--ui-control-height); padding:6px 12px; border:1px solid var(--line);
+  border-radius:6px; background:white; color:var(--ink); font-size:13px; cursor:pointer;
+}
+.erp-content :where(button):disabled { cursor:not-allowed; opacity:.55; }
+.erp-content :where(button,a):focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.erp-content :where(.page-stack,.domain-grid,.card-list,.panel,.operation-form,fieldset) { min-width:0; max-width:100%; }
+.erp-content :where(.page-stack,.domain-grid) { grid-template-columns:minmax(0,1fr); }
+.erp-content :where(.inline-actions,.form-footer,.form-footer__actions,.dialog-footer,.operation-form__actions,.card-heading) { flex-wrap:wrap; }
+.erp-content :where(.card-heading > div,.inline-actions > input,.operation-form label) { min-width:0; }
+.erp-content :where(.compact-panel p,.import-summary p,.notice,.form-footer p) { overflow-wrap:anywhere; }
+.erp-content .data-table th { height:36px; padding-block:8px; }
+.erp-content .table-viewport { background:white; }
+.erp-content fieldset.operation-form { border:1px solid var(--line); border-radius:7px; margin:12px 0; }
+.erp-content .invoice-card > h2 { margin:0 0 16px; font-size:18px; }
+.erp-content .data-table :where(td.ui-long-text) { min-width:160px; max-width:300px; white-space:pre-wrap; overflow-wrap:anywhere; }
+.erp-content .data-table.ui-action-table > :is(thead,tbody) > tr > :last-child {
+  position:sticky; right:0; min-width:112px; max-width:240px; white-space:normal;
+  background:white; z-index:2; box-shadow:-5px 0 8px -7px #687386;
+}
+.erp-content .data-table.ui-action-table > thead > tr > :last-child { z-index:5; background:#f8f9fb; }
+.erp-content .ui-action-table td:last-child button { margin:3px; }
+.catalog-image,.dashboard-image,.sku-image-preview,.dashboard-image-preview img,.material-image { object-fit:contain; }
+.erp-content .ui-filter-row { display:flex; flex-wrap:wrap; align-items:center; }
+.erp-content .ui-filter-row label { flex:0 1 220px; width:220px; }
+.erp-content .ui-filter-row label :is(input,select) { min-width:0; }
+.erp-content .ui-filter-row :is(button,a) { flex:none; }
+.erp-content .filter-reset-button { min-height:32px; padding:0 8px; border:0; border-radius:4px; background:transparent; color:var(--ink); font-size:13px; font-weight:400; cursor:pointer; }
+.erp-content .filter-reset-button:hover:not(:disabled) { color:var(--accent); background:var(--accent-soft); }
+.ui-section-tabs { display:flex; flex-wrap:wrap; gap:20px; padding:0 12px; background:white; border-bottom:1px solid var(--line); }
+.ui-section-tabs button { min-height:38px; padding:8px 0; border:0; border-bottom:2px solid transparent; background:transparent; color:var(--muted); cursor:pointer; }
+.ui-section-tabs button[aria-pressed=true] { border-bottom-color:var(--accent); color:#a64b0b; font-weight:600; }
+.operation-dialog__card:not(.cost-sheet,.order-editor,.product-create-dialog) > :is(.form-footer,.operation-form__actions,.dialog-footer) {
+  position:sticky; bottom:-20px; z-index:6; grid-column:1/-1; flex-wrap:wrap;
+  margin-top:8px; padding:12px 0; background:white; border-top:1px solid var(--line);
+}
+.erp-content .operation-dialog__card { min-width:0; }
+.operation-dialog__card:has(> .operation-dialog__close) > h2 { padding-right:44px; overflow-wrap:anywhere; }
+.erp-content dialog .operation-dialog__card { max-height:none; overflow:visible; }
+.erp-content dialog .operation-dialog__card > :is(.form-footer,.operation-form__actions,.dialog-footer) { bottom:0; }
+.operation-form input.sr-only { width:1px; max-width:1px; height:1px; min-height:0; padding:0; }
+.form-footer :is(.secondary-action,.secondary-button),.operation-form__actions .secondary-button { color:var(--ink); background:#eef0f4; }
+.ui-snapshot-label { display:grid; gap:8px; color:var(--muted); font-size:13px; margin:16px 0; }
+.ui-snapshot-label textarea { width:100%; min-height:100px; padding:10px 12px; border:1px solid var(--line); border-radius:6px; resize:vertical; color:var(--ink); }
+.ui-summary-panel { min-height:0; padding:16px; }
+.ui-summary-panel h2 { margin:0 0 12px; font-size:17px; }
+@media(min-width:1001px) {
+  .erp-content .ui-filter-row label :is(input:not([type=checkbox]),select) { flex:1; width:0; }
+}
+@media(max-width:640px) {
+  .erp-content .ui-filter-row label { flex:1 1 100%; width:100%; }
+  .erp-content .filter-panel.ui-filter-row label > :is(input,select) { width:100%; }
+  .operation-dialog { padding:12px; }
+  .operation-dialog__card:not(.cost-sheet,.order-editor,.product-create-dialog) { max-height:calc(100dvh - 24px); padding:16px; }
+  .operation-dialog__card:not(.cost-sheet,.order-editor,.product-create-dialog) > :is(.form-footer,.operation-form__actions,.dialog-footer) { bottom:-16px; }
+  .erp-content .operation-form { grid-template-columns:minmax(0,1fr); }
+  .erp-content .operation-form .form-wide { grid-column:1/-1; }
+  .erp-content .notice { flex-wrap:wrap; gap:6px; }
+  .erp-content .card-heading { gap:8px; }
+}

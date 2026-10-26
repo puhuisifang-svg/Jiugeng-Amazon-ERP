@@ -5,6 +5,7 @@ import { runtimeConfig } from './config/runtime'
 import router from './router'
 import { session } from './state/session'
 import './styles/main.css'
+import './styles/uiConsistency.css'
 
 async function bootstrap() {
   await session.initialize()

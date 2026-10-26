@@ -89,7 +89,7 @@ onMounted(load)
       正在加载…
     </p>
     <template v-else-if="batch">
-      <article class="panel import-summary">
+      <article class="panel import-summary ui-summary-panel">
         <h2>{{ batch.importType }}</h2><p>状态：<strong>{{ batch.status }}</strong> · 阶段：{{ batch.phase }} · {{ batch.percent }}%</p><p>数据 {{ batch.totalRows }} 行；错误 {{ batch.errorCount }}；警告 {{ batch.warningCount }}</p>
         <div class="inline-actions">
           <button
@@ -123,7 +123,7 @@ onMounted(load)
       </article>
       <article
         v-if="result"
-        class="panel import-summary"
+        class="panel import-summary ui-summary-panel"
       >
         <h2>提交结果</h2><p>新增 {{ result.createdRows }} · 更新 {{ result.updatedRows }} · 未变化 {{ result.unchangedRows }} · 实际写入 {{ result.writtenRows }}</p>
         <button

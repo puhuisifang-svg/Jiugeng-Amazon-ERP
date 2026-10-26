@@ -37,6 +37,7 @@ class ProductMaterialRelationService implements ProductMaterialAssignmentGateway
 
     @Transactional
     RelationView create(RelationInput input, AuthenticatedActor actor) {
+        repository.lockVariant(input.variantId());
         Validated valid = validate(input, null);
         String id = UUID.randomUUID().toString();
         try {
@@ -53,6 +54,7 @@ class ProductMaterialRelationService implements ProductMaterialAssignmentGateway
     @Transactional
     RelationView update(String id, RelationInput input, AuthenticatedActor actor) {
         RelationView before = relation(id);
+        repository.lockVariant(before.variantId());
         if (!before.productId().equals(trim(input.productId())) || !before.variantId().equals(trim(input.variantId()))
                 || !before.materialId().equals(trim(input.materialId()))) {
             throw new MaterialException(409, "PRODUCT_MATERIAL_REFERENCE_IMMUTABLE", "产品、SKU 与辅料引用不可修改");
@@ -68,6 +70,7 @@ class ProductMaterialRelationService implements ProductMaterialAssignmentGateway
     @Transactional
     RelationView disable(String id, AuthenticatedActor actor) {
         RelationView before = relation(id);
+        repository.lockVariant(before.variantId());
         if (!before.enabled()) return before;
         repository.disable(id, actor.userId());
         RelationView disabled = relation(id);
@@ -89,6 +92,7 @@ class ProductMaterialRelationService implements ProductMaterialAssignmentGateway
         if (variants.isEmpty()) throw new MaterialException(409, "ACTIVE_VARIANT_REQUIRED", "产品没有可用的启用 SKU");
         int created = 0;
         for (String variantId : variants) {
+            repository.lockVariant(variantId);
             if (!repository.exists(variantId, materialId, null)) {
                 repository.insert(UUID.randomUUID().toString(), productId, variantId, materialId, quantity, unit,
                         lossRate, remark, actor.userId());
@@ -118,6 +122,7 @@ class ProductMaterialRelationService implements ProductMaterialAssignmentGateway
 
     private void replaceVariantAssignmentsInternal(String productId, String variantId,
             List<ProductMaterialAssignmentGateway.Assignment> assignments, AuthenticatedActor actor) {
+        repository.lockVariant(variantId);
         List<ProductMaterialAssignmentGateway.Assignment> values = assignments == null ? List.of() : assignments;
         if (values.size() > 100) throw new MaterialException(400, "PRODUCT_MATERIAL_LIMIT", "单个 SKU 关联辅料不得超过 100 个");
         Map<String, RelationView> existing = repository.findByVariant(variantId).stream()

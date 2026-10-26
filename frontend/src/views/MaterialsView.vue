@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import SuccessToast from "@/components/SuccessToast.vue"
+import MaterialCostPriceDialog from '@/components/MaterialCostPriceDialog.vue'
 import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
@@ -16,6 +17,7 @@ import { session } from '@/state/session'
 import { isNonNegativeInventoryInteger, isPositiveInventoryInteger } from '@/ui/inventory'
 
 const items = ref<MaterialDetailDto[]>([])
+const costMaterial = ref<MaterialDetailDto>()
 const balances = ref<InventoryBalanceViewDto[]>([])
 const loading = ref(true); const saving = ref(false); const error = ref(''); const success = ref('')
 const editingId = ref<string | null>(null); const showMaterialForm = ref(false); const showInventoryForm = ref(false)
@@ -43,7 +45,7 @@ const selectedIds = ref<string[]>([]); const deleteOpen = ref(false); const dele
 const page = ref(1); const pageSize = ref(20); const inventoryError = ref('')
 const supplierAccess = computed(() => session.canAccess(['suppliers.read']))
 const supplierWritable = computed(() => writable.value && session.canAccess(['suppliers.read', 'suppliers.write']))
-const rowActionsAvailable = computed(() => writable.value || inventoryWritable.value || (formal.value && supplierAccess.value))
+const rowActionsAvailable = computed(() => writable.value || inventoryWritable.value || (formal.value && (supplierAccess.value || session.canAccess(['costs.read']))))
 const activeMaterials = computed(() => items.value.filter(item => item.status === 'ACTIVE'))
 const selectedMaterial = computed(() => items.value.find(item => item.id === inventoryForm.materialId))
 const balanceByMaterial = computed(() => new Map(balances.value.map(item => [item.materialId ?? item.materialCode, item])))
@@ -554,6 +556,12 @@ onMounted(load)
       </form>
     </div>
     <SuccessToast :message="success" />
+    <MaterialCostPriceDialog
+      v-if="costMaterial"
+      :material="costMaterial"
+      @close="costMaterial = undefined"
+      @saved="costMaterial = undefined; success = '成本价已保存，相关成本请重新核算。'"
+    />
     <p
       v-if="error"
       class="data-state data-state--error"
@@ -679,6 +687,13 @@ onMounted(load)
                 <td>{{ item.status === 'ACTIVE' ? '启用' : '停用' }}</td>
                 <td v-if="rowActionsAvailable">
                   <div class="table-actions">
+                    <button
+                      v-if="formal && session.canAccess(['costs.read'])"
+                      type="button"
+                      @click="costMaterial = item"
+                    >
+                      成本价
+                    </button>
                     <button
                       v-if="writable"
                       type="button"

@@ -16,6 +16,9 @@ class ProductMaterialRelationRepository {
     private final JdbcClient jdbc;
 
     ProductMaterialRelationRepository(JdbcClient jdbc) { this.jdbc = jdbc; }
+    void lockVariant(String id) {
+        jdbc.sql("SELECT id FROM product_variant WHERE id=:id FOR UPDATE").param("id",id).query(String.class).optional();
+    }
 
     List<RelationView> findByProduct(String productId) {
         return query("r.product_id = :value", productId);

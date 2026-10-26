@@ -44,7 +44,7 @@ class AuditController {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
         boolean readAll = principal.capabilities().contains("audit.read.all");
-        return service.find(new AuditFilter(
+        var result = service.find(new AuditFilter(
                 readAll ? null : principal.userId(),
                 readAll ? actorLoginName : null,
                 category,
@@ -55,5 +55,12 @@ class AuditController {
                 to,
                 page,
                 size));
+        if (principal.capabilities().contains("costs.read")) return result;
+        // Role changes must not expose old cost snapshots through the generic self-audit endpoint.
+        return new AuditPage(result.items().stream().map(e -> "PRODUCT_COST".equals(e.resourceType())
+                ? new AuditTypes.AuditEvent(e.id(), e.category(), e.action(), e.actorUserId(), e.actorLoginName(),
+                    e.actorDisplayName(), e.resourceType(), e.resourceId(), e.outcome(), null, null,
+                    "成本操作（当前角色无成本查看权限）", e.occurredAt()) : e).toList(),
+                result.page(), result.size(), result.totalElements(), result.totalPages());
     }
 }

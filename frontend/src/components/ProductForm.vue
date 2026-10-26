@@ -478,8 +478,8 @@ onMounted(loadReferences)
               <strong>{{ materialName(link.materialId) }}</strong><label>标准用量<input
                 v-model.number="link.standardQuantity"
                 type="number"
-                min="0.0001"
-                step="0.0001"
+                min="0.0000000001"
+                step="any"
                 required
               ></label><label>单位<input
                 v-model="link.unit"

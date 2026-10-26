@@ -86,6 +86,7 @@ class IamControllerTest {
     @Test
     void usesTheApprovedMvpCapabilityContract() {
         assertThat(IamTypes.capabilities(Role.ADMIN)).containsExactlyInAnyOrder(
+                "costs.read", "costs.write", "costs.publish", "costs.export",
                 "system.users.manage", "products.read", "products.write", "materials.read", "materials.write",
                 "inventory.read", "inventory.write", "selection.read", "selection.write", "watch.read",
                 "watch.write", "imports.read", "imports.template.download", "imports.validate", "imports.commit",
@@ -93,6 +94,7 @@ class IamControllerTest {
                 "dashboard.shipments.manage", "dashboard.pending-products.manage", "suppliers.read", "suppliers.write",
                 "purchases.read", "purchases.write", "purchases.receive", "customers.read", "customers.write");
         assertThat(IamTypes.capabilities(Role.PRODUCT_MATERIAL)).containsExactlyInAnyOrder(
+                "costs.read", "costs.write", "costs.export",
                 "products.read", "products.write", "materials.read", "materials.write", "inventory.read",
                 "inventory.write", "selection.read", "watch.read", "imports.read", "imports.template.download",
                 "imports.validate", "imports.commit", "imports.cancel", "imports.result.download",

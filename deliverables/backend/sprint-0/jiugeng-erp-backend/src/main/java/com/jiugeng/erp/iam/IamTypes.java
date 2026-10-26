@@ -23,6 +23,7 @@ final class IamTypes {
     static Set<String> capabilities(Role role) {
         return switch (role) {
             case ADMIN -> Set.of(
+                    "costs.read", "costs.write", "costs.publish", "costs.export",
                     "system.users.manage", "products.read", "products.write", "materials.read", "materials.write",
                     "inventory.read", "inventory.write", "selection.read", "selection.write", "watch.read",
                     "watch.write", "imports.read", "imports.template.download", "imports.validate", "imports.commit",
@@ -30,6 +31,7 @@ final class IamTypes {
                     "dashboard.shipments.manage", "dashboard.pending-products.manage", "suppliers.read",
                     "suppliers.write", "purchases.read", "purchases.write", "purchases.receive", "customers.read", "customers.write");
             case PRODUCT_MATERIAL -> Set.of(
+                    "costs.read", "costs.write", "costs.export",
                     "products.read", "products.write", "materials.read", "materials.write", "inventory.read",
                     "inventory.write", "selection.read", "watch.read", "imports.read", "imports.template.download",
                     "imports.validate", "imports.commit", "imports.cancel", "imports.result.download",

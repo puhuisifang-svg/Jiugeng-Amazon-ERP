@@ -34,6 +34,19 @@ public class CollectionService {
         jdbc.sql("UPDATE collection_job SET status='CANCELLED',reason='配置已变更' WHERE schedule_id=:sid AND status IN ('QUEUED','RETRY','RUNNING')").param("sid",sid).update();
         return schedules().stream().filter(v->v.id().equals(sid)).findFirst().orElseThrow();
     });}
+    /** Business action: enqueue a bounded public-page read; never performs network I/O in the request. */
+    public void enqueue(String kind,String targetId){
+        if(adapter(AmazonPublicAdapter.SOURCE,kind).isEmpty())return;
+        tx.executeWithoutResult(s->{lock();port(kind).prepare(targetId);
+            var existing=schedules().stream().filter(v->v.kind().equals(kind)&&v.targetId().equals(targetId)).findFirst();
+            if(existing.isEmpty()){configure(kind,targetId,AmazonPublicAdapter.SOURCE,true,null);return;}
+            var schedule=existing.get();
+            if(!schedule.provider().equals(AmazonPublicAdapter.SOURCE)||!schedule.enabled()){configure(kind,targetId,AmazonPublicAdapter.SOURCE,true,schedule.version());return;}
+            if(jdbc.sql("SELECT COUNT(*) FROM collection_job WHERE schedule_id=:id AND status IN ('QUEUED','RUNNING','RETRY')").param("id",schedule.id()).query(Long.class).single()==0)
+                jdbc.sql("UPDATE collection_schedule SET next_at=:now WHERE id=:id").param("id",schedule.id()).param("now",Timestamp.from(Instant.now())).update();
+        });
+    }
+    List<Map<String,Object>> targetStatus(String kind){return jdbc.sql("SELECT s.target_id AS targetId,s.next_at AS nextAt,s.enabled,j.status,j.reason,j.created_at AS createdAt FROM collection_schedule s LEFT JOIN collection_job j ON j.id=(SELECT j2.id FROM collection_job j2 WHERE j2.schedule_id=s.id ORDER BY j2.created_at DESC,j2.id DESC LIMIT 1) WHERE s.kind=:kind").param("kind",kind).query().listOfRows();}
     /** Called periodically; network collection happens outside transactions. Leases are fenced at result commit. */
     public void tick(){
         tx.executeWithoutResult(s->{lock();Instant now=Instant.now();
@@ -58,7 +71,7 @@ public class CollectionService {
             CollectionAdapter.Target target;
             try{target=port(schedule.kind()).prepare(schedule.targetId());}catch(ResponseStatusException e){cancel(job.id());return null;}
             if(!schedule.enabled()||schedule.version()!=job.scheduleVersion()||target.version()!=job.targetVersion()){cancel(job.id());return null;}
-            if(adapter(schedule.provider(),schedule.kind()).isEmpty())return null;
+            if(adapter(schedule.provider(),schedule.kind()).isEmpty()){cancel(job.id());return null;}
             String lease=UUID.randomUUID().toString();
             jdbc.sql("UPDATE collection_job SET status='RUNNING',attempts=attempts+1,lease_token=:lease,lease_until=:until WHERE id=:id")
                 .param("id",job.id()).param("lease",lease).param("until",Timestamp.from(Instant.now().plusSeconds(300))).update();
@@ -81,7 +94,7 @@ public class CollectionService {
             boolean retry=e instanceof CollectionAdapter.CollectionFailure f&&f.retryable()&&claim.job().attempts()<3;
             long delay=retry?new long[]{60,300,1800}[Math.min(claim.job().attempts(),2)]:0;
             if(e instanceof CollectionAdapter.CollectionFailure f)delay=Math.max(delay,Math.min(Math.max(0,f.retryAfterSeconds()),86400));
-            finish(claim,retry?"RETRY":"FAILED",retry?"来源暂不可用，等待重试":"采集或契约校验失败，请核查来源");
+            finish(claim,retry?"RETRY":"FAILED",e instanceof CollectionAdapter.CollectionFailure ? e.getMessage() : "采集或契约校验失败，保留原基线");
             jdbc.sql("UPDATE collection_job SET available_at=:at WHERE id=:id").param("id",claim.job().id()).param("at",Timestamp.from(Instant.now().plusSeconds(delay))).update();
             if(!retry)notify(claim,"采集失败，请核查来源和授权");
         });}

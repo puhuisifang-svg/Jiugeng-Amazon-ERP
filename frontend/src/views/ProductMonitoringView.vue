@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PublicCollectionStatus from '@/components/PublicCollectionStatus.vue'
 import CollectionPanel from '@/components/CollectionPanel.vue'
 import ListPagination from '@/components/ListPagination.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
@@ -151,12 +152,18 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
 
 <template>
   <section class="monitor-page page-stack">
+    <PublicCollectionStatus
+      :writable="true"
+      kind="PRODUCT"
+      :targets="(isDetail && detail ? [detail.target] : rows).map(r=>({id:r.id,label:r.asin,enabled:r.enabled}))"
+      @updated="!busy && !selected.length && load()"
+    />
     <CollectionPanel
       kind="PRODUCT"
       :targets="rows.map(r => ({id:r.id,label:r.asin}))"
     />
     <div class="monitor-intro">
-      <div><span class="monitor-eyebrow">AMAZON · US</span><h2>{{ isDetail ? '商品观测详情' : '产品监控' }}</h2><p>持续记录商品变化，让每一次判断都有依据。</p></div><span class="monitor-source-note">人工观测 / 合成演示 · 尚未接入自动采集</span>
+      <div><span class="monitor-eyebrow">AMAZON · US</span><h2>{{ isDetail ? '商品观测详情' : '产品监控' }}</h2><p>持续记录商品变化，让每一次判断都有依据。</p></div><span class="monitor-source-note">亚马逊前台观测 · 每日更新 · 失败状态可查</span>
     </div>
     <SuccessToast :message="notice" />
     <p
@@ -384,7 +391,7 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
                     :colspan="columns.length + 5"
                     class="monitor-empty"
                   >
-                    <h3>暂无监控商品</h3><p>添加美国站 ASIN，录入首次观测后即可建立基线。</p><button @click="show('create')">
+                    <h3>暂无监控商品</h3><p>添加美国站子 ASIN 后自动采集，首次成功后建立基线。</p><button @click="show('create')">
                       添加监控
                     </button>
                   </td>
@@ -517,7 +524,7 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
         class="monitor-form"
         @submit.prevent="create"
       >
-        <p>美国站 · 每批最多 100 条。新增后等待人工观测，不自动采集。</p><label>ASIN<textarea
+        <p>美国站 · 每批最多 100 条。新增后自动排队读取亚马逊前台，请在列表查看采集状态。</p><label>ASIN<textarea
           v-model="createAsins"
           required
           rows="5"

@@ -15,6 +15,7 @@ class CollectionController {
     CollectionController(CollectionService service,JdbcClient jdbc,TransactionTemplate tx){this.service=service;this.jdbc=jdbc;this.tx=tx;}
     record Configuration(String kind,String targetId,String provider,boolean enabled,Long version){}
     @GetMapping("/status") @PreAuthorize("isAuthenticated()") Map<String,Object> status(){return Map.of("sources",service.sources(),"state",service.sources().stream().anyMatch(CollectionService.Source::approved)?"CONFIGURED":"WAITING_SOURCE","mode","US · America/Los_Angeles · 每日调度");}
+    @GetMapping("/targets") @PreAuthorize("isAuthenticated()") Object targets(@RequestParam String kind){return service.targetStatus(kind);}
     @GetMapping("/schedules") @PreAuthorize("hasAuthority('system.users.manage')") Object schedules(){return service.schedules();}
     @GetMapping("/jobs") @PreAuthorize("hasAuthority('system.users.manage')") Object jobs(){return service.jobs();}
     @PutMapping("/schedules") @PreAuthorize("hasAuthority('system.users.manage')") Object configure(@RequestBody Configuration c){return service.configure(c.kind(),c.targetId(),c.provider(),c.enabled(),c.version());}
@@ -26,5 +27,5 @@ class CollectionController {
 @Configuration @Profile("!test & !mock") @EnableScheduling
 class CollectionScheduling {
     private final CollectionService service;CollectionScheduling(CollectionService service){this.service=service;}
-    @Scheduled(fixedDelayString="${erp.collection.poll-ms:60000}",initialDelay=30000) void poll(){service.tick();}
+    @Scheduled(fixedDelayString="${erp.collection.poll-ms:5000}",initialDelay=30000) void poll(){service.tick();}
 }

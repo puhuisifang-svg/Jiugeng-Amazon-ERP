@@ -25,7 +25,7 @@ async function setup(path = '/product-monitoring') {
 describe('product monitoring workflow', () => {
   it('shows honest source status and clears selection when paging', async () => {
     const w = await setup()
-    expect(w.text()).toContain('尚未接入自动采集')
+    expect(w.text()).toContain('亚马逊前台观测')
     expect(w.text()).toContain('待首次观测')
     await w.get('[aria-label="选择 B0TEST0001"]').setValue(true)
     expect(w.text()).toContain('已选 1 条')

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
+import PublicCollectionStatus from '@/components/PublicCollectionStatus.vue'
+import { apiRequest } from '@/api/client'
 import CollectionPanel from '@/components/CollectionPanel.vue'
 import WatchStoreDetail from '@/components/WatchStoreDetail.vue'
 import ListPagination from '@/components/ListPagination.vue'
@@ -23,7 +25,7 @@ const error = ref('')
 const success = ref('')
 const writable = computed(() => session.canAccess(['watch.write']))
 const formal = runtimeConfig.authMode === 'password'
-const storeKey = ref(''); const storeName = ref(''); const sourceUrl = ref('')
+const storeName = ref(''); const sourceUrl = ref('')
 const snapshots = ref<Record<string, string>>({})
 
 async function load() {
@@ -54,8 +56,8 @@ async function run(item: WatchStoreDto, mode: WatchRunMode) {
 async function createStore() {
   error.value = ''; success.value = ''
   try {
-    await domainApi.createWatchStore({ storeKey: storeKey.value.trim(), storeName: storeName.value.trim(), sourceUrl: sourceUrl.value.trim() })
-    storeKey.value = ''; storeName.value = ''; sourceUrl.value = ''; success.value = '监控店铺已登记。'; await load()
+    await apiRequest('/v1/watch/stores/from-url', { method:'POST', body:JSON.stringify({url:sourceUrl.value.trim(),name:storeName.value.trim()}) })
+    storeName.value = ''; sourceUrl.value = ''; success.value = '监控店铺已登记。'; await load()
   } catch { error.value = '店铺登记失败，请检查唯一标识和 HTTPS 链接。' }
 }
 
@@ -70,6 +72,13 @@ onMounted(load)
       </RouterLink>
     </div>
     <SyntheticNotice v-if="!formal" />
+    <PublicCollectionStatus
+      v-if="formal"
+      kind="STORE"
+      :writable="writable"
+      :targets="items.map(s=>({id:s.id,label:s.storeName,enabled:s.status==='ACTIVE'}))"
+      @updated="!selectedStore && load()"
+    />
     <CollectionPanel
       v-if="formal"
       kind="STORE"
@@ -108,14 +117,8 @@ onMounted(load)
       class="panel operation-form"
       @submit.prevent="createStore"
     >
-      <h2>登记监控店铺</h2><label>店铺标识<input
-        v-model="storeKey"
-        required
-        maxlength="100"
-      ></label>
-      <label>店铺名称<input
+      <h2>添加对标店铺</h2><label>店铺名称（可选）<input
         v-model="storeName"
-        required
         maxlength="200"
       ></label>
       <label class="form-wide">亚马逊店铺地址<input
@@ -125,7 +128,7 @@ onMounted(load)
         placeholder="https://www.amazon.com/sp?seller=..."
       ></label>
       <button type="submit">
-        登记店铺
+        添加并开始采集
       </button>
     </form>
     <p
@@ -149,45 +152,48 @@ onMounted(load)
           详情 / 设置
         </button>
       </div>
-      <p>人工有效基线：{{ item.baselineRunId ?? '尚未建立' }} · ASIN 数：{{ item.baselineAsinCount }}</p>
+      <details>
+        <summary>人工补录（可选）</summary>
+        <p>人工有效基线：{{ item.baselineRunId ?? '尚未建立' }} · ASIN 数：{{ item.baselineAsinCount }}</p>
+        <label
+          v-if="formal && writable"
+          class="form-wide ui-snapshot-label"
+        >人工 ASIN 快照（空格、逗号或换行分隔，最多 1000 行）
+          <textarea
+            v-model="snapshots[item.id]"
+            placeholder="B0..."
+          />
+        </label>
+        <div
+          v-if="writable"
+          class="inline-actions"
+        >
+          <button
+            :disabled="busyId === item.id || item.status !== 'ACTIVE'"
+            type="button"
+            @click="run(item, 'COMPLETE')"
+          >
+            {{ formal ? '提交完整快照' : '模拟完整快照' }}
+          </button>
+          <button
+            :disabled="busyId === item.id || item.status !== 'ACTIVE'"
+            type="button"
+            @click="run(item, 'INCOMPLETE')"
+          >
+            {{ formal ? '提交不完整快照' : '模拟不完整快照' }}
+          </button>
+          <button
+            :disabled="busyId === item.id || item.status !== 'ACTIVE'"
+            type="button"
+            @click="run(item, 'FAILED')"
+          >
+            {{ formal ? '登记失败快照' : '模拟失败快照' }}
+          </button>
+        </div>
+      </details>
       <p v-if="item.lastRunId">
-        最近运行：{{ item.lastRunId }} · {{ item.lastRunStatus }} · 完整性 {{ item.lastIntegrityStatus }} · 决策 {{ item.lastDecision }}
+        最近采集：{{ item.lastRunAt }} · {{ item.lastRunStatus }}（详情中查看在线产品）
       </p>
-      <label
-        v-if="formal && writable"
-        class="form-wide ui-snapshot-label"
-      >人工 ASIN 快照（空格、逗号或换行分隔，最多 1000 行）
-        <textarea
-          v-model="snapshots[item.id]"
-          placeholder="B0..."
-        />
-      </label>
-      <div
-        v-if="writable"
-        class="inline-actions"
-      >
-        <button
-          :disabled="busyId === item.id || item.status !== 'ACTIVE'"
-          type="button"
-          @click="run(item, 'COMPLETE')"
-        >
-          {{ formal ? '提交完整快照' : '模拟完整快照' }}
-        </button>
-        <button
-          :disabled="busyId === item.id || item.status !== 'ACTIVE'"
-          type="button"
-          @click="run(item, 'INCOMPLETE')"
-        >
-          {{ formal ? '提交不完整快照' : '模拟不完整快照' }}
-        </button>
-        <button
-          :disabled="busyId === item.id || item.status !== 'ACTIVE'"
-          type="button"
-          @click="run(item, 'FAILED')"
-        >
-          {{ formal ? '登记失败快照' : '模拟失败快照' }}
-        </button>
-      </div>
     </article>
     <ListPagination
       v-if="formal"

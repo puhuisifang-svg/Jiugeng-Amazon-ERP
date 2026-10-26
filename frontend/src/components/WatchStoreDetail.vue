@@ -9,7 +9,7 @@ import UnsavedChangesDialog from './UnsavedChangesDialog.vue'
 const props = defineProps<{ store: WatchStoreDto | undefined; writable: boolean }>()
 const emit = defineEmits<{ close: []; changed: [] }>()
 interface Detail { store: WatchStoreDto; runs: { id: string; completedAt: string; decision: string; reasonCode: string }[]; products: { asin: string; firstDetectedAt: string; online: boolean; source: string }[]; automaticProducts: { provider: string; asin: string; title: string; firstAt: string; lastAt: string; missingCount: number; missingAt: string | null }[] }
-const detail = ref<Detail>(), dialog = ref<HTMLDialogElement>(), error = ref(''), busy = ref(false), tab = ref('manual'), q = ref(''), page = ref(1), size = ref(20), unsaved = ref(false)
+const detail = ref<Detail>(), dialog = ref<HTMLDialogElement>(), error = ref(''), busy = ref(false), tab = ref('online'), q = ref(''), page = ref(1), size = ref(20), unsaved = ref(false)
 const draft = ref({ name: '', owner: '', remark: '', enabled: true }), baseline = ref('')
 const products = computed(() => detail.value?.products.filter(p => !q.value || p.asin.includes(q.value.toUpperCase())) ?? [])
 const auto = computed(() => detail.value?.automaticProducts.filter(p => (tab.value === 'missing' ? p.missingCount >= 2 : p.missingCount < 2) && (!q.value || p.asin.includes(q.value.toUpperCase()))) ?? [])
@@ -17,7 +17,7 @@ const total = computed(() => tab.value === 'manual' ? products.value.length : au
 watch([q, tab, size], () => { page.value = 1 })
 watch(() => props.store, async value => {
   if (!value) return
-  error.value = ''; detail.value = undefined; tab.value = 'manual'; page.value = 1
+  error.value = ''; detail.value = undefined; tab.value = 'online'; page.value = 1
   draft.value = { name: value.storeName, owner: value.owner ?? '', remark: value.remark ?? '', enabled: value.status === 'ACTIVE' }; baseline.value = JSON.stringify(draft.value)
   await nextTick(); dialog.value?.showModal()
   try { detail.value = await apiRequest<Detail>(`/v1/watch/stores/${value.id}`) } catch (e) { error.value = String(e) }

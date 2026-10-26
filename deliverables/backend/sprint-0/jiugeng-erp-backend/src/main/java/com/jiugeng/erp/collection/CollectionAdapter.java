@@ -15,7 +15,8 @@ public interface CollectionAdapter {
     record Observation(Instant observedAt,String quality,boolean pagesComplete,JsonNode fields) {}
     final class CollectionFailure extends RuntimeException {
         private final boolean retryable; private final long retryAfterSeconds;
-        public CollectionFailure(boolean retryable,long retryAfterSeconds){super("数据源调用失败");this.retryable=retryable;this.retryAfterSeconds=retryAfterSeconds;}
+        public CollectionFailure(boolean retryable,long retryAfterSeconds){this("数据源调用失败",retryable,retryAfterSeconds);}
+        public CollectionFailure(String message,boolean retryable,long retryAfterSeconds){super(message);this.retryable=retryable;this.retryAfterSeconds=retryAfterSeconds;}
         public boolean retryable(){return retryable;} public long retryAfterSeconds(){return retryAfterSeconds;}
     }
 }

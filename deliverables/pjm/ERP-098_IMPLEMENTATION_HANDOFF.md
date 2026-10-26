@@ -45,3 +45,15 @@ P1/P2 未实现。本次未改变原有历史评分，列表明确区分历史�
 用户明确数据源为亚马逊公开前台，非自营卖家API；此前供应方/API前置假设撤销，PJM已确认继续实施。已重新只读查看赛狐竞品添加、上新添加和店铺商品详情，并在PRD第0节记录可见字段与业务边界。单次亚马逊商品页无登录读取返回200及商品标题节点，仅为可行性探测，不是采集服务交付。
 
 菜单已合并：仅“上新监控”作为对标店铺入口，原独立上新事件页成为内部“上新记录”，保留旧路由/数据/权限与返回路径；不再出现两个重复一级入口。前端quality通过（81文件330测试、lint、类型检查及构建），diff check通过。前端副本更新至隔离5188，后端未变更/重启。真实公开页采集器、店铺分页完整性与周期更新尚待实现，不能继续称为“等待用户提供API”。
+
+## 2026-10-26 Amazon public-page implementation (ERP-098-B)
+
+This increment replaces WAITING_SOURCE for the isolated local deployment with an explicitly enabled `amazon-public-us` adapter. No Amazon seller API credentials are required. Product creation and seller-URL creation enqueue collection; daily schedules and explicit collection actions use the existing durable worker. The UI displays collection state/failure reasons, refreshes successful observations, defaults store detail to automatically observed products, and collapses optional manual snapshots.
+
+Local acceptance entry: http://127.0.0.1:5188/product-monitoring and /watch/stores, backend 8188. PM confirmed this entry on 2026-10-26. The user's 5173 frontend points to the older 8080 backend: collection endpoints return 404. A development-only compatibility message links to 5188. Shared 8080/public deployment was not changed. The two deployments use different databases; existing 5173 records are not migrated.
+
+Live implementation evidence: one public product automatically populated title, brand, image, bullets and observed time. The page did not expose a price; it remains null. One reference seller opened from Sellfox successfully created a public-source baseline containing 23 products, with a successful durable job. This establishes initial collection, not seven-day reliability or independent acceptance. Real identifiers and raw evidence remain in ignored local runtime files, not committed fixtures.
+
+Validation: backend `./mvnw clean verify` passed (222 tests, 1 skipped); frontend `ERP_BUILD_OUT_DIR=/tmp/erp098-public-dist pnpm quality` passed (330 tests); browser verified real product collection and store status. `git diff --check` required before commit.
+
+Limits requiring follow-up: US marketplace only; seller/me URL required (brand landing pages without seller IDs are rejected). Store traversal is bounded to 20 pages/200 seconds and refuses incomplete pagination. Search results reflect Amazon's publicly exposed catalog and are not proof of a seller's exhaustive inventory. Empty results/CAPTCHA/failed traversal do not update the baseline. Large-store traversal, automatic new-product changes across multiple daily snapshots, worker durability under slow streaming responses, and sustained reliability remain to be independently verified. No CAPTCHA bypass, API/vendor account, or synthetic substitution is implemented. Scope is not declared fully accepted or publicly released.

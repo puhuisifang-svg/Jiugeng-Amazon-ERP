@@ -19,22 +19,25 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class ShipmentDispatchService {
     record Dispatch(String id,String todayShipmentId,String productId,String productCode,String productName,String skuCodes,
-                    long quantity,long boxCount,String remark,LocalDate plannedDate,LocalDate businessDate,Instant dispatchedAt,String actorName,String variantId,com.jiugeng.erp.customer.CustomerProductLookup.ShippingProduct customerProduct,ProductLookup.NamePresentation namePresentation) {}
-    record Summary(long records,long quantity,long boxCount,long products) {}
-    record Daily(LocalDate date,long records,long quantity,long boxCount) {}
-    record ProductTotal(String productId,String productCode,String productName,long records,long quantity,long boxCount,String variantId,com.jiugeng.erp.customer.CustomerProductLookup.ShippingProduct customerProduct,ProductLookup.NamePresentation namePresentation) {}
-    record Statistics(Summary summary,List<Daily> daily,List<ProductTotal> products,DashboardTypes.Page<Dispatch> details) {}
+                    java.math.BigDecimal quantity,long boxCount,String remark,LocalDate plannedDate,LocalDate businessDate,Instant dispatchedAt,String actorName,String variantId,com.jiugeng.erp.customer.CustomerProductLookup.ShippingProduct customerProduct,ProductLookup.NamePresentation namePresentation,String quantityUnit,DashboardTypes.OrderReference orderAllocation) {}
+    record Summary(long records,java.math.BigDecimal quantity,long boxCount,long products) {}
+    record Daily(LocalDate date,long records,java.math.BigDecimal quantity,long boxCount,String quantityUnit) {}
+    record ProductTotal(String productId,String productCode,String productName,long records,java.math.BigDecimal quantity,long boxCount,String variantId,com.jiugeng.erp.customer.CustomerProductLookup.ShippingProduct customerProduct,ProductLookup.NamePresentation namePresentation,String quantityUnit) {}
+    record UnitTotal(String quantityUnit,java.math.BigDecimal quantity) {}
+    record Statistics(Summary summary,List<Daily> daily,List<ProductTotal> products,DashboardTypes.Page<Dispatch> details,List<UnitTotal> quantities) {}
     private final JdbcClient jdbc;
     private final DashboardRepository repository;
     private final ProductLookup products;
     private final AuditTrail audit;
     private final Clock clock;
+    private final OrderShipmentService orderShipments;
     private final com.jiugeng.erp.customer.CustomerProductLookup customerProducts;
-    ShipmentDispatchService(JdbcClient jdbc,DashboardRepository repository,ProductLookup products,AuditTrail audit,Clock clock,com.jiugeng.erp.customer.CustomerProductLookup customerProducts) {
+    ShipmentDispatchService(JdbcClient jdbc,DashboardRepository repository,ProductLookup products,AuditTrail audit,Clock clock,com.jiugeng.erp.customer.CustomerProductLookup customerProducts,OrderShipmentService orderShipments) {
+        this.orderShipments=orderShipments;
         this.jdbc=jdbc;this.repository=repository;this.products=products;this.audit=audit;this.clock=clock;this.customerProducts=customerProducts;
     }
     private DashboardException conflict(String message) { return new DashboardException(409,"SHIPMENT_DISPATCH_CONFLICT",message); }
-    @Transactional
+    @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     Dispatch dispatch(String id,long version,String key,AuthenticatedActor actor) {
         if(key==null || key.isBlank() || key.length()>128) throw new DashboardException(400,"DISPATCH_KEY_INVALID","请求标识无效");
         // Lock the source before checking the ledger; concurrent confirmations cannot double-count.
@@ -68,6 +71,7 @@ class ShipmentDispatchService {
             .param("actor",actor.userId()).param("actorName",actor.displayName()).param("key",key).param("version",version).param("variant",source.variantId()).param("customerProduct",source.customerProduct().id()).param("customerSnapshot",repository.customerJson(source.customerProduct())).update();
         if(jdbc.sql("UPDATE dashboard_today_shipment SET status='SHIPPED',version=version+1,updated_at=:at,updated_by=:actor WHERE id=:id AND status='ACTIVE' AND version=:version")
             .param("at",now).param("actor",actor.userId()).param("id",id).param("version",version).update()!=1) throw conflict("记录已变化");
+        orderShipments.dispatch(id,source.quantity(),source.customerProduct().id(),actor);
         var result=jdbc.sql("SELECT * FROM dashboard_shipment_dispatch WHERE id=:id").param("id",dispatchId).query(this::map).single();
         audit.record(new AuditTrail.BusinessOperation(actor.userId(),actor.loginName(),actor.displayName(),"SHIPMENT_DISPATCH","TODAY_SHIPMENT",id,true,
             Map.of("status","ACTIVE","version",version),Map.of("status","SHIPPED","dispatchId",dispatchId,"quantity",source.quantity(),"boxCount",source.boxCount()),"确认发货，已计入发货统计（不联动库存或物流）"));
@@ -75,28 +79,34 @@ class ShipmentDispatchService {
     }
 
     @Transactional(readOnly=true, isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
-    Statistics statistics(LocalDate from,LocalDate to,String keyword,int page,int size) {
+    Statistics statistics(LocalDate from,LocalDate to,String keyword,String orderId,int page,int size) {
         if(from.isAfter(to) || java.time.temporal.ChronoUnit.DAYS.between(from,to)>365)
             throw new DashboardException(400,"DISPATCH_DATE_RANGE_INVALID","开始日期不能晚于结束日期，且查询范围不能超过 366 天");
         String where=" WHERE business_date>=:from AND business_date<=:to";
         Map<String,Object> params=new HashMap<>();params.put("from",from);params.put("to",to);
+        if(orderId!=null&&!orderId.isBlank()) {
+            var ids=orderShipments.allocationIds(orderId);
+            if(ids.isEmpty())where+=" AND 1=0";
+            else {where+=" AND order_allocation_id IN (:allocations)";params.put("allocations",ids);}
+        }
         if(keyword!=null && !keyword.isBlank()) {
             where+=" AND (LOWER(product_code) LIKE :keyword ESCAPE '!' OR LOWER(product_name) LIKE :keyword ESCAPE '!' OR LOWER(sku_codes) LIKE :keyword ESCAPE '!' OR LOWER(COALESCE(customer_snapshot,'')) LIKE :keyword ESCAPE '!' OR LOWER(COALESCE(remark,'')) LIKE :keyword ESCAPE '!')";
             params.put("keyword","%"+keyword.trim().toLowerCase(java.util.Locale.ROOT).replace("!","!!").replace("%","!%").replace("_","!_")+"%");
         }
         String table=" FROM dashboard_shipment_dispatch"+where;
         var summary=jdbc.sql("SELECT COUNT(*) records,COALESCE(SUM(quantity),0) quantity,COALESCE(SUM(box_count),0) boxes,COUNT(DISTINCT COALESCE(customer_product_id,variant_id,product_id)) products"+table)
-            .params(params).query((rs,n)->new Summary(rs.getLong("records"),rs.getLong("quantity"),rs.getLong("boxes"),rs.getLong("products"))).single();
-        var daily=jdbc.sql("SELECT business_date,COUNT(*) records,SUM(quantity) quantity,SUM(box_count) boxes"+table+" GROUP BY business_date ORDER BY business_date DESC")
-            .params(params).query((rs,n)->new Daily(rs.getDate("business_date").toLocalDate(),rs.getLong("records"),rs.getLong("quantity"),rs.getLong("boxes"))).list();
-        var grouped=jdbc.sql("SELECT product_id,variant_id,customer_product_id,MAX(customer_snapshot) customer_snapshot,MAX(product_code) code,MAX(product_name) name,COUNT(*) records,SUM(quantity) quantity,SUM(box_count) boxes"+table+" GROUP BY product_id,variant_id,customer_product_id ORDER BY quantity DESC,product_id,variant_id,customer_product_id LIMIT 10")
-            .params(params).query((rs,n)->new ProductTotal(rs.getString("product_id"),rs.getString("code"),rs.getString("name"),rs.getLong("records"),rs.getLong("quantity"),rs.getLong("boxes"),rs.getString("variant_id"),repository.customerSnapshot(rs.getString("customer_snapshot")),products.namePresentation(rs.getString("product_id"),rs.getString("variant_id"),rs.getString("name")))).list();
+            .params(params).query((rs,n)->new Summary(rs.getLong("records"),rs.getBigDecimal("quantity"),rs.getLong("boxes"),rs.getLong("products"))).single();
+        var daily=jdbc.sql("SELECT business_date,quantity_unit,COUNT(*) records,SUM(quantity) quantity,SUM(box_count) boxes"+table+" GROUP BY business_date,quantity_unit ORDER BY business_date DESC,quantity_unit")
+            .params(params).query((rs,n)->new Daily(rs.getDate("business_date").toLocalDate(),rs.getLong("records"),rs.getBigDecimal("quantity"),rs.getLong("boxes"),rs.getString("quantity_unit"))).list();
+        var grouped=jdbc.sql("SELECT product_id,variant_id,customer_product_id,quantity_unit,MAX(customer_snapshot) customer_snapshot,MAX(product_code) code,MAX(product_name) name,COUNT(*) records,SUM(quantity) quantity,SUM(box_count) boxes"+table+" GROUP BY product_id,variant_id,customer_product_id,quantity_unit ORDER BY quantity DESC,product_id,variant_id,customer_product_id LIMIT 10")
+            .params(params).query((rs,n)->new ProductTotal(rs.getString("product_id"),rs.getString("code"),rs.getString("name"),rs.getLong("records"),rs.getBigDecimal("quantity"),rs.getLong("boxes"),rs.getString("variant_id"),repository.customerSnapshot(rs.getString("customer_snapshot")),products.namePresentation(rs.getString("product_id"),rs.getString("variant_id"),rs.getString("name")),rs.getString("quantity_unit"))).list();
+        var quantities=jdbc.sql("SELECT quantity_unit,SUM(quantity) quantity"+table+" GROUP BY quantity_unit ORDER BY quantity_unit").params(params).query((r,n)->new UnitTotal(r.getString("quantity_unit"),r.getBigDecimal("quantity"))).list();
         params.put("limit",size);params.put("offset",(long)page*size);
         var rows=jdbc.sql("SELECT *"+table+" ORDER BY dispatched_at DESC,id LIMIT :limit OFFSET :offset").params(params).query(this::map).list();
-        return new Statistics(summary,daily,grouped,DashboardTypes.Page.of(rows,page,size,summary.records()));
+        return new Statistics(summary,daily,grouped,DashboardTypes.Page.of(rows,page,size,summary.records()),quantities);
     }
     private Dispatch map(ResultSet rs,int index) throws SQLException {
         return new Dispatch(rs.getString("id"),rs.getString("today_shipment_id"),rs.getString("product_id"),rs.getString("product_code"),rs.getString("product_name"),rs.getString("sku_codes"),
-            rs.getLong("quantity"),rs.getLong("box_count"),rs.getString("remark"),rs.getDate("planned_date").toLocalDate(),rs.getDate("business_date").toLocalDate(),rs.getTimestamp("dispatched_at").toInstant(),rs.getString("actor_name"),rs.getString("variant_id"),repository.customerSnapshot(rs.getString("customer_snapshot")),products.namePresentation(rs.getString("product_id"),rs.getString("variant_id"),rs.getString("product_name")));
+            rs.getBigDecimal("quantity"),rs.getLong("box_count"),rs.getString("remark"),rs.getDate("planned_date").toLocalDate(),rs.getDate("business_date").toLocalDate(),rs.getTimestamp("dispatched_at").toInstant(),rs.getString("actor_name"),rs.getString("variant_id"),repository.customerSnapshot(rs.getString("customer_snapshot")),repository.presentation(rs,"product_name"),rs.getString("quantity_unit"),repository.orderAllocation(rs.getString("order_allocation_id")));
     }
 }

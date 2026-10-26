@@ -2,6 +2,7 @@ import { domainApi } from '@/api/domain'
 import { catalogApi } from '@/api/catalog'
 import type { TodayShipment } from '@/api/dashboard'
 import { nameRuns } from '@/utils/productName'
+import { shipmentUnit, shipmentQuantitySummary } from './shipmentUnits'
 
 type ExportRun = { text: string; color: string; font: string; x: number; width: number }
 export function wrapShipmentName(context: Pick<CanvasRenderingContext2D, 'measureText' | 'font'>, item: TodayShipment, width: number): ExportRun[][] {
@@ -79,7 +80,7 @@ export async function createShipmentImage(items: TodayShipment[], date: string):
   context.fillStyle = '#172033'; context.font = 'bold 40px sans-serif'; context.fillText(title, 40, 62)
   context.fillStyle = '#dc2626'; context.fillText(`发货日期：${date}`, 40 + context.measureText(title).width, 62)
   context.font = '24px sans-serif'; context.fillStyle = '#566176'
-  context.fillText(`共 ${items.length} 条    数量：${items.reduce((sum, item) => sum + item.quantity, 0)} 套    箱数：${items.reduce((sum, item) => sum + item.boxCount, 0)} 箱`, 40, 110)
+  context.fillText(`共 ${items.length} 条    数量：${shipmentQuantitySummary(items)}    箱数：${items.reduce((sum, item) => sum + item.boxCount, 0)} 箱`, 40, 110)
   context.fillStyle = '#edf1f7'; context.fillRect(40, 140, 1520, 60)
   context.fillStyle = '#42516a'; context.font = 'bold 24px sans-serif'
   context.textBaseline = 'middle'
@@ -94,7 +95,7 @@ export async function createShipmentImage(items: TodayShipment[], date: string):
       context.fillText(run.text, 220 + run.x, center + (i - (row.name.length - 1) / 2) * 36)
     }))
     context.fillStyle = '#172033'; context.font = 'bold 26px sans-serif'
-    context.fillText(`${row.item.quantity} 套`, 650, center); context.fillText(`${row.item.boxCount} 箱`, 800, center)
+    context.fillText(`${row.item.quantity} ${shipmentUnit(row.item.quantityUnit)}`, 650, center); context.fillText(`${row.item.boxCount} 箱`, 800, center)
     context.fillStyle = '#dc2626'
     row.remark.forEach((line, i) => context.fillText(line, 960, center + (i - (row.remark.length - 1) / 2) * 36))
     if (row.image) {

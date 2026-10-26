@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { shipmentUnit } from '@/ui/shipmentUnits'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
@@ -371,7 +372,7 @@ onBeforeUnmount(() => { window.clearInterval(refreshTimer); window.removeEventLi
           :key="item.id"
           class="form-wide shipment-transfer-summary"
         >
-          产品名：{{ item.productName }}<br>发货数量：{{ item.quantity }} 套 · 发货箱数：{{ item.boxCount }}<br>备注：{{ item.remark || '—' }}
+          产品名：{{ item.productName }}<br>发货数量：{{ item.quantity }} {{ shipmentUnit(item.quantityUnit) }} · 发货箱数：{{ item.boxCount }}<br>备注：{{ item.remark || '—' }}
         </p>
         <p class="form-wide">
           请确认所列 {{ dispatchTarget.length }} 条记录实际已发货。系统逐条确认，成功后移除并计入统计，失败时保留未完成记录供重试；不会自动扣减库存或下单物流。

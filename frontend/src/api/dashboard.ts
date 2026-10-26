@@ -10,19 +10,21 @@ export type PendingProductStatus = 'PENDING' | 'COMPLETED' | 'ARCHIVED'
 export interface ShippingCustomerProduct { id: string; customerId: string; customerName: string; productId: string; variantId: string; customerProductCode: string; requirements: string }
 export interface NamePresentation { highlighted: boolean; styles?: import('@/utils/productName').NameStyleSpan[] | null }
 export interface TodayShipment {
+  orderAllocation?: Pick<import('./orders').OrderAllocation, 'id' | 'orderId' | 'orderNumber'> | null
   namePresentation?: NamePresentation | null
   variantId?: string | null
   customerProduct?: ShippingCustomerProduct | null
   id: string; shipDate: string; productId: string; productCode: string; productName: string; imageId?: string
-  quantity: number; quantityUnit: 'SET'; boxCount: number; remark?: string; latestShipAt: string
+  quantity: number; quantityUnit: string; boxCount: number; remark?: string; latestShipAt: string
   status: 'ACTIVE' | 'ARCHIVED' | 'SHIPPED'; sourcePendingShipmentId?: string; version: number; createdAt: string; updatedAt: string
 }
 export interface PendingShipment {
+  orderAllocation?: Pick<import('./orders').OrderAllocation, 'id' | 'orderId' | 'orderNumber'> | null
   namePresentation?: NamePresentation | null
   variantId?: string | null
   customerProduct?: ShippingCustomerProduct | null
   id: string; plannedShipDate: string; productId: string; productCode: string; productName: string; imageId?: string
-  quantity: number; quantityUnit: 'SET'; boxCount: number; remark?: string; latestShipAt: string
+  quantity: number; quantityUnit: string; boxCount: number; remark?: string; latestShipAt: string
   status: 'PENDING' | 'TRANSFERRED_TO_TODAY' | 'ARCHIVED'; version: number; createdAt: string; updatedAt: string
 }
 export interface PendingProduct {
@@ -31,6 +33,8 @@ export interface PendingProduct {
 }
 export type DashboardItem = TodayShipment | PendingShipment | PendingProduct
 export interface ShipmentDispatch {
+  quantityUnit?: string
+  orderAllocation?: Pick<import('./orders').OrderAllocation, 'id' | 'orderId' | 'orderNumber'> | null
   namePresentation?: NamePresentation | null
   variantId?: string | null
   customerProduct?: ShippingCustomerProduct | null
@@ -39,9 +43,10 @@ export interface ShipmentDispatch {
 }
 export interface DispatchTotals { records: number; quantity: number; boxCount: number }
 export interface ShipmentStatistics {
+  quantities?: Array<{ quantityUnit: string; quantity: number }>
   summary: DispatchTotals & { products: number }
-  daily: Array<DispatchTotals & { date: string }>
-  products: Array<DispatchTotals & { namePresentation?: NamePresentation | null; productId: string; productCode: string; productName: string; variantId?: string | null; customerProduct?: ShippingCustomerProduct | null }>
+  daily: Array<DispatchTotals & { date: string; quantityUnit?: string }>
+  products: Array<DispatchTotals & { quantityUnit?: string; namePresentation?: NamePresentation | null; productId: string; productCode: string; productName: string; variantId?: string | null; customerProduct?: ShippingCustomerProduct | null }>
   details: Page<ShipmentDispatch>
 }
 export interface HomeSlice<T> { items: T[]; totalCount: number; truncated: boolean; businessDate: string; generatedAt: string }
@@ -77,7 +82,7 @@ function qs(filters: Record<string, string | number | undefined>) {
 }
 export const dashboardApi = {
   dispatch: (id: string, version: number, requestKey: string) => apiRequest<ShipmentDispatch>(`/v1/shipping/today-shipments/${encodeURIComponent(id)}/dispatch`, { method: 'POST', headers: { 'Idempotency-Key': requestKey }, body: JSON.stringify({ version }) }),
-  statistics: (filters: { from: string; to: string; keyword: string; page: number; size: number }) => apiRequest<ShipmentStatistics>(`/v1/shipping/statistics${qs(filters)}`),
+  statistics: (filters: { from: string; to: string; keyword: string; page: number; size: number; orderId?: string }) => apiRequest<ShipmentStatistics>(`/v1/shipping/statistics${qs(filters)}`),
   documents: async (scope: string, id: string, kind: ShipmentDocument['kind']) => (await raw(`/v1/shipment-documents/${scope}/${encodeURIComponent(id)}?kind=${kind}`, { method: 'GET' })).json() as Promise<ShipmentDocument[]>,
   uploadDocument: async (id: string, kind: ShipmentDocument['kind'], file: File) => {
     const body = new FormData(); body.set('kind', kind); body.set('file', file)

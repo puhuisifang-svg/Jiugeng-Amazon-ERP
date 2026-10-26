@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { shipmentUnit } from '@/ui/shipmentUnits'
+import { RouterLink } from 'vue-router'
 import ProductName from './ProductName.vue'
 import { ref, watch } from 'vue'
 import { domainApi, type ProductDetailDto } from '@/api/domain'
@@ -57,10 +59,10 @@ function date(value: string) { return new Intl.DateTimeFormat('en-CA', { timeZon
       /><small v-if="item.customerProduct">客户：{{ item.customerProduct.customerName }} · 客户编码：{{ item.customerProduct.customerProductCode || '未填' }}</small><small v-else>历史记录 · 未绑定客户商品</small><small>{{ item.variantId ? `SKU：${item.productCode}` : '历史父体记录 · 待补选 SKU' }}</small><small
         v-if="error"
         role="alert"
-      >{{ error }}</small>
+      >{{ error }}</small><small v-if="item.orderAllocation"><RouterLink :to="`/orders/customers/${item.orderAllocation.orderId}`">订单：{{ item.orderAllocation.orderNumber }}</RouterLink></small>
     </td>
     <td class="shipment-quantity">
-      {{ item.quantity.toLocaleString('zh-CN') }} <small>套</small>
+      {{ item.quantity.toLocaleString('zh-CN') }} <small>{{ shipmentUnit(item.quantityUnit) }}</small>
     </td>
     <td class="shipment-quantity">
       {{ item.boxCount }} <small>箱</small>

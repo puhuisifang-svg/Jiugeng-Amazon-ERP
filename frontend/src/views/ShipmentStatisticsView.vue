@@ -1,13 +1,16 @@
 <script setup lang="ts">
+import { shipmentUnit, shipmentQuantitySummary } from '@/ui/shipmentUnits'
 import ProductName from '@/components/ProductName.vue'
 import ListPagination from '@/components/ListPagination.vue'
 const listSize = ref(20)
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { dashboardApi, type ShipmentStatistics } from '@/api/dashboard'
 import { ApiError } from '@/api/client'
 import TableViewport from '@/components/TableViewport.vue'
 import SuccessToast from '@/components/SuccessToast.vue'
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date())
+const route = useRoute()
 const filters = reactive({ from: `${today.slice(0, 7)}-01`, to: today, keyword: '' })
 const applied = ref({ ...filters }); const page = ref(0); const result = ref<ShipmentStatistics>(); const loading = ref(false)
 const error = ref(''); const errorKey = ref(0); let sequence = 0
@@ -20,7 +23,7 @@ async function load(search = false) {
     page.value = 0; applied.value = { ...filters }
   }
   const request = ++sequence; loading.value = true; error.value = ''
-  try { const data = await dashboardApi.statistics({ ...applied.value, page: page.value, size: listSize.value }); if (request === sequence) result.value = data }
+  try { const data = await dashboardApi.statistics({ ...applied.value, page: page.value, size: listSize.value, ...(typeof route.query.orderId === 'string' ? { orderId: route.query.orderId } : {}) }); if (request === sequence) result.value = data }
   catch (e) { if (request === sequence) { result.value = undefined; errorKey.value++; error.value = e instanceof ApiError ? e.message : '统计加载失败，请重试。' } }
   finally { if (request === sequence) loading.value = false }
 }
@@ -29,6 +32,7 @@ function preset(days: number) {
   filters.from = start.toISOString().slice(0, 10); filters.to = today; void load(true)
 }
 onMounted(() => void load(true))
+watch(() => route.query.orderId, () => void load(true))
 </script>
 <template>
   <section class="page-stack shipment-statistics">
@@ -38,7 +42,13 @@ onMounted(() => void load(true))
       tone="error"
     />
     <div class="page-actions">
-      <p>按确认发货时间统计（北京时间）；仅包含已确认发货记录，不含删除或转待发货。数量单位为套，箱数单位为箱。</p>
+      <p>按确认发货时间统计（北京时间）；仅包含已确认发货记录，不含删除或转待发货。数量按单位分别汇总，箱数单位为箱。</p>
+      <RouterLink
+        v-if="route.query.orderId"
+        :to="`/orders/customers/${route.query.orderId}`"
+      >
+        当前仅显示来源订单 · 返回订单
+      </RouterLink>
     </div>
     <form
       class="panel operation-form dashboard-filters"
@@ -98,7 +108,7 @@ onMounted(() => void load(true))
           <span>发货记录数</span><strong>{{ number(result.summary.records) }}</strong><small>每次确认一条记录，非物流单数</small>
         </article>
         <article class="summary-card">
-          <span>发货数量（套）</span><strong>{{ number(result.summary.quantity) }}</strong><small>筛选范围内累计发货</small>
+          <span>发货数量</span><strong>{{ result.quantities ? shipmentQuantitySummary(result.quantities) : `${number(result.summary.quantity)} 套` }}</strong><small>筛选范围内按单位累计发货</small>
         </article>
         <article class="summary-card">
           <span>发货箱数（箱）</span><strong>{{ number(result.summary.boxCount) }}</strong><small>筛选范围内累计箱数</small>
@@ -111,12 +121,12 @@ onMounted(() => void load(true))
         <article class="panel table-panel">
           <h2>每日发货统计</h2><TableViewport>
             <table class="data-table">
-              <thead><tr><th>日期</th><th>记录数</th><th>数量（套）</th><th>箱数</th></tr></thead><tbody>
+              <thead><tr><th>日期</th><th>记录数</th><th>数量</th><th>箱数</th></tr></thead><tbody>
                 <tr
                   v-for="day in result.daily"
-                  :key="day.date"
+                  :key="day.date + (day.quantityUnit ?? 'SET')"
                 >
-                  <td>{{ day.date }}</td><td>{{ number(day.records) }}</td><td>{{ number(day.quantity) }}</td><td>{{ number(day.boxCount) }}</td>
+                  <td>{{ day.date }}</td><td>{{ number(day.records) }}</td><td>{{ number(day.quantity) }} {{ shipmentUnit(day.quantityUnit) }}</td><td>{{ number(day.boxCount) }}</td>
                 </tr><tr v-if="!result.daily.length">
                   <td colspan="4">
                     该日期范围暂无发货记录
@@ -129,10 +139,10 @@ onMounted(() => void load(true))
         <article class="panel table-panel">
           <h2>SKU 发货排行 · 前10名</h2><TableViewport>
             <table class="data-table">
-              <thead><tr><th>产品 / 编号</th><th>记录数</th><th>数量（套）</th><th>箱数</th></tr></thead><tbody>
+              <thead><tr><th>产品 / 编号</th><th>记录数</th><th>数量</th><th>箱数</th></tr></thead><tbody>
                 <tr
                   v-for="product in result.products"
-                  :key="product.customerProduct?.id || product.variantId || product.productId"
+                  :key="(product.customerProduct?.id || product.variantId || product.productId) + (product.quantityUnit ?? 'SET')"
                 >
                   <td>
                     <ProductName
@@ -140,7 +150,7 @@ onMounted(() => void load(true))
                       :styles="product.namePresentation?.styles"
                       :highlighted="product.namePresentation?.highlighted"
                     /><small>{{ product.customerProduct?.customerName || '历史记录（未绑定客户）' }}</small><small>{{ product.productCode }}{{ product.variantId ? '' : ' · 历史父体记录（未绑定 SKU）' }}</small>
-                  </td><td>{{ number(product.records) }}</td><td>{{ number(product.quantity) }}</td><td>{{ number(product.boxCount) }}</td>
+                  </td><td>{{ number(product.records) }}</td><td>{{ number(product.quantity) }} {{ shipmentUnit(product.quantityUnit) }}</td><td>{{ number(product.boxCount) }}</td>
                 </tr><tr v-if="!result.products.length">
                   <td colspan="4">
                     暂无排行数据
@@ -155,7 +165,7 @@ onMounted(() => void load(true))
         <h2>已发货明细 <small>共 {{ number(result.details.totalElements) }} 条 · 发货时快照</small></h2>
         <TableViewport>
           <table class="data-table">
-            <thead><tr><th>确认发货时间</th><th>SKU 名称 / 编号</th><th>发货 SKU</th><th>发货数量（套）</th><th>发货箱数</th><th>备注</th><th>操作人</th><th>发货记录号</th></tr></thead><tbody>
+            <thead><tr><th>确认发货时间</th><th>SKU 名称 / 编号</th><th>发货 SKU</th><th>发货数量</th><th>发货箱数</th><th>备注</th><th>操作人</th><th>发货记录号</th></tr></thead><tbody>
               <tr
                 v-for="item in result.details.items"
                 :key="item.id"
@@ -168,9 +178,16 @@ onMounted(() => void load(true))
                   /><small>{{ item.customerProduct?.customerName || '历史记录（未绑定客户）' }} · {{ item.customerProduct?.customerProductCode || '未填客户编码' }}</small><small>{{ item.productCode }}</small>
                 </td><td class="shipment-remark">
                   {{ item.variantId ? item.skuCodes : '历史父体记录（未绑定 SKU）' }}
-                </td><td>{{ number(item.quantity) }}</td><td>{{ number(item.boxCount) }}</td><td class="shipment-remark">
+                </td><td>{{ number(item.quantity) }} {{ shipmentUnit(item.quantityUnit) }}</td><td>{{ number(item.boxCount) }}</td><td class="shipment-remark">
                   {{ item.remark || '—' }}
-                </td><td>{{ item.actorName }}</td><td>{{ item.id }}</td>
+                </td><td>{{ item.actorName }}</td><td>
+                  {{ item.id }}<RouterLink
+                    v-if="item.orderAllocation"
+                    :to="`/orders/customers/${item.orderAllocation.orderId}`"
+                  >
+                    {{ item.orderAllocation.orderNumber }}
+                  </RouterLink>
+                </td>
               </tr><tr v-if="!result.details.items.length">
                 <td colspan="8">
                   暂无已发货数据

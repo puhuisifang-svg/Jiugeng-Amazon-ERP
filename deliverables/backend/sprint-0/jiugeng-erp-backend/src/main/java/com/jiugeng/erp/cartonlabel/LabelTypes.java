@@ -24,11 +24,11 @@ final class LabelTypes {
                  @Size(max=150) String destination,@Size(max=40) String carrier,@Size(max=80) String trackingNo) {}
     record Batch(@NotNull @Size(min=1,max=50) List<@Valid Entry> items,
                  @NotBlank @Pattern(regexp="[a-zA-Z0-9-]{1,36}") String requestKey) {}
-    record Snapshot(Entry entry,String customerId,String customerName,int quantity,int boxes,
+    record Snapshot(Entry entry,String customerId,String customerName,java.math.BigDecimal quantity,int boxes,
                     String unit,String shipDate,String customerProductId,Template template) {
         int pages() { return template.config().singlePage()?1:boxes; }
     }
     record Draft(String shipmentId,long shipmentVersion,String customerId,String customerName,String productName,
-                 String customerCode,int quantity,int boxes,String unit,List<Template> templates,Entry previous) {}
+                 String customerCode,java.math.BigDecimal quantity,int boxes,String unit,List<Template> templates,Entry previous,String orderReference) {}
     record Export(String id,int pages,String createdAt) {}
 }

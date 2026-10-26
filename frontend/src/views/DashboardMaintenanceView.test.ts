@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import DashboardMaintenanceView from './DashboardMaintenanceView.vue'
 
-vi.mock('vue-router', () => ({ RouterLink: { template: '<a><slot /></a>' } }))
+vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }), RouterLink: { template: '<a><slot /></a>' } }))
 
 describe('DashboardMaintenanceView in mock mode', () => {
   it('does not call formal maintenance APIs or misrepresent synthetic records', async () => {

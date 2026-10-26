@@ -1,4 +1,5 @@
 package com.jiugeng.erp.dashboard;
+import jakarta.validation.constraints.Digits;
 
 import static com.jiugeng.erp.dashboard.DashboardTypes.*;
 
@@ -53,11 +54,12 @@ class DashboardController {
 
     @GetMapping("/dashboard-maintenance/today-shipments") @PreAuthorize("hasAuthority('dashboard.shipments.manage')")
     Page<TodayShipment> todayList(@RequestParam(required=false) @Size(max=128) String keyword,
+            @RequestParam(required=false) @Size(max=36) String orderId,
             @RequestParam(required=false) TodayStatus status,
             @RequestParam(required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(defaultValue="0") @Min(0) int page,@RequestParam(defaultValue="20") @Min(1) @Max(100) int size){
-        return service.todayPage(keyword,status,from,to,page,size);}
+        return service.todayPage(keyword,status,from,to,page,size,orderId);}
 
     @PostMapping("/dashboard-maintenance/today-shipments") @PreAuthorize("hasAuthority('dashboard.shipments.manage')")
     TodayShipment createToday(@Valid @RequestBody ShipmentRequest request,@RequestHeader("Idempotency-Key") String key,
@@ -83,11 +85,12 @@ class DashboardController {
 
     @GetMapping("/dashboard-maintenance/pending-shipments") @PreAuthorize("hasAuthority('dashboard.shipments.manage')")
     Page<PendingShipment> pendingShipmentList(@RequestParam(required=false) @Size(max=128) String keyword,
+            @RequestParam(required=false) @Size(max=36) String orderId,
             @RequestParam(required=false) PendingShipmentStatus status,
             @RequestParam(required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(defaultValue="0") @Min(0) int page,@RequestParam(defaultValue="20") @Min(1) @Max(100) int size){
-        return service.pendingShipmentPage(keyword,status,from,to,page,size);}
+        return service.pendingShipmentPage(keyword,status,from,to,page,size,orderId);}
 
     @PostMapping("/dashboard-maintenance/pending-shipments") @PreAuthorize("hasAuthority('dashboard.shipments.manage')")
     PendingShipment createPendingShipment(@Valid @RequestBody ShipmentRequest request,
@@ -172,12 +175,12 @@ class DashboardController {
             .header("X-Content-Type-Options","nosniff").header(HttpHeaders.CONTENT_DISPOSITION,"inline").body(image.bytes());}
 
     record ShipmentRequest(@NotNull LocalDate date,@NotBlank @Size(max=36) String productId,@Size(max=36) String imageId,
-                           @Positive int quantity,@Positive int boxCount,@Size(max=500) String remark,
+                           @NotNull @Positive @Digits(integer=9,fraction=3) java.math.BigDecimal quantity,@Positive int boxCount,@Size(max=500) String remark,
                            @NotNull LocalDateTime latestShipTime,@NotBlank @Size(max=36) String variantId,@NotBlank @Size(max=36) String customerProductId){
         ShipmentInput input(){return new ShipmentInput(date,productId,imageId,quantity,boxCount,remark,
                 latestShipTime.atZone(DashboardService.BUSINESS_ZONE).toInstant(),variantId,customerProductId,null);}}
     record ShipmentUpdateRequest(@Valid @NotNull ShipmentRequest shipment,@Min(0) long version,@Size(max=500) String correctionReason){}
-    record TransferRequest(@Positive int quantity,@Positive int boxCount,@Size(max=500) String remark,
+    record TransferRequest(@NotNull @Positive @Digits(integer=9,fraction=3) java.math.BigDecimal quantity,@Positive int boxCount,@Size(max=500) String remark,
                            @NotNull LocalDateTime latestShipTime,@Size(max=36) String imageId,@Min(0) long version){
         java.time.Instant latestInstant(){return latestShipTime.atZone(DashboardService.BUSINESS_ZONE).toInstant();}}
     record PendingProductRequest(@NotBlank @Size(max=128) String productName,@Size(max=36) String imageId,

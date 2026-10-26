@@ -53,7 +53,7 @@ onMounted(async () => {
       const selected = options.find(t => t.id === d.previous?.templateId) ?? options.find(t => t.defaultTemplate) ?? (options.length === 1 ? options[0] : undefined)
       return { shipmentId: d.shipmentId, shipmentVersion: d.shipmentVersion, templateId: selected?.id ?? '', templateVersion: selected?.version ?? 0,
         productName: d.previous?.productName ?? d.productName, customerCode: d.previous?.customerCode ?? d.customerCode, purchaser: d.previous?.purchaser ?? '',
-        contractNo: d.previous?.contractNo ?? '', destination: d.previous?.destination ?? selected?.config.defaultDestination ?? '',
+        contractNo: d.previous?.contractNo ?? d.orderReference ?? '', destination: d.previous?.destination ?? selected?.config.defaultDestination ?? '',
         carrier: d.previous?.carrier ?? '', trackingNo: d.previous?.trackingNo ?? '' }
     })
     initial.value = JSON.stringify(entries.value)

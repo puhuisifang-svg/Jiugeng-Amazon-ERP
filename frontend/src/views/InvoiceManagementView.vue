@@ -110,9 +110,8 @@ onMounted(load)
       <label>关键字<input
         v-model="query"
         maxlength="128"
-        placeholder="搜索客户、抬头、品名、规格或物流信息"
+        placeholder="搜索客户、抬头、品名或规格"
       ></label>
-      <label>发货状态<select v-model="shipped"><option value="">全部</option><option value="false">未发货</option><option value="true">已发货</option></select></label>
       <label>开票状态<select v-model="invoiced"><option value="">全部</option><option value="false">未开票</option><option value="true">已开票</option></select></label>
       <button
         type="submit"
@@ -135,7 +134,7 @@ onMounted(load)
         <table class="data-table">
           <thead>
             <tr>
-              <th>客户名称</th><th>发票抬头信息</th><th>品名</th><th>规格及型号</th><th>单位</th><th>数量</th><th>不含税单价（RMB）</th><th>税率</th><th>总价（含税 RMB）</th><th>是否已发货</th><th>是否已开票</th><th>物流信息</th><th
+              <th>客户名称</th><th>发票抬头信息</th><th>品名</th><th>规格及型号</th><th>单位</th><th>数量</th><th>不含税单价（RMB）</th><th>税率</th><th>总价（含税 RMB）</th><th>是否已开票</th><th
                 v-if="writable"
                 class="invoice-actions"
               >
@@ -162,9 +161,7 @@ onMounted(load)
               <td class="invoice-money">
                 <strong>¥{{ item.totalAmount }}</strong><small>不含税 ¥{{ item.netAmount }}</small><small>税额 ¥{{ item.taxAmount }}</small>
               </td>
-              <td><span :class="item.details.shipped ? 'state-done' : 'state-pending'">{{ item.details.shipped ? '已发货' : '未发货' }}</span></td><td><span :class="item.details.invoiced ? 'state-done' : 'state-pending'">{{ item.details.invoiced ? '已开票' : '未开票' }}</span></td><td class="invoice-long">
-                {{ item.details.logistics || '—' }}
-              </td>
+              <td><span :class="item.details.invoiced ? 'state-done' : 'state-pending'">{{ item.details.invoiced ? '已开票' : '未开票' }}</span></td>
               <td
                 v-if="writable"
                 class="invoice-actions"
@@ -323,12 +320,7 @@ onMounted(load)
           <p class="form-wide invoice-help">
             金额按人民币四舍五入到分。税率默认 1%，请按本次业务确认；供货价未约定含税口径，因此不自动作为不含税单价。
           </p>
-          <label>是否已发货<select v-model="form.shipped"><option :value="false">未发货</option><option :value="true">已发货</option></select></label><label>是否已开票<select v-model="form.invoiced"><option :value="false">未开票</option><option :value="true">已开票</option></select></label>
-          <label class="form-wide">物流信息<input
-            v-model="form.logistics"
-            maxlength="1000"
-            placeholder="物流公司、运单号等；手工维护，不自动同步发货状态"
-          ></label>
+          <label>是否已开票<select v-model="form.invoiced"><option :value="false">未开票</option><option :value="true">已开票</option></select></label>
         </fieldset>
         <p
           v-if="formError"

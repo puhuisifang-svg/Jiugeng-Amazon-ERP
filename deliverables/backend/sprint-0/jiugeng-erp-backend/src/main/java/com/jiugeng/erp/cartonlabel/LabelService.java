@@ -14,6 +14,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 class LabelService {
+    private com.jiugeng.erp.customer.OrderFulfillment orders;
+    @org.springframework.beans.factory.annotation.Autowired
+    void configureOrders(com.jiugeng.erp.customer.OrderFulfillment orders) {this.orders=orders;}
     private com.jiugeng.erp.objectstorage.PrivateObjectStorage objects =
         new com.jiugeng.erp.objectstorage.PrivateObjectStorage(null, "", "erp/");
     @org.springframework.beans.factory.annotation.Autowired
@@ -66,13 +69,13 @@ class LabelService {
         return after;
     }
     private record Source(String id,long version,String productName,String customerCode,String customerId,String customerName,
-                          String cp,int quantity,int boxes,String unit,String date,String status) {}
+                          String cp,java.math.BigDecimal quantity,int boxes,String unit,String date,String status) {}
     private Source source(String id,boolean lock) {
         return jdbc.sql("SELECT * FROM dashboard_today_shipment WHERE id=:id"+(lock?" FOR UPDATE":"")).param("id",id).query((r,n)->{
             var snapshot=decode(Objects.requireNonNullElse(r.getString("customer_snapshot"),"{}"),com.fasterxml.jackson.databind.JsonNode.class);
             return new Source(r.getString("id"),r.getLong("version"),r.getString("product_name_snapshot"),snapshot.path("customerProductCode").asText(),
                 snapshot.path("customerId").asText(),snapshot.path("customerName").asText(),r.getString("customer_product_id"),
-                r.getInt("quantity"),r.getInt("box_count"),r.getString("quantity_unit"),r.getDate("ship_date").toString(),r.getString("status"));
+                r.getBigDecimal("quantity"),r.getInt("box_count"),r.getString("quantity_unit"),r.getDate("ship_date").toString(),r.getString("status"));
         }).optional().orElseThrow(this::missing);
     }
     @Transactional(readOnly=true)
@@ -80,7 +83,9 @@ class LabelService {
         Source s=source(id,false);
         var previous=jdbc.sql("SELECT i.snapshot FROM carton_label_export_item i JOIN carton_label_export e ON e.id=i.export_id WHERE i.shipment_id=:id ORDER BY e.created_at DESC,e.id DESC LIMIT 1")
             .param("id",id).query(String.class).optional().map(text->decode(text,Snapshot.class)).filter(v->Objects.equals(v.customerProductId(),s.cp())).map(Snapshot::entry).orElse(null);
-        return new Draft(s.id(),s.version(),s.customerId(),s.customerName(),s.productName(),s.customerCode(),s.quantity(),s.boxes(),s.unit(),templates(s.customerId()),previous);
+        String allocation=jdbc.sql("SELECT order_allocation_id FROM dashboard_today_shipment WHERE id=:id").param("id",id).query((r,n)->r.getString(1)).optional().orElse(null);
+        String reference=allocation==null?"":orders.get(allocation).reference();
+        return new Draft(s.id(),s.version(),s.customerId(),s.customerName(),s.productName(),s.customerCode(),s.quantity(),s.boxes(),s.unit(),templates(s.customerId()),previous,reference);
     }
     private List<Snapshot> snapshots(Batch batch) {
         if(batch.items().stream().map(Entry::shipmentId).distinct().count()!=batch.items().size())throw invalid("不能重复选择同一发货记录");
@@ -93,7 +98,7 @@ class LabelService {
             if(s.version()!=raw.shipmentVersion())throw conflict("发货记录已修改，请关闭弹窗重新选择："+s.productName());
             if(s.customerId().isBlank()||s.cp()==null)throw invalid("发货记录未绑定客户商品："+s.productName());
             if(s.status().equals("ARCHIVED"))throw conflict("已删除或已转待发货的记录不能生成新外箱标");
-            if(s.boxes()<1||s.quantity()<1)throw invalid("发货数量与箱数必须大于零");
+            if(s.boxes()<1||s.quantity().signum()<=0)throw invalid("发货数量与箱数必须大于零");
             Template t=jdbc.sql("SELECT * FROM carton_label_template WHERE id=:id FOR UPDATE").param("id",raw.templateId()).query(this::template).optional().orElseThrow(this::missing);
             if(!t.customerId().equals(s.customerId())||!t.enabled())throw invalid("请选择该客户启用的外箱标模板");
             if(t.version()!=raw.templateVersion())throw conflict("模板已修改，请重新加载");
@@ -109,7 +114,7 @@ class LabelService {
     byte[] templatePreview(Config config) {
         return pdf.render(List.of(new Snapshot(new Entry("preview",0,"preview",0,"合成产品 黑色 457cm x 20cm",
             "SYN2670","示例采购人","","示例收货地点","示例快递","SYN123456"),
-            "preview","示例客户",80,1,"套","2026-01-01","preview",new Template("preview","preview","预览",config,true,true,0))));
+            "preview","示例客户",java.math.BigDecimal.valueOf(80),1,"套","2026-01-01","preview",new Template("preview","preview","预览",config,true,true,0))));
     }
     @Transactional
     Export generate(Batch batch,AuthenticatedActor actor) {

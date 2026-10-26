@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { shipmentUnit } from '@/ui/shipmentUnits'
 import ProductName from '@/components/ProductName.vue'
 import ListPagination from '@/components/ListPagination.vue'
 const listSize = ref(20)
@@ -6,7 +7,7 @@ import CartonLabelExport from '@/components/CartonLabelExport.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 
 import { ApiError } from '@/api/client'
 import { dashboardApi, type DashboardHistoryEvent, type DashboardItem, type DashboardKind, type PendingProduct, type PendingProductInput, type PendingShipment, type ShipmentInput, type TodayShipment } from '@/api/dashboard'
@@ -20,6 +21,7 @@ import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import { runtimeConfig } from '@/config/runtime'
 
 const props = defineProps<{ kind: DashboardKind }>()
+const route = useRoute()
 const formal = runtimeConfig.authMode === 'password'
 const items = ref<DashboardItem[]>([]); const products = ref<ProductDetailDto[]>([])
 const loading = ref(true); const saving = ref(false); const error = ref(''); const success = ref('')
@@ -141,7 +143,7 @@ async function load() {
   }
   loading.value = true; error.value = ''
   try {
-    const result = await dashboardApi.page<DashboardItem>(props.kind, { ...filters, page: page.value, size: listSize.value })
+    const result = await dashboardApi.page<DashboardItem>(props.kind, { ...filters, ...(route?.query.orderId ? { orderId: String(route.query.orderId) } : {}), page: page.value, size: listSize.value })
     if (sequence !== loadSequence) return
     items.value = result.items; totalPages.value = result.totalPages; total.value = result.totalElements
   } catch (exception) {
@@ -235,7 +237,7 @@ async function showHistory(item: DashboardItem) {
   catch (exception) { error.value = exception instanceof ApiError ? exception.message : '历史记录加载失败。' }
 }
 function statusLabel(value: string) { return ({ ACTIVE: '有效', SHIPPED: '已发货', PENDING: '待处理', TRANSFERRED_TO_TODAY: '已转入', COMPLETED: '已完成', ARCHIVED: '已归档' } as Record<string, string>)[value] ?? value }
-watch(() => props.kind, () => {
+watch(() => [props.kind, route?.query.orderId], () => {
   page.value = 0
   Object.assign(filters, { keyword: '', status: props.kind === 'today-shipments' ? 'ACTIVE' : '', from: '', to: '' })
   items.value = []; total.value = 0; totalPages.value = 0
@@ -267,6 +269,12 @@ onMounted(async () => {
     </template>
     <template v-else>
       <div class="page-actions">
+        <RouterLink
+          v-if="route?.query.orderId"
+          :to="`/orders/customers/${route.query.orderId}`"
+        >
+          当前按来源订单筛选 · 返回订单
+        </RouterLink>
         <p>{{ title }} · 共 {{ total }} 条</p><RouterLink
           class="secondary-action"
           to="/home"
@@ -360,7 +368,7 @@ onMounted(async () => {
               :initial="editing && 'customerProduct' in editing ? editing.customerProduct : undefined"
               :product-name="editing?.productName ?? ''"
               :editing="!!editing"
-              :disabled="saving"
+              :disabled="saving || Boolean(editing && 'orderAllocation' in editing && editing.orderAllocation)"
               @select="selectCustomerProduct"
             />
             <small v-if="editing && !shipment.variantId">历史记录未绑定客户商品，请明确选择；原标签不会自动归属到新客户商品。</small>
@@ -375,11 +383,12 @@ onMounted(async () => {
               type="date"
               :min="shipment.date"
             ></label>
-            <label>发货数量（套）<input
+            <label>发货数量（{{ shipmentUnit(editing && 'quantityUnit' in editing ? editing.quantityUnit : 'SET') }}）<input
               v-model.number="shipment.quantity"
               required
               type="number"
-              min="1"
+              min="0.001"
+              step="0.001"
             ></label>
             <label>箱数<input
               v-model.number="shipment.boxCount"
@@ -575,9 +584,10 @@ onMounted(async () => {
                       :styles="'namePresentation' in item ? item.namePresentation?.styles : undefined"
                       :highlighted="'namePresentation' in item ? item.namePresentation?.highlighted : false"
                     /><small v-if="'customerProduct' in item && item.customerProduct">客户：{{ item.customerProduct.customerName }} · 客户编码：{{ item.customerProduct.customerProductCode || '未填' }}<br>特殊需求：{{ item.customerProduct.requirements || '无' }}</small><small v-if="'productCode' in item">{{ item.variantId ? `SKU：${item.productCode}` : '历史父体记录 · 待补选 SKU' }}</small>
+                    <small v-if="'orderAllocation' in item && item.orderAllocation"><RouterLink :to="`/orders/customers/${item.orderAllocation.orderId}`">订单：{{ item.orderAllocation.orderNumber }}</RouterLink></small>
                   </td><td v-if="kind === 'pending-shipments'">
                     {{ 'latestShipAt' in item ? localDate(item.latestShipAt) : '—' }}
-                  </td><td>{{ ('expectedQuantity' in item ? item.expectedQuantity : item.quantity).toLocaleString() }} 套</td><td>{{ 'boxCount' in item ? item.boxCount : '—' }}</td><td class="shipment-remark">
+                  </td><td>{{ ('expectedQuantity' in item ? item.expectedQuantity : item.quantity).toLocaleString() }} {{ shipmentUnit(item.quantityUnit) }}</td><td>{{ 'boxCount' in item ? item.boxCount : '—' }}</td><td class="shipment-remark">
                     {{ item.remark || '—' }}
                   </td><td v-if="kind === 'today-shipments'">
                     <ShipmentFiles
@@ -768,7 +778,7 @@ onMounted(async () => {
           转到今日发货
         </h2>
         <p class="form-wide shipment-transfer-summary">
-          客户：{{ todayTransferTarget.customerProduct?.customerName || '未绑定' }}<br>产品名：{{ todayTransferTarget.productName }}<br>发货数量：{{ todayTransferTarget.quantity }} 套 · 发货箱数：{{ todayTransferTarget.boxCount }}
+          客户：{{ todayTransferTarget.customerProduct?.customerName || '未绑定' }}<br>产品名：{{ todayTransferTarget.productName }}<br>发货数量：{{ todayTransferTarget.quantity }} {{ shipmentUnit(todayTransferTarget.quantityUnit) }} · 发货箱数：{{ todayTransferTarget.boxCount }}
         </p>
         <p class="form-wide">
           确认后将加入今天的发货安排，待发货记录保留转移历史，不代表已实际发运。
@@ -917,7 +927,7 @@ onMounted(async () => {
           确认已发货？
         </h2>
         <p class="form-wide shipment-transfer-summary">
-          客户：{{ dispatchTarget.customerProduct?.customerName || '未绑定' }}<br>产品名：{{ dispatchTarget.productName }}<br>SKU：{{ dispatchTarget.productCode }}<br>原计划发货日期：{{ dispatchTarget.shipDate }}<br>发货数量：{{ dispatchTarget.quantity }} 套 · 发货箱数：{{ dispatchTarget.boxCount }} 箱<br>备注：{{ dispatchTarget.remark || '—' }}
+          客户：{{ dispatchTarget.customerProduct?.customerName || '未绑定' }}<br>产品名：{{ dispatchTarget.productName }}<br>SKU：{{ dispatchTarget.productCode }}<br>原计划发货日期：{{ dispatchTarget.shipDate }}<br>发货数量：{{ dispatchTarget.quantity }} {{ shipmentUnit(dispatchTarget.quantityUnit) }} · 发货箱数：{{ dispatchTarget.boxCount }} 箱<br>备注：{{ dispatchTarget.remark || '—' }}
         </p>
         <p class="form-wide">
           确认后将按实际确认日期（北京时间）计入发货统计，保留原计划日期。不扣减库存、不触发物流下单，确认后不可编辑或删除。请确认货物确已发出。

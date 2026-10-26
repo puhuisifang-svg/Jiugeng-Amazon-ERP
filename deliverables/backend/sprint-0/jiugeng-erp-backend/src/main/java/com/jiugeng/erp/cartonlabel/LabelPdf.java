@@ -39,7 +39,7 @@ class LabelPdf {
         for(var row:config.rows()) {
             float h=56*MM*row.height()/weight;
             String value=switch(row.key()) {
-                case SKU->entry.customerCode();case QUANTITY->Integer.toString(s.quantity());
+                case SKU->entry.customerCode();case QUANTITY->s.quantity().stripTrailingZeros().toPlainString();
                 case BOXES->Integer.toString(s.boxes());case PURCHASER->entry.purchaser();
             };
             cell(cs,font,row.label(),x,top,w*.45f,h,Math.min(row.fontSize(),13),true,false);

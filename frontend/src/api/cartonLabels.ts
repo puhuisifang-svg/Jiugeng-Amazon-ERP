@@ -9,7 +9,7 @@ export interface LabelEntry {
   shipmentId: string; shipmentVersion: number; templateId: string; templateVersion: number
   productName: string; customerCode: string; purchaser: string; contractNo: string; destination: string; carrier: string; trackingNo: string
 }
-export interface LabelDraft { shipmentId: string; shipmentVersion: number; customerId: string; customerName: string; productName: string; customerCode: string; quantity: number; boxes: number; unit: string; templates: LabelTemplate[]; previous: LabelEntry | null }
+export interface LabelDraft { orderReference?: string; shipmentId: string; shipmentVersion: number; customerId: string; customerName: string; productName: string; customerCode: string; quantity: number; boxes: number; unit: string; templates: LabelTemplate[]; previous: LabelEntry | null }
 export interface LabelExport { id: string; pages: number; createdAt: string }
 export interface LabelBatch { items: LabelEntry[]; requestKey: string }
 export const defaultLabelConfig = (): LabelConfig => ({

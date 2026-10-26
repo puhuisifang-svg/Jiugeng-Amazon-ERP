@@ -33,7 +33,8 @@ class ShipmentDispatchController {
         @RequestParam @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate from,
         @RequestParam @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate to,
         @RequestParam(required=false) @Size(max=128) String keyword,
+        @RequestParam(required=false) @Size(max=36) String orderId,
         @RequestParam(defaultValue="0") @Min(0) int page,@RequestParam(defaultValue="20") @Min(1) @Max(100) int size) {
-        return service.statistics(from,to,keyword,page,size);
+        return service.statistics(from,to,keyword,orderId,page,size);
     }
 }

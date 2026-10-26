@@ -37,10 +37,12 @@ class DashboardService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final long orphanHours;
+    private final OrderShipmentService orderShipments;
 
     DashboardService(DashboardRepository repository, ProductLookup products, com.jiugeng.erp.customer.CustomerProductLookup customerProducts, DashboardImageStore images,
             AuditTrail audit, AuditHistoryLookup auditHistory, ObjectMapper objectMapper, Clock clock,
-            @Value("${app.dashboard.image-orphan-hours:24}") long orphanHours) {
+            @Value("${app.dashboard.image-orphan-hours:24}") long orphanHours, OrderShipmentService orderShipments) {
+        this.orderShipments=orderShipments;
         this.repository=repository;this.products=products;this.customerProducts=customerProducts;this.images=images;this.audit=audit;this.auditHistory=auditHistory;
         this.objectMapper=objectMapper;this.clock=clock;this.orphanHours=orphanHours;
     }
@@ -56,11 +58,11 @@ class DashboardService {
             repository.homePendingProducts(),repository.countHomePendingProducts(),date,clock.instant());}
 
     @Transactional(readOnly=true)
-    Page<TodayShipment> todayPage(String keyword,TodayStatus status,LocalDate from,LocalDate to,int page,int size){
-        range(from,to);return repository.todayPage(text(keyword,128),status,from,to,page,size);}
+    Page<TodayShipment> todayPage(String keyword,TodayStatus status,LocalDate from,LocalDate to,int page,int size,String orderId){
+        range(from,to);return repository.todayPage(text(keyword,128),status,from,to,page,size,orderId);}
     @Transactional(readOnly=true)
-    Page<PendingShipment> pendingShipmentPage(String keyword,PendingShipmentStatus status,LocalDate from,LocalDate to,int page,int size){
-        range(from,to);return repository.pendingShipmentPage(text(keyword,128),status,from,to,page,size);}
+    Page<PendingShipment> pendingShipmentPage(String keyword,PendingShipmentStatus status,LocalDate from,LocalDate to,int page,int size,String orderId){
+        range(from,to);return repository.pendingShipmentPage(text(keyword,128),status,from,to,page,size,orderId);}
     @Transactional(readOnly=true)
     Page<PendingProduct> pendingProductPage(String keyword,PendingProductStatus status,LocalDate from,LocalDate to,int page,int size){
         range(from,to);return repository.pendingProductPage(text(keyword,128),status,from,to,page,size);}
@@ -77,30 +79,34 @@ class DashboardService {
         saveCommand(actor,"TODAY_CREATE",key,hash,"TODAY_SHIPMENT",id);return created;
     }
 
-    @Transactional
+    @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     TodayShipment updateToday(String id,ShipmentInput raw,long version,String correctionReason,AuthenticatedActor actor){
         TodayShipment before=today(id);if(before.status()!=TodayStatus.ACTIVE)throw state();
         if(before.shipDate().isBefore(businessDate()))required(correctionReason,"历史更正原因",500);
         ShipmentInput input=shipment(retainBinding(raw,before.customerProduct()));var product=sku(input);
+        orderShipments.change("TODAY",id,input.quantity(),input.customerProductId(),"UPDATE",actor);
         if(input.customerProduct()==before.customerProduct()) product=new ProductLookup.ProductReference(before.productId(),before.productCode(),before.productName(),true);
         if(input.date().isAfter(businessDate()))throw invalid("今日发货只能登记当天或历史安排");
         if(repository.updateToday(id,input,product.productCode(),product.name(),version,actor.userId())!=1)throw conflict();
+        orderShipments.updatePlan("TODAY",id,input);
         attach(input.imageId(),ImagePurpose.SHIPMENT,"TODAY_SHIPMENT",id,actor);
         releaseReplaced(before.imageId(),input.imageId(),"TODAY_SHIPMENT",id);
         TodayShipment updated=today(id);record(actor,"DASHBOARD_TODAY_UPDATE","TODAY_SHIPMENT",id,snapshot(before),
                 snapshot(updated),before.shipDate().isBefore(businessDate())?required(correctionReason,"历史更正原因",500):"更新当日发货安排");return updated;
     }
 
-    @Transactional
+    @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     TodayShipment archiveToday(String id,long version,String reason,String key,AuthenticatedActor actor){
         String cleaned=required(reason,"归档原因",500);String hash=hash(new StateCommand(id,version,cleaned));
         var prior=command(actor,"TODAY_ARCHIVE",key,hash);if(prior!=null)return today(prior.resourceId());
-        TodayShipment before=today(id);if(repository.archiveToday(id,version,cleaned,actor.userId(),clock.instant())!=1)throw conflict();
+        TodayShipment before=today(id);
+        orderShipments.change("TODAY",id,before.quantity(),before.customerProduct()==null?null:before.customerProduct().id(),"DELETE",actor);
+        if(repository.archiveToday(id,version,cleaned,actor.userId(),clock.instant())!=1)throw conflict();
         TodayShipment updated=today(id);record(actor,"DASHBOARD_TODAY_ARCHIVE","TODAY_SHIPMENT",id,snapshot(before),snapshot(updated),cleaned);
         saveCommand(actor,"TODAY_ARCHIVE",key,hash,"TODAY_SHIPMENT",id);return updated;
     }
 
-    @Transactional
+    @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     PendingShipment transferToPending(String id,long version,String reason,String key,AuthenticatedActor actor){
         String cleaned=required(reason,"转为待发货原因",500);
         String hash=hash(new StateCommand(id,version,cleaned));
@@ -122,6 +128,8 @@ class DashboardService {
             if(repository.updatePendingShipment(targetId,input,source.productCode(),source.productName(),previous.version(),actor.userId())!=1)throw conflict();
         }
         if(source.imageId()!=null&&repository.transferTodayImage(source.imageId(),id,targetId,clock.instant())!=1)throw conflict();
+        orderShipments.transfer("TODAY",id,targetId,actor);
+        orderShipments.updatePlan("PENDING",targetId,input);
         var target=pendingShipment(targetId);
         record(actor,"DASHBOARD_TODAY_TRANSFER_PENDING","TODAY_SHIPMENT",id,snapshot(source),snapshot(today(id)),"转为待发货："+cleaned+"；目标记录："+targetId);
         record(actor,previous==null?"DASHBOARD_PENDING_SHIPMENT_CREATE":"DASHBOARD_PENDING_SHIPMENT_RETURN","PENDING_SHIPMENT",targetId,previous==null?null:snapshot(previous),snapshot(target),"转回待发货；原因："+cleaned);
@@ -139,28 +147,32 @@ class DashboardService {
         saveCommand(actor,"PENDING_SHIPMENT_CREATE",key,hash,"PENDING_SHIPMENT",id);return created;
     }
 
-    @Transactional
+    @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     PendingShipment updatePendingShipment(String id,ShipmentInput raw,long version,AuthenticatedActor actor){
         PendingShipment before=pendingShipment(id);if(before.status()!=PendingShipmentStatus.PENDING)throw state();
         ShipmentInput input=shipment(retainBinding(raw,before.customerProduct()),true);var product=sku(input);
+        orderShipments.change("PENDING",id,input.quantity(),input.customerProductId(),"UPDATE",actor);
         if(input.customerProduct()==before.customerProduct()) product=new ProductLookup.ProductReference(before.productId(),before.productCode(),before.productName(),true);
         if(repository.updatePendingShipment(id,input,product.productCode(),product.name(),version,actor.userId())!=1)throw conflict();
+        orderShipments.updatePlan("PENDING",id,input);
         attach(input.imageId(),ImagePurpose.SHIPMENT,"PENDING_SHIPMENT",id,actor);
         releaseReplaced(before.imageId(),input.imageId(),"PENDING_SHIPMENT",id);
         var updated=pendingShipment(id);record(actor,"DASHBOARD_PENDING_SHIPMENT_UPDATE","PENDING_SHIPMENT",id,snapshot(before),snapshot(updated),"更新待发货安排");return updated;
     }
 
-    @Transactional
+    @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     PendingShipment archivePendingShipment(String id,long version,String reason,String key,AuthenticatedActor actor){
         String cleaned=required(reason,"归档原因",500);String hash=hash(new StateCommand(id,version,cleaned));
         var prior=command(actor,"PENDING_SHIPMENT_ARCHIVE",key,hash);if(prior!=null)return pendingShipment(prior.resourceId());
-        var before=pendingShipment(id);if(repository.archivePendingShipment(id,version,cleaned,actor.userId(),clock.instant())!=1)throw conflict();
+        var before=pendingShipment(id);
+        orderShipments.change("PENDING",id,before.quantity(),before.customerProduct()==null?null:before.customerProduct().id(),"DELETE",actor);
+        if(repository.archivePendingShipment(id,version,cleaned,actor.userId(),clock.instant())!=1)throw conflict();
         var updated=pendingShipment(id);record(actor,"DASHBOARD_PENDING_SHIPMENT_ARCHIVE","PENDING_SHIPMENT",id,snapshot(before),snapshot(updated),cleaned);
         saveCommand(actor,"PENDING_SHIPMENT_ARCHIVE",key,hash,"PENDING_SHIPMENT",id);return updated;
     }
 
-    @Transactional
-    TodayShipment transfer(String id,int quantity,int boxes,String remark,Instant latest,String imageId,long version,
+    @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
+    TodayShipment transfer(String id,java.math.BigDecimal quantity,int boxes,String remark,Instant latest,String imageId,long version,
                            String key,AuthenticatedActor actor){
         ShipmentInput raw=new ShipmentInput(businessDate(),"source",imageId,quantity,boxes,remark,latest,null,null,null);
         String hash=hash(new TransferCommand(id,quantity,boxes,remark==null?"":remark,latest.toString(),
@@ -168,9 +180,11 @@ class DashboardService {
         var prior=command(actor,"PENDING_SHIPMENT_TRANSFER",key,hash);if(prior!=null)return today(prior.resourceId());
         var source=repository.pendingShipmentForUpdate(id).orElseThrow(()->missing("PENDING_SHIPMENT_NOT_FOUND","待发货记录不存在"));
         if(source.status()!=PendingShipmentStatus.PENDING)throw state();
+        orderShipments.change("PENDING",id,quantity,source.customerProduct()==null?null:source.customerProduct().id(),"UPDATE",actor);
         ShipmentInput input=shipment(new ShipmentInput(raw.date(),source.productId(),raw.imageId()==null?source.imageId():raw.imageId(),
                 raw.quantity(),raw.boxCount(),raw.remark(),raw.latestShipAt(),source.variantId(),source.customerProduct()==null?null:source.customerProduct().id(),source.customerProduct()));
         sku(input);
+        orderShipments.updatePlan("PENDING",id,input);
         var previousToday=repository.todayByPending(id).orElse(null);
         String todayId=previousToday==null?UUID.randomUUID().toString():previousToday.id();
         if(previousToday==null)repository.insertToday(todayId,input,source.productCode(),source.productName(),id,actor.userId());
@@ -179,6 +193,7 @@ class DashboardService {
             if(repository.updateToday(todayId,input,source.productCode(),source.productName(),previousToday.version(),actor.userId())!=1)throw conflict();
         }
         if(repository.markTransferred(id,version,actor.userId(),clock.instant())!=1)throw conflict();
+        orderShipments.transfer("PENDING",id,todayId,actor);
         attachTransferred(input.imageId(),todayId,id,actor);
         var today=today(todayId);record(actor,"DASHBOARD_PENDING_SHIPMENT_TRANSFER","PENDING_SHIPMENT",id,snapshot(source),snapshot(today),"转入当日发货安排");
         record(actor,"DASHBOARD_TODAY_RECEIVE","TODAY_SHIPMENT",todayId,previousToday==null?null:snapshot(previousToday),snapshot(today),"由待发货转入");
@@ -266,7 +281,7 @@ class DashboardService {
     }
     private ShipmentInput shipment(ShipmentInput input){return shipment(input,false);}
     private ShipmentInput shipment(ShipmentInput input,boolean pending){if(input==null||input.date()==null||input.latestShipAt()==null)throw invalid("发货日期和最晚发货时间必填");
-        String productId=required(input.productId(),"产品",36);if(input.quantity()<=0||input.boxCount()<=0)throw invalid("数量和箱数必须大于 0");
+        String productId=required(input.productId(),"产品",36);if(input.quantity()==null||input.quantity().signum()<=0||input.quantity().scale()>3||input.boxCount()<=0)throw invalid("数量和箱数必须大于 0");
         LocalDate latestDate=input.latestShipAt().atZone(BUSINESS_ZONE).toLocalDate();
         if(pending ? latestDate.isBefore(input.date()) : !latestDate.equals(input.date()))throw invalid(pending ? "最晚发货日期不能早于计划发货日期" : "最晚发货时间必须落在发货日期当天");
         String customerProductId=required(input.customerProductId(),"客户商品（历史记录请先编辑补选）",36);
@@ -317,5 +332,5 @@ class DashboardService {
     private DashboardException state(){return new DashboardException(409,"DASHBOARD_STATE_INVALID","当前状态不允许此操作");}
     private record StateCommand(String id,long version,String reason){}
     private record VersionCommand(String id,long version){}
-    private record TransferCommand(String source,int quantity,int boxes,String remark,String latest,String image,long version){}
+    private record TransferCommand(String source,java.math.BigDecimal quantity,int boxes,String remark,String latest,String image,long version){}
 }

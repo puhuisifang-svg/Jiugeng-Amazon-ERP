@@ -13,6 +13,7 @@ final class DashboardTypes {
     enum TodayStatus { ACTIVE, ARCHIVED, SHIPPED }
     enum PendingShipmentStatus { PENDING, TRANSFERRED_TO_TODAY, ARCHIVED }
     enum PendingProductStatus { PENDING, COMPLETED, ARCHIVED }
+    record OrderReference(String id,String orderId,String orderNumber) {}
 
     record HomeSlice<T>(List<T> items, long totalCount, boolean truncated, LocalDate businessDate,
                         Instant generatedAt) {
@@ -29,16 +30,16 @@ final class DashboardTypes {
     }
 
     record TodayShipment(String id, LocalDate shipDate, String productId, String productCode, String productName,
-                         String imageId, int quantity, String quantityUnit, int boxCount, String remark,
+                         String imageId, java.math.BigDecimal quantity, String quantityUnit, int boxCount, String remark,
                          Instant latestShipAt, TodayStatus status, String sourcePendingShipmentId, long version,
                          String createdBy, String updatedBy, String archivedBy, Instant archivedAt,
-                         String archiveReason, Instant createdAt, Instant updatedAt, String variantId, ShippingProduct customerProduct, com.jiugeng.erp.product.ProductLookup.NamePresentation namePresentation) {}
+                         String archiveReason, Instant createdAt, Instant updatedAt, String variantId, ShippingProduct customerProduct, com.jiugeng.erp.product.ProductLookup.NamePresentation namePresentation, DashboardTypes.OrderReference orderAllocation) {}
 
     record PendingShipment(String id, LocalDate plannedShipDate, String productId, String productCode,
-                           String productName, String imageId, int quantity, String quantityUnit, int boxCount,
+                           String productName, String imageId, java.math.BigDecimal quantity, String quantityUnit, int boxCount,
                            String remark, Instant latestShipAt, PendingShipmentStatus status, long version,
                            String createdBy, String updatedBy, String archivedBy, Instant archivedAt,
-                           String archiveReason, Instant createdAt, Instant updatedAt, String variantId, ShippingProduct customerProduct, com.jiugeng.erp.product.ProductLookup.NamePresentation namePresentation) {}
+                           String archiveReason, Instant createdAt, Instant updatedAt, String variantId, ShippingProduct customerProduct, com.jiugeng.erp.product.ProductLookup.NamePresentation namePresentation, DashboardTypes.OrderReference orderAllocation) {}
 
     record PendingProduct(String id, String productName, String imageId, int expectedQuantity, String quantityUnit,
                           String remark, LocalDate expectedCompletionDate, PendingProductStatus status, long version,
@@ -55,7 +56,7 @@ final class DashboardTypes {
     record ImageReceipt(String id, ImagePurpose purpose, String sourceFileName, String mediaType,
                         long byteSize, int width, int height, String sha256) {}
 
-    record ShipmentInput(LocalDate date, String productId, String imageId, int quantity, int boxCount,
+    record ShipmentInput(LocalDate date, String productId, String imageId, java.math.BigDecimal quantity, int boxCount,
                          String remark, Instant latestShipAt, String variantId, String customerProductId, ShippingProduct customerProduct) {}
     record PendingProductInput(String productName, String imageId, int expectedQuantity, String remark,
                                LocalDate expectedCompletionDate) {}

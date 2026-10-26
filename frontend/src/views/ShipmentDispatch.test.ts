@@ -1,6 +1,7 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
-const state = vi.hoisted(() => ({ manage: true, shipped: false, count: 1 }))
+const state = vi.hoisted(() => ({ manage: true, shipped: false, count: 1, route: { query: {} as Record<string,string> } }))
+vi.mock('vue-router', async importOriginal => ({ ...await importOriginal<typeof import('vue-router')>(), useRoute: () => state.route }))
 vi.mock('@/ui/shipmentExport', () => ({ createShipmentImage: vi.fn(async () => ({ blob: new Blob(['png']), missingImages: 0 })) }))
 vi.mock('@/config/runtime', () => ({ runtimeConfig: { authMode: 'password' } }))
 vi.mock('@/state/session', () => ({ session: { canAccess: () => state.manage } }))
@@ -19,7 +20,7 @@ import DashboardView from './DashboardView.vue'
 import ShipmentStatisticsView from './ShipmentStatisticsView.vue'
 const wrappers: ReturnType<typeof mount>[] = []
 function home() { const wrapper = mount(DashboardView, { global: { stubs: { RouterLink: true } } }); wrappers.push(wrapper); return wrapper }
-beforeEach(() => { state.manage = true; state.shipped = false; state.count = 1; vi.clearAllMocks() })
+beforeEach(() => { state.manage = true; state.shipped = false; state.count = 1; state.route.query = {}; vi.clearAllMocks() })
 afterEach(() => wrappers.splice(0).forEach(w => w.unmount()))
 describe('shipment confirmation', () => {
   it('does not select unbound legacy rows for dispatch or export', async () => {
@@ -112,9 +113,11 @@ describe('shipment confirmation', () => {
 })
 describe('shipment statistics', () => {
   it('shows totals and snapshots and validates date filters as a toast', async () => {
+    state.route.query = { orderId: 'synthetic-order' }
     vi.mocked(dashboardApi.statistics).mockResolvedValue({ summary: { records: 1, quantity: 5, boxCount: 2, products: 1 }, daily: [], products: [],
       details: { items: [{ id: 'dispatch-1', productName: '产品快照', productCode: 'P1', skuCodes: 'SKU1', quantity: 5, boxCount: 2, actorName: '操作员', dispatchedAt: '2026-10-16T01:00:00Z', remark: '发货备注' }], page: 0, size: 20, totalElements: 1, totalPages: 1 } } as never)
-    const wrapper = mount(ShipmentStatisticsView); wrappers.push(wrapper); await flushPromises()
+    const wrapper = mount(ShipmentStatisticsView, { global: { stubs: { RouterLink: true } } }); wrappers.push(wrapper); await flushPromises()
+    expect(dashboardApi.statistics).toHaveBeenCalledWith(expect.objectContaining({ orderId: 'synthetic-order' }))
     expect(wrapper.text()).toContain('发货 SKU / 历史父体数'); expect(wrapper.text()).toContain('产品快照'); expect(wrapper.text()).toContain('发货备注')
     const dates = wrapper.findAll('input[type="date"]')
     await dates[0]!.setValue('2026-10-20'); await dates[1]!.setValue('2026-10-16')

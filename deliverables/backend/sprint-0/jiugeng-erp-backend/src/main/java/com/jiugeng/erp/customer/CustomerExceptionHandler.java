@@ -4,7 +4,7 @@ import java.util.Map;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-@RestControllerAdvice(assignableTypes={CustomerController.class,InvoiceController.class})
+@RestControllerAdvice(basePackages={"com.jiugeng.erp.customer","com.jiugeng.erp.dashboard"})
 class CustomerExceptionHandler {
     // Avoid Spring's default validation logging of rejected customer contact values.
     @ExceptionHandler({org.springframework.web.bind.MethodArgumentNotValidException.class,

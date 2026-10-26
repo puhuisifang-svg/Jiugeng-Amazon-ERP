@@ -314,11 +314,13 @@ onBeforeUnmount(() => { window.clearInterval(refreshTimer); window.removeEventLi
               :disabled="!selectedShipments.length || exporting || dispatching || loading"
               @click="exportImage"
             >
-              {{ exporting ? '生成图片中…' : '导出' }}
+              {{ exporting ? '生成图片中…' : '导出图片' }}
             </button>
             <button
               v-if="active === 'today-shipments' && canDispatch"
               type="button"
+              class="secondary-action shipment-export-button shipment-label-export-button"
+              :class="{ 'is-selected': selectedShipments.length > 0 }"
               :disabled="!selectedShipments.length || loading || dispatching"
               @click="labelIds = selectedShipments.map(item => item.id)"
             >

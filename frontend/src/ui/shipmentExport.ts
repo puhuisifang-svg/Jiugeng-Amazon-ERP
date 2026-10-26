@@ -7,7 +7,6 @@ type ExportRun = { text: string; color: string; font: string; x: number; width: 
 export function wrapShipmentName(context: Pick<CanvasRenderingContext2D, 'measureText' | 'font'>, item: TodayShipment, width: number): ExportRun[][] {
   const runs = nameRuns(item.productName, item.namePresentation?.styles, item.namePresentation?.highlighted)
     .map(run => ({ text: run.text, color: run.color === 'RED' ? '#c62828' : '#172033', font: `${run.bold ? 'bold' : 'normal'} 26px sans-serif` }))
-  runs.push({ text: `\n客户：${item.customerProduct?.customerName ?? ''}\n客户编码：${item.customerProduct?.customerProductCode || '未填'}`, color: '#172033', font: 'bold 26px sans-serif' })
   const lines: ExportRun[][] = [[]]; let x = 0
   for (const run of runs) {
     context.font = run.font

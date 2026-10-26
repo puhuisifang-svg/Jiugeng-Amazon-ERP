@@ -21,7 +21,8 @@ const draft = ref({ name: '', owner: '', remark: '', enabled: true }), baseline 
 const products = computed(() => detail.value?.products.filter(p => !q.value || p.asin.includes(q.value.toUpperCase())) ?? [])
 const auto = computed(() => detail.value?.automaticProducts.filter(p => (tab.value === 'missing' ? p.missingCount >= 2 : p.missingCount < 2) && (!q.value || p.asin.includes(q.value.toUpperCase()) || p.title.toLowerCase().includes(q.value.toLowerCase())) && (!from.value || day(p.firstAt)>=from.value) && (!to.value || day(p.firstAt)<=to.value)) ?? [])
 const total = computed(() => tab.value === 'manual' ? products.value.length : auto.value.length)
-watch([q, tab, size, from, to], () => { page.value = 1 })
+watch([q, tab, size, from, to], () => { page.value = 1; chosen.value = [] })
+watch(page, () => { chosen.value = [] })
 watch(() => props.store, async value => {
   if (!value) return
   error.value = ''; detail.value = undefined; tab.value = 'online'; page.value = 1; chosen.value=[];q.value='';from.value='';to.value='';notice.value=''

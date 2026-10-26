@@ -13,6 +13,19 @@ async function open(writable: boolean) {
   return wrapper
 }
 describe('store product monitoring', () => {
+  it('clears selected products when filters or tabs change', async () => {
+    const wrapper = await open(true)
+    const batch = () => wrapper.findAll('button').find(b => b.text() === '批量添加产品监控')!
+    await wrapper.get('input[aria-label="选择 B000000001"]').setValue(true)
+    expect(batch().attributes('disabled')).toBeUndefined()
+    await wrapper.get('input[aria-label="搜索标题或ASIN"]').setValue('not-matched')
+    expect(batch().attributes('disabled')).toBeDefined()
+    await wrapper.get('input[aria-label="搜索标题或ASIN"]').setValue('')
+    await wrapper.get('input[aria-label="选择 B000000001"]').setValue(true)
+    await wrapper.findAll('button').find(b => b.text() === '疑似下架产品')!.trigger('click')
+    expect(batch().attributes('disabled')).toBeDefined()
+    wrapper.unmount()
+  })
   it('adds the chosen observed ASIN and keeps absent price unknown', async () => {
     const wrapper = await open(true)
     expect(wrapper.text()).not.toContain('US$ 0')

@@ -31,3 +31,13 @@ it('requires recalculation after edits and preserves draft after failed save', a
   await w.findAll('label').find(l => l.text().startsWith('成品单位'))!.get('input').setValue('套'); expect(button('保存草稿').attributes('disabled')).toBeDefined(); w.unmount()
 })
 it('does not expose write actions to a read-only account', async () => { access.write = false; const w = setup(); await flushPromises(); await w.findAll('button').find(b => b.text() === '详情 / 维护')!.trigger('click'); await flushPromises(); expect(w.text()).not.toContain('新建成本草稿'); expect(w.text()).not.toContain('工序管理'); w.unmount() })
+it('keeps input when switching cost tabs and places actions outside the scroll body', async () => {
+  const w = setup(); await flushPromises()
+  const button = (name: string) => w.findAll('button').find(b => b.text() === name)!
+  await button('详情 / 维护').trigger('click'); await flushPromises(); await button('新建成本草稿').trigger('click'); await flushPromises()
+  await w.findAll('label').find(l => l.text().startsWith('成品单位'))!.get('input').setValue('套')
+  const tabs = w.findAll('[role="tab"]'); await tabs[1]!.trigger('click'); expect(tabs[1]!.attributes('aria-selected')).toBe('true')
+  await tabs[0]!.trigger('click'); expect(w.findAll('label').find(l => l.text().startsWith('成品单位'))!.get('input').element).toHaveProperty('value', '套')
+  expect(w.get('.cost-sheet__body').find('.cost-sheet__footer').exists()).toBe(false)
+  expect(w.get('.cost-sheet__footer').text()).toContain('保存草稿'); w.unmount()
+})

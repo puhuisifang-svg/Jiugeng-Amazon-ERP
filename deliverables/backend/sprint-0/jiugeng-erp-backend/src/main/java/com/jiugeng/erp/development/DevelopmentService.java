@@ -47,6 +47,7 @@ class DevelopmentService {
                 .param("owner",event.owner()).param("asin",event.asin()).param("category",event.category())
                 .param("score",event.score()).param("price",event.referencePrice()).param("url",event.sourceUrl())
                 .param("reason",event.selectionReason()).update();
+        jdbc.sql("UPDATE product_development SET selection_research_json=:research WHERE id=:id").param("research",event.researchSnapshot()).param("id",event.candidateId()).update();
         record(event.actor(),"DEVELOPMENT_CREATE",get(event.candidateId(),false),"候选通过，生成新品开发草稿");
     }
 

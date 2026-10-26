@@ -13,7 +13,7 @@ final class SelectionTypes {
     record CandidateView(String id, String asin, String title, CandidateStatus status, Integer score,
             String rejectionReason, String sourceUrl, String category, BigDecimal price, BigDecimal rating,
             Integer reviewCount, String owner, List<String> tags, String selectionReason, CandidateSource source,
-            String sourceStore, Instant discoveredAt, String sourceRunId, String sourceEventId) {}
+            String sourceStore, Instant discoveredAt, String sourceRunId, String sourceEventId, long version, BigDecimal weightedScore) {}
 
     record NoteView(String id, String content, String authorId, String authorName, String authorRole,
             Instant createdAt) {}

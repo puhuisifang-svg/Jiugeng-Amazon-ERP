@@ -41,7 +41,7 @@ class SelectionControllerTest {
         String id=json.readTree(body).get("id").asText();
 
         mvc.perform(put("/api/v1/selection/candidates/{id}/evaluation",id).header("Authorization",bearer(token))
-                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("category","Home","price",12.5,
+                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("version",0,"category","Home","price",12.5,
                         "rating",4.6,"reviewCount",23,"owner","Alice","tags",java.util.List.of("机会","机会","低风险"),"selectionReason","值得复核"))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.tags.length()").value(2));
         mvc.perform(post("/api/v1/selection/candidates/{id}/notes",id).header("Authorization",bearer(token))
@@ -51,10 +51,10 @@ class SelectionControllerTest {
                 .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"报价\",\"url\":\"https://evidence.example/quote?token=secret\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.evidence[0].url").value("https://evidence.example/quote?token=secret"));
         mvc.perform(post("/api/v1/selection/candidates/{id}/transition",id).header("Authorization",bearer(token))
-                .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"REVIEWING\"}"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"version\":1,\"status\":\"REVIEWING\"}"))
                 .andExpect(status().isOk());
         mvc.perform(post("/api/v1/selection/candidates/{id}/transition",id).header("Authorization",bearer(token))
-                .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"REJECTED\",\"rejectionReason\":\"利润不足\"}"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"version\":2,\"status\":\"REJECTED\",\"rejectionReason\":\"利润不足\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.rejectionReason").value("利润不足"));
         mvc.perform(get("/api/v1/selection/candidates").header("Authorization",bearer(token)).param("keyword","alice").param("status","REJECTED"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$[0].id").value(id));
@@ -69,7 +69,7 @@ class SelectionControllerTest {
                 .content("{\"asinOrUrl\":\"b0dup000001\",\"title\":\"duplicate\"}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CANDIDATE_ASIN_EXISTS"));
         mvc.perform(post("/api/v1/selection/candidates/{id}/transition",id).header("Authorization",bearer(writer)).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"status\":\"REJECTED\"}"))
+                .content("{\"version\":0,\"status\":\"REJECTED\"}"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("REJECTION_REASON_REQUIRED"));
         mvc.perform(post("/api/v1/selection/candidates/{id}/evidence",id).header("Authorization",bearer(writer)).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"name\":\"bad\",\"url\":\"http://example.com\"}"))

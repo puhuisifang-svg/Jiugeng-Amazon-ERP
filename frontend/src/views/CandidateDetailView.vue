@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SelectionResearchPanel from '@/components/SelectionResearchPanel.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
@@ -95,7 +96,7 @@ onMounted(load)
           <div><strong>{{ detail.candidate.asin }}</strong><h2>{{ detail.candidate.title }}</h2></div>
           <span class="placeholder-badge">{{ detail.candidate.status }}</span>
         </div>
-        <p>综合分：{{ detail.candidate.score }} · 类目：{{ detail.candidate.category ?? '—' }} · 负责人：{{ detail.candidate.owner ?? '—' }}</p>
+        <p>综合分：{{ detail.candidate.weightedScore ?? '未完成' }} · 类目：{{ detail.candidate.category ?? '—' }} · 负责人：{{ detail.candidate.owner ?? '—' }}</p>
         <p>
           来源：{{ detail.candidate.source ?? '—' }}<template v-if="detail.candidate.sourceStore">
             / {{ detail.candidate.sourceStore }}
@@ -108,6 +109,13 @@ onMounted(load)
           选品理由：{{ detail.candidate.selectionReason }}
         </p>
       </article>
+      <SelectionResearchPanel
+        v-if="runtimeConfig.authMode !== 'mock'"
+        :candidate-id="candidateId"
+        :writable="writable"
+        :status="detail.candidate.status"
+        @changed="load"
+      />
       <form
         v-if="writable"
         class="panel operation-form"

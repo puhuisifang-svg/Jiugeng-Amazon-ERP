@@ -126,9 +126,13 @@ class MonitoringService {
 
     @Transactional
     public Snapshot snapshot(String id, SnapshotInput input) {
+        return snapshotValidated(id,input,false);
+    }
+
+    Snapshot snapshotValidated(String id, SnapshotInput input, boolean external) {
         key(input.requestId());
         require(input.observedAt()!=null && !input.observedAt().isAfter(Instant.now().plusSeconds(60)) && input.observedAt().isAfter(Instant.parse("2000-01-01T00:00:00Z")), "观测时间必须有效且不能晚于当前时间");
-        require(input.source()!=null && Set.of("MANUAL","SYNTHETIC").contains(input.source()), "仅支持人工或合成来源");
+        require(input.source()!=null && (Set.of("MANUAL","SYNTHETIC").contains(input.source()) || external && input.source().startsWith("EXTERNAL:")), "仅支持人工或合成来源");
         require(input.quality()!=null && Set.of("COMPLETE","PARTIAL","FAILED").contains(input.quality()), "无效完整性类型");
         String reason=text(input.reason(),500);
         require(input.quality().equals("COMPLETE") || !reason.isBlank(), "部分或失败观测需填写原因");

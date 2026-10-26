@@ -25,9 +25,10 @@ class SelectionService implements SelectionCandidateGateway {
     private static final Pattern PATH = Pattern.compile("/(?:DP|GP/PRODUCT)/([A-Z0-9]{10,16})(?:/|$)");
     private final SelectionRepository repository;
     private final AuditTrail audit;
+    private final SelectionResearch research;
     private final org.springframework.context.ApplicationEventPublisher events;
-    SelectionService(SelectionRepository repository, AuditTrail audit, org.springframework.context.ApplicationEventPublisher events) {
-        this.repository=repository; this.audit=audit; this.events=events;
+    SelectionService(SelectionRepository repository, AuditTrail audit, org.springframework.context.ApplicationEventPublisher events, SelectionResearch research) {
+        this.repository=repository; this.audit=audit; this.events=events; this.research=research;
     }
 
     @Transactional(readOnly=true)
@@ -53,8 +54,9 @@ class SelectionService implements SelectionCandidateGateway {
     }
 
     @Transactional
-    CandidateView evaluate(String id, EvaluationInput input, AuthenticatedActor actor) {
+    CandidateView evaluate(String id, EvaluationInput input, Long version, AuthenticatedActor actor) {
         repository.lock(id);
+        research.check(id,version);
         CandidateView before=candidate(id);
         String category=optional(input.category(),100), owner=optional(input.owner(),100), reason=optional(input.selectionReason(),1000);
         if(input.price()!=null&&input.price().signum()<0) throw invalid("CANDIDATE_PRICE_INVALID","价格不能小于 0");
@@ -72,19 +74,21 @@ class SelectionService implements SelectionCandidateGateway {
     }
 
     @Transactional
-    CandidateView transition(String id, CandidateStatus target, String rejectionReason, AuthenticatedActor actor) {
+    CandidateView transition(String id, CandidateStatus target, String rejectionReason, Long version, AuthenticatedActor actor) {
         repository.lock(id);
+        research.check(id,version);
         CandidateView before=candidate(id);
         if(target==null||!allowed(before.status()).contains(target)) throw conflict("INVALID_CANDIDATE_TRANSITION","不允许从 "+before.status()+" 变更为 "+target);
         String reason=optional(rejectionReason,500);
         if(target==CandidateStatus.REJECTED&&reason==null) throw invalid("REJECTION_REASON_REQUIRED","淘汰候选必须填写原因");
         if(target!=CandidateStatus.REJECTED&&reason!=null) throw invalid("REJECTION_REASON_NOT_ALLOWED","仅淘汰状态可以填写原因");
+        if(target==CandidateStatus.REVIEWING||target==CandidateStatus.APPROVED) research.ready(id,target==CandidateStatus.APPROVED);
         repository.transition(id,target,reason,actor.userId());
         CandidateView after=candidate(id);
         audit.record(operation(actor,"CANDIDATE_TRANSITION",id,snapshot(before),snapshot(after),"候选状态流转"));
         if (target == CandidateStatus.APPROVED) events.publishEvent(new CandidateApproved(after.id(), after.asin(),
                 after.title(), after.category(), after.score(), after.price(), after.sourceUrl(),
-                after.selectionReason(), after.owner(), actor));
+                after.selectionReason(), after.owner(), actor, research.approvalSnapshot(id)));
         return after;
     }
 
@@ -110,16 +114,16 @@ class SelectionService implements SelectionCandidateGateway {
             String runId,String eventId,AuthenticatedActor actor){
         String normalized=extractAsin(asin);
         var existing=repository.findByAsin(normalized);
-        if(existing.isPresent()) return new Confirmation(existing.get().id(),true);
+        if(existing.isPresent()) { repository.linkSource(existing.get().id(),eventId,runId); return new Confirmation(existing.get().id(),true); }
         String id=UUID.randomUUID().toString();
         try { repository.insertWatch(id,normalized,required(title,"标题",300),canonical(normalized),
                 required(storeName,"店铺名称",200),discoveredAt,required(runId,"来源运行",100),required(eventId,"来源事件",100),actor.userId()); }
         catch(DataIntegrityViolationException conflict){
-            return new Confirmation(repository.findByAsin(normalized).orElseThrow(()->conflict("CANDIDATE_ASIN_EXISTS","ASIN 并发确认冲突")).id(),true);
+            String found=repository.findByAsin(normalized).orElseThrow(()->conflict("CANDIDATE_ASIN_EXISTS","ASIN 并发确认冲突")).id(); repository.linkSource(found,eventId,runId); return new Confirmation(found,true);
         }
         CandidateView created=candidate(id);
         audit.record(operation(actor,"CANDIDATE_CREATE_FROM_WATCH",id,null,snapshot(created),"确认监控事件生成候选"));
-        return new Confirmation(id,false);
+        repository.linkSource(id,eventId,runId); return new Confirmation(id,false);
     }
 
     private CandidateView candidate(String id){ return repository.findById(id).orElseThrow(()->new SelectionException(404,"CANDIDATE_NOT_FOUND","候选不存在："+id)); }

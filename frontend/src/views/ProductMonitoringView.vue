@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CollectionPanel from '@/components/CollectionPanel.vue'
 import ListPagination from '@/components/ListPagination.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
@@ -29,7 +30,7 @@ const isDetail = computed(() => typeof route.params.id === 'string')
 const selectedRows = computed(() => rows.value.filter(row => selected.value.includes(row.id)))
 const allSelected = computed(() => rows.value.length > 0 && selected.value.length === rows.value.length)
 const statusLabels: Record<string, string> = { PENDING: '待首次观测', BASELINE: '已建立基线', SOURCE_BASELINE: '来源切换，重建基线', CHANGED: '发现变化', UNCHANGED: '无变化', PARTIAL: '部分观测', FAILED: '更新失败', OUT_OF_ORDER: '旧观测未采纳' }
-const sourceLabel = (source: string | null) => source === 'MANUAL' ? '人工观测' : source === 'SYNTHETIC' ? '合成演示' : '暂无数据'
+const sourceLabel = (source: string | null) => source === 'MANUAL' ? '人工观测' : source === 'SYNTHETIC' ? '合成演示' : source?.startsWith('EXTERNAL:') ? `外部观测（${source.slice(9)}）` : '暂无数据'
 const formatTime = (value: string | null) => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—'
 const display = (value: unknown) => value === undefined ? '未观测' : value === null ? '未知' : Array.isArray(value) ? (value.join('\n') || '明确为空') : value === 'AVAILABLE' ? '可售' : value === 'UNAVAILABLE' ? '不可售' : String(value)
 const stale = (row: MonitorTarget) => row.observedAt && Date.now() - Date.parse(row.observedAt) > 48 * 3600000
@@ -66,7 +67,7 @@ async function show(kind: typeof modalKind.value) {
   if (kind === 'snapshot') {
     const date = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
     observation.at = date.toISOString().slice(0, 19); observation.reason = ''; observation.quality = 'COMPLETE'
-    observation.source = detail.value?.target.source ?? 'MANUAL'
+    observation.source = detail.value?.target.source === 'SYNTHETIC' ? 'SYNTHETIC' : 'MANUAL'
     for (const field of fieldNames) {
       const value = detail.value?.target.fields[field]
       modes[field] = value == null ? 'UNKNOWN' : 'VALUE'
@@ -150,6 +151,10 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
 
 <template>
   <section class="monitor-page page-stack">
+    <CollectionPanel
+      kind="PRODUCT"
+      :targets="rows.map(r => ({id:r.id,label:r.asin}))"
+    />
     <div class="monitor-intro">
       <div><span class="monitor-eyebrow">AMAZON · US</span><h2>{{ isDetail ? '商品观测详情' : '产品监控' }}</h2><p>持续记录商品变化，让每一次判断都有依据。</p></div><span class="monitor-source-note">人工观测 / 合成演示 · 尚未接入自动采集</span>
     </div>

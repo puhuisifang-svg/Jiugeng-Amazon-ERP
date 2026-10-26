@@ -39,10 +39,10 @@ class DevelopmentControllerTest {
             .andExpect(jsonPath("$.item.source.score").value(82)).andExpect(jsonPath("$.item.fields.productName").value("开发测试"))
             .andExpect(jsonPath("$.item.fields.purchaseCost").isEmpty()).andExpect(jsonPath("$.history.length()").value(1));
         mvc.perform(post("/api/v1/selection/candidates/"+id+"/transition").header("Authorization",selector)
-            .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"APPROVED\"}")).andExpect(status().isConflict());
+            .contentType(MediaType.APPLICATION_JSON).content("{\"version\":2,\"status\":\"APPROVED\"}")).andExpect(status().isConflict());
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product_development WHERE candidate_id=?",Integer.class,id)).isEqualTo(1);
         mvc.perform(put("/api/v1/selection/candidates/"+id+"/evaluation").header("Authorization",selector)
-            .contentType(MediaType.APPLICATION_JSON).content("{\"score\":50,\"category\":\"changed\"}")).andExpect(status().isOk());
+            .contentType(MediaType.APPLICATION_JSON).content("{\"version\":2,\"score\":50,\"category\":\"changed\"}")).andExpect(status().isConflict());
         mvc.perform(get("/api/v1/product-development/"+id).header("Authorization",productUser))
             .andExpect(status().isOk()).andExpect(jsonPath("$.item.source.score").value(82));
         update(id,selector,0,fields(id)).andExpect(status().isForbidden());
@@ -93,7 +93,7 @@ class DevelopmentControllerTest {
         try {
             var tasks=java.util.List.of("APPROVED","REJECTED").stream().map(target -> (java.util.concurrent.Callable<Integer>) () ->
                 mvc.perform(post("/api/v1/selection/candidates/"+id+"/transition").header("Authorization",selector)
-                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(target.equals("REJECTED") ? Map.of("status",target,"rejectionReason","不采用") : Map.of("status",target))))
+                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(target.equals("REJECTED") ? Map.of("version",1,"status",target,"rejectionReason","不采用") : Map.of("version",1,"status",target))))
                 .andReturn().getResponse().getStatus()).toList();
             var statuses=executor.invokeAll(tasks).stream().map(f -> {try{return f.get();}catch(Exception e){throw new RuntimeException(e);}}).sorted().toList();
             assertThat(statuses).containsExactly(200,409);
@@ -176,9 +176,13 @@ class DevelopmentControllerTest {
     private String candidate()throws Exception {
         String body=mvc.perform(post("/api/v1/selection/candidates").header("Authorization",selector).contentType(MediaType.APPLICATION_JSON)
             .content("{\"asinOrUrl\":\"B0DEV33001\",\"title\":\"开发测试\",\"score\":82}")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        return json.readTree(body).path("id").asText();
+        String id=json.readTree(body).path("id").asText();
+        jdbc.update("UPDATE selection_candidate SET owner='Synthetic researcher',selection_reason='Test evidence',weighted_score=80,research_json=? WHERE id=?", "{\"riskStatus\":\"ACCEPTABLE\",\"riskReason\":\"synthetic check\",\"conclusion\":\"test conclusion\",\"estimateId\":\"test-estimate\"}", id);
+        jdbc.update("INSERT INTO selection_candidate_evidence(id,candidate_id,name,url,added_by_id,added_by_name,added_by_role) VALUES(?,?,'test','https://example.com/evidence','test','test','SELECTION')",UUID.randomUUID().toString(),id);
+        jdbc.update("INSERT INTO selection_estimate(id,candidate_id,request_id,payload_json,result_json,revision) VALUES('test-estimate',?,'test-request','{}','{}',1)",id);
+        return id;
     }
-    private void candidateTransition(String id,String target,int status)throws Exception {mvc.perform(post("/api/v1/selection/candidates/"+id+"/transition").header("Authorization",selector).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("status",target)))).andExpect(status().is(status));}
+    private void candidateTransition(String id,String target,int status)throws Exception {mvc.perform(post("/api/v1/selection/candidates/"+id+"/transition").header("Authorization",selector).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("version",jdbc.queryForObject("SELECT version FROM selection_candidate WHERE id=?",Long.class,id),"status",target)))).andExpect(status().is(status));}
     private void approve(String id)throws Exception {candidateTransition(id,"REVIEWING",200);candidateTransition(id,"APPROVED",200);}
     private String user(String role)throws Exception {
         String id=UUID.randomUUID().toString(),name="dev-"+id.substring(0,8),password="Development-Test-42";

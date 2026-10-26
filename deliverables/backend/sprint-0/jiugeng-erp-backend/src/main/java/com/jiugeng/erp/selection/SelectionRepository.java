@@ -36,6 +36,11 @@ class SelectionRepository {
                 .query(this::mapCandidate).optional();
     }
 
+    void linkSource(String id,String event,String run){
+        lock(id);
+        if(jdbc.sql("SELECT COUNT(*) FROM selection_source_link WHERE candidate_id=:id AND event_id=:event").param("id",id).param("event",event).query(Long.class).single()==0)
+            jdbc.sql("INSERT INTO selection_source_link(candidate_id,event_id,source_run_id) VALUES(:id,:event,:run)").param("id",id).param("event",event).param("run",run).update();
+    }
     void lock(String id) {
         jdbc.sql("SELECT id FROM selection_candidate WHERE id=:id FOR UPDATE").param("id", id)
                 .query(String.class).optional().orElseThrow(() -> new SelectionException(404,"CANDIDATE_NOT_FOUND","候选不存在"));
@@ -74,7 +79,7 @@ class SelectionRepository {
         jdbc.sql("""
                 UPDATE selection_candidate SET category=:category, price=:price, rating=:rating,
                     review_count=:reviews, owner=:owner, selection_reason=:reason,
-                    updated_by=:actor, updated_at=CURRENT_TIMESTAMP WHERE id=:id
+                    updated_by=:actor, version=version+1, updated_at=CURRENT_TIMESTAMP WHERE id=:id
                 """).param("category", input.category()).param("price", input.price()).param("rating", input.rating())
                 .param("reviews", input.reviewCount()).param("owner", input.owner()).param("reason", input.selectionReason())
                 .param("actor", actorId).param("id", id).update();
@@ -87,7 +92,7 @@ class SelectionRepository {
     }
 
     void transition(String id, CandidateStatus status, String reason, String actorId) {
-        jdbc.sql("UPDATE selection_candidate SET status=:status,rejection_reason=:reason,updated_by=:actor,updated_at=CURRENT_TIMESTAMP WHERE id=:id")
+        jdbc.sql("UPDATE selection_candidate SET status=:status,rejection_reason=:reason,updated_by=:actor,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=:id")
                 .param("status", status.name()).param("reason", reason).param("actor", actorId).param("id", id).update();
     }
 
@@ -131,7 +136,7 @@ class SelectionRepository {
                 rs.getInt("score"), rs.getString("rejection_reason"), rs.getString("source_url"), rs.getString("category"),
                 rs.getBigDecimal("price"), rs.getBigDecimal("rating"), integer(rs,"review_count"), rs.getString("owner"),
                 tags, rs.getString("selection_reason"), CandidateSource.valueOf(rs.getString("source")),
-                rs.getString("source_store"), instant(rs,"discovered_at"), rs.getString("source_run_id"), rs.getString("source_event_id"));
+                rs.getString("source_store"), instant(rs,"discovered_at"), rs.getString("source_run_id"), rs.getString("source_event_id"),rs.getLong("version"),rs.getBigDecimal("weighted_score"));
     }
 
     private Integer integer(ResultSet rs, String column) throws SQLException { int value=rs.getInt(column); return rs.wasNull()?null:value; }

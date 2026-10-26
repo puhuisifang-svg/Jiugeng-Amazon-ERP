@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import CollectionPanel from '@/components/CollectionPanel.vue'
+import WatchStoreDetail from '@/components/WatchStoreDetail.vue'
+import ListPagination from '@/components/ListPagination.vue'
+import { watch } from 'vue'
 import SuccessToast from "@/components/SuccessToast.vue"
 import { computed, onMounted, ref } from 'vue'
 import { domainApi, type WatchRunMode } from '@/api/domain'
@@ -7,6 +11,10 @@ import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import { session } from '@/state/session'
 import { runtimeConfig } from '@/config/runtime'
 
+const selectedStore = ref<WatchStoreDto>()
+const page = ref(1), pageSize = ref(20), query = ref('')
+watch([query, pageSize], () => { page.value = 1 })
+const filtered = computed(() => items.value.filter(s => [s.storeName,s.storeKey,s.owner].join(' ').toLowerCase().includes(query.value.toLowerCase())))
 const items = ref<WatchStoreDto[]>([])
 const loading = ref(true)
 const busyId = ref('')
@@ -55,7 +63,26 @@ onMounted(load)
 
 <template>
   <section class="page-stack">
-    <SyntheticNotice />
+    <SyntheticNotice v-if="!formal" />
+    <CollectionPanel
+      v-if="formal"
+      kind="STORE"
+      :targets="items.map(s => ({ id:s.id,label:s.storeName }))"
+    />
+    <WatchStoreDetail
+      v-if="formal"
+      :store="selectedStore"
+      :writable="writable"
+      @close="selectedStore=undefined"
+      @changed="load"
+    />
+    <label
+      v-if="formal"
+      class="panel filter-panel"
+    >店铺 / 监控人搜索<input
+      v-model="query"
+      placeholder="店铺名称、标识或监控人"
+    ></label>
     <p
       v-if="!writable"
       class="data-state"
@@ -102,16 +129,21 @@ onMounted(load)
       正在加载…
     </p>
     <article
-      v-for="item in items"
+      v-for="item in filtered.slice((page-1)*pageSize,page*pageSize)"
       v-else
       :key="item.id"
       class="panel compact-panel"
     >
       <div class="card-heading">
         <div><strong>{{ item.storeName }}</strong><p>{{ item.sourceUrl }}</p></div>
-        <span class="placeholder-badge">{{ item.status }}</span>
+        <span class="placeholder-badge">{{ item.status === 'ACTIVE' ? '启用' : '暂停' }}</span><button
+          v-if="formal"
+          @click="selectedStore=item"
+        >
+          详情 / 设置
+        </button>
       </div>
-      <p>有效基线：{{ item.baselineRunId ?? '尚未建立' }} · ASIN 数：{{ item.baselineAsinCount }}</p>
+      <p>人工有效基线：{{ item.baselineRunId ?? '尚未建立' }} · ASIN 数：{{ item.baselineAsinCount }}</p>
       <p v-if="item.lastRunId">
         最近运行：{{ item.lastRunId }} · {{ item.lastRunStatus }} · 完整性 {{ item.lastIntegrityStatus }} · 决策 {{ item.lastDecision }}
       </p>
@@ -129,21 +161,21 @@ onMounted(load)
         class="inline-actions"
       >
         <button
-          :disabled="busyId === item.id"
+          :disabled="busyId === item.id || item.status !== 'ACTIVE'"
           type="button"
           @click="run(item, 'COMPLETE')"
         >
           {{ formal ? '提交完整快照' : '模拟完整快照' }}
         </button>
         <button
-          :disabled="busyId === item.id"
+          :disabled="busyId === item.id || item.status !== 'ACTIVE'"
           type="button"
           @click="run(item, 'INCOMPLETE')"
         >
           {{ formal ? '提交不完整快照' : '模拟不完整快照' }}
         </button>
         <button
-          :disabled="busyId === item.id"
+          :disabled="busyId === item.id || item.status !== 'ACTIVE'"
           type="button"
           @click="run(item, 'FAILED')"
         >
@@ -151,5 +183,12 @@ onMounted(load)
         </button>
       </div>
     </article>
+    <ListPagination
+      v-if="formal"
+      v-model:page="page"
+      v-model:page-size="pageSize"
+      :total="filtered.length"
+      :disabled="loading"
+    />
   </section>
 </template>

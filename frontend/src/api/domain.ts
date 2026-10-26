@@ -429,11 +429,11 @@ export const domainApi = {
     if (runtimeConfig.authMode === 'mock') return assertSynthetic(await apiRequest<SyntheticWrite<CandidateDetailDto>>(`/selection/candidates/${id}/evidence`, { method: 'POST', body: JSON.stringify(input) }))
     return { item: await apiRequest<CandidateDetailDto>(`/v1/selection/candidates/${id}/evidence`, { method: 'POST', body: JSON.stringify(input) }), mockData: false }
   },
-  updateCandidateEvaluation: async (id: string, input: { category?: string | undefined; price?: number | undefined; rating?: number | undefined; reviewCount?: number | undefined; owner?: string | undefined; tags?: string[] | undefined; selectionReason?: string | undefined }) => {
+  updateCandidateEvaluation: async (id: string, input: { version?: number | undefined; category?: string | undefined; price?: number | undefined; rating?: number | undefined; reviewCount?: number | undefined; owner?: string | undefined; tags?: string[] | undefined; selectionReason?: string | undefined }) => {
     if (runtimeConfig.authMode === 'mock') return assertSynthetic(await apiRequest<SyntheticWrite<SelectionCandidateDto & { rejectionReason?: string }>>(`/selection/candidates/${id}/evaluation`, { method: 'PUT', body: JSON.stringify(input) }))
     return { item: await apiRequest<SelectionCandidateDto & { rejectionReason?: string }>(`/v1/selection/candidates/${id}/evaluation`, { method: 'PUT', body: JSON.stringify(input) }), mockData: false }
   },
-  transitionCandidate: async (id: string, input: { status: CandidateStatus; rejectionReason?: string }) => {
+  transitionCandidate: async (id: string, input: { version?: number | undefined; status: CandidateStatus; rejectionReason?: string }) => {
     if (runtimeConfig.authMode === 'mock') return assertSynthetic(await apiRequest<SyntheticWrite<SelectionCandidateDto & { rejectionReason?: string }>>(`/selection/candidates/${id}/transition`, { method: 'POST', body: JSON.stringify(input) }))
     return { item: await apiRequest<SelectionCandidateDto & { rejectionReason?: string }>(`/v1/selection/candidates/${id}/transition`, { method: 'POST', body: JSON.stringify(input) }), mockData: false }
   },

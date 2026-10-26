@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ListPagination from '@/components/ListPagination.vue'
+import { watch } from 'vue'
 import SuccessToast from "@/components/SuccessToast.vue"
 import { computed, onMounted, reactive, ref } from 'vue'
 import { domainApi, type CandidateStatus } from '@/api/domain'
@@ -11,6 +13,7 @@ import { downloadCandidatesCsv } from '@/utils/candidateCsv'
 type Candidate = SelectionCandidateDto & { rejectionReason?: string }
 interface EvaluationDraft { category: string; price: string; rating: string; reviewCount: string; owner: string; tags: string; selectionReason: string }
 const items = ref<Candidate[]>([]); const loading = ref(true); const busyId = ref(''); const error = ref(''); const success = ref(''); const reasons = reactive<Record<string, string>>({})
+const page = ref(1), pageSize = ref(20)
 const saving = ref(false); const asinOrUrl = ref(''); const title = ref(''); const score = ref(50)
 const query = ref(''); const statusFilter = ref(''); const ownerFilter = ref(''); const drafts = reactive<Record<string, EvaluationDraft>>({})
 const writable = computed(() => session.canAccess(['selection.write']))
@@ -24,6 +27,8 @@ const filteredItems = computed(() => {
       && (!ownerFilter.value || item.owner === ownerFilter.value)
   })
 })
+watch([query, statusFilter, ownerFilter, pageSize], () => { page.value = 1 })
+const pagedItems = computed(() => filteredItems.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
 function actions(status: string): CandidateStatus[] { if (status === 'NEW') return ['REVIEWING', 'REJECTED']; if (status === 'REVIEWING') return ['APPROVED', 'REJECTED']; return [] }
 function exportCurrentResults() { downloadCandidatesCsv(filteredItems.value) }
 function syncDraft(item: Candidate) {
@@ -47,11 +52,11 @@ async function updateEvaluation(item: Candidate) {
   busyId.value = item.id; error.value = ''; success.value = ''
   const optionalNumber = (value: string) => value.trim() === '' ? undefined : Number(value)
   try {
-    const response = await domainApi.updateCandidateEvaluation(item.id, { category: draft.category.trim() || undefined, price: optionalNumber(draft.price), rating: optionalNumber(draft.rating), reviewCount: optionalNumber(draft.reviewCount), owner: draft.owner.trim() || undefined, tags: draft.tags.split(/[,，]/).map(tag => tag.trim()).filter(Boolean), selectionReason: draft.selectionReason.trim() || undefined })
+    const response = await domainApi.updateCandidateEvaluation(item.id, { version: item.version, category: draft.category.trim() || undefined, price: optionalNumber(draft.price), rating: optionalNumber(draft.rating), reviewCount: optionalNumber(draft.reviewCount), owner: draft.owner.trim() || undefined, tags: draft.tags.split(/[,，]/).map(tag => tag.trim()).filter(Boolean), selectionReason: draft.selectionReason.trim() || undefined })
     const index = items.value.findIndex(candidate => candidate.id === item.id); items.value[index] = response.item; syncDraft(response.item)
     success.value = `候选 ${item.asin} 的评估资料已保存。`
   }
-  catch { error.value = '评估资料保存失败，请检查评分、价格和评论数。' } finally { busyId.value = '' }
+  catch (e) { error.value = e instanceof Error ? e.message : '评估资料保存失败，请检查输入。' } finally { busyId.value = '' }
 }
 async function transition(item: Candidate, status: CandidateStatus) {
   const rejectionReason = reasons[item.id]?.trim()
@@ -59,12 +64,12 @@ async function transition(item: Candidate, status: CandidateStatus) {
   busyId.value = item.id; error.value = ''; success.value = ''
   try {
     const input = status === 'REJECTED' ? { status, rejectionReason: rejectionReason as string } : { status }
-    const response = await domainApi.transitionCandidate(item.id, input)
+    const response = await domainApi.transitionCandidate(item.id, { ...input, version: item.version })
     const index = items.value.findIndex(candidate => candidate.id === item.id)
     items.value[index] = response.item
     success.value = `候选 ${item.asin} 已流转为 ${status}。`
   }
-  catch { error.value = '状态流转失败，请刷新后重试。' } finally { busyId.value = '' }
+  catch (e) { error.value = e instanceof Error ? e.message : '状态流转失败，请刷新后重试。' } finally { busyId.value = '' }
 }
 onMounted(load)
 </script>
@@ -144,14 +149,14 @@ onMounted(load)
       class="card-list"
     >
       <article
-        v-for="item in filteredItems"
+        v-for="item in pagedItems"
         :key="item.id"
         class="panel compact-panel"
       >
         <div class="card-heading">
           <div><strong>{{ item.asin }}</strong><h2>{{ item.title }}</h2></div><span class="placeholder-badge">{{ item.status }}</span>
         </div><p>
-          综合分：{{ item.score }}<span v-if="item.category"> · 类目：{{ item.category }}</span><span v-if="item.price !== undefined"> · 价格：{{ item.price }}</span><span v-if="item.rating !== undefined"> · 星级：{{ item.rating }}</span><span v-if="item.reviewCount !== undefined"> · 评论：{{ item.reviewCount }}</span><span v-if="item.owner"> · 负责人：{{ item.owner }}</span><span v-if="item.source"> · 来源：{{ item.source }}<template v-if="item.sourceStore"> / {{ item.sourceStore }}</template></span><span v-if="item.sourceUrl"> · <a
+          综合分：{{ item.weightedScore ?? '未完成' }} · 历史参考分：{{ item.score }}<span v-if="item.category"> · 类目：{{ item.category }}</span><span v-if="item.price !== undefined"> · 价格：{{ item.price }}</span><span v-if="item.rating !== undefined"> · 星级：{{ item.rating }}</span><span v-if="item.reviewCount !== undefined"> · 评论：{{ item.reviewCount }}</span><span v-if="item.owner"> · 负责人：{{ item.owner }}</span><span v-if="item.source"> · 来源：{{ item.source }}<template v-if="item.sourceStore"> / {{ item.sourceStore }}</template></span><span v-if="item.sourceUrl"> · <a
             :href="item.sourceUrl"
             target="_blank"
             rel="noreferrer"
@@ -176,7 +181,7 @@ onMounted(load)
           </RouterLink>
         </p>
         <form
-          v-if="writable && drafts[item.id]"
+          v-if="writable && drafts[item.id] && !['APPROVED', 'REJECTED'].includes(item.status)"
           class="operation-form evaluation-form"
           @submit.prevent="updateEvaluation(item)"
         >
@@ -237,5 +242,11 @@ onMounted(load)
         </div>
       </article>
     </div>
+    <ListPagination
+      v-model:page="page"
+      v-model:page-size="pageSize"
+      :total="filteredItems.length"
+      :disabled="loading"
+    />
   </section>
 </template>

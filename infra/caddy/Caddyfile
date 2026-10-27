@@ -1,6 +1,10 @@
 {
 	admin off
 	auto_https off
+	servers {
+		# cloudflared connects locally; preserve its original HTTPS scheme.
+		trusted_proxies static 127.0.0.1/32 ::1/128
+	}
 }
 
 :4173 {

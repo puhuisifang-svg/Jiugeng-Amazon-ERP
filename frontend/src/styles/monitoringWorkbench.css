@@ -39,3 +39,16 @@
 .monitor-workbench .mw-filters .monitor-check{flex:0 0 auto;flex-direction:row;gap:8px}.monitor-workbench .mw-filters input[type=checkbox]{width:16px;height:16px;min-height:16px}
 
 .monitor-workbench .mw-remark-edit{display:inline-flex;align-items:center;justify-content:center;min-width:28px;min-height:28px;margin-left:6px;vertical-align:middle}
+
+.monitor-workbench .mw-count-link{text-decoration:underline;text-underline-offset:3px;min-height:24px}
+.monitor-workbench .mw-remark-popover{position:fixed;inset:auto;margin:0;width:min(320px,calc(100vw - 16px));max-height:calc(100dvh - 16px);border:1px solid #dce2ea;box-shadow:0 6px 24px #0f172a26}
+.monitor-workbench .mw-remark-popover::backdrop{background:transparent}
+.monitor-workbench .mw-remark-popover header,.monitor-workbench .mw-remark-popover footer{padding:8px 12px;border:0}
+.monitor-workbench .mw-remark-popover h2{font-size:14px}
+.monitor-workbench .mw-remark-popover .mw-dialog-body{padding:0 12px}
+.monitor-workbench .mw-remark-popover .mw-remark-label{margin:0;gap:4px;font-size:12px}
+.monitor-workbench .mw-remark-popover textarea{min-height:96px;max-height:180px;resize:none}
+.monitor-workbench .mw-remark-popover .mw-dialog-body p{margin:4px 0;text-align:right}
+.monitor-workbench .mw-spinner{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;margin-right:4px;vertical-align:-2px;animation:mw-spin 1s linear infinite}
+@keyframes mw-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.monitor-workbench .mw-spinner{animation:none}}

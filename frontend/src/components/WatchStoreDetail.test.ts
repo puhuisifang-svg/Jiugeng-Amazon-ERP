@@ -1,5 +1,6 @@
 import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
+import { apiRequest } from '@/api/client'
 import WatchStoreDetail from './WatchStoreDetail.vue'
 import { monitoringApi } from '@/api/monitoring'
 import type { WatchStoreDto, WatchEventDto } from '@/api/resources'
@@ -13,6 +14,14 @@ async function open(writable: boolean) {
   return wrapper
 }
 describe('store product monitoring', () => {
+  it('paginates beyond twenty products and labels offer prices and unobserved ratings', async () => {
+    vi.mocked(apiRequest).mockResolvedValueOnce({products:[],runs:[],automaticProducts:Array.from({length:32},(_,i)=>({provider:'test',asin:`B0TEST${String(i).padStart(4,'0')}`,title:`Synthetic ${i}`,firstAt:'2026-10-26T12:00:00Z',lastAt:'2026-10-26T12:00:00Z',missingCount:0,price:12.99,priceType:'OFFER_FROM'}))})
+    const wrapper=await open(true)
+    expect(wrapper.text()).toContain('共 32 条');expect(wrapper.findAll('tbody tr')).toHaveLength(20)
+    expect(wrapper.text()).toContain('US$ 12.99 起');expect(wrapper.text()).toContain('暂无公开评分')
+    await wrapper.findAll('button').find(b=>b.attributes('aria-label')==='下一页')!.trigger('click')
+    expect(wrapper.findAll('tbody tr')).toHaveLength(12);expect(wrapper.text()).toContain('Synthetic 31');wrapper.unmount()
+  })
   it('renders only today event products with the same product table, including empty days', async () => {
     const wrapper = await open(true)
     await wrapper.setProps({newProducts:[{asin:'B000000002',title:'Today item',detectedAt:'2026-10-27T12:00:00Z'} as WatchEventDto]})

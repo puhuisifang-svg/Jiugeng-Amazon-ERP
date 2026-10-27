@@ -63,8 +63,9 @@ class WatchCollectionTarget implements CollectionTarget {
             if(rating!=null&&rating.length()>100)rating=null;
             var price=product.path("price").isNumber()?product.path("price").decimalValue():null;
             if(price!=null&&(price.signum()<0||price.compareTo(new java.math.BigDecimal("999999999999.99"))>0))price=null;
-            jdbc.sql("UPDATE watch_presence SET image_url=COALESCE(:image,image_url),price=COALESCE(:price,price),rating=COALESCE(:rating,rating) WHERE store_id=:store AND provider=:source AND asin=:asin")
-                .param("image",image).param("price",price).param("rating",rating).param("store",target.id()).param("source",provider).param("asin",product.path("asin").asText()).update();
+            String priceType=price==null?null:(product.path("priceType").asText().equals("OFFER_FROM")?"OFFER_FROM":"FEATURED");
+            jdbc.sql("UPDATE watch_presence SET image_url=COALESCE(:image,image_url),price=COALESCE(:price,price),price_type=COALESCE(:priceType,price_type),rating=COALESCE(:rating,rating) WHERE store_id=:store AND provider=:source AND asin=:asin")
+                .param("image",image).param("priceType",priceType).param("price",price).param("rating",rating).param("store",target.id()).param("source",provider).param("asin",product.path("asin").asText()).update();
         }
         String observedName=o.fields().path("storeName").asText("").trim();
         if(!observedName.isEmpty()&&observedName.length()<=200)

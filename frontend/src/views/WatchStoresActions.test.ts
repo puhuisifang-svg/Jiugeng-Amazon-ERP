@@ -15,6 +15,14 @@ async function setup(){
 }
 beforeEach(()=>{vi.clearAllMocks();vi.mocked(apiRequest).mockImplementation(async(path)=>path==='/v1/watch/stores'?[store]:path==='/v1/watch/events'?[]:store)})
 describe('watch list actions',()=>{
+ it('links the store name to its Amazon storefront and underlines the today action',async()=>{
+  const w=await setup();const link=w.get('a[aria-label="Test Store（打开亚马逊店铺）"]')
+  expect(link.attributes('href')).toBe('https://www.amazon.com/s?me=TESTSELLER&marketplaceID=ATVPDKIKX0DER')
+  expect(link.attributes('target')).toBe('_blank')
+  expect(w.get('[aria-label="Test Store 今日上新 0"]').classes()).toContain('mw-count-link')
+  await w.get('[aria-label="编辑 Test Store 备注"]').trigger('click')
+  expect(w.get('[aria-label="编辑店铺备注"]').classes()).toContain('mw-remark-popover');w.unmount()
+ })
  it('edits only the remark with optimistic version and keeps input on failure',async()=>{
   const w=await setup();await w.get('[aria-label="编辑 Test Store 备注"]').trigger('click')
   await w.get('#watch-remark-form textarea').setValue('New note')

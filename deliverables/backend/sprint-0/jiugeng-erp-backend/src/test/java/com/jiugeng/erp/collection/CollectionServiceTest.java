@@ -88,11 +88,12 @@ class CollectionServiceTest {
         service.configure("STORE",store,adapter.provider(),true,null);
         observe("2026-10-20T12:00:00Z",true,"B0AUTO0001");
         var fields=json.createObjectNode().put("pageCount",1).put("itemCount",1);
-        fields.putArray("products").addObject().put("asin","B0AUTO0001").put("title","Synthetic").put("imageUrl","https://example.com/image.jpg").put("price",19.99).put("rating","4.5 out of 5 stars");
+        fields.putArray("products").addObject().put("asin","B0AUTO0001").put("title","Synthetic").put("imageUrl","https://example.com/image.jpg").put("price",19.99).put("priceType","OFFER_FROM").put("rating","4.5 out of 5 stars");
         adapter.result=new CollectionAdapter.Observation(Instant.parse("2026-10-21T12:00:00Z"),"COMPLETE",true,fields);
         jdbc.update("UPDATE collection_schedule SET next_at=TIMESTAMP '2000-01-01 00:00:00'");service.tick();
         observe("2026-10-22T12:00:00Z",true,"B0AUTO0001");
         assertThat(jdbc.queryForObject("SELECT price FROM watch_presence WHERE store_id=?",java.math.BigDecimal.class,store)).isEqualByComparingTo("19.99");
+        assertThat(jdbc.queryForObject("SELECT price_type FROM watch_presence WHERE store_id=?",String.class,store)).isEqualTo("OFFER_FROM");
         assertThat(jdbc.queryForObject("SELECT image_url FROM watch_presence WHERE store_id=?",String.class,store)).isEqualTo("https://example.com/image.jpg");
     }
     @Test void resolvesIdPlaceholderButPreservesCustomStoreName() throws Exception {

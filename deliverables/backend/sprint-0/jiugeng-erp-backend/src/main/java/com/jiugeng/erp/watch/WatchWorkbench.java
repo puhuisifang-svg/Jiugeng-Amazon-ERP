@@ -26,7 +26,7 @@ class WatchWorkbench {
         var active=repository.baseline(id);
         var products=jdbc.sql("SELECT a.asin,MIN(r.completed_at) AS first_at FROM watch_snapshot_asin a JOIN watch_run r ON r.id=a.run_id WHERE r.store_id=:id AND r.decision='PROMOTED' GROUP BY a.asin ORDER BY first_at DESC,a.asin")
             .param("id",id).query((r,n)->new Product(r.getString("asin"),r.getTimestamp("first_at").toInstant().toString(),active.contains(r.getString("asin")),"MANUAL")).list();
-        var automatic=jdbc.sql("SELECT provider,asin,title,image_url AS imageUrl,price,rating,first_at AS firstAt,last_at AS lastAt,missing_count AS missingCount,missing_at AS missingAt FROM watch_presence WHERE store_id=:id ORDER BY first_at DESC,asin").param("id",id).query().listOfRows();
+        var automatic=jdbc.sql("SELECT provider,asin,title,image_url AS imageUrl,price,price_type AS priceType,rating,first_at AS firstAt,last_at AS lastAt,missing_count AS missingCount,missing_at AS missingAt FROM watch_presence WHERE store_id=:id ORDER BY first_at DESC,asin").param("id",id).query().listOfRows();
         return new Detail(store,runIds.stream().map(repository::run).toList(),products,automatic);
     }
     @PutMapping("/stores/{id}") @PreAuthorize("hasAuthority('watch.write')")

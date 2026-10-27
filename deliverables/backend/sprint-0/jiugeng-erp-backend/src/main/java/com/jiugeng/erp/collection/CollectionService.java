@@ -75,7 +75,7 @@ public class CollectionService {
             if(adapter(schedule.provider(),schedule.kind()).isEmpty()){cancel(job.id());return null;}
             String lease=UUID.randomUUID().toString();
             jdbc.sql("UPDATE collection_job SET status='RUNNING',attempts=attempts+1,lease_token=:lease,lease_until=:until WHERE id=:id")
-                .param("id",job.id()).param("lease",lease).param("until",Timestamp.from(Instant.now().plusSeconds(300))).update();
+                .param("id",job.id()).param("lease",lease).param("until",Timestamp.from(Instant.now().plusSeconds(leaseSeconds(schedule.provider(),schedule.kind())))).update();
             return new Claim(job,schedule,target,lease);
         });
         if(claim==null)return;
@@ -103,6 +103,7 @@ public class CollectionService {
     }
     private Optional<CollectionAdapter> adapter(String provider,String kind){return adapters.stream().filter(a->a.provider().equals(provider)&&a.approved()&&a.kinds().contains(kind)).findFirst();}
     private CollectionTarget port(String kind){return targets.stream().filter(t->t.kind().equals(kind)).findFirst().orElseThrow(()->error(400,"不支持的监控对象"));}
+    static long leaseSeconds(String provider,String kind){return AmazonPublicAdapter.SOURCE.equals(provider)&&"STORE".equals(kind)?AmazonPublicAdapter.STORE_LEASE_SECONDS:300;}
     private boolean owns(Claim claim){return jdbc.sql("SELECT COUNT(*) FROM collection_job WHERE id=:id AND status='RUNNING' AND lease_token=:lease AND lease_until>=:now").param("id",claim.job().id()).param("lease",claim.lease()).param("now",Timestamp.from(Instant.now())).query(Long.class).single()>0;}
     private void cancel(String id){jdbc.sql("UPDATE collection_job SET status='CANCELLED',reason='目标或配置已变更' WHERE id=:id").param("id",id).update();}
     private void finish(Claim claim,String status,String reason){jdbc.sql("UPDATE collection_job SET status=:status,reason=:reason,lease_token=NULL WHERE id=:id").param("id",claim.job().id()).param("status",status).param("reason",reason).update();}

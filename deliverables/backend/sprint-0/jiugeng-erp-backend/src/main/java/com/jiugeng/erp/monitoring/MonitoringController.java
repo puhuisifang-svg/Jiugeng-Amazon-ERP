@@ -31,6 +31,7 @@ class MonitoringController {
     @PostMapping("/batch") List<RowResult> batch(@RequestBody BatchInput input, @AuthenticationPrincipal AuthenticatedActor actor) { var result=service.batch(input, actor);if("ENABLE".equals(input.action()))result.stream().filter(r->r.status().equals("UPDATED")).forEach(r->collection.enqueue("PRODUCT",r.id()));return result; }
     @GetMapping("/preferences") Preferences preferences(@AuthenticationPrincipal AuthenticatedActor actor) { return service.preferences(actor.userId()); }
     @PutMapping("/preferences") Preferences preferences(@RequestBody ColumnInput input, @AuthenticationPrincipal AuthenticatedActor actor) { return service.columns(actor.userId(), input.columns()); }
+    @PutMapping("/{id}") Target edit(@PathVariable String id,@RequestBody EditInput input){return service.edit(id,input);}
     @GetMapping("/{id}") Detail detail(@PathVariable String id, @AuthenticationPrincipal AuthenticatedActor actor) { return service.detail(id, actor.userId()); }
     @PutMapping("/{id}/follow") Preferences follow(@PathVariable String id, @RequestBody FollowInput input, @AuthenticationPrincipal AuthenticatedActor actor) { return service.follow(id, actor.userId(), input.followed()); }
     @GetMapping("/{id}/snapshots") Page<Snapshot> snapshots(@PathVariable String id, @RequestParam(defaultValue="0") int page, @RequestParam(defaultValue="20") int size) { return service.history(id, page, size); }

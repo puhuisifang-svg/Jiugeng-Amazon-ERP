@@ -29,6 +29,22 @@ class MonitoringControllerTest {
     @Autowired org.springframework.transaction.support.TransactionTemplate tx;
     @BeforeEach void clean(){jdbc.update("DELETE FROM monitor_snapshot");jdbc.update("DELETE FROM monitor_target");jdbc.update("DELETE FROM monitor_request");jdbc.update("DELETE FROM monitor_preference");}
 
+    @Test void manualFieldsRemoveRestoreAndVersionConflicts()throws Exception {
+        String token=login("SELECTION"),id=create(token,"B0TEST0001");
+        mvc.perform(put(ROOT+"/"+id).contentType(MediaType.APPLICATION_JSON).content("{}" )).andExpect(status().isUnauthorized());
+        mvc.perform(put(ROOT+"/"+id).header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("version",0,"field","sales30Days","value","123")))).andExpect(status().isOk()).andExpect(jsonPath("$.sales30Days").value(123));
+        mvc.perform(put(ROOT+"/"+id).header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("version",0,"field","remark","value","stale")))).andExpect(status().isConflict());
+        mvc.perform(put(ROOT+"/"+id).header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("version",1,"field","sales30Days","value","-1")))).andExpect(status().isBadRequest());
+        mvc.perform(put(ROOT+"/"+id).header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("version",1,"field","remark","value","Synthetic note")))).andExpect(status().isOk()).andExpect(jsonPath("$.remark").value("Synthetic note"));
+        snapshot(token,id,2,"2026-01-01T00:00:00Z","COMPLETE",fields("First",10),"MANUAL");
+        snapshot(token,id,3,"2026-01-02T00:00:00Z","COMPLETE",fields("Second",10),"MANUAL");
+        mvc.perform(get(ROOT+"/"+id).header("Authorization",token)).andExpect(jsonPath("$.target.sales30Days").value(123)).andExpect(jsonPath("$.target.latestChanges[0].field").value("title"));
+        mvc.perform(post(ROOT+"/batch").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("targets",List.of(Map.of("id",id,"version",4)),"action","REMOVE")))).andExpect(jsonPath("$[0].status").value("UPDATED"));
+        mvc.perform(get(ROOT).header("Authorization",token)).andExpect(jsonPath("$.total").value(0));
+        assertThat(create(token,"B0TEST0001")).isEqualTo(id);
+        mvc.perform(get(ROOT+"/"+id).header("Authorization",token)).andExpect(jsonPath("$.target.enabled").value(true)).andExpect(jsonPath("$.snapshots.length()").value(2)).andExpect(jsonPath("$.target.remark").value("Synthetic note"));
+    }
+
     @Test void allRolesCanWriteButAnonymousCannotAndNoBusinessAuditIsCreated()throws Exception {
         mvc.perform(get(ROOT)).andExpect(status().isUnauthorized());
         mvc.perform(post(ROOT).contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isUnauthorized());

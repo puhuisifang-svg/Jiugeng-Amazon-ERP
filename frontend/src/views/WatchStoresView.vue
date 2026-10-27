@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { RouterLink, onBeforeRouteLeave } from 'vue-router'
+import MonitoringPencil from '@/components/MonitoringPencil.vue'
+import { useAnchoredPopover } from '@/composables/useAnchoredPopover'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { onBeforeRouteLeave } from 'vue-router'
 import { apiRequest } from '@/api/client'
 import { domainApi, type WatchRunMode } from '@/api/domain'
 import type { WatchStoreDto, WatchEventDto } from '@/api/resources'
@@ -8,13 +10,13 @@ import { confirmAction } from '@/state/uiConfirmation'
 import { session } from '@/state/session'
 import { runtimeConfig } from '@/config/runtime'
 import { useCollectionStatus } from '@/composables/useCollectionStatus'
+import { isNovel } from '@/composables/watchNovelty'
 import WatchStoreDetail from '@/components/WatchStoreDetail.vue'
 import ListPagination from '@/components/ListPagination.vue'
 import TableViewport from '@/components/TableViewport.vue'
 import SuccessToast from '@/components/SuccessToast.vue'
 import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import UnsavedChangesDialog from '@/components/UnsavedChangesDialog.vue'
-import CollectionPanel from '@/components/CollectionPanel.vue'
 import '@/styles/monitoringWorkbench.css'
 const formal = runtimeConfig.authMode === 'password'
 const writable = computed(() => session.canAccess(['watch.write']))
@@ -29,9 +31,11 @@ const collection = useCollectionStatus('STORE', () => { if (!selectedStore.value
  if(result.status==='SUCCEEDED')success.value=`${name}：更新完成`
  else error.value=`${name}：${result.status==='PARTIAL'?'部分更新':result.status==='CANCELLED'?'更新已取消':'更新失败'}${result.reason?'，'+result.reason:''}`
 })
-async function updateStore(item:WatchStoreDto){success.value='';error.value='';if(await collection.collect(item.id)&&collection.pending(item.id))success.value=`${item.storeName}：已提交更新，请查看采集状态`}
 const addDialog = ref<HTMLDialogElement>(), addOpen = ref(false), urls = ref(''), storeName = ref(''), addOwner = ref(''), saving = ref(false), addError = ref(''), unsaved = ref(false)
 const todayProducts=ref<WatchEventDto[]>()
+const initialTab=ref('online')
+const noveltyCollection=useCollectionStatus('WATCH_NOVELTY',()=>{void load()})
+void noveltyCollection
 const remarkDialog=ref<HTMLDialogElement>(), remarkStore=ref<WatchStoreDto>(), remarkDraft=ref(''), remarkError=ref(''), remarkBusy=ref(false), remarkUnsaved=ref(false)
 const snapshots = ref<Record<string,string>>({})
 watch([query,status,owner,pageSize],()=>{page.value=1;selected.value=[]})
@@ -39,18 +43,12 @@ function time(value?: string) { return value ? new Date(value).toLocaleString('z
 const today = () => new Intl.DateTimeFormat('en-CA',{timeZone:'America/Los_Angeles'}).format(new Date())
 function newProducts(id: string) { return events.value.filter(e=>e.storeId===id&&new Intl.DateTimeFormat('en-CA',{timeZone:'America/Los_Angeles'}).format(new Date(e.detectedAt))===today()) }
 function newCount(id:string){return newProducts(id).length}
-function showDetail(item:WatchStoreDto,todayOnly=false){todayProducts.value=todayOnly?newProducts(item.id):undefined;selectedStore.value=item}
-const remarkPosition=ref({left:'8px',top:'8px'})
+function showDetail(item:WatchStoreDto,todayOnly=false,novelty=false){initialTab.value=novelty?'novelty':todayOnly?'new':'online';todayProducts.value=todayOnly?newProducts(item.id):undefined;selectedStore.value=item}
+function novelCount(id:string){return newProducts(id).filter(isNovel).length}
 let remarkAnchor:HTMLElement|undefined
-function positionRemark(){
- if(!remarkAnchor||!remarkDialog.value)return
- const anchor=remarkAnchor.getBoundingClientRect(), box=remarkDialog.value.getBoundingClientRect()
- remarkPosition.value={left:`${Math.max(8,Math.min(anchor.right-box.width,window.innerWidth-box.width-8))}px`,top:`${Math.max(8,Math.min(anchor.bottom+8,window.innerHeight-box.height-8))}px`}
-}
+const {position:remarkPosition,reposition:positionRemark}=useAnchoredPopover(remarkDialog,()=>remarkAnchor)
 async function showRemark(item:WatchStoreDto,event:Event){remarkAnchor=event.currentTarget as HTMLElement;remarkStore.value=item;remarkDraft.value=item.remark??'';remarkError.value='';await nextTick();remarkDialog.value?.showModal();positionRemark();remarkDialog.value?.querySelector('textarea')?.focus()}
 function discardRemark(){remarkUnsaved.value=false;remarkDialog.value?.close();remarkStore.value=undefined;remarkAnchor?.focus()}
-onMounted(()=>window.addEventListener('resize',positionRemark))
-onBeforeUnmount(()=>window.removeEventListener('resize',positionRemark))
 function closeRemark(){if(remarkBusy.value)return;if(remarkDraft.value!==(remarkStore.value?.remark??'')){remarkUnsaved.value=true;return}discardRemark()}
 async function saveRemark(){if(!remarkStore.value)return;remarkBusy.value=true;remarkError.value='';try{await apiRequest(`/v1/watch/stores/${remarkStore.value.id}/remark`,{method:'PATCH',body:JSON.stringify({version:remarkStore.value.version,remark:remarkDraft.value})});discardRemark();success.value='备注已保存';await load()}catch(e){remarkError.value=e instanceof Error?e.message:'备注保存失败'}finally{remarkBusy.value=false}}
 async function removeStore(item:WatchStoreDto){if(!await confirmAction(`移除店铺“${item.storeName}”？将停止监控并从列表移出，历史记录保留，重新添加同一地址可恢复。`))return;busyId.value=item.id;error.value='';try{await apiRequest(`/v1/watch/stores/${item.id}?version=${item.version}`,{method:'DELETE'});selected.value=selected.value.filter(id=>id!==item.id);success.value='店铺已移除';await load();page.value=Math.min(page.value,Math.max(1,Math.ceil(filtered.value.length/pageSize.value)))}catch(e){error.value=e instanceof Error?e.message:'移除失败'}finally{busyId.value=''}}
@@ -81,6 +79,18 @@ async function createStore(){
  }catch(e){failures.push(url);addError.value=e instanceof Error?e.message:'添加失败'}}
  saving.value=false;await load();void collection.refresh()
  if(failures.length){urls.value=failures.join('\n');addError.value=`成功 ${count} 个，剩余 ${failures.length} 个未完成：${addError.value}`}else{discardAdd();success.value=`已添加 ${count} 个店铺，正在自动采集。`}
+}
+async function refreshSelected(){
+ if(!writable.value||!selected.value.length||busyId.value)return
+ busyId.value='refresh-selected';error.value='';success.value='';let count=0;let skipped=0;const failed:string[]=[]
+ try{for(const item of items.value.filter(s=>selected.value.includes(s.id))){
+  if(item.status!=='ACTIVE'||collection.pending(item.id)){skipped++;continue}
+  if(await collection.collect(item.id))count++;else failed.push(item.storeName)
+ }
+ if(count)success.value=`已提交 ${count} 家店铺采集${skipped?`，跳过 ${skipped} 家暂停或采集中的店铺`:''}`
+ if(failed.length)error.value=`以下店铺提交失败：${failed.join('、')}。请重试。`
+ else if(!count)success.value='所选店铺已在采集中或已暂停，无需重复提交。'
+ }finally{busyId.value=''}
 }
 async function assignOwner(){
  busyId.value='batch';error.value=''
@@ -138,27 +148,16 @@ onMounted(load)
         >
           设为我负责
         </button>
-        <RouterLink
-          to="/watch/events"
-          class="mw-link"
-        >
-          上新记录
-        </RouterLink>
-        <span class="mw-note">监控店铺 {{ items.filter(s=>s.status==='ACTIVE').length }} · 每日更新</span>
         <button
-          :disabled="loading"
-          aria-label="刷新店铺列表"
-          @click="load();collection.refresh()"
+          v-if="formal"
+          :disabled="!writable||!selected.length||!!busyId"
+          :class="{'mw-selected-update':selected.length>0}"
+          aria-label="更新所选店铺"
+          @click="refreshSelected"
         >
-          刷新
+          更新所选<span v-if="selected.length">（{{ selected.length }}）</span>
         </button>
-        <details>
-          <summary>更多</summary><CollectionPanel
-            v-if="formal"
-            kind="STORE"
-            :targets="items.map(s=>({id:s.id,label:s.storeName}))"
-          />
-        </details>
+        <span class="mw-note">监控店铺 {{ items.filter(s=>s.status==='ACTIVE').length }} · 按计划更新</span>
       </div>
       <TableViewport>
         <table class="mw-table ui-action-table">
@@ -171,7 +170,11 @@ onMounted(load)
                   :checked="!!visible.length&&visible.every(s=>selected.includes(s.id))"
                   @change="selected=($event.target as HTMLInputElement).checked?visible.map(s=>s.id):[]"
                 >
-              </th><th>监控</th><th>店铺名称</th><th>站点</th><th>今日上新</th><th>状态</th><th>开始监控时间</th><th>更新时间</th><th>备注</th><th>监控人</th><th>操作</th>
+              </th><th>监控</th><th>店铺名称</th><th>站点</th><th title="今日首次在该店铺监测到的商品，不代表实际首次上架日期">
+                今日上架 ⓘ
+              </th><th title="今日首次发现且符合新品条件的商品；统一日期窗口60天，包含疑似新品和人工确认">
+                今日新品 ⓘ
+              </th><th>状态</th><th>开始监控时间</th><th>更新时间</th><th>备注</th><th>监控人</th><th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -212,10 +215,18 @@ onMounted(load)
               <td>美国</td><td>
                 <button
                   class="mw-link mw-count-link"
-                  :aria-label="`${item.storeName} 今日上新 ${newCount(item.id)}`"
+                  :aria-label="`${item.storeName} 今日上架 ${newCount(item.id)}`"
                   @click="showDetail(item,true)"
                 >
                   {{ newCount(item.id) }}
+                </button>
+              </td><td>
+                <button
+                  class="mw-link mw-count-link"
+                  :aria-label="`${item.storeName} 今日新品 ${novelCount(item.id)}`"
+                  @click="showDetail(item,true,true)"
+                >
+                  {{ novelCount(item.id) }}
                 </button>
               </td>
               <td>
@@ -233,15 +244,7 @@ onMounted(load)
                   title="编辑备注"
                   @click="showRemark(item,$event)"
                 >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.7"
-                    aria-hidden="true"
-                  ><path d="m16 3 5 5-12 12-6 1 1-6L16 3Z M13 6l5 5" /></svg>
+                  <MonitoringPencil />
                 </button>
               </td><td>{{ item.owner||'未分配' }}</td>
               <td>
@@ -250,18 +253,6 @@ onMounted(load)
                   @click="showDetail(item)"
                 >
                   详情
-                </button><button
-                  v-if="writable&&formal"
-                  class="mw-link"
-                  :disabled="item.status!=='ACTIVE'||collection.pending(item.id)||!collection.enabled.value"
-                  :aria-busy="collection.pending(item.id)"
-                  @click="updateStore(item)"
-                >
-                  <span
-                    v-if="collection.pending(item.id)"
-                    class="mw-spinner"
-                    aria-hidden="true"
-                  />{{ collection.pending(item.id)?collection.label(item.id):'更新' }}
                 </button><button
                   v-if="writable&&formal"
                   class="mw-link"
@@ -274,7 +265,7 @@ onMounted(load)
             </tr>
             <tr v-if="!visible.length">
               <td
-                colspan="11"
+                colspan="12"
                 class="mw-empty"
               >
                 <strong>{{ loading?'正在加载店铺…':'暂无监控店铺' }}</strong>添加对标店铺，自动发现新商品。
@@ -294,6 +285,7 @@ onMounted(load)
       v-if="formal"
       :store="selectedStore"
       :new-products="todayProducts"
+      :initial-tab="initialTab"
       :writable="writable"
       @close="selectedStore=undefined"
       @changed="load"
@@ -353,7 +345,7 @@ onMounted(load)
           maxlength="200"
           :disabled="saving"
         ></label>
-        <p>支持含 seller= 或 me= 的亚马逊美国站店铺地址。首次采集建立商品清单，后续新发现的商品进入上新记录。</p>
+        <p>支持含 seller= 或 me= 的亚马逊美国站店铺地址。首次采集建立商品清单，后续新发现的商品进入上架记录。</p>
         <p
           v-if="addError"
           class="mw-error"

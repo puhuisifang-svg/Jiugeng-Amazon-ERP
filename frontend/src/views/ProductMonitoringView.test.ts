@@ -54,13 +54,10 @@ describe('product monitoring workflow', () => {
     expect(w.text()).toContain('已更新 0 条')
     expect(w.text()).toContain('记录已更新')
   })
-  it('does not save column changes on cancel', async () => {
-    const w = await setup()
-    await w.findAll('button').find(b => b.text() === '自定义列')!.trigger('click')
-    await w.findAll('dialog button').find(b => b.text() === '恢复默认')!.trigger('click')
-    await w.findAll('dialog button').find(b => b.text() === '取消')!.trigger('click')
-    expect(monitoringApi.columns).not.toHaveBeenCalled()
-    expect(w.findAll('th').map(t => t.text())).not.toContain('品牌')
+  it('uses fixed identity columns and removes redundant list controls',async()=>{
+    const w=await setup();const labels=w.findAll('th').map(t=>t.text());expect(labels).toContain('近30天销量');expect(labels).toContain('产品尺寸&重量');expect(w.findAll('th.fixed-title')).toHaveLength(1)
+    for(const label of ['刷新列表','更多','关注','取消关注'])expect(w.findAll('button').some(b=>b.text()===label)).toBe(false)
+    const button=w.get('[aria-label="更新所选产品"]');expect(button.attributes('disabled')).toBeDefined();await w.get('[aria-label="选择 B0TEST0001"]').setValue(true);expect(button.classes()).toContain('mw-selected-update');expect(button.attributes('disabled')).toBeUndefined()
   })
   it('disables observation for a paused target and keeps history visible', async () => {
     vi.mocked(monitoringApi.detail).mockResolvedValue({ target: { ...row, enabled: false }, snapshots: [] })
@@ -77,5 +74,13 @@ describe('product monitoring workflow', () => {
     await w.get('dialog form').trigger('submit'); await flushPromises()
     expect(monitoringApi.snapshot).toHaveBeenCalledWith('one', expect.objectContaining({ fields: { title: '测试商品', brand: null, imageUrl: null, bullets: null, price: null, currency: 'USD', availability: null } }))
     expect(w.get('dialog').text()).toContain('校验失败')
+  })
+})
+
+describe('monitor controls',()=>{
+  it('asks before stopping and does not change anything on cancellation',async()=>{
+    const {settleConfirmation,uiConfirmation}=await import('@/state/uiConfirmation')
+    const w=await setup();await w.get('[role="switch"]').trigger('click');expect(uiConfirmation.value?.message).toContain('是否停止监控');settleConfirmation(null);await flushPromises();expect(monitoringApi.batch).not.toHaveBeenCalled()
+    await w.get('[role="switch"]').trigger('click');vi.mocked(monitoringApi.batch).mockResolvedValue([{asin:row.asin,id:row.id,status:'UPDATED',message:''}]);settleConfirmation('');await flushPromises();expect(monitoringApi.batch).toHaveBeenCalledWith([{id:row.id,version:0}],'PAUSE',[])
   })
 })

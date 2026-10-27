@@ -16,6 +16,14 @@ class AmazonPublicAdapterTest {
  """;
  @Test void parsesObservedFieldsAndRetainsUnknownSemantics(){var fields=adapter.product(Jsoup.parse(PAGE),"B0TEST0001");assertThat(fields.path("title").asText()).isEqualTo("Synthetic & sample");assertThat(fields.path("price").decimalValue()).isEqualByComparingTo("19.99");assertThat(fields.path("brand").asText()).isEqualTo("Example");assertThat(fields.path("availability").asText()).isEqualTo("AVAILABLE");assertThat(fields.path("bullets").size()).isEqualTo(1);
  var unknown=adapter.product(Jsoup.parse("<input id=ASIN value=B0TEST0001><span id=productTitle>Example</span>"),"B0TEST0001");assertThat(!unknown.has("price")).isTrue();assertThat(!unknown.has("availability")).isTrue();assertThat(unknown.size()).isEqualTo(1);}
+ @Test void readsAdditionalPublicProductFields(){
+  var fields=adapter.product(Jsoup.parse(PAGE+"<div id=acrPopover><span class=a-icon-alt>4.5 out of 5 stars</span></div><span id=acrCustomerReviewText>123 ratings</span><table id=productDetails_detailBullets_sections1><tr><th>Best Sellers Rank</th><td>#1,234 in Home (See Top 100) #12 in Toy Storage</td></tr><tr><th>Date First Available</th><td>October 1, 2026</td></tr><tr><th>Product Dimensions</th><td>10 x 12 x 15 inches</td></tr><tr><th>Item Weight</th><td>2 pounds</td></tr></table>"),"B0TEST0001");
+  assertThat(fields.path("rating").asText()).isEqualTo("4.5 out of 5 stars");assertThat(fields.path("ratingCount").asText()).isEqualTo("123 ratings");assertThat(fields.path("largeCategoryRank").asText()).isEqualTo("#1,234 in Home");assertThat(fields.path("smallCategoryRank").asText()).isEqualTo("#12 in Toy Storage");assertThat(fields.path("weight").asText()).isEqualTo("2 pounds");assertThat(fields.path("listedAt").asText()).isEqualTo("October 1, 2026");
+ }
+ @Test void readsExpandableDetailsAndOverviewWithoutInventingAbsentDateOrWeight(){
+  var fields=adapter.product(Jsoup.parse(PAGE+"<div id=prodDetails><div style='display:none'><table class=prodDetTable><tr><th>Best Sellers Rank</th><td>#30,000 in Pet Supplies (See Top 100) #7 in Dog Covers</td></tr></table></div></div><table><tr class=po-item_length_width_height><td><span class=a-text-bold>Product Dimensions</span></td><td>96&quot;L x 48&quot;W x 15&quot;H</td></tr><tr><th>Date First Available</th><td>unrelated recommendation</td></tr></table>"),"B0TEST0001");
+  assertThat(fields.path("largeCategoryRank").asText()).isEqualTo("#30,000 in Pet Supplies");assertThat(fields.path("smallCategoryRank").asText()).isEqualTo("#7 in Dog Covers");assertThat(fields.path("dimensions").asText()).isEqualTo("96\"L x 48\"W x 15\"H");assertThat(fields.has("weight")).isFalse();assertThat(fields.has("listedAt")).isFalse();
+ }
  @Test void rejectsWrongAsinAndRobotPages(){assertThatThrownBy(()->adapter.product(Jsoup.parse(PAGE),"B0TEST0002")).isInstanceOf(CollectionAdapter.CollectionFailure.class);assertThatThrownBy(()->adapter.product(Jsoup.parse("<title>Robot Check</title>"+PAGE),"B0TEST0001")).hasMessageContaining("验证码");}
  @Test void rejectsRedirectsOutsidePublicAmazonRoutes(){for(String uri:new String[]{"http://www.amazon.com/dp/B0TEST0001","https://evil.example/dp/B0TEST0001","https://www.amazon.com@localhost/dp/B0TEST0001","https://www.amazon.com/ap/signin","https://www.amazon.com:444/dp/B0TEST0001"})assertThatThrownBy(()->AmazonPublicAdapter.validate(URI.create(uri))).isInstanceOf(CollectionAdapter.CollectionFailure.class);AmazonPublicAdapter.validate(URI.create("https://www.amazon.com/s?me=SYNTHETIC"));}
  @Test void doesNotInventRangeOrUnknownPrices(){assertThat(AmazonPublicAdapter.price("$10.00 - $20.00")).isNull();assertThat(AmazonPublicAdapter.price(null)).isNull();assertThat(AmazonPublicAdapter.price("$1,299.99")).isEqualByComparingTo("1299.99");}
@@ -126,6 +134,27 @@ class AmazonPublicAdapterTest {
   assertThatThrownBy(()->AmazonPublicAdapter.decodeBody(oversized.toByteArray(),"gzip")).hasMessageContaining("大小限制");
   assertThatThrownBy(()->AmazonPublicAdapter.decodeBody(new byte[]{1,2,3},"gzip")).hasMessageContaining("不完整");
   assertThatThrownBy(()->AmazonPublicAdapter.decodeBody(html,"br")).hasMessageContaining("压缩格式");
+ }
+
+ private String positionedPage(int requested,int start,int end,String asin,String next){
+  return "<div data-component-type=s-result-info-bar><h2>"+start+"-"+end+" of over 100 results</h2></div><span class=s-pagination-selected>"+requested+"</span>"+searchPage(asin,next);
+ }
+ @Test void allowsRepeatedProductsOnlyWithVerifiedForwardPaginationAndRetainsObservedFields(){
+  var result=adapter.store("TESTSELLER",u->{int page=AmazonPublicAdapter.pageNumber(u);
+   String html=positionedPage(page,page,page,"B0TEST0001",page==3?null:"/s?me=TESTSELLER&page="+(page+1));
+   // Place the observations inside the result row, independent of the pager.
+   if(page==1)html=html.replace("<h2>Synthetic item</h2>","<h2>Synthetic item</h2><span class=a-price><span class=a-offscreen>$12.99</span></span><i class=a-icon-alt>4.5 out of 5 stars</i>");
+   return Jsoup.parse(html);
+  });
+  assertThat(result.pagesComplete()).isTrue();assertThat(result.fields().path("pageCount").asInt()).isEqualTo(3);
+  assertThat(result.fields().path("itemCount").asInt()).isEqualTo(1);
+  assertThat(result.fields().path("products").get(0).path("price").decimalValue()).isEqualByComparingTo("12.99");
+  assertThat(result.fields().path("products").get(0).path("rating").asText()).isEqualTo("4.5 out of 5 stars");
+ }
+ @Test void rejectsPageRewindsEvenWithChangingUrlsOrDifferentProducts(){
+  assertThatThrownBy(()->adapter.store("TESTSELLER",u->{int p=AmazonPublicAdapter.pageNumber(u);return Jsoup.parse(positionedPage(1,p,p,p==1?"B0TEST0001":"B0TEST0002","/s?me=TESTSELLER&page="+(p+1)));})).hasMessageContaining("页码与请求不一致");
+  assertThatThrownBy(()->adapter.store("TESTSELLER",u->{int p=AmazonPublicAdapter.pageNumber(u);return Jsoup.parse(positionedPage(p,1,1,"B0TEST0001","/s?me=TESTSELLER&page="+(p+1)));})).hasMessageContaining("范围未前进");
+  assertThatThrownBy(()->adapter.store("TESTSELLER",u->Jsoup.parse(searchPage("B0TEST0001","/s?me=TESTSELLER&page=1&qid=changed")))).hasMessageContaining("页码未前进");
  }
 
 }

@@ -34,7 +34,7 @@ export interface SelectionCandidateDto {
 export interface CandidateNoteDto { id: string; content: string; authorId: string; authorName: string; authorRole: string; createdAt: string }
 export interface CandidateEvidenceDto { id: string; name: string; url: string; description?: string; addedById: string; addedByName: string; addedByRole: string; createdAt: string }
 export interface CandidateDetailDto { candidate: SelectionCandidateDto & { rejectionReason?: string }; notes: CandidateNoteDto[]; evidence: CandidateEvidenceDto[] }
-export interface WatchEventDto { id: string; storeId?: string; storeName: string; asin: string; title?: string; detectedAt: string; sourceRunId?: string; status: string; candidateId?: string; version?: number; ignoreReason?: string }
+export interface WatchEventDto { id: string; storeId?: string; storeName: string; asin: string; title?: string; detectedAt: string; sourceRunId?: string; status: string; candidateId?: string; version?: number; ignoreReason?: string; noveltyStatus?: string; availableDate?: string; noveltyReason?: string; noveltyCheckedAt?: string; noveltyOverride?: string; noveltyVersion?: number }
 export interface WatchStoreDto {
   version?: number
   owner?: string

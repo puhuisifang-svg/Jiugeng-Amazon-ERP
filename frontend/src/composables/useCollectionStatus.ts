@@ -2,7 +2,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { apiRequest } from '@/api/client'
 import { runtimeConfig } from '@/config/runtime'
 export interface CollectionState { targetId: string; status: string | null; reason: string | null; createdAt: string | null }
-export function useCollectionStatus(kind: 'PRODUCT' | 'STORE', updated: () => void, completed?: (id: string, result: CollectionState) => void) {
+export function useCollectionStatus(kind: 'PRODUCT' | 'STORE' | 'WATCH_NOVELTY', updated: () => void, completed?: (id: string, result: CollectionState) => void) {
   const states = ref<CollectionState[]>([]), enabled = ref(false), error = ref(''), busy = ref('')
   const requests = ref<Record<string, { previous: string | null; started: number; submitting: boolean; observed: boolean }>>({})
   let timer: ReturnType<typeof setInterval> | undefined, fetching = false, stopped = false
@@ -44,7 +44,7 @@ export function useCollectionStatus(kind: 'PRODUCT' | 'STORE', updated: () => vo
     requests.value[id] = { previous: rawState(id)?.createdAt ?? null, started: Date.now(), submitting: true, observed: false }
     busy.value = id; error.value = ''
     try {
-      await apiRequest(kind === 'PRODUCT' ? `/v1/product-monitoring/${id}/collect` : `/v1/watch/stores/${id}/collect`, { method: 'POST' })
+      await apiRequest(kind === 'PRODUCT' ? `/v1/product-monitoring/${id}/collect` : kind === 'WATCH_NOVELTY' ? `/v1/watch/events/${id}/novelty/collect` : `/v1/watch/stores/${id}/collect`, { method: 'POST' })
       requests.value[id]!.submitting = false
       await refresh(); return true
     } catch (e) { delete requests.value[id]; error.value = e instanceof Error ? e.message : '采集排队失败'; return false }

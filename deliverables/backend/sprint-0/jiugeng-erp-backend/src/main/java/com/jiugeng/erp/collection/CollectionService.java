@@ -12,7 +12,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service @Profile("!mock")
 public class CollectionService {
-    record Schedule(String id,String kind,String targetId,String provider,boolean enabled,long version,String nextAt,String sourceStatus) {}
+    record Schedule(String id,String kind,String targetId,String provider,boolean enabled,long version,String nextAt,String sourceStatus,int intervalDays,String localTime,String timeZone,long timingVersion,boolean manualRequested) {}
     record Job(String id,String scheduleId,long scheduleVersion,long targetVersion,String status,int attempts,String reason) {}
     record Claim(Job job,Schedule schedule,CollectionAdapter.Target target,String lease) {}
     record Source(String provider,Set<String> kinds,boolean approved) {}
@@ -20,7 +20,7 @@ public class CollectionService {
     CollectionService(JdbcClient jdbc,TransactionTemplate tx,List<CollectionAdapter> adapters,List<CollectionTarget> targets){this.jdbc=jdbc;this.tx=tx;this.adapters=adapters;this.targets=targets;}
     private void lock(){jdbc.sql("SELECT id FROM collection_guard WHERE id=1 FOR UPDATE").query(Integer.class).single();}
     List<Source> sources(){return adapters.stream().map(a->new Source(a.provider(),a.kinds(),a.approved())).toList();}
-    List<Schedule> schedules(){return jdbc.sql("SELECT * FROM collection_schedule ORDER BY next_at,id").query((r,n)->new Schedule(r.getString("id"),r.getString("kind"),r.getString("target_id"),r.getString("provider"),r.getBoolean("enabled"),r.getLong("version"),r.getTimestamp("next_at").toInstant().toString(),adapter(r.getString("provider"),r.getString("kind")).isPresent()?"READY":"WAITING_SOURCE")).list();}
+    List<Schedule> schedules(){return jdbc.sql("SELECT * FROM collection_schedule ORDER BY next_at,id").query((r,n)->new Schedule(r.getString("id"),r.getString("kind"),r.getString("target_id"),r.getString("provider"),r.getBoolean("enabled"),r.getLong("version"),r.getTimestamp("next_at").toInstant().toString(),adapter(r.getString("provider"),r.getString("kind")).isPresent()?"READY":"WAITING_SOURCE",r.getInt("interval_days"),r.getString("local_time"),r.getString("time_zone"),r.getLong("timing_version"),r.getBoolean("manual_requested"))).list();}
     List<Job> jobs(){return jdbc.sql("SELECT * FROM collection_job ORDER BY created_at DESC,id LIMIT 100").query((r,n)->new Job(r.getString("id"),r.getString("schedule_id"),r.getLong("schedule_version"),r.getLong("target_version"),r.getString("status"),r.getInt("attempts"),r.getString("reason"))).list();}
     Schedule configure(String kind,String id,String provider,boolean enabled,Long version){return tx.execute(s->{
         lock();port(kind); if(enabled)port(kind).prepare(id);
@@ -44,8 +44,33 @@ public class CollectionService {
             jdbc.sql("UPDATE collection_job SET status='CANCELLED',reason='目标设置已更新' WHERE schedule_id=:id AND target_version<>:version AND status IN ('QUEUED','RUNNING','RETRY')").param("id",schedule.id()).param("version",target.version()).update();
             if(!schedule.provider().equals(AmazonPublicAdapter.SOURCE)||!schedule.enabled()){configure(kind,targetId,AmazonPublicAdapter.SOURCE,true,schedule.version());return;}
             if(jdbc.sql("SELECT COUNT(*) FROM collection_job WHERE schedule_id=:id AND status IN ('QUEUED','RUNNING','RETRY')").param("id",schedule.id()).query(Long.class).single()==0)
-                jdbc.sql("UPDATE collection_schedule SET next_at=:now WHERE id=:id").param("id",schedule.id()).param("now",Timestamp.from(Instant.now())).update();
+                jdbc.sql("UPDATE collection_schedule SET manual_requested=TRUE WHERE id=:id").param("id",schedule.id()).update();
         });
+    }
+    record Timing(int intervalDays,String localTime,String timeZone,long version,String nextAt,boolean enabled) {}
+    Timing storeTiming(String id){
+        var s=schedules().stream().filter(v->v.kind().equals("STORE")&&v.targetId().equals(id)).findFirst().orElseThrow(()->error(404,"店铺尚未建立自动采集计划"));
+        return new Timing(s.intervalDays(),s.localTime(),s.timeZone(),s.timingVersion(),s.nextAt(),s.enabled());
+    }
+    Timing saveStoreTiming(String id,Timing input){return tx.execute(status->{
+        lock();
+        if(input==null||input.intervalDays()<1||input.intervalDays()>30||input.localTime()==null||!input.localTime().matches("(?:[01][0-9]|2[0-3]):[0-5][0-9]")||(input.timeZone()==null||!Set.of("Asia/Shanghai","America/Los_Angeles").contains(input.timeZone())))throw error(400,"请选择1–30天的频率、有效时间和时区");
+        var old=storeTiming(id);if(old.version()!=input.version())throw error(409,"采集计划已更新，请重新打开后修改");
+        var now=Instant.now();var zone=ZoneId.of(input.timeZone());
+        Instant anchor=now.atZone(zone).toLocalDate().atTime(LocalTime.parse(input.localTime())).atZone(zone).toInstant();
+        Instant next=nextOccurrence(now,anchor,input.intervalDays(),input.localTime(),input.timeZone());
+        jdbc.sql("UPDATE collection_schedule SET interval_days=:days,local_time=:time,time_zone=:zone,timing_version=timing_version+1,next_at=:next WHERE kind='STORE' AND target_id=:id")
+            .param("days",input.intervalDays()).param("time",input.localTime()).param("zone",input.timeZone()).param("next",Timestamp.from(next)).param("id",id).update();
+        // Timing edits affect future starts, not the version fence of an active collection.
+        return storeTiming(id);
+    });}
+    static Instant nextOccurrence(Instant now,Instant anchor,int days,String time,String zoneName){
+        ZoneId zone=ZoneId.of(zoneName);LocalDate date=anchor.atZone(zone).toLocalDate();
+        long elapsed=java.time.temporal.ChronoUnit.DAYS.between(date,now.atZone(zone).toLocalDate());
+        if(elapsed>0)date=date.plusDays((elapsed/days)*days);
+        Instant next=date.atTime(LocalTime.parse(time)).atZone(zone).toInstant();
+        while(!next.isAfter(now)){date=date.plusDays(days);next=date.atTime(LocalTime.parse(time)).atZone(zone).toInstant();}
+        return next;
     }
     List<Map<String,Object>> targetStatus(String kind){return jdbc.sql("SELECT s.target_id AS targetId,s.next_at AS nextAt,s.enabled,j.status,j.reason,j.created_at AS createdAt FROM collection_schedule s LEFT JOIN collection_job j ON j.id=(SELECT j2.id FROM collection_job j2 WHERE j2.schedule_id=s.id ORDER BY j2.created_at DESC,j2.id DESC LIMIT 1) WHERE s.kind=:kind").param("kind",kind).query().listOfRows();}
     /** Called periodically; network collection happens outside transactions. Leases are fenced at result commit. */
@@ -53,18 +78,18 @@ public class CollectionService {
         tx.executeWithoutResult(s->{lock();Instant now=Instant.now();
             jdbc.sql("UPDATE collection_job SET status=CASE WHEN attempts>=4 THEN 'FAILED' ELSE 'RETRY' END,reason='执行租约过期',available_at=:now,lease_token=NULL WHERE status='RUNNING' AND lease_until<:now").param("now",Timestamp.from(now)).update();
             for(Schedule schedule:schedules()){
-                if(!schedule.enabled()||Instant.parse(schedule.nextAt()).isAfter(now)||adapter(schedule.provider(),schedule.kind()).isEmpty())continue;
+                if(!schedule.enabled()||(Instant.parse(schedule.nextAt()).isAfter(now)&&!schedule.manualRequested())||adapter(schedule.provider(),schedule.kind()).isEmpty())continue;
                 if(jdbc.sql("SELECT COUNT(*) FROM collection_job WHERE schedule_id=:id AND status IN ('QUEUED','RETRY','RUNNING')").param("id",schedule.id()).query(Long.class).single()>0)continue;
                 CollectionAdapter.Target target;
                 try{target=port(schedule.kind()).prepare(schedule.targetId());}catch(ResponseStatusException e){continue;}
                 jdbc.sql("INSERT INTO collection_job(id,schedule_id,schedule_version,target_version,status,available_at) VALUES(:id,:sid,:version,:tv,'QUEUED',:now)")
                     .param("id",UUID.randomUUID().toString()).param("sid",schedule.id()).param("version",schedule.version()).param("tv",target.version()).param("now",Timestamp.from(now)).update();
-                Instant next=now.atZone(ZoneId.of("America/Los_Angeles")).toLocalDate().plusDays(1).atStartOfDay(ZoneId.of("America/Los_Angeles")).plusHours(3).plusSeconds(Math.floorMod(schedule.id().hashCode(),3600)).toInstant();
-                jdbc.sql("UPDATE collection_schedule SET next_at=:next WHERE id=:id").param("next",Timestamp.from(next)).param("id",schedule.id()).update();
+                Instant next=Instant.parse(schedule.nextAt()).isAfter(now)?Instant.parse(schedule.nextAt()):nextOccurrence(now,Instant.parse(schedule.nextAt()),schedule.intervalDays(),schedule.localTime(),schedule.timeZone());
+                jdbc.sql("UPDATE collection_schedule SET next_at=:next,manual_requested=FALSE WHERE id=:id").param("next",Timestamp.from(next)).param("id",schedule.id()).update();
             }
         });
         Claim claim=tx.execute(s->{lock();var now=Timestamp.from(Instant.now());
-            var id=jdbc.sql("SELECT id FROM collection_job WHERE status IN ('QUEUED','RETRY') AND available_at<=:now ORDER BY available_at,id LIMIT 1").param("now",now).query(String.class).optional();
+            var id=jdbc.sql("SELECT j.id FROM collection_job j JOIN collection_schedule s ON s.id=j.schedule_id WHERE j.status IN ('QUEUED','RETRY') AND j.available_at<=:now ORDER BY CASE WHEN s.kind='WATCH_NOVELTY' THEN 1 ELSE 0 END,j.available_at,j.id LIMIT 1").param("now",now).query(String.class).optional();
             if(id.isEmpty())return null;
             Job job=jdbc.sql("SELECT * FROM collection_job WHERE id=:id").param("id",id.get()).query((r,n)->new Job(r.getString("id"),r.getString("schedule_id"),r.getLong("schedule_version"),r.getLong("target_version"),r.getString("status"),r.getInt("attempts"),r.getString("reason"))).single();
             if(job==null)return null;
@@ -87,10 +112,11 @@ public class CollectionService {
                 try{target=port(current.kind()).prepare(current.targetId());}catch(ResponseStatusException e){cancel(claim.job().id());return;}
                 if(adapter(current.provider(),current.kind()).isEmpty()||!current.enabled()||current.version()!=claim.job().scheduleVersion()||target.version()!=claim.job().targetVersion()){cancel(claim.job().id());return;}
                 if(observation==null||observation.observedAt()==null||observation.observedAt().isAfter(Instant.now().plusSeconds(60))||observation.observedAt().isBefore(Instant.parse("2000-01-01T00:00:00Z")))throw error(400,"来源观测时间无效");
-                boolean partialProduct=current.kind().equals("PRODUCT")&&current.provider().equals(AmazonPublicAdapter.SOURCE)&&"PARTIAL".equals(observation.quality());
+                boolean partialProduct=Set.of("PRODUCT","WATCH_NOVELTY").contains(current.kind())&&current.provider().equals(AmazonPublicAdapter.SOURCE)&&"PARTIAL".equals(observation.quality());
                 if((!"COMPLETE".equals(observation.quality())&&!partialProduct)||!observation.pagesComplete()){finish(claim,"PARTIAL","分页或字段不完整，保留原基线");notify(claim,"采集不完整，保留原基线");return;}
                 String message=port(current.kind()).apply(target,current.provider(),claim.job().id(),observation);
-                finish(claim,partialProduct?"PARTIAL":"SUCCEEDED",partialProduct?"部分字段未观测，保留其历史值；已更新本次可见字段":"");if(message!=null&&!message.isBlank())notify(claim,message);
+                boolean incompleteMonitor=partialProduct&&current.kind().equals("PRODUCT");
+                finish(claim,incompleteMonitor?"PARTIAL":"SUCCEEDED",incompleteMonitor?"部分字段未观测，保留其历史值；已更新本次可见字段":"");if(message!=null&&!message.isBlank())notify(claim,message);
             });
         }catch(Exception e){tx.executeWithoutResult(s->{lock();if(!owns(claim))return;
             boolean retry=e instanceof CollectionAdapter.CollectionFailure f&&f.retryable()&&claim.job().attempts()<3;

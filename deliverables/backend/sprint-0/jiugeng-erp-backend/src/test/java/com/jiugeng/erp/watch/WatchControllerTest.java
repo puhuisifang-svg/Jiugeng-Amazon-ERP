@@ -28,6 +28,38 @@ import static org.assertj.core.api.Assertions.assertThat;import static org.sprin
   assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM watch_run WHERE store_id=?",Integer.class,id)).isEqualTo(1);
   mvc.perform(post("/api/v1/watch/stores/from-url").header("Authorization",bearer(writer)).contentType(MediaType.APPLICATION_JSON).content("{\"url\":\"https://www.amazon.com/sp?seller=TESTSELLER\"}")).andExpect(status().isOk()).andExpect(jsonPath("$.id").value(id)).andExpect(jsonPath("$.remark").value("Updated note"));
  }
+
+ @Test void timingRequiresWatchPermissionAndEventsAreStoreScoped()throws Exception{
+  String token=user("timing-watcher","SELECTION"),denied=user("timing-denied","PRODUCT_MATERIAL");String id=createStore(token,"TIMING-SYNTHETIC"),other=createStore(token,"OTHER-SYNTHETIC");
+  jdbc.update("INSERT INTO collection_schedule(id,kind,target_id,provider,enabled,next_at) VALUES(?,'STORE',?,'synthetic',TRUE,CURRENT_TIMESTAMP)",UUID.randomUUID().toString(),id);
+  String path="/api/v1/collection/stores/"+id+"/timing";
+  mvc.perform(get(path)).andExpect(status().isUnauthorized());
+  mvc.perform(put(path).header("Authorization",bearer(denied)).contentType(MediaType.APPLICATION_JSON).content("{\"intervalDays\":2,\"localTime\":\"08:00\",\"timeZone\":\"Asia/Shanghai\",\"version\":0}")).andExpect(status().isForbidden());
+  mvc.perform(put(path).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content("{\"intervalDays\":2,\"localTime\":\"08:00\",\"timeZone\":\"Asia/Shanghai\",\"version\":0}")).andExpect(status().isOk()).andExpect(jsonPath("$.intervalDays").value(2)).andExpect(jsonPath("$.version").value(1));
+  run(token,id,"timing-baseline","SUCCEEDED",1,1,true,List.of("B0BASE0001"));run(token,id,"timing-new","SUCCEEDED",2,1,true,List.of("B0BASE0001","B0NEW00001"));
+  mvc.perform(get("/api/v1/watch/stores/{id}/events",id).header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1));
+  mvc.perform(get("/api/v1/watch/stores/{id}/events",other).header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(0));
+ }
+ @Autowired WatchNoveltyTarget novelty;
+ @Test void noveltyIsIndependentVersionedAndKeepsDiscoveryDate()throws Exception{
+  String writer=user("novelty-writer","SELECTION"),reader=user("novelty-reader","PRODUCT_MATERIAL"),store=createStore(writer,"NOVELTY-SYNTHETIC");
+  run(writer,store,"novelty-base","SUCCEEDED",1,1,true,List.of("B0BASE0001"));
+  run(writer,store,"novelty-new","SUCCEEDED",2,1,true,List.of("B0BASE0001","B0NEW00001"));
+  String id=jdbc.queryForObject("SELECT id FROM watch_new_product_event WHERE store_id=?",String.class,store);
+  jdbc.update("UPDATE watch_new_product_event SET first_detected_at=? WHERE id=?",java.sql.Timestamp.from(java.time.Instant.parse("2026-10-27T08:00:00Z")),id);
+  jdbc.update("UPDATE watch_run SET adapter_name='amazon-public-us' WHERE id=(SELECT detected_run_id FROM watch_new_product_event WHERE id=?)",id);
+  String path="/api/v1/watch/events/"+id+"/novelty";
+  mvc.perform(put(path).header("Authorization",bearer(reader)).contentType(MediaType.APPLICATION_JSON).content("{\"version\":0,\"action\":\"CONFIRMED\"}")).andExpect(status().isForbidden());
+  mvc.perform(post(path+"/collect").header("Authorization",bearer(reader))).andExpect(status().isForbidden());
+  mvc.perform(put(path).header("Authorization",bearer(writer)).contentType(MediaType.APPLICATION_JSON).content("{\"version\":0,\"action\":\"BAD\"}")).andExpect(status().isBadRequest());
+  mvc.perform(put(path).header("Authorization",bearer(writer)).contentType(MediaType.APPLICATION_JSON).content("{\"version\":0,\"action\":\"EXCLUDED\"}")).andExpect(status().isOk()).andExpect(jsonPath("$.noveltyOverride").value("EXCLUDED"));
+  novelty.apply(new com.jiugeng.erp.collection.CollectionAdapter.Target("WATCH_NOVELTY",id,"B0NEW00001",0),"amazon-public-us","test-job",new com.jiugeng.erp.collection.CollectionAdapter.Observation(java.time.Instant.parse("2026-11-15T12:00:00Z"),"PARTIAL",true,json.createObjectNode().put("listedAt","August 28, 2026")));
+  mvc.perform(get("/api/v1/watch/stores/{id}/events",store).header("Authorization",bearer(writer))).andExpect(jsonPath("$[0].noveltyStatus").value("CANDIDATE")).andExpect(jsonPath("$[0].availableDate").value("2026-08-28")).andExpect(jsonPath("$[0].noveltyOverride").value("EXCLUDED")).andExpect(jsonPath("$[0].detectedAt").value("2026-10-27T08:00:00Z"));
+  mvc.perform(put(path).header("Authorization",bearer(writer)).contentType(MediaType.APPLICATION_JSON).content("{\"version\":0,\"action\":\"RESET\"}")).andExpect(status().isConflict());
+  mvc.perform(put(path).header("Authorization",bearer(writer)).contentType(MediaType.APPLICATION_JSON).content("{\"version\":1,\"action\":\"RESET\"}")).andExpect(status().isOk()).andExpect(jsonPath("$.noveltyOverride").isEmpty());
+  assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM watch_new_product_event WHERE store_id=?",Integer.class,store)).isEqualTo(1);
+  assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE action='WATCH_NOVELTY_MARK'",Integer.class)).isEqualTo(2);
+ }
  private String createStore(String token,String key)throws Exception{String body=mvc.perform(post("/api/v1/watch/stores").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("storeKey",key,"storeName","监控店铺","sourceUrl","https://example.com/store")))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();return json.readTree(body).get("id").asText();}
  private org.springframework.test.web.servlet.ResultActions run(String token,String store,String request,String status,int count,int pages,boolean complete,List<String> asins)throws Exception{return mvc.perform(post("/api/v1/watch/stores/{id}/runs",store).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("requestId",request,"status",status,"itemCount",count,"pageCount",pages,"pagesComplete",complete,"asins",asins))));}
  private String user(String name,String role)throws Exception{String id=UUID.randomUUID().toString();var encoder=new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder();jdbc.update("INSERT INTO iam_user (id,login_name,display_name,password_hash,role,status,must_change_password) VALUES (?,?,?,?,?,'ENABLED',FALSE)",id,name,name,encoder.encode(PASSWORD),role);String body=mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("loginName",name,"password",PASSWORD)))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();return json.readTree(body).get("token").asText();}private String bearer(String token){return "Bearer "+token;}

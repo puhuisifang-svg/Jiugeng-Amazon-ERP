@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 
+const props=withDefaults(defineProps<{reserveBottom?:number}>(),{reserveBottom:0})
 const viewport = ref<HTMLElement>()
 const height = ref('55vh')
 let observer: ResizeObserver | undefined
@@ -18,7 +19,7 @@ function measure() {
   const dock = boundary?.classList.contains('erp-content')
     ? boundary.closest('.erp-shell')?.querySelector('#workspace-pagination') : undefined
   const reserved = dock?.querySelector('.list-pagination') ? 16 : 72
-  height.value = `${Math.max(180, bottom - top - reserved)}px`
+  height.value = `${Math.max(props.reserveBottom ? 96 : 180, bottom - top - reserved - props.reserveBottom)}px`
 }
 function schedule() {
   cancelAnimationFrame(frame)

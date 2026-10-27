@@ -36,11 +36,11 @@ class AmazonPublicAdapter implements CollectionAdapter {
         client=builder.build();
     }
     public String provider(){return SOURCE;}
-    public Set<String> kinds(){return Set.of("PRODUCT","STORE");}
+    public Set<String> kinds(){return Set.of("PRODUCT","STORE","WATCH_NOVELTY");}
     public boolean approved(){return enabled;}
     public synchronized Observation collect(Target target){
         if(!enabled)throw failure("网页采集未启用",false);
-        if(target.kind().equals("PRODUCT")){
+        if(Set.of("PRODUCT","WATCH_NOVELTY").contains(target.kind())){
             if(!target.key().matches("[A-Z0-9]{10}"))throw failure("ASIN无效",false);
             Document doc=usPage(URI.create("https://www.amazon.com/dp/"+target.key()));
             ObjectNode fields=product(doc,target.key());
@@ -54,7 +54,7 @@ class AmazonPublicAdapter implements CollectionAdapter {
     Observation store(String seller,java.util.function.Function<URI,Document> reader){
         URI uri=URI.create("https://www.amazon.com/s?me="+seller+"&marketplaceID=ATVPDKIKX0DER");
         Set<String> visited=new HashSet<>(),pageSignatures=new HashSet<>();var products=new LinkedHashMap<String,ObjectNode>();
-        Instant started=Instant.now();int pages=0;String storeName=null;
+        Instant started=Instant.now();int pages=0;long previousRangeEnd=0;String storeName=null;
         while(uri!=null){
             if(++pages>MAX_STORE_PAGES)throw failure("店铺超过"+MAX_STORE_PAGES+"页采集上限，未更新基线",false);
             if(Duration.between(started,Instant.now()).toSeconds()>STORE_TIMEOUT_SECONDS)throw failure("店铺采集超时，等待重试，未更新基线",true);
@@ -68,16 +68,41 @@ class AmazonPublicAdapter implements CollectionAdapter {
                 String image=attr(row,"img.s-image","src");if(image!=null)item.put("imageUrl",image);
                 searchPrice(row,item);
                 String rating=rating(row);if(rating!=null)item.put("rating",rating);
-                products.put(asin,item);pageAsins.add(asin);
+                products.computeIfAbsent(asin,key->mapper.createObjectNode()).setAll(item);pageAsins.add(asin);
             }
-            if(pageAsins.isEmpty()||!pageSignatures.add(pageAsins.toString()))throw failure("店铺分页重复或结果为空，未更新基线",false);
+            long rangeEnd=verifiedRangeEnd(doc,uri,previousRangeEnd);
+            if(pageAsins.isEmpty())throw failure("店铺商品结果为空，未更新基线",false);
+            // Repeated ASINs are not evidence of a repeated page when Amazon's
+            // selected page and result range both prove that pagination advanced.
+            if(!pageSignatures.add(pageAsins.toString())&&rangeEnd==0)throw failure("店铺分页重复且无法确认页码前进，未更新基线",false);
+            previousRangeEnd=rangeEnd==0?previousRangeEnd:rangeEnd;
             Element next=doc.selectFirst("a.s-pagination-next[href]:not(.s-pagination-disabled), .a-pagination .a-last:not(.a-disabled) a[href]");
-            if(next!=null){URI candidate=uri.resolve(next.attr("href"));validate(candidate);Map<String,String> query=query(candidate);if(!seller.equals(query.get("me"))&&!seller.equals(query.get("seller")))throw failure("店铺下一页未保持seller范围，未更新基线",false);uri=candidate;}
+            if(next!=null){URI candidate=uri.resolve(next.attr("href"));validate(candidate);Map<String,String> query=query(candidate);if(!seller.equals(query.get("me"))&&!seller.equals(query.get("seller")))throw failure("店铺下一页未保持seller范围，未更新基线",false);if(pageNumber(candidate)<=pageNumber(uri))throw failure("店铺下一页页码未前进，未更新基线",false);uri=candidate;}
             else if(doc.selectFirst(".s-pagination-next.s-pagination-disabled, .a-pagination .a-last.a-disabled")!=null || exactSinglePage(doc,pages,pageAsins.size(),rows.size()))uri=null;
             else throw failure("无法确认店铺最后一页，未更新基线",false);
         }
         ObjectNode fields=mapper.createObjectNode();if(storeName!=null)fields.put("storeName",storeName);var array=fields.putArray("products");products.values().forEach(array::add);fields.put("pageCount",pages).put("itemCount",products.size()).put("inventoryComplete",false).put("coverage","PUBLIC_SEARCH_PAGES");var coverage=fields.putArray("visitedPages");visited.stream().sorted().forEach(coverage::add);
         return new Observation(Instant.now(),"COMPLETE",true,fields);
+    }
+    static int pageNumber(URI uri){
+        try{int page=Integer.parseInt(query(uri).getOrDefault("page","1"));if(page>0)return page;}catch(NumberFormatException ignored){}
+        throw failure("店铺页码无效，未更新基线",false);
+    }
+    static long verifiedRangeEnd(Document doc,URI uri,long previousEnd){
+        int requested=pageNumber(uri);
+        Element selected=doc.selectFirst(".s-pagination-selected, .a-pagination .a-selected");
+        if(selected==null)return 0;
+        String shown=selected.text().trim();
+        if(!shown.equals(String.valueOf(requested)))throw failure("店铺返回页码与请求不一致，未更新基线",false);
+        for(Element label:doc.select("[data-component-type=s-result-info-bar] h2, [data-component-type=s-result-info-bar] span")){
+            var match=java.util.regex.Pattern.compile("^([0-9,]+)\\s*[-–]\\s*([0-9,]+) of (?:over |about )?[0-9,]+ results?$").matcher(label.text().trim());
+            if(match.matches())try{
+                long start=Long.parseLong(match.group(1).replace(",","")),end=Long.parseLong(match.group(2).replace(",",""));
+                if(start>previousEnd&&end>=start)return end;
+                throw failure("店铺结果范围未前进，未更新基线",false);
+            }catch(NumberFormatException ignored){return 0;}
+        }
+        return 0;
     }
     static boolean exactSinglePage(Document doc,int pages,int uniqueItems,int rows){
         // Amazon omits the entire pager for a single page. Only an exact result count
@@ -112,6 +137,21 @@ class AmazonPublicAdapter implements CollectionAdapter {
         BigDecimal amount=price(text(doc,"#corePriceDisplay_desktop_feature_div .a-price .a-offscreen, #corePrice_feature_div .a-price .a-offscreen, #priceblock_ourprice, #priceblock_dealprice"));
         if(amount!=null){fields.put("price",amount);fields.put("currency","USD");}
         String availability=text(doc,"#availability");if(availability!=null){String lower=availability.toLowerCase(Locale.ROOT);if(lower.contains("currently unavailable")||lower.contains("out of stock"))fields.put("availability","UNAVAILABLE");else if(lower.contains("in stock")||lower.contains("left in stock"))fields.put("availability","AVAILABLE");}
+        String stars=text(doc,"#acrPopover .a-icon-alt, #averageCustomerReviews .a-icon-alt");if(stars!=null)fields.put("rating",stars);
+        String reviews=text(doc,"#acrCustomerReviewText");if(reviews!=null)fields.put("ratingCount",reviews);
+        for(Element row:doc.select("#productDetails_detailBullets_sections1 tr, #productDetails_techSpec_section_1 tr, #detailBullets_feature_div li, #prodDetails table.prodDetTable tr, tr.po-item_length_width_height, tr.po-item_weight")){
+            String label=text(row,"th, span.a-text-bold");if(label==null)continue;
+            Element valueCell=row.select("td").last();String value=valueCell==null?null:valueCell.text().trim();if(value==null)value=row.text().replace(label,"").replaceFirst("^[\\s:：\\u200e\\u200f]+","").trim();
+            if(value.isBlank()||value.length()>1000)continue;
+            String key=label.toLowerCase(java.util.Locale.ROOT);
+            if(key.contains("date first available"))fields.put("listedAt",value);
+            else if((key.contains("product dimensions")||key.contains("item dimensions"))){String[] parts=value.split(";",2);fields.put("dimensions",parts[0].trim());if(parts.length==2&&parts[1].toLowerCase(java.util.Locale.ROOT).matches(".*(pounds|ounces|grams|kg|lbs).*"))fields.put("weight",parts[1].trim());}
+            else if(key.contains("item weight"))fields.put("weight",value);
+            else if(key.contains("best sellers rank")){
+                var ranks=java.util.regex.Pattern.compile("#[0-9,]+\\s+in\\s+[^#(]+").matcher(value);var found=new java.util.ArrayList<String>();while(ranks.find())found.add(ranks.group().trim());
+                if(!found.isEmpty())fields.put("largeCategoryRank",found.getFirst());if(found.size()>1)fields.put("smallCategoryRank",String.join(" / ",found.subList(1,found.size())));
+            }
+        }
         return fields;
     }
     private Document usPage(URI uri){

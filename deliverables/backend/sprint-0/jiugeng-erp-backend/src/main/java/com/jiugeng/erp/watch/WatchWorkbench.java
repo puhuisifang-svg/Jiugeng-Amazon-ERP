@@ -29,6 +29,11 @@ class WatchWorkbench {
         var automatic=jdbc.sql("SELECT provider,asin,title,image_url AS imageUrl,price,price_type AS priceType,rating,first_at AS firstAt,last_at AS lastAt,missing_count AS missingCount,missing_at AS missingAt FROM watch_presence WHERE store_id=:id ORDER BY first_at DESC,asin").param("id",id).query().listOfRows();
         return new Detail(store,runIds.stream().map(repository::run).toList(),products,automatic);
     }
+    @GetMapping("/stores/{id}/events") @PreAuthorize("hasAuthority('watch.read')")
+    List<WatchTypes.EventView> events(@PathVariable String id){
+        repository.store(id).orElseThrow(()->error(404,"店铺不存在"));
+        return repository.events().stream().filter(e->e.storeId().equals(id)).toList();
+    }
     @PutMapping("/stores/{id}") @PreAuthorize("hasAuthority('watch.write')")
     WatchTypes.StoreView edit(@PathVariable String id,@RequestBody StoreEdit in,@AuthenticationPrincipal AuthenticatedActor actor){
         repository.lockStore(id);var store=repository.store(id).orElseThrow();version(in.version(),store.version());

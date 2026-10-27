@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { useCollectionStatus } from '@/composables/useCollectionStatus'
 import '@/styles/monitoringWorkbench.css'
-import CollectionPanel from '@/components/CollectionPanel.vue'
+import { confirmAction } from '@/state/uiConfirmation'
+import MonitorInlineEditor from '@/components/MonitorInlineEditor.vue'
 import ListPagination from '@/components/ListPagination.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
-import TableViewport from "@/components/TableViewport.vue"
+import HorizontalTableViewport from '@/components/HorizontalTableViewport.vue'
+import MonitoringPencil from '@/components/MonitoringPencil.vue'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { monitoringApi, type FieldName, type MonitorDetail, type MonitorFields, type MonitorResult, type MonitorSnapshot, type MonitorTarget, type SnapshotInput } from '@/api/monitoring'
@@ -99,19 +101,19 @@ async function batch(action = batchAction.value, targets = selectedRows.value) {
   try {
     const result = await monitoringApi.batch(targets.map(({ id, version }) => ({ id, version })), action, split(batchTags.value))
     const failed = result.filter(r => r.status !== 'UPDATED')
-    notice.value = `已更新 ${result.length - failed.length} 条。${failed.map(r => `${r.asin}：${r.message}`).join('；')}`
+    notice.value = `已${action==='REMOVE'?'移除':'更新'} ${result.length - failed.length} 条。${failed.map(r => `${r.asin}：${r.message}`).join('；')}`
     await load()
   } catch (e) { fail(e) } finally { busy.value = false }
 }
-async function follow(row: MonitorTarget) {
-  busy.value = true; notice.value = String(); error.value = ''
-  try { await monitoringApi.follow(row.id, !row.followed); await load() } catch (e) { fail(e) } finally { busy.value = false }
-}
-async function followSelected(followed: boolean) {
-  busy.value = true; notice.value = String(); error.value = ''; let done = 0
-  try { for (const row of selectedRows.value) { await monitoringApi.follow(row.id, followed); done++ } notice.value = `已${followed ? '关注' : '取消关注'} ${done} 条。`; await load() }
-  catch (e) { notice.value = `已完成 ${done} 条，其余可重试。`; fail(e) } finally { busy.value = false }
-}
+const editAnchor=ref<HTMLElement>()
+const editing=ref<MonitorTarget>(), editField=ref<'remark'|'sales30Days'>('remark')
+function edit(row:MonitorTarget,field:'remark'|'sales30Days',event:Event){editAnchor.value=event.currentTarget as HTMLElement;editing.value=row;editField.value=field}
+async function toggleMonitor(row:MonitorTarget){if(row.enabled&&!await confirmAction(`是否停止监控 ${row.asin}？历史数据将保留。`))return;await batch(row.enabled?'PAUSE':'ENABLE',[row])}
+async function remove(row:MonitorTarget){if(await confirmAction(`移除 ${row.asin}？将停止监控，历史记录保留，重新添加相同 ASIN 可恢复。`))await batch('REMOVE',[row])}
+async function updateSelected(){if(!selectedRows.value.length||busy.value)return;busy.value=true;notice.value='';error.value='';let count=0,skipped=0;const failed:string[]=[];
+ try{for(const row of [...selectedRows.value]){if(!row.enabled||collection.pending(row.id)){skipped++;continue}if(await collection.collect(row.id))count++;else failed.push(row.asin)}notice.value=`已提交 ${count} 条更新${skipped?`，跳过 ${skipped} 条暂停或采集中的商品`:''}`;if(failed.length)error.value=`提交失败：${failed.join('、')}`}finally{busy.value=false}}
+const changeLabels:Record<string,string>={...fieldLabels,rating:'星级评分',ratingCount:'评分数',smallCategoryRank:'小类目排名',largeCategoryRank:'大类目排名',listedAt:'上架时间',dimensions:'尺寸',weight:'重量'}
+function changes(row:MonitorTarget){return row.latestChanges?.length?row.latestChanges.map(c=>`${changeLabels[c.field]??c.field}变化`).join('、'):'暂无变动'}
 async function saveColumns() {
   busy.value = true; notice.value = String(); error.value = ''
   try { const p = await monitoringApi.columns(draftColumns.value); columns.value = p.columns; modal.value?.close() } catch (e) { fail(e) } finally { busy.value = false }
@@ -154,7 +156,14 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
 
 <template>
   <section class="monitor-page page-stack monitor-workbench">
-    <SuccessToast :message="notice" />
+    <SuccessToast :message="notice" /><MonitorInlineEditor
+      v-if="editing"
+      :target="editing"
+      :anchor="editAnchor"
+      :field="editField"
+      @close="editing=undefined"
+      @saved="editing=undefined;notice='已保存';load()"
+    />
     <p
       v-if="error || collection.error.value"
       class="data-state data-state--error"
@@ -175,10 +184,6 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
           maxlength="50"
           placeholder="精确匹配标签"
         ></label>
-        <label class="monitor-check"><input
-          v-model="filters.followed"
-          type="checkbox"
-        >仅我关注</label>
         <div class="monitor-search">
           <select
             v-model="filters.searchBy"
@@ -213,25 +218,17 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
             @click="show('create')"
           >
             ＋ 添加监控
+          </button><button
+            aria-label="更新所选产品"
+            :class="{'mw-selected-update':selected.length>0}"
+            :disabled="!selected.length||busy||loading"
+            @click="updateSelected"
+          >
+            更新所选<span v-if="selected.length">（{{ selected.length }}）</span>
           </button><span
             class="monitor-quota"
             title="亚马逊前台观测 · 每日更新"
-          >启用目标 <strong>{{ active }}</strong> / 1,000</span><span class="monitor-spacer" /><button
-            :disabled="busy"
-            @click="show('columns')"
-          >
-            自定义列
-          </button><button
-            :disabled="loading || busy"
-            @click="load"
-          >
-            刷新列表
-          </button><details>
-            <summary>更多</summary><CollectionPanel
-              kind="PRODUCT"
-              :targets="rows.map(r=>({id:r.id,label:r.asin}))"
-            />
-          </details>
+          >启用目标 <strong>{{ active }}</strong> / 1,000</span>
         </div>
         <div class="monitor-batch">
           <span>已选 {{ selected.length }} 条</span><select
@@ -261,16 +258,6 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
             @click="batch()"
           >
             应用
-          </button><button
-            :disabled="!selected.length || busy || loading"
-            @click="followSelected(true)"
-          >
-            关注
-          </button><button
-            :disabled="!selected.length || busy || loading"
-            @click="followSelected(false)"
-          >
-            取消关注
           </button>
         </div>
         <p
@@ -283,11 +270,11 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
           v-else
           class="monitor-table-wrap"
         >
-          <TableViewport>
-            <table class="monitor-table ui-action-table">
+          <HorizontalTableViewport>
+            <table class="monitor-table competitor-table">
               <thead>
                 <tr>
-                  <th>
+                  <th class="fixed-select">
                     <input
                       type="checkbox"
                       aria-label="选择本页全部"
@@ -295,21 +282,21 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
                       :disabled="busy"
                       @change="toggleAll"
                     >
-                  </th><th>监控 / 关注</th><th class="monitor-product-col">
-                    商品 / ASIN
-                  </th><th>更新状态</th><th
-                    v-for="col in columns"
-                    :key="col"
-                  >
-                    {{ columnLabels[col] }}
-                  </th><th>操作</th>
+                  </th><th class="fixed-monitor">
+                    监控状态
+                  </th><th class="fixed-image">
+                    图片
+                  </th><th class="fixed-title">
+                    标题 / ASIN
+                  </th><th>采集状态</th><th>站点</th><th>可售状态</th><th>品牌</th><th>最新变动</th><th>近30天销量</th><th>价格</th><th>小类目排名</th><th>大类目排名</th><th>星级评分</th><th>评分数</th><th>上架时间</th><th>产品尺寸&amp;重量</th><th>备注</th><th>操作</th>
                 </tr>
-              </thead><tbody>
+              </thead>
+              <tbody>
                 <tr
                   v-for="row in rows"
                   :key="row.id"
                 >
-                  <td>
+                  <td class="fixed-select">
                     <input
                       v-model="selected"
                       type="checkbox"
@@ -317,85 +304,100 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
                       :aria-label="`选择 ${row.asin}`"
                       :disabled="busy"
                     >
-                  </td><td>
-                    <span :class="['monitor-pill', { paused: !row.enabled }]">{{ row.enabled ? '监控中' : '已暂停' }}</span><button
-                      class="monitor-star"
-                      :aria-label="`${row.followed ? '取消关注' : '关注'} ${row.asin}`"
+                  </td>
+                  <td class="fixed-monitor">
+                    <button
+                      class="mw-switch"
+                      role="switch"
+                      :aria-checked="row.enabled"
+                      :aria-label="`监控 ${row.asin}`"
                       :disabled="busy"
-                      @click="follow(row)"
-                    >
-                      {{ row.followed ? '★' : '☆' }}
-                    </button>
-                  </td><td>
-                    <div class="monitor-product">
-                      <img
-                        v-if="row.fields.imageUrl"
-                        :src="row.fields.imageUrl"
-                        alt="商品主图"
-                        referrerpolicy="no-referrer"
-                      ><span
-                        v-else
-                        class="monitor-image-empty"
-                      >暂无图片</span><div>
-                        <RouterLink :to="`/product-monitoring/${row.id}`">
-                          {{ row.fields.title || '等待首次观测' }}
-                        </RouterLink><p class="monitor-asin">
-                          {{ row.asin }}
-                        </p>
-                      </div>
-                    </div>
-                  </td><td>
+                      @click="toggleMonitor(row)"
+                    />
+                  </td>
+                  <td class="fixed-image">
+                    <img
+                      v-if="row.fields.imageUrl"
+                      :src="row.fields.imageUrl"
+                      alt="商品主图"
+                      referrerpolicy="no-referrer"
+                    ><span
+                      v-else
+                      class="monitor-image-empty"
+                    >暂无图片</span>
+                  </td>
+                  <td class="fixed-title">
+                    <RouterLink :to="`/product-monitoring/${row.id}`">
+                      {{ row.fields.title||'等待首次观测' }}
+                    </RouterLink><p class="monitor-asin">
+                      <a
+                        :href="`https://www.amazon.com/dp/${row.asin}`"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >{{ row.asin }}</a>
+                    </p>
+                  </td>
+                  <td
+                    class="product-collection-status"
+                    :aria-label="`${row.asin} 采集状态`"
+                    aria-live="polite"
+                  >
                     <span
                       class="mw-status"
-                      :class="{good:collection.state(row.id)?.status==='SUCCEEDED',warn:['PARTIAL','FAILED'].includes(collection.state(row.id)?.status??'')}"
+                      :class="{good:row.enabled&&collection.state(row.id)?.status==='SUCCEEDED',warn:['FAILED','PARTIAL','RETRY','UNKNOWN'].includes(collection.state(row.id)?.status??'')}"
                       :title="collection.state(row.id)?.reason??row.lastReason??''"
-                    >{{ row.enabled ? (collection.state(row.id) ? collection.label(row.id) : statusLabels[row.lastStatus]) : '已暂停' }}</span><small
-                      v-if="stale(row)"
-                      class="monitor-stale"
-                    >数据已超过 48 小时</small>
-                  </td><td
-                    v-for="col in columns"
-                    :key="col"
-                  >
-                    <template v-if="col === 'brand'">
-                      {{ display(row.fields.brand) }}
-                    </template><template v-else-if="col === 'price'">
-                      {{ row.fields.price == null ? '—' : `USD ${row.fields.price.toFixed(2)}` }}
-                    </template><template v-else-if="col === 'availability'">
-                      {{ display(row.fields.availability) }}
-                    </template><template v-else-if="col === 'owner'">
-                      {{ row.ownerName || '未分配' }}
-                    </template><template v-else-if="col === 'tags'">
+                      :aria-busy="collection.pending(row.id)"
+                    >
                       <span
-                        v-for="tag in row.tags"
-                        :key="tag"
-                        class="monitor-tag"
-                      >{{ tag }}</span><span v-if="!row.tags.length">—</span>
-                    </template><template v-else-if="col === 'updated'">
-                      {{ formatTime(row.observedAt) }}
-                    </template><template v-else-if="col === 'source'">
-                      {{ sourceLabel(row.source) }}
-                    </template>
-                  </td><td>
+                        v-if="collection.pending(row.id)"
+                        class="mw-spinner"
+                        aria-hidden="true"
+                      />{{ row.enabled?(collection.state(row.id)?collection.label(row.id):statusLabels[row.lastStatus]):'已暂停' }}
+                    </span>
+                    <small
+                      v-if="['FAILED','PARTIAL','UNKNOWN'].includes(collection.state(row.id)?.status??'')"
+                      class="collection-status-reason"
+                    >{{ collection.state(row.id)?.reason }}</small>
+                  </td>
+                  <td>美国</td><td>{{ display(row.fields.availability) }}</td>
+                  <td>{{ display(row.fields.brand) }}</td><td>{{ changes(row) }}</td>
+                  <td>
+                    {{ row.sales30Days??'未填写' }}<button
+                      class="mw-link mw-remark-edit"
+                      :aria-label="`编辑 ${row.asin} 近30天销量`"
+                      :disabled="busy"
+                      @click="edit(row,'sales30Days',$event)"
+                    >
+                      <MonitoringPencil />
+                    </button>
+                  </td>
+                  <td>{{ row.fields.price==null?'未观测':`US$ ${row.fields.price.toFixed(2)}` }}</td>
+                  <td>{{ display(row.fields.smallCategoryRank) }}</td><td>{{ display(row.fields.largeCategoryRank) }}</td><td>{{ display(row.fields.rating) }}</td><td>{{ display(row.fields.ratingCount) }}</td><td>{{ display(row.fields.listedAt) }}</td>
+                  <td><div>尺寸：{{ display(row.fields.dimensions) }}</div><div>重量：{{ display(row.fields.weight) }}</div></td>
+                  <td>
+                    <span class="competitor-remark">{{ row.remark||'—' }}</span><button
+                      class="mw-link mw-remark-edit"
+                      :aria-label="`编辑 ${row.asin} 备注`"
+                      :disabled="busy"
+                      @click="edit(row,'remark',$event)"
+                    >
+                      <MonitoringPencil />
+                    </button>
+                  </td>
+                  <td>
                     <RouterLink :to="`/product-monitoring/${row.id}`">
                       详情
                     </RouterLink><button
                       class="monitor-text-button"
-                      :disabled="!row.enabled||collection.pending(row.id)||!collection.enabled.value"
-                      @click="collection.collect(row.id)"
-                    >
-                      更新
-                    </button><button
-                      class="monitor-text-button"
                       :disabled="busy"
-                      @click="batch(row.enabled ? 'PAUSE' : 'ENABLE', [row])"
+                      @click="remove(row)"
                     >
-                      {{ row.enabled ? '暂停' : '恢复' }}
+                      移除
                     </button>
                   </td>
                 </tr><tr v-if="!rows.length">
                   <td
-                    :colspan="columns.length + 5"
+                    colspan="19"
                     class="monitor-empty"
                   >
                     <h3>暂无监控商品</h3><p>添加美国站子 ASIN 后自动采集，首次成功后建立基线。</p><button @click="show('create')">
@@ -405,7 +407,7 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
                 </tr>
               </tbody>
             </table>
-          </TableViewport>
+          </HorizontalTableViewport>
         </div>
         <ListPagination
           v-model:page-size="filters.size"

@@ -84,7 +84,7 @@ class WatchCollectionTarget implements CollectionTarget {
         }
         if(last.isEmpty())jdbc.sql("INSERT INTO watch_auto_baseline(store_id,provider,observed_at) VALUES(:id,:source,:at)").param("id",target.id()).param("source",provider).param("at",Timestamp.from(o.observedAt())).update();
         else jdbc.sql("UPDATE watch_auto_baseline SET observed_at=:at WHERE store_id=:id AND provider=:source").param("id",target.id()).param("source",provider).param("at",Timestamp.from(o.observedAt())).update();
-        return events+missing>0?"店铺发现 "+events+" 个新品、"+missing+" 个疑似下架商品":"";
+        return events+missing>0?"店铺发现 "+events+" 个首次发现商品、"+missing+" 个疑似下架商品":"";
     }
     private ResponseStatusException bad(String m){return new ResponseStatusException(HttpStatus.BAD_REQUEST,m);}
 }

@@ -1,43 +1,69 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { RouterLink, onBeforeRouteLeave } from 'vue-router'
+import { onBeforeRouteLeave } from 'vue-router'
+import { useCollectionStatus } from '@/composables/useCollectionStatus'
+import { isNovel, noveltyStatus, noveltyLabel } from '@/composables/watchNovelty'
+import { confirmAction } from '@/state/uiConfirmation'
 import { monitoringApi } from '@/api/monitoring'
-import SuccessToast from './SuccessToast.vue'
-import '@/styles/monitoringWorkbench.css'
 import { apiRequest } from '@/api/client'
 import type { WatchStoreDto, WatchEventDto } from '@/api/resources'
+import SuccessToast from './SuccessToast.vue'
 import ListPagination from './ListPagination.vue'
-import TableViewport from './TableViewport.vue'
+import HorizontalTableViewport from './HorizontalTableViewport.vue'
 import UnsavedChangesDialog from './UnsavedChangesDialog.vue'
-const props = defineProps<{ store: WatchStoreDto | undefined; writable: boolean; newProducts?: WatchEventDto[] | undefined }>()
-const emit = defineEmits<{ close: []; changed: [] }>()
-interface Detail { store: WatchStoreDto; runs: { id: string; completedAt: string; decision: string; reasonCode: string }[]; products: { asin: string; firstDetectedAt: string; online: boolean; source: string }[]; automaticProducts: { provider: string; asin: string; title: string; firstAt: string; lastAt: string; missingCount: number; missingAt: string | null; imageUrl?: string; price?: number; priceType?: string; rating?: string }[] }
-const detail = ref<Detail>(), dialog = ref<HTMLDialogElement>(), error = ref(''), busy = ref(false), tab = ref('online'), q = ref(''), page = ref(1), size = ref(20), unsaved = ref(false)
-const chosen=ref<string[]>([]), from=ref(''), to=ref(''), notice=ref('')
+import StoreTimingForm from './StoreTimingForm.vue'
+import '@/styles/monitoringWorkbench.css'
+const props=defineProps<{store:WatchStoreDto|undefined;writable:boolean;newProducts?:WatchEventDto[]|undefined;initialTab?:string}>()
+const emit=defineEmits<{close:[];changed:[]}>()
+interface Product {provider:string;asin:string;title:string;firstAt:string;lastAt:string;missingCount:number;missingAt:string|null;imageUrl?:string;price?:number;priceType?:string;rating?:string;event?:WatchEventDto}
+interface Detail {automaticProducts:Product[]}
+const detail=ref<Detail>(), events=ref<WatchEventDto[]>([]), dialog=ref<HTMLDialogElement>(), timing=ref<InstanceType<typeof StoreTimingForm>>()
+const error=ref(''), eventError=ref(''), busy=ref(false), loading=ref(false), tab=ref('online'), q=ref(''), page=ref(1), size=ref(20), unsaved=ref(false), notice=ref(''), settingsVisited=ref(false)
+const judgement=ref('NOVEL')
+const applied=ref({q:'',from:'',to:'',judgement:'NOVEL'})
+const isRecord=computed(()=>['new','novelty'].includes(tab.value))
+const novelty=useCollectionStatus('WATCH_NOVELTY',()=>{if(props.store)void loadEvents(props.store.id,request)})
+const filters=computed(()=>isRecord.value?applied.value:{q:q.value,from:from.value,to:to.value,judgement:judgement.value})
+function search(){if(invalidRange.value)return;applied.value={q:q.value.trim(),from:from.value,to:to.value,judgement:judgement.value};page.value=1;chosen.value=[]}
+const chosen=ref<string[]>([]), from=ref(''), to=ref(''), version=ref(0)
+const draft=ref({name:'',owner:'',remark:'',enabled:true}), baseline=ref('')
 function day(value:string){return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Los_Angeles'}).format(new Date(value))}
 function date(value:string){return new Date(value).toLocaleString('zh-CN',{hour12:false})}
-async function monitor(asins:string[]){if(!props.writable)return;busy.value=true;error.value='';try{const result=await monitoringApi.create({requestId:crypto.randomUUID(),asins,tags:[],remark:''});notice.value=`已添加 ${result.filter(r=>r.status==='CREATED').length} 个，已存在 ${result.filter(r=>r.status==='EXISTS').length} 个`;const failed=result.filter(r=>!['CREATED','EXISTS'].includes(r.status));if(failed.length)error.value=failed.map(r=>r.message).join('；');chosen.value=[]}catch(e){error.value=e instanceof Error?e.message:'添加监控失败'}finally{busy.value=false}}
-const draft = ref({ name: '', owner: '', remark: '', enabled: true }), baseline = ref('')
-const products = computed(() => detail.value?.products.filter(p => !q.value || p.asin.includes(q.value.toUpperCase())) ?? [])
-const sourceProducts=computed(()=>props.newProducts===undefined?detail.value?.automaticProducts??[]:props.newProducts.map(event=>detail.value?.automaticProducts.find(p=>p.asin===event.asin)??{asin:event.asin,title:event.title??event.asin,firstAt:event.detectedAt,lastAt:event.detectedAt,missingCount:0,missingAt:null,provider:'',imageUrl:undefined,price:undefined,priceType:undefined,rating:undefined}))
-const auto = computed(() => sourceProducts.value.filter(p => (props.newProducts!==undefined || (tab.value === 'missing' ? p.missingCount >= 2 : p.missingCount < 2)) && (!q.value || p.asin.includes(q.value.toUpperCase()) || p.title.toLowerCase().includes(q.value.toLowerCase())) && (!from.value || day(p.firstAt)>=from.value) && (!to.value || day(p.firstAt)<=to.value)) ?? [])
-const total = computed(() => tab.value === 'manual' ? products.value.length : auto.value.length)
-watch([q, tab, size, from, to], () => { page.value = 1; chosen.value = [] })
-watch(page, () => { chosen.value = [] })
-watch(() => props.store, async value => {
-  if (!value) return
-  error.value = ''; detail.value = undefined; tab.value = 'online'; page.value = 1; chosen.value=[];q.value='';from.value='';to.value='';notice.value=''
-  draft.value = { name: value.storeName, owner: value.owner ?? '', remark: value.remark ?? '', enabled: value.status === 'ACTIVE' }; baseline.value = JSON.stringify(draft.value)
-  await nextTick(); dialog.value?.showModal()
-  try { detail.value = await apiRequest<Detail>(`/v1/watch/stores/${value.id}`) } catch (e) { error.value = String(e) }
+const today=()=>day(new Date().toISOString())
+function todayRange(){from.value=today();to.value=today()}
+const online=computed(()=>detail.value?.automaticProducts.filter(p=>p.missingCount<2)??[])
+const todayCount=computed(()=>events.value.filter(e=>day(e.detectedAt)===today()).length)
+const novelTodayCount=computed(()=>events.value.filter(e=>day(e.detectedAt)===today()&&isNovel(e)).length)
+const sourceProducts=computed<Product[]>(()=>isRecord.value?events.value.map(e=>({...detail.value?.automaticProducts.find(p=>p.asin===e.asin),event:e,provider:'event',asin:e.asin,title:e.title??e.asin,firstAt:e.detectedAt,lastAt:detail.value?.automaticProducts.find(p=>p.asin===e.asin)?.lastAt??e.detectedAt,missingCount:0,missingAt:null})):detail.value?.automaticProducts??[])
+const invalidRange=computed(()=>!!from.value&&!!to.value&&from.value>to.value)
+const auto=computed(()=>(!!filters.value.from&&!!filters.value.to&&filters.value.from>filters.value.to)?[]:sourceProducts.value.filter(p=>(isRecord.value||(tab.value==='missing'?p.missingCount>=2:p.missingCount<2))&&(tab.value!=='novelty'||!!p.event&&(filters.value.judgement==='ALL'||(filters.value.judgement==='NOVEL'?isNovel(p.event):noveltyStatus(p.event)===filters.value.judgement)))&&(!filters.value.q||p.asin.includes(filters.value.q.toUpperCase())||p.title.toLowerCase().includes(filters.value.q.toLowerCase()))&&(!filters.value.from||day(p.firstAt)>=filters.value.from)&&(!filters.value.to||day(p.firstAt)<=filters.value.to)))
+const total=computed(()=>auto.value.length)
+const dirty=computed(()=>JSON.stringify(draft.value)!==baseline.value||!!timing.value?.dirty)
+const locked=computed(()=>busy.value||!!timing.value?.busy)
+const visible=computed(()=>auto.value.slice((page.value-1)*size.value,page.value*size.value))
+function switchTab(id:string){tab.value=id;if(id==='settings')settingsVisited.value=true;if(['new','novelty'].includes(id))todayRange();else{from.value='';to.value=''}q.value='';judgement.value='NOVEL';applied.value={q:'',from:from.value,to:to.value,judgement:'NOVEL'}}
+watch([q,tab,size,from,to],()=>{page.value=1;chosen.value=[]})
+watch(page,()=>{chosen.value=[]})
+watch(()=>props.newProducts,value=>{if(value!==undefined){events.value=value;switchTab(props.initialTab==='novelty'?'novelty':'new')}})
+let request=0
+async function loadEvents(id:string,current:number){try{const result=await apiRequest<WatchEventDto[]>(`/v1/watch/stores/${id}/events`);if(current===request&&Array.isArray(result))events.value=result}catch(e){if(current===request)eventError.value=e instanceof Error?e.message:'上架记录加载失败'}}
+watch(()=>props.store,async value=>{
+ if(!value)return
+ const current=++request;detail.value=undefined;events.value=props.newProducts??[];error.value='';eventError.value='';notice.value='';settingsVisited.value=false;chosen.value=[];page.value=1;switchTab(props.initialTab??(props.newProducts===undefined?'online':'new'))
+ version.value=value.version??0;draft.value={name:value.storeName,owner:value.owner??'',remark:value.remark??'',enabled:value.status==='ACTIVE'};baseline.value=JSON.stringify(draft.value)
+ await nextTick();dialog.value?.showModal();loading.value=true
+ try{const result=await apiRequest<Detail>(`/v1/watch/stores/${value.id}`);if(current===request)detail.value=result;await loadEvents(value.id,current)}catch(e){if(current===request)error.value=e instanceof Error?e.message:'店铺详情加载失败'}finally{if(current===request)loading.value=false}
 })
-onBeforeRouteLeave(() => { if (props.store && (busy.value || JSON.stringify(draft.value) !== baseline.value)) { unsaved.value = true; return false } return true })
-function close() { if (busy.value) return; if (JSON.stringify(draft.value) !== baseline.value) unsaved.value = true; else discard() }
-function discard() { unsaved.value = false; dialog.value?.close(); emit('close') }
-async function save() {
-  if (!props.store) return
-  busy.value = true
-  try { await apiRequest(`/v1/watch/stores/${props.store.id}`, { method: 'PUT', body: JSON.stringify({ ...draft.value, version: props.store.version }) }); baseline.value = JSON.stringify(draft.value); emit('changed'); discard() } catch (e) { error.value = e instanceof Error ? e.message : '保存失败' } finally { busy.value = false }
+onBeforeRouteLeave(()=>{if(props.store&&locked.value)return false;if(props.store&&dirty.value){unsaved.value=true;return false}return true})
+function close(){if(locked.value)return;if(dirty.value)unsaved.value=true;else discard()}
+function discard(){request++;unsaved.value=false;dialog.value?.close();emit('close')}
+async function save(){if(!props.store||!props.writable||locked.value)return;busy.value=true;error.value='';try{const result=await apiRequest<WatchStoreDto>(`/v1/watch/stores/${props.store.id}`,{method:'PUT',body:JSON.stringify({...draft.value,version:version.value})});version.value=result.version??version.value;baseline.value=JSON.stringify(draft.value);notice.value='店铺信息已保存';emit('changed')}catch(e){error.value=e instanceof Error?e.message:'保存失败'}finally{busy.value=false}}
+async function monitor(asins:string[]){if(!props.writable||locked.value)return;busy.value=true;error.value='';try{const result=await monitoringApi.create({requestId:crypto.randomUUID(),asins,tags:[],remark:''});notice.value=`已添加 ${result.filter(r=>r.status==='CREATED').length} 个，已存在 ${result.filter(r=>r.status==='EXISTS').length} 个`;const failed=result.filter(r=>!['CREATED','EXISTS'].includes(r.status));if(failed.length)error.value=failed.map(r=>r.message).join('；');chosen.value=[]}catch(e){error.value=e instanceof Error?e.message:'添加监控失败'}finally{busy.value=false}}
+async function retryNovelty(event:WatchEventDto){if(!props.writable||locked.value)return;if(await novelty.collect(event.id))notice.value='日期补采已排队，上架记录不受影响';else error.value=novelty.error.value}
+async function markNovelty(event:WatchEventDto,action:string){
+ if(!props.writable||locked.value||!await confirmAction(action==='RESET'?'撤销人工标记，恢复自动判定？':action==='EXCLUDED'?'将此商品排除出新品统计？上架记录会保留。':'确认此商品为新品？该人工判断会计入首次发现当天的新品统计。'))return
+ busy.value=true;error.value=''
+ try{const result=await apiRequest<WatchEventDto>(`/v1/watch/events/${event.id}/novelty`,{method:'PUT',body:JSON.stringify({version:event.noveltyVersion??0,action})});events.value=events.value.map(e=>e.id===result.id?result:e);notice.value='新品标记已保存';emit('changed')}catch(e){error.value=e instanceof Error?e.message:'保存失败'}finally{busy.value=false}
 }
 </script>
 <template>
@@ -47,199 +73,298 @@ async function save() {
     aria-label="店铺监控详情"
     @cancel.prevent="close"
   >
-    <header>
-      <div>
-        <h2>{{ newProducts===undefined?'店铺监控详情':'今日上新' }}</h2><p class="store-subtitle">
-          {{ store?.storeName }} · 美国站
-        </p>
+    <header class="store-detail-header">
+      <div class="store-identity">
+        <span
+          class="store-avatar"
+          aria-hidden="true"
+        >店</span><div>
+          <h2>{{ store?.storeName }}</h2><p class="store-subtitle">
+            店铺监控详情 · 美国站 · {{ store?.storeKey }}
+          </p>
+        </div>
       </div><button
-        :disabled="busy"
+        :disabled="locked"
         @click="close"
       >
         关闭
       </button>
     </header>
+    <div class="store-overview">
+      <div><span>在线产品</span><strong>{{ online.length.toLocaleString() }}</strong></div><div><span>今日上架</span><strong>{{ todayCount.toLocaleString() }}</strong></div><div><span>今日新品</span><strong>{{ novelTodayCount.toLocaleString() }}</strong></div><div class="store-last-observed">
+        <span>最近观测</span><strong>{{ detail?.automaticProducts[0]?.lastAt?date(detail.automaticProducts[0].lastAt):'等待采集' }}</strong>
+      </div>
+    </div>
+    <nav
+      class="store-detail-tabs"
+      aria-label="店铺详情页签"
+    >
+      <button
+        v-for="t in [{id:'online',label:'在线产品'},{id:'missing',label:'疑似下架产品'},{id:'new',label:'上架记录'},{id:'novelty',label:'新品记录'},{id:'settings',label:'店铺设置'}]"
+        :key="t.id"
+        :aria-pressed="tab===t.id"
+        @click="switchTab(t.id)"
+      >
+        {{ t.label }}
+      </button>
+    </nav>
     <SuccessToast :message="notice" />
-    <div class="store-body">
+    <div
+      class="store-body"
+      :class="{'store-body-products':tab!=='settings'}"
+    >
       <p
         v-if="error"
+        class="mw-error"
         role="alert"
       >
         {{ error }}
-      </p>
-      <div
-        v-if="newProducts===undefined"
-        class="ui-section-tabs"
+      </p><p
+        v-if="loading"
+        role="status"
       >
-        <button
-          v-for="t in [{id:'online',label:'在线产品'},{id:'missing',label:'疑似下架产品'},{id:'runs',label:'更新记录'},{id:'settings',label:'店铺设置'},{id:'manual',label:'人工记录'}]"
-          :key="t.id"
-          :aria-pressed="tab === t.id"
-          @click="tab = t.id"
+        正在加载店铺数据…
+      </p>
+      <template v-if="tab!=='settings'">
+        <div
+          class="store-product-filters"
+          :class="{'store-record-filters':isRecord}"
         >
-          {{ t.label }}
-        </button>
-      </div>
-      <template v-if="['manual','online','missing'].includes(tab)">
-        <div class="mw-toolbar">
-          <button
-            v-if="tab!=='manual'"
+          <label>{{ isRecord?'发现日期':'首次发现' }}<input
+            v-model="from"
+            type="date"
+            :aria-label="isRecord?'上架开始日期':'首次发现开始日期'"
+          ></label><label>至<input
+            v-model="to"
+            type="date"
+            :aria-label="isRecord?'上架结束日期':'首次发现结束日期'"
+          ></label><label class="store-search">搜索<input
+            v-model="q"
+            placeholder="商品标题 / ASIN"
+            aria-label="搜索标题或ASIN"
+          ></label><label v-if="tab==='novelty'">判断结果<select
+            v-model="judgement"
+            aria-label="新品判断结果"
+          ><option value="NOVEL">新品候选 / 疑似 / 已确认</option><option value="PENDING">待核实</option><option value="OLD">老链接</option><option value="EXCLUDED">已排除</option><option value="ALL">全部记录</option></select></label><button
+            v-if="isRecord"
             class="mw-primary"
-            :disabled="!writable||!chosen.length||busy"
+            :disabled="loading||invalidRange"
+            @click="search"
+          >
+            搜索
+          </button>
+        </div>
+        <div class="store-product-actions">
+          <button
+            class="mw-primary"
+            :disabled="!writable||!chosen.length||locked||loading"
             @click="monitor(chosen)"
           >
             批量添加产品监控
-          </button>
-          <label>首次发现 <input
-            v-model="from"
-            type="date"
-            aria-label="首次发现开始日期"
-          ></label>
-          <label>至 <input
-            v-model="to"
-            type="date"
-            aria-label="首次发现结束日期"
-          ></label>
-          <input
-            v-model="q"
-            placeholder="搜索标题 / ASIN"
-            aria-label="搜索标题或ASIN"
-          >
+          </button><span>{{ chosen.length?`已选 ${chosen.length} 个商品`:'勾选商品可添加至产品监控' }}</span>
         </div>
-        <p class="store-hint">
-          {{ tab==='manual' ? '人工快照记录，保留历史来源。' : newProducts===undefined ? '按美国收货地区采集；价格为公开报价，“起”为其他卖家最低报价。首次发现为本系统观测时间，搜索未出现不据此判定下架。' : '当前店铺今日发现的新品，按美国太平洋时区统计。' }}
+        <p
+          v-if="invalidRange"
+          class="mw-error"
+          role="alert"
+        >
+          开始日期不能晚于结束日期。
         </p>
-        <TableViewport>
-          <table class="mw-table ui-action-table">
+        <p
+          v-if="isRecord&&eventError"
+          class="mw-error"
+          role="alert"
+        >
+          {{ eventError }} <button @click="store&&loadEvents(store.id,request)">
+            重试
+          </button>
+        </p>
+        <p class="store-hint">
+          {{ tab==='novelty'?'统一新品窗口60天，按首次发现日判断；无日期不自动认定新品，补采不会改变记录归属日期。':isRecord?'按美国太平洋时间统计首次发现，不代表实际首次上架；初次建档商品不计入今日上架。':tab==='missing'?'搜索未出现不等于下架；当前公开网页采集不会仅凭缺失判定下架。':'价格为美国站公开报价，“起”为其他卖家最低报价；缺失价格或评分不会填零。' }}
+        </p>
+        <HorizontalTableViewport>
+          <table
+            class="mw-table ui-action-table"
+            :class="{'store-novelty-table':tab==='novelty'}"
+          >
             <thead>
               <tr>
-                <th v-if="tab!=='manual'">
+                <th>
                   <input
                     type="checkbox"
                     aria-label="选择本页商品"
-                    :checked="!!auto.length&&auto.slice((page-1)*size,page*size).every(p=>chosen.includes(p.asin))"
-                    @change="chosen=($event.target as HTMLInputElement).checked?auto.slice((page-1)*size,page*size).map(p=>p.asin):[]"
+                    :checked="!!visible.length&&visible.every(p=>chosen.includes(p.asin))"
+                    @change="chosen=($event.target as HTMLInputElement).checked?visible.map(p=>p.asin):[]"
                   >
-                </th><th>产品信息</th><th v-if="tab!=='manual'">
-                  价格
-                </th><th v-if="tab!=='manual'">
-                  星级评分
-                </th><th>首次发现</th><th>最近观测</th><th>操作</th>
+                </th><th>产品信息</th><th>价格</th><th>星级评分</th><th>首次发现时间</th><th>最近观测</th><template v-if="tab==='novelty'">
+                  <th>亚马逊首次可用日期</th><th>判断结果 / 依据</th>
+                </template><th>操作</th>
               </tr>
             </thead><tbody>
-              <template v-if="tab === 'manual'">
-                <tr
-                  v-for="p in products.slice((page-1)*size,page*size)"
-                  :key="p.asin"
-                >
-                  <td>{{ p.asin }}</td><td>{{ date(p.firstDetectedAt) }}</td><td>{{ p.online?'最近快照中出现':'最近快照中未出现' }}</td><td>人工记录</td>
-                </tr>
-              </template>
-              <template v-else>
-                <tr
-                  v-for="p in auto.slice((page-1)*size,page*size)"
-                  :key="p.provider+p.asin"
-                >
-                  <td>
-                    <input
-                      v-model="chosen"
-                      type="checkbox"
-                      :value="p.asin"
-                      :aria-label="`选择 ${p.asin}`"
-                    >
-                  </td>
-                  <td>
-                    <div class="mw-cell-product">
-                      <img
-                        v-if="p.imageUrl"
-                        :src="p.imageUrl"
-                        alt="商品主图"
-                      ><div
-                        v-else
-                        class="store-image-empty"
-                      >
-                        暂无图片
-                      </div><div>
-                        <a
-                          :href="`https://www.amazon.com/dp/${p.asin}`"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >{{ p.title }}</a><small>{{ p.asin }}</small>
-                      </div>
+              <tr
+                v-for="p in visible"
+                :key="p.provider+p.asin"
+              >
+                <td>
+                  <input
+                    v-model="chosen"
+                    type="checkbox"
+                    :value="p.asin"
+                    :aria-label="`选择 ${p.asin}`"
+                  >
+                </td><td>
+                  <div class="mw-cell-product">
+                    <img
+                      v-if="p.imageUrl"
+                      :src="p.imageUrl"
+                      alt="商品主图"
+                      loading="lazy"
+                    ><span
+                      v-else
+                      class="store-image-empty"
+                    >暂无图片</span><div>
+                      <a
+                        :href="`https://www.amazon.com/dp/${p.asin}`"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >{{ p.title }}</a><small>{{ p.asin }}</small>
                     </div>
-                  </td>
-                  <td>{{ p.price==null?'暂无公开报价':`US$ ${Number(p.price).toFixed(2)}${p.priceType==='OFFER_FROM'?' 起':''}` }}</td><td>{{ p.rating||'暂无公开评分' }}</td><td>{{ day(p.firstAt) }}</td><td>{{ date(p.lastAt) }}</td>
+                  </div>
+                </td><td class="store-price">
+                  {{ p.price!=null?`US$ ${Number(p.price).toFixed(2)}${p.priceType==='OFFER_FROM'?' 起':''}`:'暂无公开报价' }}
+                </td><td><span :class="{'store-rating':!!p.rating}">{{ p.rating||'暂无公开评分' }}</span></td><td>{{ isRecord?date(p.firstAt):day(p.firstAt) }}</td><td>{{ date(p.lastAt) }}</td><template v-if="tab==='novelty'&&p.event">
                   <td>
+                    {{ p.event.availableDate||'未观测' }}<small><a
+                      :href="`https://www.amazon.com/dp/${p.asin}`"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >查看来源</a></small>
+                  </td><td class="store-novelty-evidence">
+                    <span
+                      class="mw-status"
+                      :class="{good:isNovel(p.event),warn:noveltyStatus(p.event)==='PENDING'}"
+                    >{{ noveltyLabel(p.event) }}</span><small>{{ p.event.noveltyReason||'等待补采亚马逊首次可用日期' }}</small><small v-if="p.event.noveltyCheckedAt">核实于 {{ date(p.event.noveltyCheckedAt) }}</small><small v-if="novelty.state(p.event.id)">{{ novelty.label(p.event.id) }} {{ novelty.state(p.event.id)?.reason }}</small>
+                  </td>
+                </template><td>
+                  <button
+                    class="mw-link"
+                    :disabled="!writable||locked"
+                    @click="monitor([p.asin])"
+                  >
+                    添加产品监控
+                  </button><template v-if="tab==='novelty'&&p.event">
                     <button
                       class="mw-link"
-                      :disabled="!writable||busy"
-                      @click="monitor([p.asin])"
+                      :disabled="!writable||locked||novelty.pending(p.event.id)"
+                      @click="retryNovelty(p.event)"
                     >
-                      添加产品监控
-                    </button>
-                  </td>
-                </tr>
-              </template>
+                      补采日期
+                    </button><button
+                      v-if="p.event.noveltyOverride"
+                      class="mw-link"
+                      :disabled="!writable||locked"
+                      @click="markNovelty(p.event,'RESET')"
+                    >
+                      撤销标记
+                    </button><template v-else>
+                      <button
+                        class="mw-link"
+                        :disabled="!writable||locked"
+                        @click="markNovelty(p.event,'CONFIRMED')"
+                      >
+                        确认新品
+                      </button><button
+                        class="mw-link"
+                        :disabled="!writable||locked"
+                        @click="markNovelty(p.event,'EXCLUDED')"
+                      >
+                        排除
+                      </button>
+                    </template>
+                  </template>
+                </td>
+              </tr>
+              <tr v-if="!loading&&!total">
+                <td
+                  :colspan="tab==='novelty'?9:7"
+                  class="mw-empty"
+                >
+                  <strong>{{ tab==='novelty'?'暂无符合条件的新品记录':isRecord?'所选时段暂无上架记录':'暂无符合条件的产品' }}</strong>{{ tab==='novelty'?'可切换“待核实”或“全部记录”，查看日期补采与判断结果。':isRecord?'可调整日期范围查看历史上架。':'可调整搜索条件，或等待店铺采集完成。' }}
+                </td>
+              </tr>
             </tbody>
           </table>
-        </TableViewport><p v-if="!total">
-          尚无符合条件的数据。
-        </p>
+        </HorizontalTableViewport>
       </template>
-      <div v-else-if="tab === 'runs'">
-        <p
-          v-for="run in detail?.runs"
-          :key="run.id"
-        >
-          {{ date(run.completedAt) }} · {{ run.decision==='PROMOTED'?'已更新商品清单':'保留原有数据' }}
-        </p><p v-if="!detail?.runs.length">
-          暂无更新记录。
-        </p>
+      <div
+        v-if="settingsVisited"
+        v-show="tab==='settings'"
+        class="store-settings-layout"
+      >
+        <section class="store-settings-card">
+          <div class="store-card-heading">
+            <div><h3>店铺基本信息</h3><p>维护名称、负责人和备注，暂停监控会保留历史记录。</p></div>
+          </div><form
+            id="store-basic-form"
+            class="store-basic-form"
+            @submit.prevent="save"
+          >
+            <fieldset :disabled="!writable||locked">
+              <div class="store-settings-grid">
+                <label>店铺名称<input
+                  v-model="draft.name"
+                  required
+                  maxlength="200"
+                ></label><label>监控人<input
+                  v-model="draft.owner"
+                  maxlength="100"
+                ></label><label>监控状态<select v-model="draft.enabled"><option :value="true">监控中</option><option :value="false">暂停监控</option></select></label><label class="store-form-wide">备注<textarea
+                  v-model="draft.remark"
+                  maxlength="1000"
+                  rows="3"
+                  placeholder="记录该店铺的关注重点"
+                /></label>
+              </div>
+            </fieldset>
+          </form>
+        </section>
+        <StoreTimingForm
+          v-if="store"
+          ref="timing"
+          :store-id="store.id"
+          :writable="writable&&!busy"
+          hide-actions
+          @saved="emit('changed')"
+        />
       </div>
-      <form
-        v-else
-        class="operation-form"
-        @submit.prevent="save"
-      >
-        <label>店铺名称<input
-          v-model="draft.name"
-          :disabled="!writable"
-          required
-          maxlength="200"
-        ></label><label>监控人<input
-          v-model="draft.owner"
-          :disabled="!writable"
-          maxlength="100"
-        ></label><label>备注<textarea
-          v-model="draft.remark"
-          :disabled="!writable"
-          maxlength="1000"
-        /></label><label>监控状态<select
-          v-model="draft.enabled"
-          :disabled="!writable"
-        ><option :value="true">启用</option><option :value="false">暂停（保留历史）</option></select></label>
-      </form>
-      <RouterLink
-        v-if="store"
-        :to="`/watch/events?storeId=${store.id}`"
-        @click="close"
-      >
-        查看该店铺上新事件
-      </RouterLink>
     </div>
     <footer>
       <ListPagination
-        v-if="['manual','online','missing'].includes(tab)"
+        v-if="tab!=='settings'"
         v-model:page="page"
         v-model:page-size="size"
         :total="total"
-      /><button
-        v-if="tab === 'settings' && writable"
-        :disabled="busy"
-        @click="save"
+        :disabled="loading"
+      /><div
+        v-else
+        class="store-settings-footer"
       >
-        保存设置
-      </button>
+        <span class="store-footer-hint">店铺信息与采集计划分别保存</span><div>
+          <button
+            :disabled="!writable||locked||JSON.stringify(draft)===baseline"
+            form="store-basic-form"
+            type="submit"
+          >
+            {{ busy?'保存中…':'保存店铺信息' }}
+          </button><button
+            class="mw-primary"
+            :disabled="!writable||locked||!timing?.dirty"
+            @click="timing?.save()"
+          >
+            {{ timing?.busy?'保存中…':'保存采集计划' }}
+          </button>
+        </div>
+      </div>
     </footer>
     <UnsavedChangesDialog
       v-if="unsaved"
@@ -248,8 +373,3 @@ async function save() {
     />
   </dialog>
 </template>
-<style scoped>
-.store-detail{width:min(1100px,calc(100vw - 24px));height:min(780px,calc(100dvh - 24px));padding:0;border:1px solid #cbd5e1;border-radius:10px}.store-detail[open]{display:flex;flex-direction:column}.store-detail::backdrop{background:#0f172a80}.store-detail header,.store-detail footer{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;padding:12px;flex-shrink:0}.store-body{padding:12px;overflow:auto;min-height:0}.store-detail .pagination{width:100%}.store-body .operation-form{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}.store-detail td{overflow-wrap:anywhere}
-
-.store-detail{width:min(1280px,calc(100vw - 24px));border:0;box-shadow:0 24px 80px #14284440}.store-detail header{padding:16px 20px;border-bottom:1px solid #e7ebf0}.store-detail h2{margin:0;font-size:18px}.store-subtitle{font-size:13px;color:#718096;margin:6px 0 0}.store-body{padding:0 16px 12px;flex:1}.store-body .ui-section-tabs{padding:12px 0 0;gap:20px;border-bottom:1px solid #e7ebf0}.store-body .ui-section-tabs button{border:0;border-radius:0;background:transparent;padding:10px 4px;color:#617188}.store-body .ui-section-tabs button[aria-pressed=true]{border-bottom:2px solid #3069df;color:#3069df;background:transparent}.store-body .mw-toolbar{padding:12px 0;gap:12px}.store-body .mw-toolbar label{font-size:12px;color:#718096;display:flex;align-items:center;gap:6px}.store-body .mw-toolbar input{width:150px}.store-hint{font-size:12px;color:#8a94a3;margin:0 0 10px}.store-image-empty{width:52px;height:60px;flex-shrink:0;background:#f6f8fb;border:1px solid #e7ebf0;border-radius:4px;display:grid;place-items:center;font-size:10px;color:#9ba5b5}.store-detail footer{border-top:1px solid #e7ebf0}.store-body> a{display:inline-block;font-size:13px;margin-top:12px}.store-detail .mw-table td:last-child{min-width:125px}
-</style>

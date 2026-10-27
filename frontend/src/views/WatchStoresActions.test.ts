@@ -7,7 +7,8 @@ vi.mock('@/config/runtime',()=>({runtimeConfig:{authMode:'password'}}))
 vi.mock('@/state/session',()=>({session:{canAccess:()=>true,user:{value:{displayName:'Tester'}}}}))
 vi.mock('@/state/uiConfirmation',()=>({confirmAction:vi.fn()}))
 vi.mock('@/api/client',()=>({apiRequest:vi.fn()}))
-vi.mock('@/composables/useCollectionStatus',()=>({useCollectionStatus:()=>({error:{value:''},enabled:{value:true},state:()=>undefined,label:()=>'',pending:()=>false,refresh:vi.fn()})}))
+const {collect}=vi.hoisted(()=>({collect:vi.fn(async()=>true)}))
+vi.mock('@/composables/useCollectionStatus',()=>({useCollectionStatus:()=>({error:{value:''},enabled:{value:true},state:()=>undefined,label:()=>'',pending:()=>false,collect,refresh:vi.fn()})}))
 const store={id:'store1',storeKey:'TESTSELLER',storeName:'Test Store',status:'ACTIVE',version:3,remark:'Original'}
 async function setup(){
  HTMLDialogElement.prototype.showModal=vi.fn();HTMLDialogElement.prototype.close=vi.fn()
@@ -19,7 +20,7 @@ describe('watch list actions',()=>{
   const w=await setup();const link=w.get('a[aria-label="Test Store（打开亚马逊店铺）"]')
   expect(link.attributes('href')).toBe('https://www.amazon.com/s?me=TESTSELLER&marketplaceID=ATVPDKIKX0DER')
   expect(link.attributes('target')).toBe('_blank')
-  expect(w.get('[aria-label="Test Store 今日上新 0"]').classes()).toContain('mw-count-link')
+  expect(w.get('[aria-label="Test Store 今日上架 0"]').classes()).toContain('mw-count-link')
   await w.get('[aria-label="编辑 Test Store 备注"]').trigger('click')
   expect(w.get('[aria-label="编辑店铺备注"]').classes()).toContain('mw-remark-popover');w.unmount()
  })
@@ -40,8 +41,16 @@ describe('watch list actions',()=>{
   expect(apiRequest).toHaveBeenCalledWith('/v1/watch/stores/store1?version=3',{method:'DELETE'});w.unmount()
  })
  it('opens today products in the shared detail instead of navigating to events',async()=>{
-  const w=await setup();await w.get('[aria-label="Test Store 今日上新 0"]').trigger('click')
+  const w=await setup();await w.get('[aria-label="Test Store 今日上架 0"]').trigger('click')
   expect(w.findComponent({name:'WatchStoreDetail'}).props('newProducts')).toEqual([])
-  expect(w.findComponent({name:'WatchStoreDetail'}).props('store')).toEqual(store);w.unmount()
+  expect(w.findComponent({name:'WatchStoreDetail'}).props('store')).toEqual(store);await w.get('[aria-label="Test Store 今日新品 0"]').trigger('click');expect(w.findComponent({name:'WatchStoreDetail'}).props('initialTab')).toBe('novelty');w.unmount()
  })
+ it('only refreshes selected stores and removes global events and more entries',async()=>{
+  const w=await setup();expect(w.findAll('button').some(b=>['更新','设置'].includes(b.text()))).toBe(false);const refresh=w.get('[aria-label="更新所选店铺"]');expect(refresh.attributes('disabled')).toBeDefined()
+  expect(w.findAll('a').some(a=>a.text()==='上架记录')).toBe(false);expect(w.find('summary').exists()).toBe(false)
+  await w.get('[aria-label="选择 Test Store"]').setValue(true);expect(refresh.attributes('disabled')).toBeUndefined()
+  await refresh.trigger('click');await flushPromises();expect(collect).toHaveBeenCalledExactlyOnceWith('store1')
+  expect(w.text()).toContain('已提交 1 家店铺采集');w.unmount()
+ })
+
 })

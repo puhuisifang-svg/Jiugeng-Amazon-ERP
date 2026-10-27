@@ -10,7 +10,7 @@ final class WatchTypes {
             int baselineAsinCount,String lastRunId,String lastRunStatus,String lastIntegrityStatus,String lastDecision,
             String lastReasonCode,Instant lastRunAt,long version,String owner,String remark,Instant createdAt){}
     record EventView(String id,String storeId,String storeName,String asin,String title,Instant detectedAt,
-            String sourceRunId,String status,String candidateId,long version,String ignoreReason){}
+            String sourceRunId,String status,String candidateId,long version,String ignoreReason,String noveltyStatus,String availableDate,String noveltyReason,Instant noveltyCheckedAt,String noveltyOverride,long noveltyVersion){}
     record RunView(String id,String storeId,String requestId,String status,String integrityStatus,String decision,
             String reasonCode,int itemCount,int uniqueAsinCount,int pageCount,boolean pagesComplete,Instant completedAt){}
     record RunResult(StoreView item,List<EventView> events,boolean baselineChanged,RunView run,boolean replayed){}

@@ -9,10 +9,11 @@ final class MonitoringTypes {
     record Target(String id, String marketplace, String asin, boolean enabled, String ownerId, String ownerName,
                   List<String> tags, String remark, long version, JsonNode fields, String source,
                   Instant observedAt, String lastStatus, String lastReason, Instant lastAttemptAt,
-                  Instant createdAt, boolean followed) {}
+                  Instant createdAt, boolean followed, Long sales30Days, JsonNode latestChanges) {}
     record Page<T>(List<T> items, long total, long activeCount, int limit) {}
     record CreateInput(String requestId, List<String> asins, List<String> tags, String remark) {}
     record RowResult(String asin, String id, String status, String message) {}
+    record EditInput(long version, String field, String value) {}
     record VersionedId(String id, long version) {}
     record BatchInput(List<VersionedId> targets, String action, List<String> tags) {}
     record SnapshotInput(String requestId, long version, Instant observedAt, String source,

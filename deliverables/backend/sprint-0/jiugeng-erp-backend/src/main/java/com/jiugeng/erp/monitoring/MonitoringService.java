@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 class MonitoringService {
     static final int LIMIT = 1000;
     static final List<String> FIELDS = List.of("title", "brand", "imageUrl", "bullets", "price", "currency", "availability");
+    static final List<String> EXTRA_FIELDS = List.of("rating", "ratingCount", "smallCategoryRank", "largeCategoryRank", "listedAt", "dimensions", "weight");
     static final List<String> COLUMNS = List.of("brand", "price", "availability", "owner", "tags", "updated", "source");
     private final JdbcClient jdbc;
     private final ObjectMapper mapper;
@@ -29,7 +30,7 @@ class MonitoringService {
 
     // A database lock, not a JVM lock: protects quotas/idempotency across application instances.
     private void lock() { jdbc.sql("SELECT id FROM monitor_guard WHERE id=1 FOR UPDATE").query(Integer.class).single(); }
-    private long active() { return jdbc.sql("SELECT COUNT(*) FROM monitor_target WHERE enabled=TRUE").query(Long.class).single(); }
+    private long active() { return jdbc.sql("SELECT COUNT(*) FROM monitor_target WHERE enabled=TRUE AND removed=FALSE").query(Long.class).single(); }
 
     Page<Target> list(String q, String searchBy, String status, String owner, String tag, boolean followed,
                       int page, int size, String user) {
@@ -40,7 +41,7 @@ class MonitoringService {
         Set<String> favorites = new HashSet<>(preferences(user).followed());
         Set<String> asins = new HashSet<>(Arrays.asList(q.trim().toUpperCase(Locale.ROOT).split("[\\s,，]+")));
         require(q.isBlank() || !searchBy.equals("ASIN") || asins.size() <= 100, "最多搜索 100 个 ASIN");
-        List<Target> all = jdbc.sql("SELECT * FROM monitor_target ORDER BY created_at DESC,id").query((r,n) -> target(r, favorites)).list();
+        List<Target> all = jdbc.sql("SELECT monitor_target.*, (SELECT changes_json FROM monitor_snapshot WHERE target_id=monitor_target.id AND decision='CHANGED' ORDER BY observed_at DESC,id DESC LIMIT 1) AS historical_changes FROM monitor_target WHERE removed=FALSE ORDER BY created_at DESC,id").query((r,n) -> target(r, favorites)).list();
         List<Target> filtered = all.stream().filter(t -> status.equals("ALL") || t.enabled() == status.equals("ACTIVE"))
                 .filter(t -> !followed || t.followed())
                 .filter(t -> owner.isBlank() || Objects.equals(t.ownerId(), owner) || Objects.equals(t.ownerName(), owner))
@@ -70,6 +71,10 @@ class MonitoringService {
             String asin = raw == null ? "" : raw.trim().toUpperCase(Locale.ROOT);
             if (!asin.matches("[A-Z0-9]{10}")) { result.add(new RowResult(asin.length() > 50 ? asin.substring(0,50) : asin, null,"INVALID","ASIN 必须为 10 位字母或数字")); continue; }
             var existing = jdbc.sql("SELECT id FROM monitor_target WHERE marketplace='US' AND asin=:asin").param("asin",asin).query(String.class).optional();
+            if (existing.isPresent() && jdbc.sql("SELECT removed FROM monitor_target WHERE id=:id").param("id",existing.get()).query(Boolean.class).single()) {
+                if(used>=LIMIT){result.add(new RowResult(asin,null,"LIMIT","启用额度不足"));continue;}
+                jdbc.sql("UPDATE monitor_target SET removed=FALSE,enabled=TRUE,version=version+1 WHERE id=:id").param("id",existing.get()).update();used++;result.add(new RowResult(asin,existing.get(),"CREATED","已恢复监控，历史记录保留"));continue;
+            }
             if (existing.isPresent()) { result.add(new RowResult(asin,existing.get(),"EXISTS","已存在，不重复创建")); continue; }
             if (used >= LIMIT) { result.add(new RowResult(asin,null,"LIMIT","启用目标已达 1000 条，请先暂停部分目标")); continue; }
             String id = UUID.randomUUID().toString();
@@ -86,7 +91,7 @@ class MonitoringService {
     @Transactional
     public List<RowResult> batch(BatchInput input, AuthenticatedActor actor) {
         require(input.targets() != null && !input.targets().isEmpty() && input.targets().size() <= 100, "请选择 1～100 条记录");
-        require(input.action()!=null && Set.of("ENABLE","PAUSE","ASSIGN_SELF","CLEAR_OWNER","ADD_TAGS","REMOVE_TAGS").contains(input.action()), "不支持的批量操作");
+        require(input.action()!=null && Set.of("REMOVE","ENABLE","PAUSE","ASSIGN_SELF","CLEAR_OWNER","ADD_TAGS","REMOVE_TAGS").contains(input.action()), "不支持的批量操作");
         List<String> requestedTags = tags(input.tags());
         require(input.targets().stream().allMatch(Objects::nonNull), "无效记录");
         require(input.targets().stream().map(VersionedId::id).distinct().count()==input.targets().size(), "批量记录不可重复");
@@ -100,6 +105,7 @@ class MonitoringService {
             LinkedHashSet<String> merged = new LinkedHashSet<>(t.tags());
             switch (input.action()) {
                 case "ENABLE" -> { if (!enabled && used >= LIMIT) { result.add(new RowResult(t.asin(),t.id(),"LIMIT","启用额度不足")); continue; } if (!enabled) used++; enabled = true; }
+                case "REMOVE" -> { if(enabled)used--;enabled=false; jdbc.sql("UPDATE monitor_target SET removed=TRUE WHERE id=:id").param("id",t.id()).update(); }
                 case "PAUSE" -> { if (enabled) used--; enabled = false; }
                 case "ASSIGN_SELF" -> { ownerId=actor.userId(); ownerName=actor.displayName(); }
                 case "CLEAR_OWNER" -> { ownerId=null; ownerName=null; }
@@ -113,6 +119,15 @@ class MonitoringService {
             result.add(new RowResult(t.asin(),t.id(),"UPDATED","已更新"));
         }
         return result;
+    }
+
+    @Transactional public Target edit(String id, EditInput input) {
+        require(input.field()!=null&&Set.of("remark","sales30Days").contains(input.field()),"不支持的编辑字段");
+        lock();Target target=get(id,Set.of());conflict(target.version()==input.version(),"记录已更新，请重新打开后修改");
+        if(input.field().equals("remark")) jdbc.sql("UPDATE monitor_target SET remark=:value,version=version+1 WHERE id=:id").param("value",text(input.value(),1000)).param("id",id).update();
+        else { String value=input.value()==null?"":input.value().trim();require(value.isEmpty()||value.matches("[0-9]{1,9}"),"近30天销量须为0至999999999的整数，留空表示未知");
+            jdbc.sql("UPDATE monitor_target SET sales_30_days=:value,version=version+1 WHERE id=:id").param("value",value.isEmpty()?null:Long.valueOf(value),java.sql.Types.BIGINT).param("id",id).update(); }
+        return get(id,Set.of());
     }
 
     Detail detail(String id, String user) { return new Detail(get(id, new HashSet<>(preferences(user).followed())), history(id,0,20).items()); }
@@ -159,7 +174,7 @@ class MonitoringService {
                 if(target.observedAt()==null) decision="BASELINE";
                 else if(!Objects.equals(target.source(),input.source())) decision="SOURCE_BASELINE";
                 else {
-                    for(String field:FIELDS) if((!partialPublic||fields.has(field))&&!Objects.equals(target.fields().get(field),fields.get(field))) {
+                    for(String field:java.util.stream.Stream.concat(FIELDS.stream(),EXTRA_FIELDS.stream()).toList()) if((!partialPublic||fields.has(field))&&!Objects.equals(target.fields().get(field),fields.get(field))) {
                         ObjectNode change=mapper.createObjectNode();change.put("field",field);
                         change.set("before",target.fields().get(field));change.set("after",fields.get(field));changes.add(change);
                     }
@@ -172,6 +187,7 @@ class MonitoringService {
                 .param("sid",sid).param("id",id).param("request",input.requestId()).param("hash",hash).param("at",Timestamp.from(input.observedAt()))
                 .param("source",input.source()).param("quality",input.quality()).param("decision",decision).param("reason",reason)
                 .param("fields",json(fields)).param("changes",json(changes)).update();
+        if(!changes.isEmpty()) jdbc.sql("UPDATE monitor_target SET latest_changes_json=:changes WHERE id=:id").param("changes",json(changes)).param("id",id).update();
         if(promote) jdbc.sql("UPDATE monitor_target SET baseline_json=:fields,baseline_source=:source,baseline_at=:at WHERE id=:id")
                 .param("fields",json(promotedFields)).param("source",input.source()).param("at",Timestamp.from(input.observedAt())).param("id",id).update();
         jdbc.sql("UPDATE monitor_target SET last_status=:status,last_reason=:reason,last_attempt_at=CURRENT_TIMESTAMP(6),version=version+1 WHERE id=:id")
@@ -202,8 +218,8 @@ class MonitoringService {
 
     private JsonNode validateFields(JsonNode fields,boolean complete) {
         require(fields!=null && fields.isObject(),"fields 必须为对象");
-        require(fields.size()<=FIELDS.size(),"不支持的观测字段");
-        fields.fieldNames().forEachRemaining(k->require(FIELDS.contains(k),"不支持的观测字段："+k));
+        require(fields.size()<=FIELDS.size()+EXTRA_FIELDS.size(),"不支持的观测字段");
+        fields.fieldNames().forEachRemaining(k->require(FIELDS.contains(k)||EXTRA_FIELDS.contains(k),"不支持的观测字段："+k));
         if(complete) { require(FIELDS.stream().allMatch(fields::has),"完整快照必须包含全部字段；明确未知请传 null，未观测应选部分快照"); require(FIELDS.stream().anyMatch(k->!fields.get(k).isNull()&&!k.equals("currency")),"空结果不能建立基线"); }
         ObjectNode normalized=(ObjectNode)fields.deepCopy();
         for(String field:List.of("title","brand","imageUrl","availability","currency")) {
@@ -230,14 +246,15 @@ class MonitoringService {
             require("USD".equals(fields.path("currency").asText()),"提供价格时必须同时提供 USD 币种");
             normalized.put("price",price.decimalValue().setScale(2));
         }
+        for(String name:EXTRA_FIELDS){JsonNode value=fields.get(name);if(value==null||value.isNull())continue;require(value.isTextual()&&!value.asText().isBlank()&&value.asText().length()<=1000,"无效观测字段："+name);}
         // Use the same numeric node representation as persisted JSON to avoid 10 vs 10.00 false positives.
         return tree(json(normalized));
     }
 
     private Target get(String id,Set<String> followed){return find(id,followed).orElseThrow(()->new MonitoringException(404,"监控目标不存在"));}
-    private Optional<Target> find(String id,Set<String> followed){return jdbc.sql("SELECT * FROM monitor_target WHERE id=:id").param("id",id).query((r,n)->target(r,followed)).optional();}
+    private Optional<Target> find(String id,Set<String> followed){return jdbc.sql("SELECT monitor_target.*, (SELECT changes_json FROM monitor_snapshot WHERE target_id=monitor_target.id AND decision='CHANGED' ORDER BY observed_at DESC,id DESC LIMIT 1) AS historical_changes FROM monitor_target WHERE id=:id AND removed=FALSE").param("id",id).query((r,n)->target(r,followed)).optional();}
     private Target target(ResultSet r,Set<String> followed)throws SQLException {
-        return new Target(r.getString("id"),r.getString("marketplace"),r.getString("asin"),r.getBoolean("enabled"),r.getString("owner_id"),r.getString("owner_name"),strings(r.getString("tags_json")),r.getString("remark"),r.getLong("version"),tree(r.getString("baseline_json")),r.getString("baseline_source"),instant(r,"baseline_at"),r.getString("last_status"),r.getString("last_reason"),instant(r,"last_attempt_at"),instant(r,"created_at"),followed.contains(r.getString("id")));
+        return new Target(r.getString("id"),r.getString("marketplace"),r.getString("asin"),r.getBoolean("enabled"),r.getString("owner_id"),r.getString("owner_name"),strings(r.getString("tags_json")),r.getString("remark"),r.getLong("version"),tree(r.getString("baseline_json")),r.getString("baseline_source"),instant(r,"baseline_at"),r.getString("last_status"),r.getString("last_reason"),instant(r,"last_attempt_at"),instant(r,"created_at"),followed.contains(r.getString("id")),(Long)r.getObject("sales_30_days"),r.getString("latest_changes_json")==null?(r.getString("historical_changes")==null?mapper.createArrayNode():tree(r.getString("historical_changes"))):tree(r.getString("latest_changes_json")));
     }
     private Snapshot snapshotRow(ResultSet r,int n)throws SQLException {
         return new Snapshot(r.getString("id"),r.getString("target_id"),r.getString("request_id"),instant(r,"observed_at"),instant(r,"recorded_at"),r.getString("source"),r.getString("quality"),r.getString("decision"),r.getString("reason"),tree(r.getString("fields_json")),tree(r.getString("changes_json")));

@@ -103,3 +103,5 @@
 
 .store-product-filters select{height:32px;max-width:100%;min-width:0;padding:0 8px;border:1px solid #dce2ea;border-radius:4px;background:white;color:inherit;font-size:12px;box-sizing:border-box}.store-body-products>.horizontal-table-viewport{display:flex;flex-direction:column;flex:1;min-height:0}.store-body-products>.horizontal-table-viewport>.table-viewport{flex:1;min-height:0;max-height:none!important}.store-body-products .horizontal-table-controls{flex-shrink:0}.store-detail-tabs button{white-space:nowrap}@media(max-width:500px){.store-body-products>.horizontal-table-viewport{flex:1 0 200px}}
 @media(max-height:700px){.store-body-products{overflow:auto}.store-body-products>.horizontal-table-viewport{flex:1 0 240px}}
+
+.store-product-filters .date-range-filter{flex:0 1 auto;min-width:0;max-width:100%}.store-date-label{white-space:nowrap;flex-shrink:0}.store-product-filters .date-range-filter .date-picker{min-width:0;max-width:100%}

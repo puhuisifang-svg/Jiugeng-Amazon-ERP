@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DatePicker from '@/components/DatePicker.vue'
 import { shipmentUnit, shipmentQuantitySummary } from '@/ui/shipmentUnits'
 import ProductName from '@/components/ProductName.vue'
 import ListPagination from '@/components/ListPagination.vue'
@@ -59,15 +60,13 @@ watch(() => route.query.orderId, () => void load(true))
         maxlength="128"
         placeholder="产品名称、编号、SKU或备注"
       ></label>
-      <label>开始日期<input
+      <label class="date-range-filter">日期范围<DatePicker
         v-model="filters.from"
+        v-model:end="filters.to"
+        range
         type="date"
         required
-      ></label><label>结束日期<input
-        v-model="filters.to"
-        type="date"
-        required
-      ></label>
+      /></label>
       <button
         type="submit"
         :disabled="loading"

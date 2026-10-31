@@ -41,6 +41,7 @@ class IamService {
     private static final int RESET_CODE_ATTEMPTS = 5;
     private static final int RESET_REQUESTS_PER_HOUR = 5;
     private final IamRepository repository;
+    @org.springframework.beans.factory.annotation.Autowired private RoleRepository roles;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
     private final PasswordResetDelivery passwordResetDelivery;
@@ -63,13 +64,15 @@ class IamService {
     @Transactional(noRollbackFor = IamException.class)
     LoginResult login(String loginName, String password, boolean staySignedIn) {
         String normalized = normalize(loginName);
-        Optional<User> found = repository.findUserByLoginName(normalized);
-        if (found.isEmpty()) {
+        String phone = normalized.replaceAll("[\\s-]", "");
+        var candidates = repository.findUsersByLoginIdentifier(normalized, PHONE_PATTERN.matcher(phone).matches() ? phone : "");
+        // Never choose an account by trying passwords when legacy identifiers collide.
+        if (candidates.size() != 1) {
             auditService.security(Actor.attemptedLogin(null, normalized, null), "LOGIN_FAILED", normalized,
                     Outcome.FAILURE, "INVALID_CREDENTIALS");
             throw new IamException(401, "INVALID_CREDENTIALS", "账号或密码错误");
         }
-        User user = found.get();
+        User user = candidates.getFirst();
         Actor actor = Actor.attemptedLogin(user.id(), user.loginName(), user.displayName());
         if (user.status() == Status.DISABLED) {
             auditService.security(actor, "LOGIN_FAILED", user.id(), Outcome.FAILURE, "ACCOUNT_DISABLED");
@@ -121,6 +124,7 @@ class IamService {
 
     @Transactional
     int updateStaySignedInDays(int days, SessionPrincipal principal) {
+        roles.lock(); roles.requireAdministrator(principal.userId());
         if (days < 1 || days > 30) {
             throw new IamException(400, "STAY_SIGNED_IN_DAYS_INVALID", "免登录天数必须在 1 到 30 天之间");
         }
@@ -164,16 +168,38 @@ class IamService {
     @Transactional
     UserView createUser(String loginName, String displayName, String initialPassword, Role role,
             SessionPrincipal principal) {
+        roles.lock(); roles.requireAdministrator(principal.userId());
         return createUser(loginName, displayName, null, null, initialPassword, role, Actor.authenticated(principal));
     }
 
     @Transactional
     UserView createUser(String loginName, String displayName, String email, String phone, String initialPassword,
             Role role, SessionPrincipal principal) {
+        roles.lock(); roles.requireAdministrator(principal.userId());
         return createUser(loginName, displayName, email, phone, initialPassword, role, Actor.authenticated(principal));
     }
 
     private UserView createUser(String loginName, String displayName, String email, String phone,
+            String initialPassword, Role role, Actor actor) {
+        if (role == null || role == Role.CUSTOM) throw new IamException(400,"ROLE_INVALID","请选择有效角色");
+        requireEnabledRole(role);
+        return insertUser(loginName, displayName, email, phone, initialPassword, role, actor);
+    }
+
+    @Transactional
+    UserView createUserForRoleAssignment(String loginName, String displayName, String email, String phone,
+            String initialPassword, SessionPrincipal principal) {
+        roles.lock(); roles.requireAdministrator(principal.userId());
+        // RoleService binds the validated target roles in the same transaction.
+        return insertUser(loginName, displayName, email, phone, initialPassword, Role.CUSTOM, Actor.authenticated(principal));
+    }
+
+    private void requireEnabledRole(Role role) {
+        if (!roles.require(role.name()).status().equals("ENABLED"))
+            throw new IamException(400,"ROLE_NOT_ENABLED","不能分配草稿或停用角色");
+    }
+
+    private UserView insertUser(String loginName, String displayName, String email, String phone,
             String initialPassword, Role role, Actor actor) {
         String normalized = normalize(loginName);
         if (!LOGIN_NAME_PATTERN.matcher(normalized).matches()) {
@@ -186,9 +212,12 @@ class IamService {
         String normalizedEmail = normalizeEmail(email);
         String normalizedPhone = normalizePhone(phone);
         ensureRecoveryContactsAvailable(normalizedEmail, normalizedPhone, null);
-        if (repository.findUserByLoginName(normalized).isPresent()) {
+        if (repository.loginNameExists(normalized)) {
             throw new IamException(409, "LOGIN_NAME_EXISTS", "登录名已存在");
         }
+        String phoneAlias = normalized.replaceAll("[\\s-]", "");
+        if (PHONE_PATTERN.matcher(phoneAlias).matches() && repository.findUserByRecoveryDestination(RecoveryChannel.SMS, phoneAlias).isPresent())
+            throw new IamException(409,"LOGIN_NAME_EXISTS","登录名与其他账号的手机号冲突");
         String id = UUID.randomUUID().toString();
         repository.insertUser(id, normalized, displayName.trim(), normalizedEmail, normalizedPhone,
                 passwordEncoder.encode(initialPassword), role);
@@ -198,13 +227,29 @@ class IamService {
     }
 
     @Transactional
+    void deleteUser(String userId, SessionPrincipal principal) {
+        roles.lock(); roles.requireAdministrator(principal.userId());
+        if (userId.equals(principal.userId())) {
+            throw new IamException(400, "SELF_DELETE_FORBIDDEN", "不能删除当前登录账号");
+        }
+        User user = requireUser(userId);
+        repository.deleteUser(userId);
+        roles.guardAvailableAdministrator();
+        repository.revokeUserSessions(userId);
+        auditService.account(Actor.authenticated(principal), "ACCOUNT_DELETE", user.view(), null,
+                "SOFT_DELETE_HISTORY_RETAINED");
+    }
+
+    @Transactional
     UserView setStatus(String userId, Status status, SessionPrincipal principal) {
+        roles.lock(); roles.requireAdministrator(principal.userId());
         if (userId.equals(principal.userId()) && status == Status.DISABLED) {
             throw new IamException(400, "SELF_DISABLE_FORBIDDEN", "不能停用当前登录账号");
         }
         User user = requireUser(userId);
         UserView before = user.view();
         repository.setStatus(userId, status);
+        roles.guardAvailableAdministrator(); roles.guardEnabledUsers();
         if (status == Status.DISABLED) repository.revokeUserSessions(userId);
         UserView after = repository.findUserById(userId).orElseThrow().view();
         auditService.account(Actor.authenticated(principal),
@@ -214,12 +259,16 @@ class IamService {
 
     @Transactional
     UserView setRole(String userId, Role role, SessionPrincipal principal) {
+        roles.lock(); roles.requireAdministrator(principal.userId());
         if (userId.equals(principal.userId())) {
             throw new IamException(400, "SELF_ROLE_CHANGE_FORBIDDEN", "不能修改当前登录账号的角色");
         }
         User user = requireUser(userId);
         UserView before = user.view();
+        if (role == Role.CUSTOM) throw new IamException(400,"ROLE_INVALID","请通过角色分配选择具体角色");
+        requireEnabledRole(role);
         repository.setRole(userId, role);
+        roles.guardAvailableAdministrator();
         repository.revokeUserSessions(userId);
         UserView after = repository.findUserById(userId).orElseThrow().view();
         auditService.account(Actor.authenticated(principal), "ROLE_CHANGE", before, after, null);
@@ -228,6 +277,7 @@ class IamService {
 
     @Transactional
     UserView unlock(String userId, SessionPrincipal principal) {
+        roles.lock(); roles.requireAdministrator(principal.userId());
         User user = requireUser(userId);
         UserView before = user.view();
         repository.unlock(userId);
@@ -238,12 +288,14 @@ class IamService {
 
     @Transactional
     UserView lock(String userId, SessionPrincipal principal) {
+        roles.lock(); roles.requireAdministrator(principal.userId());
         if (userId.equals(principal.userId())) {
             throw new IamException(400, "SELF_LOCK_FORBIDDEN", "不能锁定当前登录账号");
         }
         User user = requireUser(userId);
         UserView before = user.view();
         repository.lock(userId);
+        roles.guardAvailableAdministrator();
         repository.revokeUserSessions(userId);
         UserView after = repository.findUserById(userId).orElseThrow().view();
         auditService.account(Actor.authenticated(principal), "ACCOUNT_LOCK", before, after, "MANUAL_ADMIN_LOCK");
@@ -252,6 +304,7 @@ class IamService {
 
     @Transactional
     UserView resetPassword(String userId, String newPassword, SessionPrincipal principal) {
+        roles.lock(); roles.requireAdministrator(principal.userId());
         requireValidPassword(newPassword);
         User user = requireUser(userId);
         UserView before = user.view();
@@ -264,6 +317,7 @@ class IamService {
 
     @Transactional
     UserView updateRecoveryContacts(String userId, String email, String phone, SessionPrincipal principal) {
+        roles.lock(); roles.requireAdministrator(principal.userId());
         User user = requireUser(userId);
         String normalizedEmail = normalizeEmail(email);
         String normalizedPhone = normalizePhone(phone);
@@ -337,7 +391,7 @@ class IamService {
     }
 
     private String normalize(String loginName) {
-        return loginName.trim().toLowerCase(Locale.ROOT);
+        return loginName == null ? "" : loginName.trim().toLowerCase(Locale.ROOT);
     }
 
     private void requireValidPassword(String password) {
@@ -375,6 +429,9 @@ class IamService {
         if (email != null) repository.findUserByRecoveryDestination(RecoveryChannel.EMAIL, email)
                 .filter(user -> !user.id().equals(currentUserId))
                 .ifPresent(user -> { throw new IamException(409, "EMAIL_EXISTS", "邮箱已绑定其他账号"); });
+        if (phone != null) repository.findUserByLoginName(phone)
+                .filter(user -> !user.id().equals(currentUserId))
+                .ifPresent(user -> { throw new IamException(409,"PHONE_EXISTS","手机号与其他账号的登录名冲突"); });
         if (phone != null) repository.findUserByRecoveryDestination(RecoveryChannel.SMS, phone)
                 .filter(user -> !user.id().equals(currentUserId))
                 .ifPresent(user -> { throw new IamException(409, "PHONE_EXISTS", "手机号已绑定其他账号"); });

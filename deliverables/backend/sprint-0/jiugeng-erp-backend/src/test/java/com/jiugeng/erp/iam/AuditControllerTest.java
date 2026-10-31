@@ -131,6 +131,38 @@ class AuditControllerTest {
                 .doesNotContain("token");
     }
 
+    @Test
+    void multiValueFiltersIntersectAndOptionsRespectScope() throws Exception {
+        String adminToken = loginAndChange("admin");
+        String selectorToken = loginAndChange("selector");
+        mvc.perform(get("/api/v1/audit/events")
+                        .header("Authorization", bearer(adminToken))
+                        .queryParam("actorLoginName", "admin", "selector")
+                        .queryParam("action", "LOGIN", "PASSWORD_CHANGE")
+                        .queryParam("resourceType", "ACCOUNT", "PRODUCT")
+                        .queryParam("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(4))
+                .andExpect(jsonPath("$.items.length()").value(1));
+        mvc.perform(get("/api/v1/audit/events")
+                        .header("Authorization", bearer(adminToken))
+                        .queryParam("action", "LOGIN", "PASSWORD_CHANGE")
+                        .queryParam("resourceType", "PRODUCT"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(0));
+        String body = mvc.perform(get("/api/v1/audit/events/options")
+                        .header("Authorization", bearer(selectorToken)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        JsonNode options = objectMapper.readTree(body);
+        assertThat(options.get("actors").size()).isEqualTo(1);
+        assertThat(options.get("actors").get(0).get("value").asText()).isEqualTo("selector");
+        mvc.perform(get("/api/v1/audit/events")
+                        .header("Authorization", bearer(adminToken))
+                        .queryParam("action", "LOGIN", "invalid action"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/audit/events/options")).andExpect(status().isUnauthorized());
+    }
+
     private String loginAndChange(String loginName) throws Exception {
         String token = login(loginName, INITIAL_PASSWORD);
         mvc.perform(post("/api/v1/auth/change-password")

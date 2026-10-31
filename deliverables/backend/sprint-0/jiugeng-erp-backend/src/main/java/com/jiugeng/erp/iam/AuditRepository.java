@@ -72,6 +72,38 @@ class AuditRepository {
                 .param("type", resourceType).param("id", resourceId).query(this::mapEvent).list();
     }
 
+    List<AuditEvent> findResourcePage(String type,String id,int page,int size) {
+        return jdbc.sql("SELECT * FROM audit_event WHERE resource_type=:type AND resource_id=:id ORDER BY occurred_at DESC,id DESC LIMIT :size OFFSET :offset")
+            .param("type",type).param("id",id).param("size",size).param("offset",(long)(page-1)*size).query(this::mapEvent).list();
+    }
+    long countResource(String type,String id) {
+        return jdbc.sql("SELECT COUNT(*) FROM audit_event WHERE resource_type=:type AND resource_id=:id").param("type",type).param("id",id).query(Long.class).single();
+    }
+
+    AuditTypes.FilterOptions options(String userId) {
+        String scope = userId == null ? "" : " WHERE actor_user_id = :userId";
+        Map<String, Object> params = userId == null ? Map.of() : Map.of("userId", userId);
+        var actors = jdbc.sql("SELECT actor_login_name, MAX(actor_display_name) AS display_name FROM audit_event"
+                + scope + " GROUP BY actor_login_name ORDER BY actor_login_name")
+                .params(params).query((rs, n) -> new AuditTypes.FilterOption(rs.getString("actor_login_name"),
+                        rs.getString("display_name"))).list();
+        return new AuditTypes.FilterOptions(actors, distinct("category", scope, params),
+                distinct("action", scope, params), distinct("resource_type", scope, params));
+    }
+
+    private List<String> distinct(String column, String scope, Map<String, Object> params) {
+        return jdbc.sql("SELECT DISTINCT " + column + " FROM audit_event" + scope + " ORDER BY " + column)
+                .params(params).query(String.class).list();
+    }
+
+    private void add(StringBuilder sql, Map<String, Object> parameters, String column, String parameter, List<String> values) {
+        if (values == null || values.isEmpty()) return;
+        var selected = values.stream().filter(value -> value != null && !value.isBlank()).distinct().toList();
+        if (selected.isEmpty()) return;
+        sql.append(" AND ").append(column).append(" IN (:").append(parameter).append(")");
+        parameters.put(parameter, selected);
+    }
+
     private Query query(AuditFilter filter) {
         StringBuilder sql = new StringBuilder("SELECT * FROM audit_event WHERE 1 = 1");
         Map<String, Object> parameters = new HashMap<>();

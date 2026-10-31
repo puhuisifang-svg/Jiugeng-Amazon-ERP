@@ -61,7 +61,7 @@ class PerformanceBaselineTest {
                 INSERT INTO iam_user(id,login_name,display_name,password_hash,role,status,must_change_password)
                 VALUES(?,?,?,?, 'ADMIN','ENABLED',FALSE)
                 """, UUID.randomUUID().toString(), login, "Performance Admin",
-                new BCryptPasswordEncoder().encode(PASSWORD));
+                new BCryptPasswordEncoder().encode(PASSWORD));jdbc.update("INSERT INTO iam_user_role(user_id,role_id) SELECT id,role FROM iam_user WHERE login_name=?",login);
         String response = mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(Map.of("loginName", login, "password", PASSWORD))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();

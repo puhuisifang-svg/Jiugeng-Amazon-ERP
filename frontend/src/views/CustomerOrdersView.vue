@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
+import DatePicker from '@/components/DatePicker.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ordersApi, type CustomerOrder, type OrderInput, type OrderAllocation, type ArrangementItem } from '@/api/orders'
@@ -13,8 +15,8 @@ import OrderDocuments from '@/components/OrderDocuments.vue'
 import { orderHistoryChanges } from '@/ui/orderHistory'
 const route = useRoute(), router = useRouter()
 const saveKey = ref('')
-const writable = computed(() => session.canAccess(['customers.write']))
-const canArrange = computed(() => writable.value && session.canAccess(['dashboard.shipments.manage']))
+const writable = computed(() => session.canAccess(['orders.write']))
+const canArrange = computed(() => session.canAccess(['orders.transition', 'dashboard.shipments.manage']))
 const rows = ref<CustomerOrder[]>([]), detail = ref<CustomerOrder>(), allocations = ref<OrderAllocation[]>([]), history = ref<DashboardHistoryEvent[]>([])
 const loading = ref(false), saving = ref(false), error = ref(''), success = ref(''), formError = ref(''), editing = ref(false), editTarget = ref<CustomerOrder>()
 const page = ref(1), size = ref(20), total = ref(0), query = reactive({ q: '', status: '', source: '', from: '', to: '', deliveryFrom: '', deliveryTo: '', shipping: '', invoiceStatus: '' })
@@ -90,28 +92,38 @@ watch(() => route.params.id, load); onMounted(load)
           v-model="query.q"
           placeholder="订单编号、客户订单号或客户名称"
           maxlength="128"
-        ></label><label>来源<select v-model="query.source"><option value="">全部</option><option value="1688">1688</option><option value="OFFLINE">线下</option></select></label>
-        <label>状态<select v-model="query.status"><option value="">全部</option><option
+        ></label><label>来源<select
+          v-model="query.source"
+          v-single-select
+        ><option value="">全部</option><option value="1688">1688</option><option value="OFFLINE">线下</option></select></label>
+        <label>状态<select
+          v-model="query.status"
+          v-single-select
+        ><option value="">全部</option><option
           v-for="s in ['DRAFT','CONFIRMED','COMPLETED','CANCELLED','CLOSED']"
           :key="s"
           :value="s"
         >{{ labels[s] }}</option></select></label>
-        <label>下单开始日期<input
+        <label class="date-range-filter">下单日期<DatePicker
           v-model="query.from"
+          v-model:end="query.to"
+          range
           type="date"
-        ></label><label>下单结束日期<input
-          v-model="query.to"
-          type="date"
-        ></label>
-        <label>交期开始<input
+        /></label>
+        <label class="date-range-filter">交期范围<DatePicker
           v-model="query.deliveryFrom"
+          v-model:end="query.deliveryTo"
+          range
           type="date"
-        ></label><label>交期结束<input
-          v-model="query.deliveryTo"
-          type="date"
-        ></label>
-        <label>发货进度<select v-model="query.shipping"><option value="">全部</option><option value="UNSHIPPED">未发货</option><option value="PARTIAL">部分发货</option><option value="SHIPPED">全部发货</option></select></label>
-        <label>开票状态<select v-model="query.invoiceStatus"><option value="">全部</option><option value="NONE">无需开票</option><option value="NOT_GENERATED">待生成</option><option value="PENDING">待开票</option><option value="INVOICED">已开票</option></select></label>
+        /></label>
+        <label>发货进度<select
+          v-model="query.shipping"
+          v-single-select
+        ><option value="">全部</option><option value="UNSHIPPED">未发货</option><option value="PARTIAL">部分发货</option><option value="SHIPPED">全部发货</option></select></label>
+        <label>开票状态<select
+          v-model="query.invoiceStatus"
+          v-single-select
+        ><option value="">全部</option><option value="NONE">无需开票</option><option value="NOT_GENERATED">待生成</option><option value="PENDING">待开票</option><option value="INVOICED">已开票</option></select></label>
         <button :disabled="loading">
           查询
         </button><button
@@ -187,7 +199,7 @@ watch(() => route.params.id, load); onMounted(load)
         >
           编辑
         </button><button
-          v-if="writable && detail.status === 'DRAFT'"
+          v-if="session.canAccess(['orders.transition']) && detail.status === 'DRAFT'"
           @click="ask(detail,'CONFIRM')"
         >
           确认订单
@@ -197,7 +209,7 @@ watch(() => route.params.id, load); onMounted(load)
         >
           安排发货
         </button><button
-          v-if="writable && detail.details.invoiceRequired && detail.status === 'CONFIRMED'"
+          v-if="session.canAccess(['invoices.write']) && detail.details.invoiceRequired && detail.status === 'CONFIRMED'"
           :disabled="saving"
           @click="generate(detail)"
         >
@@ -208,17 +220,17 @@ watch(() => route.params.id, load); onMounted(load)
         >
           查看发票
         </RouterLink><button
-          v-if="writable && ['DRAFT','CONFIRMED'].includes(detail.status)"
+          v-if="session.canAccess(['orders.transition']) && ['DRAFT','CONFIRMED'].includes(detail.status)"
           @click="ask(detail,'CANCEL')"
         >
           取消订单
         </button><button
-          v-if="writable && detail.status === 'CONFIRMED'"
+          v-if="session.canAccess(['orders.transition']) && detail.status === 'CONFIRMED'"
           @click="ask(detail,'CLOSE')"
         >
           关闭剩余订单
         </button><button
-          v-if="writable && detail.status === 'DRAFT'"
+          v-if="session.canAccess(['orders.transition']) && detail.status === 'DRAFT'"
           class="danger-button"
           @click="ask(detail,'DELETE')"
         >
@@ -396,22 +408,22 @@ watch(() => route.params.id, load); onMounted(load)
                     :required="a.selected"
                   >
                 </td><td>
-                  <input
+                  <DatePicker
                     v-model="a.plannedDate"
                     aria-label="计划日期"
                     type="date"
                     :disabled="!a.selected"
                     :required="a.selected"
-                  >
+                  />
                 </td><td>
-                  <input
+                  <DatePicker
                     v-model="a.latestDate"
                     aria-label="最晚日期"
                     type="date"
                     :min="a.plannedDate"
                     :disabled="!a.selected"
                     :required="a.selected"
-                  >
+                  />
                 </td><td>
                   <input
                     v-model="a.remark"

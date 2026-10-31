@@ -16,7 +16,7 @@ class DashboardExceptionHandler {
         return ResponseEntity.status(exception.status()).body(new Problem(exception.code(), exception.getMessage()));
     }
 
-    @ExceptionHandler({MethodArgumentNotValidException.class, org.springframework.http.converter.HttpMessageNotReadableException.class})
+    @ExceptionHandler({jakarta.validation.ConstraintViolationException.class, MethodArgumentNotValidException.class, org.springframework.http.converter.HttpMessageNotReadableException.class})
     ResponseEntity<Problem> invalid(Exception exception) {
         return ResponseEntity.badRequest().body(new Problem("DASHBOARD_REQUEST_INVALID", "请求参数不符合要求"));
     }

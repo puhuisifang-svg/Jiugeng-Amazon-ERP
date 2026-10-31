@@ -47,6 +47,11 @@ final class DashboardTypes {
                           String archivedBy, Instant archivedAt, String archiveReason, Instant createdAt,
                           Instant updatedAt) {}
 
+    record HomePendingProduct(String id,String productName,String imageId,Integer expectedQuantity,String quantityUnit,
+            String remark,LocalDate expectedCompletionDate,String developmentId,String number,String owner,String developmentState,Integer stage) {
+        static HomePendingProduct legacy(PendingProduct p){return new HomePendingProduct(p.id(),p.productName(),p.imageId(),p.expectedQuantity(),p.quantityUnit(),p.remark(),p.expectedCompletionDate(),null,null,null,null,null);}
+    }
+
     record ImageAsset(String id, ImagePurpose purpose, ImageStatus status, String originalStorageKey,
                       String thumbnailStorageKey, String sourceFileName, String sourceMediaType,
                       String storedMediaType, long byteSize, String sha256, int width, int height,

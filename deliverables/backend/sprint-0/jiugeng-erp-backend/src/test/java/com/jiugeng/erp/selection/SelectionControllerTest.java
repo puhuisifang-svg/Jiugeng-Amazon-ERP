@@ -39,6 +39,8 @@ class SelectionControllerTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.asin").value("B0CASE12345"))
                 .andExpect(jsonPath("$.source").value("MANUAL")).andReturn().getResponse().getContentAsString();
         String id=json.readTree(body).get("id").asText();
+        // Legacy candidate contract fixture; new records use the workbench gate tested separately.
+        jdbc.update("DELETE FROM launch_workspace WHERE entity_id=?",id);
 
         mvc.perform(put("/api/v1/selection/candidates/{id}/evaluation",id).header("Authorization",bearer(token))
                 .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("version",0,"category","Home","price",12.5,
@@ -102,7 +104,7 @@ class SelectionControllerTest {
         } finally { executor.shutdownNow(); }
     }
 
-    private String create(String token,String asin)throws Exception {String body=mvc.perform(post("/api/v1/selection/candidates").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("asinOrUrl",asin,"title","candidate")))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();return json.readTree(body).get("id").asText();}
-    private String user(String name,String role)throws Exception{String id=java.util.UUID.randomUUID().toString();var encoder=new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder();jdbc.update("INSERT INTO iam_user (id,login_name,display_name,password_hash,role,status,must_change_password) VALUES (?,?,?,?,?,'ENABLED',FALSE)",id,name,name,encoder.encode(PASSWORD),role);String body=mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("loginName",name,"password",PASSWORD)))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();return json.readTree(body).get("token").asText();}
+    private String create(String token,String asin)throws Exception {String body=mvc.perform(post("/api/v1/selection/candidates").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("asinOrUrl",asin,"title","candidate")))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();String legacyId=json.readTree(body).get("id").asText();jdbc.update("DELETE FROM launch_workspace WHERE entity_id=?",legacyId);return legacyId;}
+    private String user(String name,String role)throws Exception{String id=java.util.UUID.randomUUID().toString();var encoder=new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder();jdbc.update("INSERT INTO iam_user (id,login_name,display_name,password_hash,role,status,must_change_password) VALUES (?,?,?,?,?,'ENABLED',FALSE)",id,name,name,encoder.encode(PASSWORD),role);jdbc.update("INSERT INTO iam_user_role(user_id,role_id) SELECT id,role FROM iam_user WHERE id=?",id);String body=mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("loginName",name,"password",PASSWORD)))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();return json.readTree(body).get("token").asText();}
     private String bearer(String token){return "Bearer "+token;}
 }

@@ -31,9 +31,12 @@ final class AuditTypes {
                       JsonNode beforeValue, JsonNode afterValue, String detail, Instant occurredAt) {
     }
 
-    record AuditFilter(String actorUserId, String actorLoginName, String category, String action,
-                       String resourceType, Outcome outcome, Instant from, Instant to, int page, int size) {
+    record AuditFilter(String actorUserId, List<String> actorLoginName, List<String> category, List<String> action,
+                       List<String> resourceType, Outcome outcome, Instant from, Instant to, int page, int size) {
     }
+
+    record FilterOption(String value, String label) {}
+    record FilterOptions(List<FilterOption> actors, List<String> categories, List<String> actions, List<String> resources) {}
 
     record AuditPage(List<AuditEvent> items, int page, int size, long totalElements, int totalPages) {
         static AuditPage of(List<AuditEvent> items, int page, int size, long totalElements) {

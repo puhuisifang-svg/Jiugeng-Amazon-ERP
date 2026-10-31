@@ -23,6 +23,10 @@ describe('audit API', () => {
     })).toBe('?actorLoginName=operator&action=PASSWORD_RESET&page=2&size=20')
   })
 
+  it('encodes multiple values as repeated parameters', () => {
+    expect(auditQueryString({ action: ['LOGIN', 'LOGOUT'], category: [], actorLoginName: ['a&b'] })).toBe('?action=LOGIN&action=LOGOUT&actorLoginName=a%26b')
+  })
+
   it('queries audit events with the active bearer session', async () => {
     window.localStorage.setItem(SESSION_TOKEN_KEY, 'opaque-test-token')
     const response = { items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 }

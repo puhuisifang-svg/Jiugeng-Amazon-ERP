@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
 import { confirmAction } from '@/state/uiConfirmation'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
@@ -85,6 +86,7 @@ onMounted(load)
       <h2>{{ editingId ? '调整 SKU 辅料' : '新增 SKU 辅料' }}</h2>
       <label>SKU<select
         v-model="form.variantId"
+        v-single-select
         required
         :disabled="Boolean(editingId) || applyAll"
       >
@@ -99,6 +101,7 @@ onMounted(load)
       </select></label>
       <label>辅料<select
         v-model="form.materialId"
+        v-single-select
         required
         :disabled="Boolean(editingId)"
       >

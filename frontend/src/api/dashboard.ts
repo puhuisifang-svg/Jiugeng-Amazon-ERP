@@ -31,7 +31,12 @@ export interface PendingProduct {
   id: string; productName: string; imageId?: string; expectedQuantity: number; quantityUnit: 'SET'; remark?: string
   expectedCompletionDate: string; status: PendingProductStatus; version: number; createdAt: string; updatedAt: string
 }
+export interface HomePendingProduct {
+  id: string; productName: string; imageId?: string; expectedQuantity: number | null; quantityUnit: string | null; remark?: string
+  expectedCompletionDate: string | null; developmentId?: string | null; number?: string | null; owner?: string | null; developmentState?: string | null; stage?: number | null
+}
 export type DashboardItem = TodayShipment | PendingShipment | PendingProduct
+export type DashboardHomeItem = TodayShipment | PendingShipment | HomePendingProduct
 export interface ShipmentDispatch {
   quantityUnit?: string
   orderAllocation?: Pick<import('./orders').OrderAllocation, 'id' | 'orderId' | 'orderNumber'> | null
@@ -81,6 +86,7 @@ function qs(filters: Record<string, string | number | undefined>) {
   return search.size ? `?${search}` : ''
 }
 export const dashboardApi = {
+  productionProducts: (filters: { keyword: string; from: string; to: string; page: number; size: number }) => apiRequest<Page<HomePendingProduct>>(`/v1/dashboard/production-products${qs(filters)}`),
   dispatch: (id: string, version: number, requestKey: string) => apiRequest<ShipmentDispatch>(`/v1/shipping/today-shipments/${encodeURIComponent(id)}/dispatch`, { method: 'POST', headers: { 'Idempotency-Key': requestKey }, body: JSON.stringify({ version }) }),
   statistics: (filters: { from: string; to: string; keyword: string; page: number; size: number; orderId?: string }) => apiRequest<ShipmentStatistics>(`/v1/shipping/statistics${qs(filters)}`),
   documents: async (scope: string, id: string, kind: ShipmentDocument['kind']) => (await raw(`/v1/shipment-documents/${scope}/${encodeURIComponent(id)}?kind=${kind}`, { method: 'GET' })).json() as Promise<ShipmentDocument[]>,
@@ -94,7 +100,7 @@ export const dashboardApi = {
     link.href = url; link.download = document.fileName; window.document.body.append(link); link.click(); link.remove()
     window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   },
-  home: <T extends DashboardItem>(kind: WorklistKind) => apiRequest<HomeSlice<T>>(`/v1/dashboard/${kind}`),
+  home: <T extends DashboardItem | DashboardHomeItem>(kind: WorklistKind) => apiRequest<HomeSlice<T>>(`/v1/dashboard/${kind}`),
   page: <T extends DashboardItem>(kind: WorklistKind, filters: Record<string, string | number | undefined>) => apiRequest<Page<T>>(`/v1/dashboard-maintenance/${kind}${qs(filters)}`),
   history: (kind: WorklistKind, id: string) => apiRequest<DashboardHistoryEvent[]>(`/v1/dashboard-maintenance/${kind}/${id}/history`),
   createShipment: (kind: Exclude<WorklistKind, 'pending-products'>, input: ShipmentInput) => apiRequest<TodayShipment | PendingShipment>(`/v1/dashboard-maintenance/${kind}`, { method: 'POST', headers: { 'Idempotency-Key': key() }, body: JSON.stringify(input) }),

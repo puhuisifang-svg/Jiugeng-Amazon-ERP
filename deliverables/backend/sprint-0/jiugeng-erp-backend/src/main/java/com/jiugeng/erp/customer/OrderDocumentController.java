@@ -24,12 +24,12 @@ class OrderDocumentController {
         if(!List.of("ORDER","INVOICE").contains(scope))throw invalid("附件类型无效");
         if(scope.equals("INVOICE")&&order.invoiceId()==null)throw invalid("请先生成发票");
     }
-    @GetMapping @PreAuthorize("hasAuthority('customers.read')")
+    @GetMapping @PreAuthorize("(#scope == 'INVOICE' and hasAuthority('invoices.read')) or (#scope != 'INVOICE' and hasAuthority('orders.read'))")
     List<Document> list(@PathVariable String orderId,@PathVariable String scope) {
         owner(orderId,scope);return jdbc.sql("SELECT id,file_name,byte_size FROM customer_order_document WHERE order_id=:order AND scope=:scope ORDER BY uploaded_at,id")
             .param("order",orderId).param("scope",scope).query((r,n)->new Document(r.getString("id"),r.getString("file_name"),r.getLong("byte_size"))).list();
     }
-    @PostMapping @PreAuthorize("hasAuthority('customers.write')") @Transactional
+    @PostMapping @PreAuthorize("(#scope == 'INVOICE' and hasAuthority('invoices.write')) or (#scope != 'INVOICE' and hasAuthority('orders.write'))") @Transactional
     Document upload(@PathVariable String orderId,@PathVariable String scope,@RequestParam MultipartFile file,@AuthenticationPrincipal AuthenticatedActor actor) throws java.io.IOException {
         orders.lock(orderId);owner(orderId,scope);
         if(file.isEmpty()||file.getSize()>10*1024*1024)throw invalid("附件不能为空且不得超过10MB");
@@ -46,7 +46,7 @@ class OrderDocumentController {
         orders.record(actor,orderId,"ORDER_DOCUMENT_UPLOAD","新增"+(scope.equals("ORDER")?"订单":"发票")+"附件；文件ID："+id);
         return new Document(id,name,bytes.length);
     }
-    @GetMapping("/{id}") @PreAuthorize("hasAuthority('customers.read')")
+    @GetMapping("/{id}") @PreAuthorize("(#scope == 'INVOICE' and hasAuthority('invoices.read')) or (#scope != 'INVOICE' and hasAuthority('orders.read'))")
     ResponseEntity<byte[]> download(@PathVariable String orderId,@PathVariable String scope,@PathVariable String id) {
         owner(orderId,scope);return jdbc.sql("SELECT file_name,content FROM customer_order_document WHERE id=:id AND order_id=:order AND scope=:scope")
             .param("id",id).param("order",orderId).param("scope",scope).query((r,n)->ResponseEntity.ok().contentType(MediaType.APPLICATION_OCTET_STREAM).cacheControl(CacheControl.noStore())

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
+import DatePicker from '@/components/DatePicker.vue'
 import ListPagination from '@/components/ListPagination.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
@@ -151,12 +153,18 @@ onMounted(load)
         placeholder="采购单号 / 供应商 / SKU / 辅料"
         aria-label="搜索采购单"
       ></label>
-      <label>状态<select v-model="status"><option value="">全部状态</option><option
+      <label>状态<select
+        v-model="status"
+        v-single-select
+      ><option value="">全部状态</option><option
         v-for="(label,key) in statusLabels"
         :key="key"
         :value="key"
       >{{ label }}</option></select></label>
-      <label>交期<select v-model="delivery"><option value="">全部交期</option><option value="overdue">已逾期未收齐</option><option value="missing">未填写交期</option></select></label>
+      <label>交期<select
+        v-model="delivery"
+        v-single-select
+      ><option value="">全部交期</option><option value="overdue">已逾期未收齐</option><option value="missing">未填写交期</option></select></label>
       <button
         type="button"
         @click="resetFilters"
@@ -293,6 +301,7 @@ onMounted(load)
         >
           <label>供应商<select
             v-model="form.supplierId"
+            v-single-select
             required
             :disabled="supplierLoading"
             @change="loadReferences()"
@@ -311,12 +320,12 @@ onMounted(load)
             pattern="[A-Za-z]{3}"
             placeholder="CNY"
           ></label>
-          <label>预计到货日期<input
+          <label>预计到货日期<DatePicker
             v-model="form.expectedDeliveryDate"
             type="date"
             min="2000-01-01"
             max="9999-12-31"
-          ></label>
+          /></label>
           <label>收货信息<input
             v-model="form.deliveryAddress"
             maxlength="500"
@@ -339,6 +348,7 @@ onMounted(load)
                     <td>
                       <select
                         v-model="line.itemId"
+                        v-single-select
                         required
                         :aria-label="`采购项目 ${index + 1}`"
                         :disabled="referenceLoading || !references.length"

@@ -19,32 +19,46 @@ import org.springframework.stereotype.Repository;
 @Repository
 class IamRepository {
     private final JdbcClient jdbc;
+    private final RoleRepository roles;
 
-    IamRepository(JdbcClient jdbc) {
-        this.jdbc = jdbc;
+    IamRepository(JdbcClient jdbc, RoleRepository roles) {
+        this.jdbc = jdbc; this.roles = roles;
+    }
+
+    boolean loginNameExists(String loginName) {
+        return jdbc.sql("SELECT COUNT(*) FROM iam_user WHERE login_name = :name")
+                .param("name", loginName).query(Integer.class).single() > 0;
     }
 
     Optional<User> findUserByLoginName(String loginName) {
         return jdbc.sql("""
                 SELECT id, login_name, display_name, email, phone, password_hash, role, status, must_change_password,
-                       failed_login_count, locked_at
-                FROM iam_user WHERE login_name = :loginName
+                       failed_login_count, locked_at, authorization_version, created_at
+                FROM iam_user WHERE login_name = :loginName AND deleted_at IS NULL
                 """).param("loginName", loginName).query(this::mapUser).optional();
+    }
+
+    List<User> findUsersByLoginIdentifier(String loginName, String phone) {
+        return jdbc.sql("""
+                SELECT id, login_name, display_name, email, phone, password_hash, role, status, must_change_password,
+                       failed_login_count, locked_at, authorization_version, created_at
+                FROM iam_user WHERE (login_name = :loginName OR phone = :phone) AND deleted_at IS NULL
+                """).param("loginName",loginName).param("phone",phone).query(this::mapUser).list();
     }
 
     Optional<User> findUserById(String id) {
         return jdbc.sql("""
                 SELECT id, login_name, display_name, email, phone, password_hash, role, status, must_change_password,
-                       failed_login_count, locked_at
-                FROM iam_user WHERE id = :id
+                       failed_login_count, locked_at, authorization_version, created_at
+                FROM iam_user WHERE id = :id AND deleted_at IS NULL
                 """).param("id", id).query(this::mapUser).optional();
     }
 
     List<User> findUsers() {
         return jdbc.sql("""
                 SELECT id, login_name, display_name, email, phone, password_hash, role, status, must_change_password,
-                       failed_login_count, locked_at
-                FROM iam_user ORDER BY created_at, login_name
+                       failed_login_count, locked_at, authorization_version, created_at
+                FROM iam_user WHERE deleted_at IS NULL ORDER BY created_at, login_name
                 """).query(this::mapUser).list();
     }
 
@@ -56,8 +70,8 @@ class IamRepository {
         String column = channel == RecoveryChannel.EMAIL ? "email" : "phone";
         String sql = """
                 SELECT id, login_name, display_name, email, phone, password_hash, role, status, must_change_password,
-                       failed_login_count, locked_at
-                FROM iam_user WHERE %s = :destination
+                       failed_login_count, locked_at, authorization_version, created_at
+                FROM iam_user WHERE %s = :destination AND deleted_at IS NULL
                 """.formatted(column);
         return jdbc.sql(sql).param("destination", destination).query(this::mapUser).optional();
     }
@@ -71,6 +85,7 @@ class IamRepository {
                 """).param("id", id).param("loginName", loginName).param("displayName", displayName)
                 .param("email", email).param("phone", phone).param("passwordHash", passwordHash)
                 .param("role", role.name()).update();
+        if (role != Role.CUSTOM) roles.bind(id, java.util.List.of(role.name()));
     }
 
     int recordFailedLogin(User user, int maxFailures) {
@@ -104,12 +119,12 @@ class IamRepository {
                 SELECT u.id, u.login_name, u.display_name, u.role, u.must_change_password
                 FROM iam_session s JOIN iam_user u ON u.id = s.user_id
                 WHERE s.token_hash = :tokenHash AND s.revoked_at IS NULL AND s.expires_at > :now
-                  AND u.status = 'ENABLED' AND u.locked_at IS NULL
+                  AND u.status = 'ENABLED' AND u.locked_at IS NULL AND u.deleted_at IS NULL
                 """).param("tokenHash", tokenHash).param("now", now).query((rs, rowNum) -> {
                     Role role = Role.valueOf(rs.getString("role"));
                     return new SessionPrincipal(rs.getString("id"), rs.getString("login_name"),
                             rs.getString("display_name"), role, rs.getBoolean("must_change_password"),
-                            IamTypes.capabilities(role), tokenHash);
+                            roles.capabilities(rs.getString("id")), tokenHash);
                 }).optional();
     }
 
@@ -207,6 +222,17 @@ class IamRepository {
                 """).param("id", challengeId).update();
     }
 
+    void deleteUser(String userId) {
+        jdbc.sql("""
+                UPDATE iam_user SET deleted_at = CURRENT_TIMESTAMP, status = 'DISABLED',
+                    updated_at = CURRENT_TIMESTAMP WHERE id = :id AND deleted_at IS NULL
+                """).param("id", userId).update();
+        jdbc.sql("""
+                UPDATE iam_password_reset_challenge SET consumed_at = CURRENT_TIMESTAMP
+                WHERE user_id = :id AND consumed_at IS NULL
+                """).param("id", userId).update();
+    }
+
     void setStatus(String userId, Status status) {
         jdbc.sql("UPDATE iam_user SET status = :status, updated_at = CURRENT_TIMESTAMP WHERE id = :id")
                 .param("status", status.name()).param("id", userId).update();
@@ -215,6 +241,7 @@ class IamRepository {
     void setRole(String userId, Role role) {
         jdbc.sql("UPDATE iam_user SET role = :role, updated_at = CURRENT_TIMESTAMP WHERE id = :id")
                 .param("role", role.name()).param("id", userId).update();
+        roles.bind(userId, java.util.List.of(role.name()));
     }
 
     void unlock(String userId) {
@@ -248,6 +275,7 @@ class IamRepository {
                 rs.getString("email"), rs.getString("phone"),
                 Role.valueOf(rs.getString("role")), Status.valueOf(rs.getString("status")),
                 rs.getBoolean("must_change_password"), rs.getInt("failed_login_count"),
-                lockedAt == null ? null : lockedAt.toInstant(), rs.getString("password_hash"));
+                lockedAt == null ? null : lockedAt.toInstant(), rs.getString("password_hash"), roles.userRoles(rs.getString("id")), roles.capabilities(rs.getString("id")), rs.getLong("authorization_version"), rs.getTimestamp("created_at").toInstant(),
+                jdbc.sql("SELECT MAX(created_at) FROM iam_session WHERE user_id=:id").param("id",rs.getString("id")).query((r,n)->r.getTimestamp(1)==null?null:r.getTimestamp(1).toInstant()).optional().orElse(null));
     }
 }

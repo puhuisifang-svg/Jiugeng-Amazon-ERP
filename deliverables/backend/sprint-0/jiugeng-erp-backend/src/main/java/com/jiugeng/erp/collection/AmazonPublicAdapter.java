@@ -36,11 +36,11 @@ class AmazonPublicAdapter implements CollectionAdapter {
         client=builder.build();
     }
     public String provider(){return SOURCE;}
-    public Set<String> kinds(){return Set.of("PRODUCT","STORE","WATCH_NOVELTY");}
+    public Set<String> kinds(){return Set.of("PRODUCT","STORE","WATCH_NOVELTY","CANDIDATE");}
     public boolean approved(){return enabled;}
     public synchronized Observation collect(Target target){
         if(!enabled)throw failure("网页采集未启用",false);
-        if(Set.of("PRODUCT","WATCH_NOVELTY").contains(target.kind())){
+        if(Set.of("PRODUCT","WATCH_NOVELTY","CANDIDATE").contains(target.kind())){
             if(!target.key().matches("[A-Z0-9]{10}"))throw failure("ASIN无效",false);
             Document doc=usPage(URI.create("https://www.amazon.com/dp/"+target.key()));
             ObjectNode fields=product(doc,target.key());
@@ -48,10 +48,12 @@ class AmazonPublicAdapter implements CollectionAdapter {
         }
         if(!target.kind().equals("STORE")||!target.key().matches("[A-Z0-9]{8,30}"))throw failure("请填写有效的亚马逊美国站seller店铺地址",false);
         URI start=URI.create("https://www.amazon.com/s?me="+target.key()+"&marketplaceID=ATVPDKIKX0DER");
-        Document first=usPage(start);
-        return store(target.key(),uri->{if(uri.equals(start))return first;Document doc=fetch(uri);requireUsLocation(doc);return doc;});
+        return store(target.key(),uri->{if(uri.equals(start))return usPage(start);Document doc=fetch(uri);requireUsLocation(doc);return doc;});
     }
     Observation store(String seller,java.util.function.Function<URI,Document> reader){
+        return store(seller,reader,AmazonPublicAdapter::pauseRetry);
+    }
+    Observation store(String seller,java.util.function.Function<URI,Document> reader,java.util.function.LongConsumer pause){
         URI uri=URI.create("https://www.amazon.com/s?me="+seller+"&marketplaceID=ATVPDKIKX0DER");
         Set<String> visited=new HashSet<>(),pageSignatures=new HashSet<>();var products=new LinkedHashMap<String,ObjectNode>();
         Instant started=Instant.now();int pages=0;long previousRangeEnd=0;String storeName=null;
@@ -59,7 +61,7 @@ class AmazonPublicAdapter implements CollectionAdapter {
             if(++pages>MAX_STORE_PAGES)throw failure("店铺超过"+MAX_STORE_PAGES+"页采集上限，未更新基线",false);
             if(Duration.between(started,Instant.now()).toSeconds()>STORE_TIMEOUT_SECONDS)throw failure("店铺采集超时，等待重试，未更新基线",true);
             if(!visited.add(uri.toString()))throw failure("店铺分页出现循环，未更新基线",false);
-            Document doc=reader.apply(uri);checkPage(doc);if(storeName==null)storeName=storeName(doc,seller);var rows=doc.select("[data-component-type=s-search-result][data-asin]");
+            Document doc=storePage(uri,reader,pause,started);checkPage(doc);if(storeName==null)storeName=storeName(doc,seller);var rows=doc.select("[data-component-type=s-search-result][data-asin]");
             if(rows.isEmpty())throw failure("未识别到店铺商品列表，保留原基线",false);
             Set<String> pageAsins=new TreeSet<>();
             for(Element row:rows){String asin=row.attr("data-asin");if(!asin.matches("[A-Z0-9]{10}"))continue;
@@ -83,6 +85,27 @@ class AmazonPublicAdapter implements CollectionAdapter {
         }
         ObjectNode fields=mapper.createObjectNode();if(storeName!=null)fields.put("storeName",storeName);var array=fields.putArray("products");products.values().forEach(array::add);fields.put("pageCount",pages).put("itemCount",products.size()).put("inventoryComplete",false).put("coverage","PUBLIC_SEARCH_PAGES");var coverage=fields.putArray("visitedPages");visited.stream().sorted().forEach(coverage::add);
         return new Observation(Instant.now(),"COMPLETE",true,fields);
+    }
+    /** Retry only transient reads of the current page; never accept a partial store snapshot. */
+    static Document storePage(URI uri,java.util.function.Function<URI,Document> reader,
+                              java.util.function.LongConsumer pause,Instant started){
+        for(int attempt=1;attempt<=3;attempt++){
+            if(Thread.currentThread().isInterrupted())throw failure("采集任务被中断",true);
+            if(Duration.between(started,Instant.now()).toSeconds()>=STORE_TIMEOUT_SECONDS)
+                throw failure("店铺采集超时（第"+pageNumber(uri)+"页），未更新基线",true);
+            try{return reader.apply(uri);}
+            catch(CollectionFailure e){
+                // Rate limits belong to the durable job queue; do not block its worker for minutes.
+                if(!e.retryable()||e.retryAfterSeconds()>0||attempt==3||Thread.currentThread().isInterrupted())
+                    throw new CollectionFailure("第"+pageNumber(uri)+"页读取失败（本页尝试"+attempt+"次）："+e.getMessage(),e.retryable(),e.retryAfterSeconds());
+                org.slf4j.LoggerFactory.getLogger(AmazonPublicAdapter.class).warn("Public store page {} transient read failed; retry {}/2",pageNumber(uri),attempt);
+                pause.accept(attempt==1?2000L:5000L);
+            }
+        }
+        throw new IllegalStateException("Unreachable page retry state");
+    }
+    private static void pauseRetry(long milliseconds){
+        try{Thread.sleep(milliseconds);}catch(InterruptedException e){Thread.currentThread().interrupt();throw failure("采集任务被中断",true);}
     }
     static int pageNumber(URI uri){
         try{int page=Integer.parseInt(query(uri).getOrDefault("page","1"));if(page>0)return page;}catch(NumberFormatException ignored){}
@@ -220,7 +243,9 @@ class AmazonPublicAdapter implements CollectionAdapter {
             for(int redirects=0;redirects<4;redirects++){
                 if(location)validateLocation(uri);else validate(uri);
                 long pause=1500-(System.currentTimeMillis()-lastRequest);if(pause>0)Thread.sleep(pause);lastRequest=System.currentTimeMillis();
-                var builder=HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(25)).header("User-Agent","JiugengERP-Monitor/0.1").header("Accept-Language","en-US").header("Accept-Encoding","gzip, deflate");
+                // Do not force content-encoding negotiation: some public search responses
+                // fail with 503 for that variant. Still decode any returned Content-Encoding.
+                var builder=HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(25)).header("User-Agent","JiugengERP-Monitor/0.1").header("Accept-Language","en-US");
                 input.headers().forEach(builder::header);
                 if(input.body()!=null)builder.header("Content-Type","application/json").POST(HttpRequest.BodyPublishers.ofString(input.body()));else builder.GET();
                 HttpResponse<byte[]> response=readResponse(client,builder.build(),Duration.ofNanos(Math.max(1,deadline-System.nanoTime())));

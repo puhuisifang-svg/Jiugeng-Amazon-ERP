@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
 import './cartonLabels.css'
 import UnsavedChangesDialog from './UnsavedChangesDialog.vue'
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
@@ -135,6 +136,7 @@ onBeforeUnmount(clearPreview)
           <div class="label-fields">
             <label>外箱标模板<select
               v-model="entry.templateId"
+              v-single-select
               required
               @change="selectTemplate(index)"
             ><option value="">请选择（未配置请先到客户信息维护模板）</option><option

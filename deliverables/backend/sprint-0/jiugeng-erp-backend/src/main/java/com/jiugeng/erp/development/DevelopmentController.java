@@ -18,22 +18,22 @@ class DevelopmentController {
         return org.springframework.http.ResponseEntity.status(error.getStatusCode())
                 .body(java.util.Map.of("code","DEVELOPMENT_REQUEST_FAILED","message",error.getReason()));
     }
-    @GetMapping @PreAuthorize("hasAuthority('products.read')")
+    @GetMapping @PreAuthorize("hasAuthority('development.read')")
     Page list(@RequestParam(required=false) Status status, @RequestParam(defaultValue="") String q,
             @RequestParam(defaultValue="0") int page, @RequestParam(defaultValue="20") int size) {
         return service.list(status,q,page,size);
     }
-    @GetMapping("/{id}") @PreAuthorize("hasAuthority('products.read')")
+    @GetMapping("/{id}") @PreAuthorize("hasAuthority('development.read')")
     Detail detail(@PathVariable String id) { return service.detail(id); }
-    @PostMapping @PreAuthorize("hasAuthority('products.write')")
+    @PostMapping @PreAuthorize("hasAuthority('development.write')")
     View create(@RequestBody Create input,@AuthenticationPrincipal AuthenticatedActor actor) {
         return service.create(input,actor);
     }
-    @PutMapping("/{id}") @PreAuthorize("hasAuthority('products.write')")
+    @PutMapping("/{id}") @PreAuthorize("hasAuthority('development.write')")
     View update(@PathVariable String id,@RequestBody Update input,@AuthenticationPrincipal AuthenticatedActor actor) {
         return service.update(id,input,actor);
     }
-    @PostMapping("/{id}/transition") @PreAuthorize("hasAuthority('products.write')")
+    @PostMapping("/{id}/transition") @PreAuthorize("hasAuthority('development.write')")
     View transition(@PathVariable String id,@RequestBody Transition input,@AuthenticationPrincipal AuthenticatedActor actor) {
         return service.transition(id,input,actor);
     }

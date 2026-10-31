@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
+import DatePicker from '@/components/DatePicker.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import UnsavedChangesDialog from './UnsavedChangesDialog.vue'
 import { onBeforeRouteLeave } from 'vue-router'
@@ -88,6 +90,7 @@ onMounted(async () => {
           >搜索</button></label>
           <label>客户 *<select
             v-model="form.customerId"
+            v-single-select
             required
             @change="changeCustomer"
           ><option value="">请选择客户</option><option
@@ -95,7 +98,10 @@ onMounted(async () => {
             :key="c.id"
             :value="c.id"
           >{{ c.name }}</option></select></label>
-          <label>来源<select v-model="form.source"><option value="OFFLINE">线下</option><option value="1688">1688</option></select></label>
+          <label>来源<select
+            v-model="form.source"
+            v-single-select
+          ><option value="OFFLINE">线下</option><option value="1688">1688</option></select></label>
           <label>客户订单号<input
             v-model="form.externalNumber"
             maxlength="100"
@@ -105,18 +111,22 @@ onMounted(async () => {
             v-model="form.contractNumber"
             maxlength="100"
           ></label>
-          <label>下单日期<input
+          <label>下单日期<DatePicker
             v-model="form.orderDate"
             type="date"
             required
-          ></label><label>交期<input
+          /></label><label>交期<DatePicker
             v-model="form.deliveryDate"
             type="date"
             required
-          ></label>
-          <label>是否需要开票<select v-model="form.invoiceRequired"><option :value="false">否</option><option :value="true">是</option></select></label>
+          /></label>
+          <label>是否需要开票<select
+            v-model="form.invoiceRequired"
+            v-single-select
+          ><option :value="false">否</option><option :value="true">是</option></select></label>
           <label v-if="form.invoiceRequired">发票抬头<select
             v-model="titleIndex"
+            v-single-select
             @change="chooseTitle"
           ><option value="">请选择（无抬头可先存草稿）</option><option
             v-if="props.initial?.invoiceTitle.invoiceTitle"
@@ -144,7 +154,10 @@ onMounted(async () => {
             :disabled="!form.customerId"
             @click="searchProducts"
           >搜索商品</button></label>
-          <label>添加商品<select v-model="selectedProduct"><option value="">请选择客户商品</option><option
+          <label>添加商品<select
+            v-model="selectedProduct"
+            v-single-select
+          ><option value="">请选择客户商品</option><option
             v-for="p in products"
             :key="p.id"
             :value="p.id"
@@ -214,12 +227,12 @@ onMounted(async () => {
                       step="0.01"
                     >
                   </td><td>{{ invoiceAmounts(l.quantity,l.netUnitPrice,l.taxRate)?.total ?? '—' }}</td><td>
-                    <input
+                    <DatePicker
                       v-model="l.deliveryDate"
                       aria-label="商品交期"
                       required
                       type="date"
-                    >
+                    />
                   </td><td>
                     <input
                       v-model="l.remark"

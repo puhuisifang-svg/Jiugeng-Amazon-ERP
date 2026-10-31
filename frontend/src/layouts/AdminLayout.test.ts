@@ -121,7 +121,7 @@ describe('horizontal navigation shell', () => {
     await wrapper.get('[data-domain="客户"]').trigger('click')
     expect(wrapper.get('.mega-panel').text()).toContain('客户管理')
     expect(wrapper.get('a[href="/customers/products"]').text()).toBe('客户商品')
-    expect(wrapper.get('a[href="/customers/invoices"]').text()).toBe('发票管理')
+    expect(wrapper.find('a[href="/customers/invoices"]').exists()).toBe(false)
     allowed.value = []; await nextTick()
     expect(wrapper.find('[data-domain="客户"]').exists()).toBe(false)
   })
@@ -138,7 +138,7 @@ describe('horizontal navigation shell', () => {
     expect(wrapper.find('[data-domain="发货"]').exists()).toBe(false)
   })
   it.each(['/product-monitoring', '/product-monitoring/example'])('groups monitoring under selection without granting other selection access: %s', async path => {
-    const { wrapper, router } = await setup(path, ref([]))
+    const { wrapper, router } = await setup(path, ref(['monitoring.read']))
     expect(wrapper.find('[data-domain="产品监控"]').exists()).toBe(false)
     expect(wrapper.get('[data-domain="选品"]').classes()).toContain('is-active')
     await wrapper.get('[data-domain="选品"]').trigger('click')
@@ -231,7 +231,7 @@ describe('horizontal navigation shell', () => {
   it('never exposes hidden routes or unauthorized groups and removes revoked tabs', async () => {
     const allowed = ref<string[] | null>(['dashboard.read', 'products.read'])
     const { wrapper } = await setup('/products', allowed)
-    expect(wrapper.find('[data-domain="选品"]').exists()).toBe(true)
+    expect(wrapper.find('[data-domain="选品"]').exists()).toBe(false)
     await wrapper.get('[data-domain="商品"]').trigger('click')
     expect(wrapper.find('.mega-panel a[href="/products/new"]').exists()).toBe(false)
     expect(wrapper.find('.mega-panel a[href="/imports"]').exists()).toBe(false)

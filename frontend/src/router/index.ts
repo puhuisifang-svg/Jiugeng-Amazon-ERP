@@ -27,22 +27,28 @@ export const appRoutes: RouteRecordRaw[] = [
     component: AdminLayout,
     redirect: '/home',
     children: [
+      { path: 'factory/employees', name: 'factory-employees', component: () => import('@/views/FactoryWorkbenchView.vue'), props: { kind: 'employees' }, meta: { title: '员工管理', group: '工厂管理', capabilities: ['factory.employees.read'], breadcrumbs: [{ title: '工厂' }, { title: '员工管理' }] } },
+      { path: 'factory/rates', name: 'factory-rates', component: () => import('@/views/FactoryWorkbenchView.vue'), props: { kind: 'rates' }, meta: { title: '工价管理', group: '工厂管理', capabilities: ['factory.rates.read'], breadcrumbs: [{ title: '工厂' }, { title: '工价管理' }] } },
+      { path: 'factory/reports', name: 'factory-reports', component: () => import('@/views/FactoryWorkbenchView.vue'), props: { kind: 'reports' }, meta: { title: '每日报工', group: '工厂管理', capabilities: ['factory.reports.read'], breadcrumbs: [{ title: '工厂' }, { title: '每日报工' }] } },
+      { path: 'factory/payroll', name: 'factory-payroll', component: () => import('@/views/FactoryWorkbenchView.vue'), props: { kind: 'payroll' }, meta: { title: '月度工资', group: '工厂管理', capabilities: ['factory.payroll.read'], breadcrumbs: [{ title: '工厂' }, { title: '月度工资' }] } },
+      { path: 'finance/bills', name: 'finance-bills', component: () => import('@/views/FinanceBillsView.vue'), meta: { title: '账单管理', group: '财务管理', capabilities: ['finance.read'], breadcrumbs: [{ title: '财务' }, { title: '账单管理' }] } },
       { path: 'compliance/customs', name: 'customs-management', component: () => import('@/views/CustomsManagementView.vue'), meta: { title: '报关管理', group: '报关管理', capabilities: ['products.read'], breadcrumbs: [{ title: '合规' }, { title: '报关管理' }] } },
       { path: 'customers/info', name: 'customer-info', component: () => import('@/views/CustomerManagementView.vue'), props: { kind: 'info' }, meta: { title: '客户信息', group: '客户管理', capabilities: ['customers.read'], breadcrumbs: [{ title: '客户' }, { title: '客户管理' }, { title: '客户信息' }] } },
       { path: 'customers/products', name: 'customer-products', component: () => import('@/views/CustomerManagementView.vue'), props: { kind: 'products' }, meta: { title: '客户商品', group: '客户管理', capabilities: ['customers.read'], breadcrumbs: [{ title: '客户' }, { title: '客户管理' }, { title: '客户商品' }] } },
-      { path: 'customers/invoices', name: 'customer-invoices', component: () => import('@/views/OrderInvoicesView.vue'), meta: { title: '发票管理', group: '客户管理', capabilities: ['customers.read'], breadcrumbs: [{ title: '客户' }, { title: '客户管理' }, { title: '发票管理' }] } },
-      { path: 'orders/customers', name: 'customer-orders', component: () => import('@/views/CustomerOrdersView.vue'), meta: { title: '客户订单', group: '订单管理', capabilities: ['customers.read'], breadcrumbs: [{ title: '订单' }, { title: '订单管理' }, { title: '客户订单' }] } },
-      { path: 'orders/customers/:id', name: 'customer-order-detail', component: () => import('@/views/CustomerOrdersView.vue'), meta: { title: '订单详情', hidden: true, parentPath: '/orders/customers', capabilities: ['customers.read'], breadcrumbs: [{ title: '订单' }, { title: '订单管理' }, { title: '客户订单', to: '/orders/customers' }, { title: '订单详情' }] } },
-      { path: 'product-development', name: 'product-development', component: () => import('@/views/ProductDevelopmentView.vue'), meta: { title: '新品开发', group: '产品管理', icon: '新', capabilities: ['products.read'] } },
-      { path: 'product-development/new', name: 'product-development-new', component: () => import('@/views/ProductDevelopmentView.vue'), meta: { title: '添加新品需求', group: '产品管理', hidden: true, parentPath: '/product-development', capabilities: ['products.write'] } },
-      { path: 'product-development/:id', name: 'product-development-detail', component: () => import('@/views/ProductDevelopmentView.vue'), meta: { title: '新品开发详情', group: '产品管理', hidden: true, parentPath: '/product-development', capabilities: ['products.read'] } },
-      { path: 'product-monitoring', name: 'product-monitoring', component: () => import('@/views/ProductMonitoringView.vue'), meta: { title: '产品监控', group: '选品管理', icon: '◎' } },
-      { path: 'product-monitoring/:id', name: 'product-monitoring-detail', component: () => import('@/views/ProductMonitoringView.vue'), meta: { title: '监控详情', hidden: true, parentPath: '/product-monitoring' } },
+      { path: 'customers/invoices', name: 'customer-invoices', component: () => import('@/views/OrderInvoicesView.vue'), meta: { title: '发票管理', group: '客户管理', capabilities: ['invoices.read'], breadcrumbs: [{ title: '客户' }, { title: '客户管理' }, { title: '发票管理' }] } },
+      { path: 'orders/customers', name: 'customer-orders', component: () => import('@/views/CustomerOrdersView.vue'), meta: { title: '客户订单', group: '订单管理', capabilities: ['orders.read'], breadcrumbs: [{ title: '订单' }, { title: '订单管理' }, { title: '客户订单' }] } },
+      { path: 'orders/customers/:id', name: 'customer-order-detail', component: () => import('@/views/CustomerOrdersView.vue'), meta: { title: '订单详情', hidden: true, parentPath: '/orders/customers', capabilities: ['orders.read'], breadcrumbs: [{ title: '订单' }, { title: '订单管理' }, { title: '客户订单', to: '/orders/customers' }, { title: '订单详情' }] } },
+      { path: 'product-development', name: 'product-development', component: () => import('@/views/DevelopmentWorkbenchView.vue'), meta: { title: '新品开发', group: '产品管理', icon: '新', capabilities: ['development.read'] } },
+      { path: 'product-development/new', name: 'product-development-new', component: () => import('@/views/DevelopmentWorkbenchView.vue'), meta: { title: '添加新品需求', group: '产品管理', hidden: true, parentPath: '/product-development', capabilities: ['development.write'] } },
+      { path: 'product-development/:id', name: 'product-development-detail', component: () => import('@/views/DevelopmentWorkbenchView.vue'), meta: { title: '新品开发详情', group: '产品管理', hidden: true, parentPath: '/product-development', breadcrumbs: [{ title: '商品' }, { title: '产品管理' }, { title: '新品开发', to: '/product-development' }, { title: '详情' }], capabilities: ['development.read'] } },
+      { path: 'product-monitoring', name: 'product-monitoring', component: () => import('@/views/ProductMonitoringView.vue'), meta: { capabilities: ['monitoring.read'], title: '产品监控', group: '选品管理', icon: '◎' } },
+      { path: 'product-monitoring/:id', name: 'product-monitoring-detail', component: () => import('@/views/ProductMonitoringView.vue'), meta: { capabilities: ['monitoring.read'], title: '监控详情', hidden: true, parentPath: '/product-monitoring', breadcrumbs: [{ title: '选品' }, { title: '产品监控', to: '/product-monitoring' }, { title: '监控详情' }] } },
       { path: 'home', name: 'home', component: () => import('@/views/DashboardView.vue'), meta: { title: '首页', group: '工作台', icon: '⌂', capabilities: ['dashboard.read'] } },
       { path: 'dashboard-maintenance/today-shipments', name: 'dashboard-today-shipments', component: () => import('@/views/DashboardMaintenanceView.vue'), props: { kind: 'today-shipments' }, meta: { title: '今日发货管理', group: '发货管理', icon: '今', capabilities: ['dashboard.shipments.manage'] } },
       { path: 'dashboard-maintenance/pending-shipments', name: 'dashboard-pending-shipments', component: () => import('@/views/DashboardMaintenanceView.vue'), props: { kind: 'pending-shipments' }, meta: { title: '待发货管理', group: '发货管理', icon: '待', capabilities: ['dashboard.shipments.manage'] } },
       { path: 'shipping/statistics', name: 'shipping-statistics', component: () => import('@/views/ShipmentStatisticsView.vue'), meta: { title: '发货统计', group: '发货管理', icon: '统', capabilities: ['dashboard.shipments.manage'] } },
-      { path: 'dashboard-maintenance/pending-products', name: 'dashboard-pending-products', component: () => import('@/views/DashboardMaintenanceView.vue'), props: { kind: 'pending-products' }, meta: { title: '新品待开发管理', group: '工作台维护', icon: '新', capabilities: ['dashboard.pending-products.manage'] } },
+      { path: 'dashboard-maintenance/pending-products', name: 'dashboard-pending-products', component: () => import('@/views/ProductionDevelopmentView.vue'), meta: { title: '样品待开发管理', group: '工作台维护', icon: '新', capabilities: ['dashboard.pending-products.manage'] } },
+      { path: 'samples', name: 'samples', component: () => import('@/views/SamplesView.vue'), meta: { title: '样品管理', group: '产品管理', icon: '样', breadcrumbs: [{ title: '商品' }, { title: '产品管理', to: '/products' }, { title: '样品管理' }], capabilities: ['samples.read'] } },
       { path: 'products', name: 'products', component: () => import('@/views/ProductsView.vue'), meta: { title: '产品管理', group: '产品管理', icon: '◆', capabilities: ['products.read'] } },
       { path: 'products/new', name: 'product-new', component: () => import('@/views/ProductNewView.vue'), meta: { title: '新建产品', hidden: true, capabilities: ['products.write'] } },
       { path: 'products/:productId/:section(overview|variants|materials|documents|changes)?', name: 'product-detail', component: () => import('@/views/ProductDetailView.vue'), meta: { title: '产品详情', hidden: true, parentPath: '/products', breadcrumbs: [{ title: '商品' }, { title: '产品管理', to: '/products' }, { title: '产品详情' }], capabilities: ['products.read'] } },
@@ -60,17 +66,25 @@ export const appRoutes: RouteRecordRaw[] = [
       { path: 'products/imports/:batchId', name: 'product-import-detail', component: () => import('@/views/ImportDetailView.vue'), props: { importBasePath: '/products/imports' }, meta: { title: '产品导入批次', hidden: true, parentPath: '/products', breadcrumbs: [{ title: '商品' }, { title: '产品管理', to: '/products' }, { title: '导入', to: '/products/imports' }, { title: '导入批次' }], capabilities: ['imports.read'] } },
       { path: 'imports', name: 'imports', component: () => import('@/views/ImportsView.vue'), meta: { title: '导入', hidden: true, parentPath: '/materials', breadcrumbs: [{ title: '商品' }, { title: '辅料管理', to: '/materials' }, { title: '导入' }], capabilities: ['imports.read'] } },
       { path: 'imports/:batchId', name: 'import-detail', component: () => import('@/views/ImportDetailView.vue'), meta: { title: '导入批次', hidden: true, parentPath: '/materials', breadcrumbs: [{ title: '商品' }, { title: '辅料管理', to: '/materials' }, { title: '导入', to: '/imports' }, { title: '导入批次' }], capabilities: ['imports.read'] } },
-      { path: 'selection/candidates', name: 'selection-candidates', component: () => import('@/views/CandidatesView.vue'), meta: { title: '候选池', group: '选品管理', icon: '☆', capabilities: ['selection.read'] } },
-      { path: 'selection/candidates/:candidateId', name: 'candidate-detail', component: () => import('@/views/CandidateDetailView.vue'), meta: { title: '候选详情', hidden: true, capabilities: ['selection.read'] } },
+      { path: 'selection/candidates', name: 'selection-candidates', component: () => import('@/views/CandidateWorkbenchView.vue'), meta: { title: '候选池', group: '选品管理', icon: '☆', capabilities: ['selection.read'] } },
+      { path: 'selection/candidates/:candidateId', name: 'candidate-detail', component: () => import('@/views/CandidateWorkbenchView.vue'), meta: { title: '候选详情', hidden: true, breadcrumbs: [{ title: '选品' }, { title: '候选池', to: '/selection/candidates' }, { title: '候选详情' }], capabilities: ['selection.read'] } },
       { path: 'watch/stores', name: 'watch-stores', component: () => import('@/views/WatchStoresView.vue'), meta: { title: '上新监控', group: '选品管理', icon: '◎', capabilities: ['watch.read'] } },
       { path: 'watch/events', name: 'new-events', component: () => import('@/views/WatchEventsView.vue'), meta: { title: '上新记录', hidden: true, parentPath: '/watch/stores', group: '选品管理', capabilities: ['watch.read'] } },
-      { path: 'system/users', name: 'users', component: () => import('@/views/UsersView.vue'), meta: { title: '用户与角色', group: '系统管理', icon: '♙', capabilities: ['system.users.manage'] } },
+      { path: 'system/users', name: 'users', component: () => import('@/views/UsersView.vue'), meta: { title: '用户管理', group: '系统管理', icon: '♙', capabilities: ['system.users.manage'] } },
+      { path: 'system/roles', name: 'roles', component: () => import('@/views/RolesView.vue'), meta: { title: '角色管理', group: '系统管理', capabilities: ['system.users.manage'] } },
+      { path: 'system/roles/:id', name: 'role-detail', component: () => import('@/views/RolesView.vue'), meta: { title: '角色详情', hidden: true, parentPath: '/system/roles', capabilities: ['system.users.manage'], breadcrumbs: [{ title: '设置' }, { title: '角色管理', to: '/system/roles' }, { title: '详情' }] } },
       { path: 'system/audit', name: 'audit', component: () => import('@/views/AuditView.vue'), meta: { title: '审计日志', group: '系统管理', icon: '◫', capabilities: ['audit.read.self'] } },
       { path: 'settings', name: 'settings', component: () => import('@/views/SettingsView.vue'), meta: { title: '设置', group: '系统管理', icon: '⚙' } },
     ],
   },
   { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('@/views/NotFoundView.vue'), meta: { title: '页面不存在', hidden: true } },
 ]
+
+export function defaultAccessiblePath() {
+  if (session.canAccess(['dashboard.read'])) return '/home'
+  const first = appRoutes.find(route => route.path === '/')?.children?.find(route => !route.meta?.hidden && route.meta?.group && session.canAccess(route.meta.capabilities))
+  return first ? `/${first.path}` : '/forbidden'
+}
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -80,11 +94,12 @@ const router = createRouter({
 
 router.beforeEach(async (to) => {
   if (to.name === 'login' || to.name === 'forgot-password') {
-    return session.isAuthenticated.value ? { name: 'home' } : true
+    return session.isAuthenticated.value ? { path: defaultAccessiblePath() } : true
   }
   if (!session.isAuthenticated.value) return { name: 'login', query: { redirect: to.fullPath } }
   if (session.user.value?.mustChangePassword && to.name !== 'change-password') return { name: 'change-password' }
   if (!await refreshAccessIfStale(to.meta.capabilities)) {
+    if (to.name === 'home' && session.isAuthenticated.value) return { path: defaultAccessiblePath() }
     return session.isAuthenticated.value ? { name: 'forbidden' } : { name: 'login', query: { redirect: to.fullPath } }
   }
   return true

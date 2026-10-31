@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -66,19 +67,19 @@ onMounted(async () => {
       <div v-if="runtimeConfig.authMode === 'mock'" class="notice login-notice">
         <strong>SYNTHETIC</strong><span>本地模拟模式，不使用真实账号或密码。</span>
       </div>
-      <p v-else>使用内部账号登录。连续失败会锁定账号，首次登录必须修改初始密码。</p>
+      <p v-else>使用用户名或已绑定手机号登录。连续失败会锁定账号，首次登录必须修改初始密码。</p>
       <form class="login-form" @submit.prevent="submit">
         <template v-if="runtimeConfig.authMode === 'mock'">
           <label for="role">选择模拟角色</label>
-          <select id="role" v-model="role">
+          <select id="role" v-model="role" v-single-select>
             <option value="ADMIN">管理员（ADMIN）</option>
             <option value="PRODUCT_MATERIAL">产品与辅料（PRODUCT_MATERIAL）</option>
             <option value="SELECTION">选品（SELECTION）</option>
           </select>
         </template>
         <template v-else>
-          <label for="login-name">登录名</label>
-          <input id="login-name" v-model.trim="loginName" autocomplete="username" maxlength="128" required>
+          <label for="login-name">用户名 / 手机号</label>
+          <input id="login-name" v-model.trim="loginName" placeholder="请输入用户名或手机号" autocomplete="username" maxlength="128" required>
           <label for="password">密码</label>
           <PasswordField id="password" v-model="password" autocomplete="current-password" required />
           <div class="login-options">

@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class DashboardService {
     static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Shanghai");
+    private final com.jiugeng.erp.development.DevelopmentWorklist development;
     private final DashboardRepository repository;
     private final ProductLookup products;
     private final com.jiugeng.erp.customer.CustomerProductLookup customerProducts;
@@ -41,7 +42,8 @@ class DashboardService {
 
     DashboardService(DashboardRepository repository, ProductLookup products, com.jiugeng.erp.customer.CustomerProductLookup customerProducts, DashboardImageStore images,
             AuditTrail audit, AuditHistoryLookup auditHistory, ObjectMapper objectMapper, Clock clock,
-            @Value("${app.dashboard.image-orphan-hours:24}") long orphanHours, OrderShipmentService orderShipments) {
+            @Value("${app.dashboard.image-orphan-hours:24}") long orphanHours, OrderShipmentService orderShipments, com.jiugeng.erp.development.DevelopmentWorklist development) {
+        this.development=development;
         this.orderShipments=orderShipments;
         this.repository=repository;this.products=products;this.customerProducts=customerProducts;this.images=images;this.audit=audit;this.auditHistory=auditHistory;
         this.objectMapper=objectMapper;this.clock=clock;this.orphanHours=orphanHours;
@@ -54,8 +56,16 @@ class DashboardService {
     HomeSlice<PendingShipment> homePendingShipments(){var date=businessDate();return HomeSlice.of(
             repository.homePendingShipments(),repository.countHomePendingShipments(),date,clock.instant());}
     @Transactional(readOnly=true)
-    HomeSlice<PendingProduct> homePendingProducts(){var date=businessDate();return HomeSlice.of(
-            repository.homePendingProducts(),repository.countHomePendingProducts(),date,clock.instant());}
+    HomeSlice<HomePendingProduct> homePendingProducts(){
+        var projects=development.pending();
+        return HomeSlice.of(projects.items().stream().map(this::productionItem).toList(),projects.total(),businessDate(),clock.instant());
+    }
+    private HomePendingProduct productionItem(com.jiugeng.erp.development.DevelopmentWorklist.Item p){return new HomePendingProduct(p.id(),p.name(),null,null,null,p.remark(),p.endDate(),p.id(),p.number(),p.owner(),p.state(),p.stage());}
+    @Transactional(readOnly=true)
+    Page<HomePendingProduct> productionProducts(String keyword,LocalDate from,LocalDate to,int page,int size){
+        range(from,to);var projects=development.pending(keyword,from,to,page,size);
+        return Page.of(projects.items().stream().map(this::productionItem).toList(),page,size,projects.total());
+    }
 
     @Transactional(readOnly=true)
     Page<TodayShipment> todayPage(String keyword,TodayStatus status,LocalDate from,LocalDate to,int page,int size,String orderId){

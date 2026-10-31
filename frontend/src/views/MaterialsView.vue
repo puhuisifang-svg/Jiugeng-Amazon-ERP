@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
 import { confirmAction } from '@/state/uiConfirmation'
 import SuccessToast from "@/components/SuccessToast.vue"
 import MaterialCostPriceDialog from '@/components/MaterialCostPriceDialog.vue'
@@ -41,7 +42,7 @@ const writable = computed(() => session.canAccess(['materials.write']))
 const formal = computed(() => runtimeConfig.authMode === 'password')
 const mockMode = computed(() => runtimeConfig.authMode === 'mock')
 const inventoryReadable = computed(() => session.canAccess(['inventory.read']))
-const inventoryWritable = computed(() => inventoryReadable.value && (mockMode.value || session.canAccess(['inventory.write'])))
+const inventoryWritable = computed(() => inventoryReadable.value && (mockMode.value || session.canAccess(['inventory.inbound']) || session.canAccess(['inventory.outbound'])))
 const selectedIds = ref<string[]>([]); const deleteOpen = ref(false); const deleteError = ref('')
 const page = ref(1); const pageSize = ref(20); const inventoryError = ref('')
 const supplierAccess = computed(() => session.canAccess(['suppliers.read']))
@@ -101,7 +102,7 @@ function openInventory(item?: MaterialDetailDto) {
   inventoryError.value = ''
   resetForm()
   inventoryForm.materialId = item?.id ?? ''; inventoryForm.materialCode = item?.materialCode ?? ''
-  inventoryForm.type = 'INBOUND'; inventoryForm.quantity = 0; inventoryForm.reason = '日常库存操作'
+  inventoryForm.type = session.canAccess(['inventory.inbound']) ? 'INBOUND' : 'OUTBOUND'; inventoryForm.quantity = 0; inventoryForm.reason = '日常库存操作'
   showInventoryForm.value = true; success.value = ''; error.value = ''
 }
 function addSupplier(event: Event) { const select = event.target as HTMLSelectElement; const id = select.value; select.value = ''; if (id && !supplierLinks.value.some(item => item.supplierId === id)) supplierLinks.value.push({ supplierId: id, primary: supplierLinks.value.length === 0 }) }
@@ -248,13 +249,22 @@ onMounted(load)
         v-model="filters.keyword"
         placeholder="辅料编码、名称或规格"
       ></label>
-      <label>辅料类型<select v-model="filters.materialType"><option value="">全部类型</option><option
+      <label>辅料类型<select
+        v-model="filters.materialType"
+        v-single-select
+      ><option value="">全部类型</option><option
         v-for="item in materialTypes"
         :key="item"
         :value="item"
       >{{ item }}</option></select></label>
-      <label>主档状态<select v-model="filters.status"><option value="">全部状态</option><option value="ACTIVE">启用</option><option value="DISABLED">停用</option></select></label>
-      <label v-if="inventoryReadable">库存状态<select v-model="filters.stock"><option value="">全部库存</option><option value="NORMAL">正常</option><option value="LOW">低库存</option><option value="UNINITIALIZED">未初始化</option></select></label>
+      <label>主档状态<select
+        v-model="filters.status"
+        v-single-select
+      ><option value="">全部状态</option><option value="ACTIVE">启用</option><option value="DISABLED">停用</option></select></label>
+      <label v-if="inventoryReadable">库存状态<select
+        v-model="filters.stock"
+        v-single-select
+      ><option value="">全部库存</option><option value="NORMAL">正常</option><option value="LOW">低库存</option><option value="UNINITIALIZED">未初始化</option></select></label>
       <button
         class="secondary-button"
         type="button"
@@ -346,6 +356,7 @@ onMounted(load)
         ></label>
         <label>单位<select
           v-model="form.unit"
+          v-single-select
           required
         ><option
           v-for="unit in unitOptions"
@@ -412,6 +423,7 @@ onMounted(load)
             </RouterLink>；供应商档案独立保存，关联随辅料保存。
           </p>
           <select
+            v-single-select
             aria-label="添加辅料供应商"
             value=""
             @change="addSupplier($event)"
@@ -502,6 +514,7 @@ onMounted(load)
         ></label>
         <label v-else>辅料<select
           v-model="inventoryForm.materialId"
+          v-single-select
           required
         ><option
           value=""
@@ -511,7 +524,28 @@ onMounted(load)
           :key="item.id"
           :value="item.id"
         >{{ item.materialCode }} · {{ item.name }}</option></select></label>
-        <label>类型<select v-model="inventoryForm.type"><template v-if="mockMode"><option value="OPENING">期初入库</option><option value="INBOUND">入库</option><option value="OUTBOUND">出库</option><option value="ADJUSTMENT">库存调整</option></template><template v-else><option value="INBOUND">入库</option><option value="OUTBOUND">出库</option><option value="ADJUST_IN">盘盈调整</option><option value="ADJUST_OUT">盘亏调整</option></template></select></label>
+        <label>类型<select
+          v-model="inventoryForm.type"
+          v-single-select
+        ><template v-if="mockMode"><option value="OPENING">期初入库</option><option
+          v-if="mockMode || session.canAccess(['inventory.inbound'])"
+          value="INBOUND"
+        >入库</option><option
+          v-if="mockMode || session.canAccess(['inventory.outbound'])"
+          value="OUTBOUND"
+        >出库</option><option value="ADJUSTMENT">库存调整</option></template><template v-else><option
+          v-if="mockMode || session.canAccess(['inventory.inbound'])"
+          value="INBOUND"
+        >入库</option><option
+          v-if="mockMode || session.canAccess(['inventory.outbound'])"
+          value="OUTBOUND"
+        >出库</option><option
+          v-if="session.canAccess(['inventory.inbound'])"
+          value="ADJUST_IN"
+        >盘盈调整</option><option
+          v-if="session.canAccess(['inventory.outbound'])"
+          value="ADJUST_OUT"
+        >盘亏调整</option></template></select></label>
         <label>数量<input
           v-model.number="inventoryForm.quantity"
           required
@@ -657,7 +691,7 @@ onMounted(load)
                 </td>
                 <td v-if="inventoryReadable">
                   <div
-                    v-if="formal && inventoryWritable && balanceFor(item)?.materialId"
+                    v-if="formal && session.canAccess(['inventory.write']) && balanceFor(item)?.materialId"
                     class="safety-editor"
                   >
                     <input

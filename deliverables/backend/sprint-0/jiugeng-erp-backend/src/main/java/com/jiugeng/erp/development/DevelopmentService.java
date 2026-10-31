@@ -25,12 +25,14 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 @Profile("!mock")
 class DevelopmentService {
+    private final com.jiugeng.erp.launch.LaunchWorkspace work;
     private final JdbcClient jdbc;
     private final ObjectMapper mapper;
     private final AuditTrail audit;
     private final AuditHistoryLookup history;
     private final ProductLookup products;
-    DevelopmentService(JdbcClient jdbc,ObjectMapper mapper,AuditTrail audit,AuditHistoryLookup history,ProductLookup products) {
+    DevelopmentService(JdbcClient jdbc,ObjectMapper mapper,AuditTrail audit,AuditHistoryLookup history,ProductLookup products,com.jiugeng.erp.launch.LaunchWorkspace work) {
+        this.work=work;
         this.jdbc=jdbc; this.mapper=mapper; this.audit=audit; this.history=history; this.products=products;
     }
 
@@ -43,11 +45,15 @@ class DevelopmentService {
                 INSERT INTO product_development(id,candidate_id,number,name,developer,source_asin,source_title,
                     source_category,source_score,source_price,source_url,source_reason,fields_json)
                 VALUES(:id,:id,:number,:title,:owner,:asin,:title,:category,:score,:price,:url,:reason,'{}')
-                """).param("id",event.candidateId()).param("number","ND-"+event.asin()).param("title",event.title())
+                """).param("id",event.candidateId()).param("number",event.asin()==null?"ND-"+event.candidateId().substring(0,20):"ND-"+event.asin()).param("title",event.title())
                 .param("owner",event.owner()).param("asin",event.asin()).param("category",event.category())
                 .param("score",event.score()).param("price",event.referencePrice()).param("url",event.sourceUrl())
                 .param("reason",event.selectionReason()).update();
         jdbc.sql("UPDATE product_development SET selection_research_json=:research WHERE id=:id").param("research",event.researchSnapshot()).param("id",event.candidateId()).update();
+        if(event.researchSnapshot()!=null&&work.decode(event.researchSnapshot()).has("workspace")){
+            var seed=work.decode(event.researchSnapshot()).path("workspace");
+            work.create("DEVELOPMENT",event.candidateId(),"DRAFT",seed,seed);
+        }
         record(event.actor(),"DEVELOPMENT_CREATE",get(event.candidateId(),false),"候选通过，生成新品开发草稿");
     }
 
@@ -100,11 +106,13 @@ class DevelopmentService {
                 .param("name",fields.name()).param("developer",fields.developer()).param("fields",payload)
                 .param("request",request).param("actor",actor.userId()).param("hash",hash).update();
         jdbc.sql("UPDATE product_development_create_lock SET next_number=next_number+1 WHERE id=1").update();
-        View result=get(id,false); record(actor,"DEVELOPMENT_MANUAL_CREATE",result,"手动添加新品需求"); return result;
+        View result=get(id,false); record(actor,"DEVELOPMENT_MANUAL_CREATE",result,"手动添加新品需求");
+        var seed=(com.fasterxml.jackson.databind.node.ObjectNode)work.blank();seed.put("name",fields.name());seed.put("owner",fields.developer());seed.put("reason",fields.remark());seed.put("market","US");seed.put("specVersion","1");work.create("DEVELOPMENT",id,"DRAFT",seed,null);return result;
     }
 
     @Transactional
     View update(String id,Update input,AuthenticatedActor actor) {
+        work.legacyGuard("DEVELOPMENT",id);
         View before=get(id,true); version(input.version(),before);
         if(before.status()==Status.COMPLETED||before.status()==Status.VOID) throw conflict("已完成或已作废的需求不可修改");
         Fields fields=validate(input.fields());
@@ -119,6 +127,7 @@ class DevelopmentService {
 
     @Transactional
     View transition(String id,Transition input,AuthenticatedActor actor) {
+        work.legacyGuard("DEVELOPMENT",id);
         View before=get(id,true); version(input.version(),before);
         Status target=input.target();
         boolean allowed=(before.status()==Status.DRAFT&&(target==Status.IN_PROGRESS||target==Status.VOID))

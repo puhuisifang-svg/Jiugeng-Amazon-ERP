@@ -38,7 +38,7 @@ describe('InventoryLedgerView', () => {
     expect(wrapper.text()).toContain('MAT-1')
     expect(wrapper.text()).not.toContain('MAT-2')
 
-    await wrapper.get('button').trigger('click')
+    await wrapper.findAll('button').find(b => b.text() === '重置')!.trigger('click')
     await wrapper.get('select').setValue('OUTBOUND')
     expect(wrapper.text()).not.toContain('MAT-1')
     expect(wrapper.text()).toContain('MAT-2')

@@ -4,11 +4,23 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { session } from '@/state/session'
 import { capabilitiesForRole } from '@/auth/capabilities'
 
-import { appRoutes, refreshAccessIfStale } from './index'
+import { appRoutes, refreshAccessIfStale, defaultAccessiblePath } from './index'
 
 afterEach(() => vi.restoreAllMocks())
 
 describe('application routes', () => {
+  it('lands a custom monitoring-only role on its allowed page without granting dashboard access', () => {
+    vi.spyOn(session, 'canAccess').mockImplementation(caps => !caps?.length || caps.every(c => ['monitoring.read','audit.read.self'].includes(c)))
+    expect(defaultAccessiblePath()).toBe('/product-monitoring')
+  })
+  it('keeps existing dashboard users on home', () => {
+    vi.spyOn(session, 'canAccess').mockReturnValue(true)
+    expect(defaultAccessiblePath()).toBe('/home')
+  })
+  it('links product monitoring details back to the selection monitoring list',()=>{
+    const router=createRouter({history:createMemoryHistory(),routes:appRoutes})
+    expect(router.resolve('/product-monitoring/synthetic').meta.breadcrumbs).toEqual([{title:'选品'},{title:'产品监控',to:'/product-monitoring'},{title:'监控详情'}])
+  })
   it('keeps product import list and detail in product navigation without changing materials imports', () => {
     const router = createRouter({ history: createMemoryHistory(), routes: appRoutes })
     for (const path of ['/products/imports', '/products/imports/batch-1']) {
@@ -21,12 +33,12 @@ describe('application routes', () => {
     expect(router.resolve('/imports').meta.parentPath).toBe('/materials')
     expect(router.resolve('/imports/batch-1').meta.parentPath).toBe('/materials')
   })
-  it('places candidate-linked development under product management using existing product access', () => {
+  it('places candidate-linked development under product management using independent development access', () => {
     const routes = appRoutes.find(route => route.path === '/')?.children?.filter(route => route.path.startsWith('product-development')) ?? []
     expect(routes).toHaveLength(3)
     expect(routes.every(route => route.meta?.group === '产品管理')).toBe(true)
-    expect(routes.filter(route => route.path !== 'product-development/new').every(route => route.meta?.capabilities?.includes('products.read'))).toBe(true)
-    expect(routes.find(route => route.path === 'product-development/new')?.meta?.capabilities).toEqual(['products.write'])
+    expect(routes.filter(route => route.path !== 'product-development/new').every(route => route.meta?.capabilities?.includes('development.read'))).toBe(true)
+    expect(routes.find(route => route.path === 'product-development/new')?.meta?.capabilities).toEqual(['development.write'])
     expect(routes.filter(route => !route.meta?.hidden).map(route => route.meta?.title)).toEqual(['新品开发'])
   })
   it('redirects the root shell to the home page', async () => {
@@ -42,7 +54,7 @@ describe('application routes', () => {
     const shell = appRoutes.find((route) => route.path === '/')
     const groups = new Set(shell?.children?.map((route) => route.meta?.group).filter(Boolean))
 
-    expect(groups).toEqual(new Set(['工作台', '工作台维护', '产品管理', '发货管理', '客户管理', '订单管理', '报关管理', '选品管理', '系统管理']))
+    expect(groups).toEqual(new Set(['工厂管理', '财务管理', '工作台', '工作台维护', '产品管理', '发货管理', '客户管理', '订单管理', '报关管理', '选品管理', '系统管理']))
   })
 
   it('merges inventory into material management while preserving the legacy route guard', () => {

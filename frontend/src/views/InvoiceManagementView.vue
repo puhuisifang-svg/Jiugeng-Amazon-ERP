@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
 import ListPagination from '@/components/ListPagination.vue'
 const listSize = ref(20)
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
@@ -112,7 +113,10 @@ onMounted(load)
         maxlength="128"
         placeholder="搜索客户、抬头、品名或规格"
       ></label>
-      <label>开票状态<select v-model="invoiced"><option value="">全部</option><option value="false">未开票</option><option value="true">已开票</option></select></label>
+      <label>开票状态<select
+        v-model="invoiced"
+        v-single-select
+      ><option value="">全部</option><option value="false">未开票</option><option value="true">已开票</option></select></label>
       <button
         type="submit"
         :disabled="loading"
@@ -255,6 +259,7 @@ onMounted(load)
           >选择发票抬头 *
             <select
               v-model="selectedTitle"
+              v-single-select
               required
               :disabled="!invoiceTitles.length"
               @change="chooseTitle"
@@ -320,7 +325,10 @@ onMounted(load)
           <p class="form-wide invoice-help">
             金额按人民币四舍五入到分。税率默认 1%，请按本次业务确认；供货价未约定含税口径，因此不自动作为不含税单价。
           </p>
-          <label>是否已开票<select v-model="form.invoiced"><option :value="false">未开票</option><option :value="true">已开票</option></select></label>
+          <label>是否已开票<select
+            v-model="form.invoiced"
+            v-single-select
+          ><option :value="false">未开票</option><option :value="true">已开票</option></select></label>
         </fieldset>
         <p
           v-if="formError"

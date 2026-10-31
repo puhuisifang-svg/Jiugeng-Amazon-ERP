@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
 import './cartonLabels.css'
 import UnsavedChangesDialog from './UnsavedChangesDialog.vue'
 import SuccessToast from './SuccessToast.vue'
@@ -104,6 +105,7 @@ onBeforeUnmount(clearPreview)
           ></label>
           <label>导出页数<select
             v-model="form.config.singlePage"
+            v-single-select
             aria-label="导出页数"
           >
             <option :value="false">按箱数导出（每箱一页）</option>

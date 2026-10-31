@@ -15,7 +15,7 @@ class CollectionController {
     CollectionController(CollectionService service,JdbcClient jdbc,TransactionTemplate tx){this.service=service;this.jdbc=jdbc;this.tx=tx;}
     record Configuration(String kind,String targetId,String provider,boolean enabled,Long version){}
     @GetMapping("/status") @PreAuthorize("isAuthenticated()") Map<String,Object> status(){return Map.of("sources",service.sources(),"state",service.sources().stream().anyMatch(CollectionService.Source::approved)?"CONFIGURED":"WAITING_SOURCE","mode","US · America/Los_Angeles · 每日调度");}
-    @GetMapping("/targets") @PreAuthorize("isAuthenticated()") Object targets(@RequestParam String kind){return service.targetStatus(kind);}
+    @GetMapping("/targets") @PreAuthorize("(#kind == 'PRODUCT' and hasAuthority('monitoring.read')) or (#kind == 'STORE' and hasAuthority('watch.read')) or (#kind == 'CANDIDATE' and hasAuthority('selection.read'))") Object targets(@RequestParam String kind){return service.targetStatus(kind);}
     @GetMapping("/schedules") @PreAuthorize("hasAuthority('system.users.manage')") Object schedules(){return service.schedules();}
     @GetMapping("/jobs") @PreAuthorize("hasAuthority('system.users.manage')") Object jobs(){return service.jobs();}
     @PutMapping("/schedules") @PreAuthorize("hasAuthority('system.users.manage')") Object configure(@RequestBody Configuration c){return service.configure(c.kind(),c.targetId(),c.provider(),c.enabled(),c.version());}

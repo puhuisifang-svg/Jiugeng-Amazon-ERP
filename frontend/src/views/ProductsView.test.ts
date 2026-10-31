@@ -221,6 +221,8 @@ describe('ProductsView', () => {
     await wrapper.get('.product-management-filters input[type="search"]').setValue('missing')
     await flushPromises()
     expect(wrapper.text()).toContain('暂无匹配的产品')
+    expect(wrapper.find('[aria-label="列表分页"]').exists()).toBe(true)
+    expect(wrapper.get('[aria-label="下一页"]').attributes('disabled')).toBeDefined()
   })
 
   it('enables Add SKU only after selection and removes duplicate toolbar actions', async () => {
@@ -301,7 +303,7 @@ describe('ProductsView', () => {
     await selects[1]!.setValue('DRAFT')
     await selects[2]!.setValue('UNINITIALIZED')
     expect(wrapper.get('.product-parent-row').text()).toContain('P-2')
-    await wrapper.get('.product-management-filters button').trigger('click')
+    await wrapper.get('.product-management-filters .filter-reset-button').trigger('click')
     await flushPromises()
     expect((input.element as HTMLInputElement).value).toBe('')
     expect((selects[0]!.element as HTMLSelectElement).value).toBe('')

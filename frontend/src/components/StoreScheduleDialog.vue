@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
 import { nextTick, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import StoreTimingForm from './StoreTimingForm.vue'
@@ -33,6 +34,7 @@ onBeforeRouteLeave(()=>{if(props.open&&form.value?.busy)return false;if(props.op
     </header>
     <div class="mw-dialog-body">
       <label>选择店铺<select
+        v-single-select
         :value="selected"
         :disabled="form?.busy"
         @change="change"

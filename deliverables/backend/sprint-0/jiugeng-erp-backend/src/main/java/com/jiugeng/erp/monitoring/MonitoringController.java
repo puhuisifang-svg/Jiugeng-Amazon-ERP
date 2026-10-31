@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @Profile("!mock")
 @RequestMapping("/api/v1/product-monitoring")
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("hasAuthority('monitoring.read')")
 class MonitoringController {
     private final MonitoringService service; private final com.jiugeng.erp.collection.CollectionService collection;
     MonitoringController(MonitoringService service,com.jiugeng.erp.collection.CollectionService collection) { this.service = service;this.collection=collection; }
@@ -26,16 +26,16 @@ class MonitoringController {
                       @AuthenticationPrincipal AuthenticatedActor actor) {
         return service.list(q, searchBy, status, owner, tag, followed, page, size, actor.userId());
     }
-    @PostMapping List<RowResult> create(@RequestBody CreateInput input, @AuthenticationPrincipal AuthenticatedActor actor) { var result=service.create(input, actor);result.stream().filter(r->r.id()!=null&&r.status().equals("CREATED")).forEach(r->collection.enqueue("PRODUCT",r.id()));return result; }
-    @PostMapping("/{id}/collect") void collect(@PathVariable String id){collection.enqueue("PRODUCT",id);}
-    @PostMapping("/batch") List<RowResult> batch(@RequestBody BatchInput input, @AuthenticationPrincipal AuthenticatedActor actor) { var result=service.batch(input, actor);if("ENABLE".equals(input.action()))result.stream().filter(r->r.status().equals("UPDATED")).forEach(r->collection.enqueue("PRODUCT",r.id()));return result; }
+    @PostMapping @PreAuthorize("hasAuthority('monitoring.write')") List<RowResult> create(@RequestBody CreateInput input, @AuthenticationPrincipal AuthenticatedActor actor) { var result=service.create(input, actor);result.stream().filter(r->r.id()!=null&&r.status().equals("CREATED")).forEach(r->collection.enqueue("PRODUCT",r.id()));return result; }
+    @PostMapping("/{id}/collect") @PreAuthorize("hasAuthority('monitoring.collect')") void collect(@PathVariable String id){collection.enqueue("PRODUCT",id);}
+    @PostMapping("/batch") @PreAuthorize("(#input.action() == 'REMOVE' and hasAuthority('monitoring.remove')) or (#input.action() != 'REMOVE' and hasAuthority('monitoring.write'))") List<RowResult> batch(@RequestBody BatchInput input, @AuthenticationPrincipal AuthenticatedActor actor) { var result=service.batch(input, actor);if("ENABLE".equals(input.action()))result.stream().filter(r->r.status().equals("UPDATED")).forEach(r->collection.enqueue("PRODUCT",r.id()));return result; }
     @GetMapping("/preferences") Preferences preferences(@AuthenticationPrincipal AuthenticatedActor actor) { return service.preferences(actor.userId()); }
     @PutMapping("/preferences") Preferences preferences(@RequestBody ColumnInput input, @AuthenticationPrincipal AuthenticatedActor actor) { return service.columns(actor.userId(), input.columns()); }
-    @PutMapping("/{id}") Target edit(@PathVariable String id,@RequestBody EditInput input){return service.edit(id,input);}
+    @PutMapping("/{id}") @PreAuthorize("hasAuthority('monitoring.write')") Target edit(@PathVariable String id,@RequestBody EditInput input){return service.edit(id,input);}
     @GetMapping("/{id}") Detail detail(@PathVariable String id, @AuthenticationPrincipal AuthenticatedActor actor) { return service.detail(id, actor.userId()); }
     @PutMapping("/{id}/follow") Preferences follow(@PathVariable String id, @RequestBody FollowInput input, @AuthenticationPrincipal AuthenticatedActor actor) { return service.follow(id, actor.userId(), input.followed()); }
     @GetMapping("/{id}/snapshots") Page<Snapshot> snapshots(@PathVariable String id, @RequestParam(defaultValue="0") int page, @RequestParam(defaultValue="20") int size) { return service.history(id, page, size); }
-    @PostMapping("/{id}/snapshots") Snapshot snapshot(@PathVariable String id, @RequestBody SnapshotInput input) { return service.snapshot(id, input); }
+    @PostMapping("/{id}/snapshots") @PreAuthorize("hasAuthority('monitoring.write')") Snapshot snapshot(@PathVariable String id, @RequestBody SnapshotInput input) { return service.snapshot(id, input); }
     record FollowInput(boolean followed) {}
     record ColumnInput(List<String> columns) {}
 

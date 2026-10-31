@@ -16,7 +16,7 @@ beforeEach(() => { vi.clearAllMocks(); vi.mocked(customersApi.list).mockResolved
 it('retains input on backdrop, confirms discard, defaults unique title and emits decimal lines', async () => {
   const w = mount(CustomerOrderEditor, { props: { busy: false, error: '' } }); await flushPromises()
   const labels = w.findAll('label'), byLabel = (name: string) => labels.find(l => l.text().startsWith(name))!
-  await byLabel('添加商品').get('select').setValue('cp1'); await byLabel('添加商品').get('button').trigger('click')
+  await byLabel('添加商品').get('select').setValue('cp1'); await byLabel('添加商品').findAll('button').find(b => b.text() === '添加明细')!.trigger('click')
   await w.get('[aria-label="数量"]').setValue('1.25'); await w.get('[aria-label="不含税单价"]').setValue('10')
   await byLabel('是否需要开票').get('select').setValue('true')
   await w.get('[aria-label="客户订单表单"]').trigger('click'); expect(w.emitted('close')).toBeUndefined()

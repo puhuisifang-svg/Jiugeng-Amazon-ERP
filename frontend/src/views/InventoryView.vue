@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, ref } from 'vue'
@@ -98,6 +99,7 @@ onMounted(load)
       ></label>
       <label v-else>辅料<select
         v-model="materialId"
+        v-single-select
         required
       ><option
         value=""
@@ -107,7 +109,10 @@ onMounted(load)
         :key="item.id"
         :value="item.id"
       >{{ item.materialCode }} · {{ item.name }}</option></select></label>
-      <label>类型<select v-model="type"><template v-if="mockMode"><option>OPENING</option><option>INBOUND</option><option>OUTBOUND</option><option>ADJUSTMENT</option></template><template v-else><option>INBOUND</option><option>OUTBOUND</option><option>ADJUST_IN</option><option>ADJUST_OUT</option></template></select></label>
+      <label>类型<select
+        v-model="type"
+        v-single-select
+      ><template v-if="mockMode"><option>OPENING</option><option>INBOUND</option><option>OUTBOUND</option><option>ADJUSTMENT</option></template><template v-else><option>INBOUND</option><option>OUTBOUND</option><option>ADJUST_IN</option><option>ADJUST_OUT</option></template></select></label>
       <label>数量<input
         v-model.number="quantity"
         required

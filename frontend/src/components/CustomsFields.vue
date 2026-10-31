@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
 import type { CustomsProfile } from '@/api/customs'
 const model = defineModel<CustomsProfile>({ required: true })
 defineProps<{ disabled?: boolean }>()
@@ -71,7 +72,10 @@ const codes = [['chinaCode', '中国商品编码（10位）', '[0-9]{10}', 10], 
       v-model="model.remark"
       maxlength="1000"
     ></label>
-    <label>资料状态<select v-model="model.state"><option value="DRAFT">草稿 / 待核对</option><option value="REVIEWED">资料已核对</option></select></label>
+    <label>资料状态<select
+      v-model="model.state"
+      v-single-select
+    ><option value="DRAFT">草稿 / 待核对</option><option value="REVIEWED">资料已核对</option></select></label>
     <p class="form-wide customs-help">
       “资料已核对”是人工维护标记，不代表已申报、海关审核通过或目的地合规认证。目的地编码仅做格式校验，不校验归类正确性；该页不代替逐票申报、商业发票或装箱单。
     </p>

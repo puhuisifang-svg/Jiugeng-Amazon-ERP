@@ -31,7 +31,7 @@ class CostController {
     @GetMapping("/skus/{id}/history") @PreAuthorize("hasAuthority('costs.read')") java.util.List<AuditHistoryLookup.HistoryEvent> history(@PathVariable String id){return audit.find("PRODUCT_COST",id);}
     @GetMapping("/versions/{id}") @PreAuthorize("hasAuthority('costs.read')") Version version(@PathVariable String id){return service.version(id);}
     @PostMapping("/versions/{id}/publish") @PreAuthorize("hasAuthority('costs.publish') and hasAuthority('products.write') and hasAuthority('materials.write')") Version publish(@PathVariable String id,@Valid @RequestBody Publish input,@AuthenticationPrincipal AuthenticatedActor actor){return service.publish(id,input,actor);}
-    @DeleteMapping("/versions/{id}") @PreAuthorize("hasAuthority('costs.write')") void delete(@PathVariable String id,@RequestParam @Min(0) long revision,@AuthenticationPrincipal AuthenticatedActor actor){service.delete(id,revision,actor);}
+    @DeleteMapping("/versions/{id}") @PreAuthorize("hasAuthority('costs.delete')") void delete(@PathVariable String id,@RequestParam @Min(0) long revision,@AuthenticationPrincipal AuthenticatedActor actor){service.delete(id,revision,actor);}
     @GetMapping("/versions/{id}/export") @PreAuthorize("hasAuthority('costs.read') and hasAuthority('costs.export')")
     ResponseEntity<byte[]> export(@PathVariable String id,@AuthenticationPrincipal AuthenticatedActor actor){
         var v=service.version(id);var s=v.snapshot();var out=new StringBuilder("\uFEFF");

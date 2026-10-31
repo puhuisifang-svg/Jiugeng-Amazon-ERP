@@ -26,7 +26,7 @@ describe('selection research', () => {
     expect(researchApi.save).toHaveBeenCalledWith('candidate', expect.objectContaining({ version: 7, customer: '仍须保留的研究' }))
     expect(wrapper.get('textarea').element.value).toBe('仍须保留的研究')
     expect(wrapper.text()).toContain('版本冲突')
-    await wrapper.get('button[type="button"]').trigger('click')
+    await wrapper.get('button.secondary-button').trigger('click')
     expect(wrapper.findComponent({ name: 'UnsavedChangesDialog' }).exists()).toBe(true)
     wrapper.unmount()
   })

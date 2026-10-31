@@ -4,7 +4,7 @@ import {createMemoryHistory,createRouter} from 'vue-router'
 import {apiRequest} from '@/api/client'
 import ProductMonitoringView from './ProductMonitoringView.vue'
 vi.mock('@/config/runtime',()=>({runtimeConfig:{authMode:'password'}}))
-vi.mock('@/state/session',()=>({session:{user:{value:{id:'tester'}}}}))
+vi.mock('@/state/session',()=>({session:{canAccess:()=>true,user:{value:{id:'tester'}}}}))
 vi.mock('@/api/client',()=>({apiRequest:vi.fn()}))
 vi.mock('@/api/monitoring',()=>({monitoringApi:{list:vi.fn(async()=>({items:[{id:'one',asin:'B0TEST0001',enabled:true,fields:{availability:'AVAILABLE'},lastStatus:'PENDING',tags:[],remark:''}],total:1,activeCount:1})),preferences:vi.fn(async()=>({columns:[]}))}}))
 it('shows selected update progress separately from availability and polls through completion',async()=>{

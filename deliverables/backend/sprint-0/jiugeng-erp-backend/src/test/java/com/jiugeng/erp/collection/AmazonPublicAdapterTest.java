@@ -5,6 +5,36 @@ import org.junit.jupiter.api.Test;
 import java.net.URI;
 import static org.assertj.core.api.Assertions.*;
 class AmazonPublicAdapterTest {
+ @Test void transientPageFailureRetriesOnlyThatPageAndKeepsEarlierProducts(){
+  var calls=new java.util.ArrayList<Integer>();var delays=new java.util.ArrayList<Long>();
+  var result=adapter.store("TESTSELLER",uri->{
+   int p=AmazonPublicAdapter.pageNumber(uri);calls.add(p);
+   if(p==2&&java.util.Collections.frequency(calls,2)<3)throw new CollectionAdapter.CollectionFailure("Synthetic timeout",true,0);
+   return Jsoup.parse(searchPage(p==1?"B0TEST0001":"B0TEST0002",p==1?"/s?me=TESTSELLER&page=2":null));
+  },delays::add);
+  assertThat(calls).containsExactly(1,2,2,2);assertThat(delays).containsExactly(2000L,5000L);
+  assertThat(result.fields().path("itemCount").asInt()).isEqualTo(2);assertThat(result.pagesComplete()).isTrue();
+ }
+ @Test void pageRetryExhaustionFailsWholeSnapshotWithPageContext(){
+  var calls=new java.util.ArrayList<Integer>();
+  assertThatThrownBy(()->adapter.store("TESTSELLER",uri->{
+   int p=AmazonPublicAdapter.pageNumber(uri);calls.add(p);
+   if(p==2)throw new CollectionAdapter.CollectionFailure("Synthetic timeout",true,0);
+   return Jsoup.parse(searchPage("B0TEST0001","/s?me=TESTSELLER&page=2"));
+  },ms->{})).isInstanceOfSatisfying(CollectionAdapter.CollectionFailure.class,e->{
+   assertThat(e.retryable()).isTrue();assertThat(e.getMessage()).contains("第2页","尝试3次");
+  });assertThat(calls).containsExactly(1,2,2,2);
+ }
+ @Test void pageRetriesDoNotBypassPermanentFailuresRateLimitsOrDeadline(){
+  for(var failure:java.util.List.of(new CollectionAdapter.CollectionFailure("Synthetic captcha",false,0),new CollectionAdapter.CollectionFailure("Synthetic throttle",true,300))){
+   var calls=new java.util.concurrent.atomic.AtomicInteger();
+   assertThatThrownBy(()->adapter.store("TESTSELLER",uri->{calls.incrementAndGet();throw failure;},ms->{throw new AssertionError("Must not sleep");}))
+    .isInstanceOfSatisfying(CollectionAdapter.CollectionFailure.class,e->{assertThat(e.retryable()).isEqualTo(failure.retryable());assertThat(e.retryAfterSeconds()).isEqualTo(failure.retryAfterSeconds());});
+   assertThat(calls.get()).isEqualTo(1);
+  }
+  assertThatThrownBy(()->AmazonPublicAdapter.storePage(URI.create("https://www.amazon.com/s?me=TESTSELLER&page=8"),uri->{throw new AssertionError("Deadline must stop network reads");},ms->{},java.time.Instant.now().minusSeconds(1801)))
+   .hasMessageContaining("采集超时（第8页）");
+ }
  private final AmazonPublicAdapter adapter=new AmazonPublicAdapter(new ObjectMapper(),false);
  private static final String PAGE="""
  <html><head><title>Example product</title></head><body>

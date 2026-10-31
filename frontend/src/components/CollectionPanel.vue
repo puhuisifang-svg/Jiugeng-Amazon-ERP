@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
 import { computed, onMounted, ref } from 'vue'
 import { apiRequest } from '@/api/client'
 import { session } from '@/state/session'
@@ -52,6 +53,7 @@ onMounted(load)
     >
       <label>监控对象<select
         v-model="selected"
+        v-single-select
         required
       ><option value="">请选择</option><option
         v-for="target in targets"
@@ -60,6 +62,7 @@ onMounted(load)
       >{{ target.label }}</option></select></label>
       <label>获批来源<select
         v-model="provider"
+        v-single-select
         required
       ><option value="">请选择</option><option
         v-for="s in available"

@@ -9,7 +9,7 @@ final class IamTypes {
     }
 
     enum Role {
-        ADMIN, PRODUCT_MATERIAL, SELECTION
+        ADMIN, PRODUCT_MATERIAL, SELECTION, CUSTOM
     }
 
     enum Status {
@@ -22,7 +22,9 @@ final class IamTypes {
 
     static Set<String> capabilities(Role role) {
         return switch (role) {
+            case CUSTOM -> Set.of();
             case ADMIN -> Set.of(
+                    "finance.read", "finance.write",
                     "costs.read", "costs.write", "costs.publish", "costs.export",
                     "system.users.manage", "products.read", "products.write", "materials.read", "materials.write",
                     "inventory.read", "inventory.write", "selection.read", "selection.write", "watch.read",
@@ -45,15 +47,15 @@ final class IamTypes {
     }
 
     record User(String id, String loginName, String displayName, String email, String phone, Role role, Status status,
-                boolean mustChangePassword, int failedLoginCount, java.time.Instant lockedAt, String passwordHash) {
+                boolean mustChangePassword, int failedLoginCount, java.time.Instant lockedAt, String passwordHash, List<RoleRepository.RoleRef> roles, Set<String> effectivePermissions, long authorizationVersion, java.time.Instant createdAt, java.time.Instant lastLoginAt) {
         UserView view() {
             return new UserView(id, loginName, displayName, email, phone, role, status, mustChangePassword, lockedAt,
-                    capabilities(role).stream().sorted().toList());
+                    effectivePermissions.stream().sorted().toList(), roles, authorizationVersion, createdAt, lastLoginAt);
         }
     }
 
     record UserView(String id, String loginName, String displayName, String email, String phone, Role role, Status status,
-                    boolean mustChangePassword, java.time.Instant lockedAt, List<String> capabilities) {
+                    boolean mustChangePassword, java.time.Instant lockedAt, List<String> capabilities, List<RoleRepository.RoleRef> roles, long authorizationVersion, java.time.Instant createdAt, java.time.Instant lastLoginAt) {
     }
 
     record PasswordResetChallenge(String id, String userId, RecoveryChannel channel, String destination,

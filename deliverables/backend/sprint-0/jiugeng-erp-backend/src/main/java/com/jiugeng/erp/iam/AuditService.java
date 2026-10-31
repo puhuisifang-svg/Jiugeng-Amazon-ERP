@@ -68,6 +68,11 @@ class AuditService implements AuditTrail, AuditHistoryLookup {
     }
 
     @Transactional(readOnly = true)
+    AuditTypes.FilterOptions options(String userId) {
+        return repository.options(userId);
+    }
+
+    @Transactional(readOnly = true)
     AuditPage find(AuditFilter filter) {
         if (filter.from() != null && filter.to() != null && filter.from().isAfter(filter.to())) {
             throw new IamException(400, "AUDIT_TIME_RANGE_INVALID", "开始时间不能晚于结束时间");
@@ -87,6 +92,14 @@ class AuditService implements AuditTrail, AuditHistoryLookup {
                 event.afterValue(), event.detail(), event.occurredAt())).toList();
     }
 
+    @Override @Transactional(readOnly=true)
+    public HistoryPage page(String resourceType,String resourceId,int page,int size) {
+        if(page<1 || size<1 || size>100) throw new IamException(400,"PAGE_INVALID","分页参数无效");
+        var rows=repository.findResourcePage(resourceType,resourceId,page,size).stream().map(event -> new HistoryEvent(
+            event.id(),event.action(),event.actorLoginName(),event.actorDisplayName(),event.beforeValue(),event.afterValue(),event.detail(),event.occurredAt())).toList();
+        return new HistoryPage(rows,repository.countResource(resourceType,resourceId),page,size);
+    }
+
     private JsonNode tree(Object value) {
         return value == null ? null : objectMapper.valueToTree(value);
     }
@@ -98,6 +111,8 @@ class AuditService implements AuditTrail, AuditHistoryLookup {
         snapshot.put("loginName", user.loginName());
         snapshot.put("displayName", user.displayName());
         snapshot.put("role", user.role());
+        snapshot.put("roles", user.roles());
+        snapshot.put("authorizationVersion", user.authorizationVersion());
         snapshot.put("status", user.status());
         snapshot.put("mustChangePassword", user.mustChangePassword());
         snapshot.put("lockedAt", user.lockedAt());

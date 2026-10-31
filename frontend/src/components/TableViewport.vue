@@ -4,6 +4,9 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 const props=withDefaults(defineProps<{reserveBottom?:number}>(),{reserveBottom:0})
 const viewport = ref<HTMLElement>()
 const height = ref('55vh')
+const keyboardFocus = ref(false)
+function pointerInput(){ keyboardFocus.value=false }
+function keyboardInput(event:KeyboardEvent){ if (!event.metaKey && !event.ctrlKey && !event.altKey) keyboardFocus.value=true }
 let observer: ResizeObserver | undefined
 let frame = 0
 
@@ -27,6 +30,8 @@ function schedule() {
 }
 onMounted(() => {
   measure()
+  window.addEventListener('pointerdown',pointerInput,true)
+  window.addEventListener('keydown',keyboardInput,true)
   window.addEventListener('resize', schedule)
   if (typeof ResizeObserver !== 'undefined') {
     observer = new ResizeObserver(schedule)
@@ -37,6 +42,8 @@ onMounted(() => {
   }
 })
 onBeforeUnmount(() => {
+  window.removeEventListener('pointerdown',pointerInput,true)
+  window.removeEventListener('keydown',keyboardInput,true)
   observer?.disconnect()
   cancelAnimationFrame(frame)
   window.removeEventListener('resize', schedule)
@@ -47,6 +54,7 @@ onBeforeUnmount(() => {
   <div
     ref="viewport"
     class="table-viewport"
+    :class="{'is-keyboard-focus':keyboardFocus}"
     :style="{ maxHeight: height }"
     tabindex="0"
     role="region"

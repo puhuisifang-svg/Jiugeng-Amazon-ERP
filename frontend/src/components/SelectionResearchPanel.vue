@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
+import DatePicker from '@/components/DatePicker.vue'
 import { computed, nextTick, onMounted, onBeforeUnmount, ref } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { researchApi, type Research, type ResearchView, type EstimateInput } from '@/api/selectionResearch'
@@ -125,12 +127,18 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', leave))
               v-model="research.supply"
               maxlength="2000"
             /></label>
-            <label>风险状态<select v-model="research.riskStatus"><option value="PENDING">待核查</option><option value="ACCEPTABLE">可接受</option><option value="BLOCKED">阻断</option></select></label>
+            <label>风险状态<select
+              v-model="research.riskStatus"
+              v-single-select
+            ><option value="PENDING">待核查</option><option value="ACCEPTABLE">可接受</option><option value="BLOCKED">阻断</option></select></label>
             <label>风险核查依据<textarea
               v-model="research.riskReason"
               maxlength="2000"
             /></label>
-            <label>本次评审试算<select v-model="research.estimateId"><option value="">未指定</option><option
+            <label>本次评审试算<select
+              v-model="research.estimateId"
+              v-single-select
+            ><option value="">未指定</option><option
               v-for="item in data?.estimates"
               :key="item.id"
               :value="item.id"
@@ -138,7 +146,10 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', leave))
             <label
               v-for="(criterion, index) in research.criteria"
               :key="index"
-            >{{ names[index] }}<select v-model="criterion.score"><option :value="null">未评分</option><option
+            >{{ names[index] }}<select
+              v-model="criterion.score"
+              v-single-select
+            ><option :value="null">未评分</option><option
               v-for="n in [0,1,2,3,4,5]"
               :key="n"
               :value="n"
@@ -178,7 +189,10 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', leave))
                 type="number"
                 min="0"
                 step="0.000001"
-              ></label><label>币种<select v-model="cost.currency"><option>USD</option><option>CNY</option></select></label><label>1单位费用币种折合USD<input
+              ></label><label>币种<select
+                v-model="cost.currency"
+                v-single-select
+              ><option>USD</option><option>CNY</option></select></label><label>1单位费用币种折合USD<input
                 v-model.number="cost.exchangeRate"
                 required
                 type="number"
@@ -211,11 +225,11 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', leave))
               min="0"
               max="1"
               step="0.000001"
-            ></label><label>汇率日期<input
+            ></label><label>汇率日期<DatePicker
               v-model="estimate.rateDate"
               required
               type="date"
-            ></label><label>费率与试算依据<textarea
+            /></label><label>费率与试算依据<textarea
               v-model="estimate.basis"
               required
               maxlength="2000"

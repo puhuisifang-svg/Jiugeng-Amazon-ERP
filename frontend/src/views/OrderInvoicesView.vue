@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
+import DatePicker from '@/components/DatePicker.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { ordersApi, type OrderInvoice } from '@/api/orders'
@@ -11,7 +13,7 @@ import OrderDocuments from '@/components/OrderDocuments.vue'
 import ProductName from '@/components/ProductName.vue'
 import UnsavedChangesDialog from '@/components/UnsavedChangesDialog.vue'
 const route = useRoute(), router = useRouter(), legacy = ref(false)
-const writable = computed(() => session.canAccess(['customers.write']))
+const writable = computed(() => session.canAccess(['invoices.write']))
 const rows = ref<OrderInvoice[]>([]), selected = ref<OrderInvoice>(), page = ref(1), size = ref(20), total = ref(0), query = ref('')
 const busy = ref(false), saving = ref(false), error = ref(''), success = ref(''), discard = ref(false), initial = ref('')
 const form = reactive({ invoiced: false, invoiceNumber: '', invoiceDate: '', refreshFromOrder: false })
@@ -155,15 +157,18 @@ onMounted(async () => { await load(); await openFromRoute() })
           class="operation-form"
           :disabled="saving || !writable || selected.invoiced"
         >
-          <label>开票状态<select v-model="form.invoiced"><option :value="false">待开票</option><option :value="true">已开票</option></select></label><label>发票号码<input
+          <label>开票状态<select
+            v-model="form.invoiced"
+            v-single-select
+          ><option :value="false">待开票</option><option :value="true">已开票</option></select></label><label>发票号码<input
             v-model="form.invoiceNumber"
             :required="form.invoiced"
             maxlength="100"
-          ></label><label>开票日期<input
+          ></label><label>开票日期<DatePicker
             v-model="form.invoiceDate"
             type="date"
             :required="form.invoiced"
-          ></label><label><input
+          /></label><label><input
             v-model="form.refreshFromOrder"
             type="checkbox"
           >从订单更新未开票内容</label>

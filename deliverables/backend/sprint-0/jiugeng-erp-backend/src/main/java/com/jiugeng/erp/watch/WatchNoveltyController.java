@@ -22,7 +22,7 @@ class WatchNoveltyController {
         var ids=jdbc.sql("SELECT e.id FROM watch_new_product_event e JOIN watch_run r ON r.id=e.detected_run_id JOIN watch_store s ON s.id=e.store_id WHERE r.adapter_name='amazon-public-us' AND s.removed=FALSE AND s.status='ACTIVE' AND NOT EXISTS(SELECT 1 FROM collection_schedule c WHERE c.kind='WATCH_NOVELTY' AND c.target_id=e.id) ORDER BY e.first_detected_at DESC LIMIT 20").query(String.class).list();
         for(String id:ids){try{collection.enqueue("WATCH_NOVELTY",id);}catch(org.springframework.web.server.ResponseStatusException ignored){/* A concurrent pause/removal fences the queue. */}}
     }
-    @PostMapping("/{id}/novelty/collect") @PreAuthorize("hasAuthority('watch.write')")
+    @PostMapping("/{id}/novelty/collect") @PreAuthorize("hasAuthority('watch.collect')")
     void retry(@PathVariable String id){collection.enqueue("WATCH_NOVELTY",id);}
     record Mark(Long version,String action){}
     @PutMapping("/{id}/novelty") @PreAuthorize("hasAuthority('watch.write')") @Transactional

@@ -1,25 +1,41 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
+import AuditEventDialog from '@/components/AuditEventDialog.vue'
+import DatePicker from '@/components/DatePicker.vue'
+import FilterMultiSelect from '@/components/FilterMultiSelect.vue'
+import { actionLabel, categoryLabel, resourceLabel } from '@/utils/auditLabels'
 import ListPagination from '@/components/ListPagination.vue'
 import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, ref } from 'vue'
 
-import { auditApi, type AuditEvent, type AuditOutcome, type AuditPage } from '@/api/audit'
+import { auditApi, type AuditEvent, type AuditOutcome, type AuditPage, type AuditOptions } from '@/api/audit'
 import { ApiError } from '@/api/client'
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
 
 const emptyPage = (): AuditPage => ({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
 const result = ref<AuditPage>(emptyPage())
+const selectedEvent = ref<AuditEvent | null>(null)
 const loading = ref(false)
 const errorMessage = ref('')
-const actorLoginName = ref('')
-const category = ref('')
-const action = ref('')
-const resourceType = ref('')
+const actorLoginName = ref<string[]>([])
+const category = ref<string[]>([])
+const action = ref<string[]>([])
+const resourceType = ref<string[]>([])
 const outcome = ref<AuditOutcome | ''>('')
 const from = ref('')
 const to = ref('')
 const canReadAll = computed(() => session.canAccess(['audit.read.all']))
+
+const options = ref<AuditOptions>({ actors: [], categories: [], actions: [], resources: [] })
+const optionError = ref('')
+const actorOptions = computed(() => options.value.actors.map(o => ({ value: o.value, label: o.label && o.label !== o.value ? `${o.label}（${o.value}）` : o.value })))
+function named(values: string[], label: (code: string) => string) { return values.map(value => ({ value, label: label(value).startsWith('其他') ? `${label(value)}（${value}）` : label(value) })) }
+async function loadOptions() {
+  optionError.value = ''
+  try { options.value = await auditApi.options() }
+  catch { optionError.value = '筛选选项加载失败，请重试。' }
+}
 
 function asInstant(value: string) {
   return value ? new Date(value).toISOString() : undefined
@@ -31,10 +47,10 @@ async function load(page = 0) {
   errorMessage.value = ''
   try {
     result.value = await auditApi.events({
-      actorLoginName: canReadAll.value ? actorLoginName.value.trim() : undefined,
-      category: category.value || undefined,
-      action: action.value.trim().toUpperCase() || undefined,
-      resourceType: resourceType.value || undefined,
+      actorLoginName: canReadAll.value ? actorLoginName.value : undefined,
+      category: category.value,
+      action: action.value,
+      resourceType: resourceType.value,
       outcome: outcome.value,
       from: asInstant(from.value),
       to: asInstant(to.value),
@@ -51,10 +67,10 @@ async function load(page = 0) {
 }
 
 function resetFilters() {
-  actorLoginName.value = ''
-  category.value = ''
-  action.value = ''
-  resourceType.value = ''
+  actorLoginName.value = []
+  category.value = []
+  action.value = []
+  resourceType.value = []
   outcome.value = ''
   from.value = ''
   to.value = ''
@@ -65,11 +81,7 @@ function formatTime(value: string) {
   return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'medium' }).format(new Date(value))
 }
 
-function snapshot(value: AuditEvent['beforeValue']) {
-  return value ? JSON.stringify(value, null, 2) : '无'
-}
-
-onMounted(() => load())
+onMounted(() => { void load(); if (runtimeConfig.authMode !== 'mock') void loadOptions() })
 </script>
 
 <template>
@@ -80,44 +92,25 @@ onMounted(() => load())
     </div>
     <template v-else>
       <form class="panel audit-filters" @submit.prevent="load(0)">
-        <h2>审计筛选</h2>
-        <label v-if="canReadAll">操作账号<input v-model.trim="actorLoginName" maxlength="128"></label>
-        <label>类别
-          <select v-model="category">
-            <option value="">全部</option>
-            <option value="SECURITY">安全</option>
-            <option value="ACCOUNT">账号</option>
-            <option value="BUSINESS">业务</option>
-          </select>
-        </label>
-        <label>动作<input v-model.trim="action" maxlength="64" placeholder="例如 PASSWORD_RESET"></label>
-        <label>资源
-          <select v-model="resourceType">
-            <option value="">全部</option>
-            <option value="ACCOUNT">账号</option>
-            <option value="PRODUCT">产品</option>
-            <option value="MATERIAL">辅料</option>
-            <option value="INVENTORY">库存</option>
-            <option value="SELECTION">候选</option>
-            <option value="WATCH">监控</option>
-            <option value="IMPORT">导入</option>
-          </select>
-        </label>
+        <label v-if="canReadAll">操作账号<FilterMultiSelect v-model="actorLoginName" :options="actorOptions" label="操作账号" /></label>
+        <label>类别<FilterMultiSelect v-model="category" :options="named(options.categories, categoryLabel)" label="类别" /></label>
+        <label>动作<FilterMultiSelect v-model="action" :options="named(options.actions, actionLabel)" label="动作" /></label>
+        <label>资源<FilterMultiSelect v-model="resourceType" :options="named(options.resources, resourceLabel)" label="资源" /></label>
         <label>结果
-          <select v-model="outcome">
+          <select v-model="outcome" v-single-select>
             <option value="">全部</option>
             <option value="SUCCESS">成功</option>
             <option value="FAILURE">失败</option>
           </select>
         </label>
-        <label>开始时间<input v-model="from" type="datetime-local"></label>
-        <label>结束时间<input v-model="to" type="datetime-local"></label>
+        <label class="date-range-filter">时间范围<DatePicker v-model="from" v-model:end="to" range type="datetime-local" start-label="开始时间" end-label="结束时间" /></label>
         <div class="audit-filter-actions">
           <button :disabled="loading" type="submit">查询</button>
           <button class="filter-reset-button" type="button" @click="resetFilters">清空</button>
         </div>
       </form>
 
+      <p v-if="optionError" class="data-state data-state--error" role="alert">{{ optionError }} <button type="button" @click="loadOptions">重试</button></p>
       <p v-if="!canReadAll" class="data-state">当前角色仅可查看本人操作记录。</p>
       <p v-if="errorMessage" class="data-state data-state--error" role="alert">{{ errorMessage }}</p>
       <div class="panel table-panel">
@@ -132,16 +125,11 @@ onMounted(() => load())
                 <tr v-for="event in result.items" :key="event.id">
                   <td>{{ formatTime(event.occurredAt) }}</td>
                   <td>{{ event.actorDisplayName || event.actorLoginName }}<small>{{ event.actorLoginName }}</small></td>
-                  <td><span class="audit-category">{{ event.category }}</span>{{ event.action }}</td>
-                  <td>{{ event.resourceType }}<small>{{ event.resourceId || '—' }}</small></td>
+                  <td><span class="audit-category" :title="event.category">{{ categoryLabel(event.category) }}</span><span :title="event.action">{{ actionLabel(event.action) }}</span></td>
+                  <td><span :title="event.resourceType">{{ resourceLabel(event.resourceType) }}</span><small>{{ event.resourceId || '—' }}</small></td>
                   <td><span :class="event.outcome === 'SUCCESS' ? 'status-success' : 'status-failure'">{{ event.outcome === 'SUCCESS' ? '成功' : '失败' }}</span></td>
                   <td>
-                    <details>
-                      <summary>查看</summary>
-                      <p v-if="event.detail">{{ event.detail }}</p>
-                      <strong>变更前</strong><pre>{{ snapshot(event.beforeValue) }}</pre>
-                      <strong>变更后</strong><pre>{{ snapshot(event.afterValue) }}</pre>
-                    </details>
+                    <button type="button" class="audit-view-button" :aria-label="`查看${actionLabel(event.action)}详情`" @click="selectedEvent = event">查看</button>
                   </td>
                 </tr>
               </tbody>
@@ -150,6 +138,13 @@ onMounted(() => load())
         </div>
         <ListPagination v-model:page-size="result.size" :page="result.page + 1" :total="result.totalElements" :disabled="loading" @update:page="load($event - 1)" />
       </div>
+      <AuditEventDialog v-if="selectedEvent" :event="selectedEvent" @close="selectedEvent = null" />
     </template>
   </section>
 </template>
+
+<style scoped>
+.audit-view-button { border:0; border-radius:4px; padding:4px 8px; min-height:28px; background:transparent; color:#2864c5; font-size:13px; cursor:pointer; white-space:nowrap; }
+.audit-view-button:hover { background:#edf4ff; }
+.audit-view-button:focus-visible { outline:2px solid #2864c5; outline-offset:1px; }
+</style>

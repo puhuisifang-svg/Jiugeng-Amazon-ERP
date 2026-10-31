@@ -4,6 +4,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { monitoringApi, type MonitorTarget } from '@/api/monitoring'
 import ProductMonitoringView from './ProductMonitoringView.vue'
 
+vi.mock('@/state/session', () => ({ session: { canAccess: () => true, user: { value: null } } }))
 vi.mock('@/api/monitoring', () => ({ monitoringApi: { list: vi.fn(), preferences: vi.fn(), create: vi.fn(), detail: vi.fn(), batch: vi.fn(), history: vi.fn(), snapshot: vi.fn(), follow: vi.fn(), columns: vi.fn() } }))
 const row: MonitorTarget = { id: 'one', marketplace: 'US', asin: 'B0TEST0001', enabled: true, ownerId: null, ownerName: null, tags: [], remark: '', version: 0, fields: {}, source: null, observedAt: null, lastStatus: 'PENDING', lastReason: null, lastAttemptAt: null, createdAt: '2026-01-01T00:00:00Z', followed: false }
 const mounted: ReturnType<typeof mount>[] = []
@@ -63,8 +64,9 @@ describe('product monitoring workflow', () => {
     vi.mocked(monitoringApi.detail).mockResolvedValue({ target: { ...row, enabled: false }, snapshots: [] })
     const w = await setup('/product-monitoring/one')
     expect(w.findAll('button').find(b => b.text() === '人工补录')!.attributes('disabled')).toBeDefined()
+    await w.findAll('button').find(b=>b.text().startsWith('变化记录'))!.trigger('click')
     expect(w.text()).toContain('商品变化与历史快照')
-    expect(w.text()).not.toContain('操作日志')
+    expect(w.text()).not.toContain('人员操作历史')
   })
   it('keeps explicit unknown fields in a submitted observation', async () => {
     const w = await setup('/product-monitoring/one')

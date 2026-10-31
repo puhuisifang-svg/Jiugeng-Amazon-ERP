@@ -1,7 +1,12 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
+import ProductImagePreview from '@/components/ProductImagePreview.vue'
+import DatePicker from '@/components/DatePicker.vue'
+import { launchApi } from '@/api/launch'
 import { useCollectionStatus } from '@/composables/useCollectionStatus'
 import '@/styles/monitoringWorkbench.css'
 import { confirmAction } from '@/state/uiConfirmation'
+import ProductMonitorDetail from '@/components/ProductMonitorDetail.vue'
 import MonitorInlineEditor from '@/components/MonitorInlineEditor.vue'
 import ListPagination from '@/components/ListPagination.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
@@ -35,10 +40,7 @@ const isDetail = computed(() => typeof route.params.id === 'string')
 const selectedRows = computed(() => rows.value.filter(row => selected.value.includes(row.id)))
 const allSelected = computed(() => rows.value.length > 0 && selected.value.length === rows.value.length)
 const statusLabels: Record<string, string> = { PENDING: '待首次观测', BASELINE: '已建立基线', SOURCE_BASELINE: '来源切换，重建基线', CHANGED: '发现变化', UNCHANGED: '无变化', PARTIAL: '部分观测', FAILED: '更新失败', OUT_OF_ORDER: '旧观测未采纳' }
-const sourceLabel = (source: string | null) => source === 'EXTERNAL:amazon-public-us' ? '亚马逊前台' : source === 'MANUAL' ? '人工观测' : source === 'SYNTHETIC' ? '合成演示' : source?.startsWith('EXTERNAL:') ? `外部观测（${source.slice(9)}）` : '暂无数据'
-const formatTime = (value: string | null) => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—'
 const display = (value: unknown) => value === undefined ? '未观测' : value === null ? '未知' : Array.isArray(value) ? (value.join('\n') || '明确为空') : value === 'AVAILABLE' ? '可售' : value === 'UNAVAILABLE' ? '不可售' : String(value)
-const stale = (row: MonitorTarget) => row.observedAt && Date.now() - Date.parse(row.observedAt) > 48 * 3600000
 const split = (value: string) => [...new Set(value.split(/[\s,，]+/).map(v => v.trim()).filter(Boolean))]
 const fail = (e: unknown) => { error.value = e instanceof Error ? e.message : '请求失败，请重试。' }
 function requestKey(signature: string, previous?: { signature: string; id: string }) { return previous?.signature === signature ? previous : { signature, id: crypto.randomUUID() } }
@@ -50,8 +52,9 @@ async function load() {
     if (isDetail.value) {
       const value = await monitoringApi.detail(String(route.params.id))
       if (serial !== loadSerial) return
-      detail.value = value; historyPage.value = 0
-      const page = await monitoringApi.history(value.target.id, 0)
+      if(detail.value?.target.id!==value.target.id){historyPage.value=0;history.value=[];historyTotal.value=0}
+      detail.value = value
+      const page = await monitoringApi.history(value.target.id, historyPage.value)
       if (serial !== loadSerial) return
       history.value = page.items; historyTotal.value = page.total
     } else {
@@ -61,6 +64,12 @@ async function load() {
     }
   } catch (e) { if (serial === loadSerial) fail(e) }
   finally { if (serial === loadSerial) loading.value = false }
+}
+async function addSelectedCandidates(){
+  if(!selectedRows.value.length)return
+  busy.value=true;error.value='';const outcome:string[]=[]
+  for(const row of selectedRows.value){try{const added=await launchApi(false).create({type:'AMAZON',asinOrUrl:row.asin,title:row.fields.title||row.asin,owner:row.ownerName||session.user.value?.displayName||'选品负责人',reason:'来自产品监控，待评估客户需求与开发机会',requestId:crypto.randomUUID()});outcome.push(`${row.asin} 已关联候选 ${added.id.slice(0,8)}`)}catch(e){outcome.push(`${row.asin}：${e instanceof Error?e.message:'加入失败'}`)}}
+  notice.value=outcome.join('；');busy.value=false
 }
 async function search() { filters.page = 0; await load() }
 async function reset() { Object.assign(filters, { q: '', searchBy: 'ASIN', status: 'ALL', owner: '', tag: '', followed: false, page: 0 }); await load() }
@@ -149,7 +158,7 @@ async function historyTurn(delta: number) {
   loading.value = true
   try { const page = await monitoringApi.history(detail.value.target.id, historyPage.value + delta); history.value = page.items; historyTotal.value = page.total; historyPage.value += delta } catch (e) { fail(e) } finally { loading.value = false }
 }
-watch(() => route.params.id, load)
+watch(() => route.params.id, () => {detail.value=undefined;history.value=[];historyPage.value=0;historyTotal.value=0;void load()})
 watch(() => JSON.stringify(filters), () => { selected.value = [] })
 onMounted(async () => { await load(); try { columns.value = (await monitoringApi.preferences()).columns } catch (e) { fail(e) } })
 </script>
@@ -176,9 +185,18 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
         class="panel monitor-filters mw-filters"
         @submit.prevent="search"
       >
-        <label>站点<select disabled><option>美国 · USD</option></select></label>
-        <label>监控状态<select v-model="filters.status"><option value="ALL">全部状态</option><option value="ACTIVE">监控中</option><option value="PAUSED">已暂停</option></select></label>
-        <label>监控人<select v-model="filters.owner"><option value="">全部人员</option><option :value="session.user.value?.id">我负责的</option></select></label>
+        <label>站点<select
+          v-single-select
+          disabled
+        ><option>美国 · USD</option></select></label>
+        <label>监控状态<select
+          v-model="filters.status"
+          v-single-select
+        ><option value="ALL">全部状态</option><option value="ACTIVE">监控中</option><option value="PAUSED">已暂停</option></select></label>
+        <label>监控人<select
+          v-model="filters.owner"
+          v-single-select
+        ><option value="">全部人员</option><option :value="session.user.value?.id">我负责的</option></select></label>
         <label>标签<input
           v-model="filters.tag"
           maxlength="50"
@@ -187,6 +205,7 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
         <div class="monitor-search">
           <select
             v-model="filters.searchBy"
+            v-single-select
             aria-label="搜索字段"
           >
             <option value="ASIN">
@@ -213,26 +232,39 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
       <article class="panel monitor-list">
         <div class="monitor-toolbar mw-toolbar">
           <button
+            v-if="session.canAccess(['monitoring.write'])"
             class="primary"
             :disabled="busy"
             @click="show('create')"
           >
             ＋ 添加监控
           </button><button
+            v-if="session.canAccess(['monitoring.collect'])"
             aria-label="更新所选产品"
             :class="{'mw-selected-update':selected.length>0}"
             :disabled="!selected.length||busy||loading"
             @click="updateSelected"
           >
             更新所选<span v-if="selected.length">（{{ selected.length }}）</span>
+          </button><button
+            v-if="session.canAccess(['selection.write'])"
+            :disabled="!selected.length||busy"
+            class="secondary-button"
+            @click="addSelectedCandidates"
+          >
+            加入候选
           </button><span
             class="monitor-quota"
             title="亚马逊前台观测 · 每日更新"
           >启用目标 <strong>{{ active }}</strong> / 1,000</span>
         </div>
-        <div class="monitor-batch">
+        <div
+          v-if="session.canAccess(['monitoring.write'])"
+          class="monitor-batch"
+        >
           <span>已选 {{ selected.length }} 条</span><select
             v-model="batchAction"
+            v-single-select
             aria-label="批量操作"
           >
             <option value="PAUSE">
@@ -311,17 +343,16 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
                       role="switch"
                       :aria-checked="row.enabled"
                       :aria-label="`监控 ${row.asin}`"
-                      :disabled="busy"
+                      :disabled="busy || !session.canAccess(['monitoring.write'])"
                       @click="toggleMonitor(row)"
                     />
                   </td>
                   <td class="fixed-image">
-                    <img
+                    <ProductImagePreview
                       v-if="row.fields.imageUrl"
                       :src="row.fields.imageUrl"
-                      alt="商品主图"
-                      referrerpolicy="no-referrer"
-                    ><span
+                      :alt="row.asin + ' 商品图片'"
+                    /><span
                       v-else
                       class="monitor-image-empty"
                     >暂无图片</span>
@@ -363,6 +394,7 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
                   <td>{{ display(row.fields.brand) }}</td><td>{{ changes(row) }}</td>
                   <td>
                     {{ row.sales30Days??'未填写' }}<button
+                      v-if="session.canAccess(['monitoring.write'])"
                       class="mw-link mw-remark-edit"
                       :aria-label="`编辑 ${row.asin} 近30天销量`"
                       :disabled="busy"
@@ -376,6 +408,7 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
                   <td><div>尺寸：{{ display(row.fields.dimensions) }}</div><div>重量：{{ display(row.fields.weight) }}</div></td>
                   <td>
                     <span class="competitor-remark">{{ row.remark||'—' }}</span><button
+                      v-if="session.canAccess(['monitoring.write'])"
                       class="mw-link mw-remark-edit"
                       :aria-label="`编辑 ${row.asin} 备注`"
                       :disabled="busy"
@@ -388,6 +421,7 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
                     <RouterLink :to="`/product-monitoring/${row.id}`">
                       详情
                     </RouterLink><button
+                      v-if="session.canAccess(['monitoring.remove'])"
                       class="monitor-text-button"
                       :disabled="busy"
                       @click="remove(row)"
@@ -418,95 +452,25 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
         />
       </article>
     </template>
-    <template v-else-if="detail">
-      <div class="monitor-toolbar mw-toolbar">
-        <RouterLink to="/product-monitoring">
-          ← 返回监控清单
-        </RouterLink><span class="monitor-spacer" /><button
-          :disabled="busy || loading"
-          @click="load"
-        >
-          刷新
-        </button><button
-          :disabled="busy || loading"
-          @click="batch(detail.target.enabled ? 'PAUSE' : 'ENABLE', [detail.target])"
-        >
-          {{ detail.target.enabled ? '暂停监控' : '恢复监控' }}
-        </button><button
-          :disabled="!detail.target.enabled || busy || loading"
-          @click="show('snapshot')"
-        >
-          人工补录
-        </button><button
-          class="primary"
-          :disabled="!detail.target.enabled||collection.pending(detail.target.id)||!collection.enabled.value"
-          @click="collection.collect(detail.target.id)"
-        >
-          立即更新
-        </button>
-      </div>
-      <article class="panel monitor-detail">
-        <div class="monitor-product">
-          <img
-            v-if="detail.target.fields.imageUrl"
-            :src="detail.target.fields.imageUrl"
-            alt="商品主图"
-            referrerpolicy="no-referrer"
-          ><div><h2>{{ detail.target.fields.title || '等待首次观测' }}</h2><p>{{ detail.target.asin }} · 美国站 · {{ detail.target.enabled ? '监控中' : '已暂停' }}</p><p>{{ sourceLabel(detail.target.source) }} · 最近观测 {{ formatTime(detail.target.observedAt) }}</p></div>
-        </div><p v-if="detail.target.remark">
-          备注：{{ detail.target.remark }}
-        </p><p>最近结果：{{ statusLabels[detail.target.lastStatus] }} {{ detail.target.lastReason }}</p><p
-          v-if="stale(detail.target)"
-          class="monitor-stale"
-        >
-          数据已超过 48 小时，可点击立即更新重试。
-        </p><dl class="monitor-field-grid">
-          <div
-            v-for="field in fieldNames.filter(f => !['imageUrl','title','bullets'].includes(f)).concat('bullets')"
-            :key="field"
-            :class="{ 'monitor-field-wide': field === 'bullets' }"
-          >
-            <dt>{{ fieldLabels[field] }}</dt><dd>{{ display(detail.target.fields[field]) }}</dd>
-          </div>
-        </dl>
-      </article>
-      <article class="panel monitor-detail">
-        <h3>商品变化与历史快照</h3><p class="muted">
-          记录商品观测，不记录人员操作历史。发现时间不代表 Amazon 实际修改时刻。
-        </p><div
-          v-if="!history.length"
-          class="monitor-empty"
-        >
-          尚无快照，等待首次自动采集。
-        </div><details
-          v-for="snapshot in history"
-          :key="snapshot.id"
-          class="monitor-history"
-        >
-          <summary><strong>{{ statusLabels[snapshot.decision] }}</strong><span>{{ formatTime(snapshot.observedAt) }} · {{ sourceLabel(snapshot.source) }}</span><span>{{ snapshot.changes.length }} 项变化</span></summary><p>记录时间：{{ formatTime(snapshot.recordedAt) }} <span v-if="snapshot.reason"> · {{ snapshot.reason }}</span></p><div
-            v-for="change in snapshot.changes"
-            :key="change.field"
-            class="monitor-change"
-          >
-            <strong>{{ fieldLabels[change.field] }}</strong><div><span>之前</span><pre>{{ display(change.before) }}</pre></div><div><span>之后</span><pre>{{ display(change.after) }}</pre></div>
-          </div><dl class="monitor-field-grid">
-            <div
-              v-for="field in fieldNames"
-              :key="field"
-            >
-              <dt>{{ fieldLabels[field] }}</dt><dd>{{ display(snapshot.fields[field]) }}</dd>
-            </div>
-          </dl>
-        </details><ListPagination
-          :page="historyPage + 1"
-          :page-size="20"
-          :sizes="[20]"
-          :total="historyTotal"
-          :disabled="loading"
-          @update:page="historyTurn($event - 1 - historyPage)"
-        />
-      </article>
-    </template>
+    <ProductMonitorDetail
+      v-else-if="detail"
+      :key="detail.target.id"
+      :target="detail.target"
+      :history="history"
+      :history-page="historyPage"
+      :history-total="historyTotal"
+      :loading="loading"
+      :busy="busy"
+      :pending="collection.pending(detail.target.id)"
+      :collection-enabled="collection.enabled.value"
+      :collection-label="collection.label(detail.target.id)"
+      :collection-reason="collection.state(detail.target.id)?.reason??null"
+      @toggle="toggleMonitor(detail.target)"
+      @collect="collection.collect(detail.target.id)"
+      @manual="show('snapshot')"
+      @page="historyTurn($event-1-historyPage)"
+      @edit="(field,event)=>edit(detail!.target,field,event)"
+    />
     <p
       v-else-if="loading"
       class="data-state"
@@ -570,6 +534,7 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
           >
             关闭
           </button><button
+            v-if="session.canAccess(['monitoring.write'])"
             class="primary"
             :disabled="busy"
           >
@@ -632,6 +597,7 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
           >
             取消
           </button><button
+            v-if="session.canAccess(['monitoring.write'])"
             class="primary"
             :disabled="busy"
           >
@@ -645,12 +611,18 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
         @submit.prevent="saveSnapshot"
       >
         <div class="monitor-field-grid">
-          <label>来源<select v-model="observation.source"><option value="MANUAL">人工观测</option><option value="SYNTHETIC">合成演示</option></select></label><label>观测时间（本地时区）<input
+          <label>来源<select
+            v-model="observation.source"
+            v-single-select
+          ><option value="MANUAL">人工观测</option><option value="SYNTHETIC">合成演示</option></select></label><label>观测时间（本地时区）<DatePicker
             v-model="observation.at"
             type="datetime-local"
             step="1"
             required
-          ></label><label>完整性<select v-model="observation.quality"><option value="COMPLETE">完整观测</option><option value="PARTIAL">部分观测</option><option value="FAILED">失败记录</option></select></label>
+          /></label><label>完整性<select
+            v-model="observation.quality"
+            v-single-select
+          ><option value="COMPLETE">完整观测</option><option value="PARTIAL">部分观测</option><option value="FAILED">失败记录</option></select></label>
         </div><p>完整观测需逐项确认；“未知”是明确观测结果，“未观测”不会覆盖旧值。部分和失败记录不会更新基线。</p><div
           v-for="field in fieldNames"
           :key="field"
@@ -658,6 +630,7 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
         >
           <label :for="`field-${field}`">{{ fieldLabels[field] }}</label><select
             v-model="modes[field]"
+            v-single-select
             :aria-label="`${fieldLabels[field]}观测状态`"
           >
             <option value="VALUE">
@@ -677,6 +650,7 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
               v-else-if="field === 'availability'"
               :id="`field-${field}`"
               v-model="values[field]"
+              v-single-select
             >
               <option value="AVAILABLE">
                 可售
@@ -711,6 +685,7 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
           >
             取消
           </button><button
+            v-if="session.canAccess(['monitoring.write'])"
             class="primary"
             :disabled="busy"
           >

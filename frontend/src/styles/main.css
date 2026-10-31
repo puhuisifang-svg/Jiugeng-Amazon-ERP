@@ -12,12 +12,12 @@
   --surface: #ffffff;
   --sidebar: #151b2b;
   /* ERP-080: docs/ui/UI_STANDARD.md is the normative density contract. */
-  --ui-header-height: 44px;
-  --ui-tabs-height: 32px;
-  --ui-breadcrumb-height: 28px;
+  --ui-header-height: 36px;
+  --ui-tabs-height: 30px;
+  --ui-breadcrumb-height: 26px;
   --ui-control-height: 32px;
-  --ui-page-padding: 12px;
-  --ui-section-gap: 8px;
+  --ui-page-padding: 8px;
+  --ui-section-gap: 6px;
 }
 
 * { box-sizing: border-box; }
@@ -67,7 +67,8 @@ a { color: inherit; }
 .table-scroll { overflow-x: auto; }
 /* ERP-042: a single scroll owner keeps wide-table columns and headers aligned. */
 .table-viewport { min-width: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
-.table-viewport:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.table-viewport:focus { outline:none; }
+.table-viewport.is-keyboard-focus:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .table-viewport > table { width: 100%; border-collapse: separate; border-spacing: 0; }
 .table-viewport > table > thead { position: sticky; top: 0; z-index: 4; background: #f8f9fb; }
 .table-viewport > table > thead th { background: #f8f9fb; box-shadow: inset 0 -1px var(--line); }

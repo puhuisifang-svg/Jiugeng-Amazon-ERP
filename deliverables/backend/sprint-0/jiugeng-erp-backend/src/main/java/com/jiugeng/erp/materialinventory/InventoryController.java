@@ -46,7 +46,7 @@ class InventoryController {
     }
 
     @PostMapping("/transactions")
-    @PreAuthorize("hasAuthority('inventory.write')")
+    @PreAuthorize("(#request.type().name() == 'REVERSAL' and hasAuthority('inventory.reverse')) or ((#request.type().name() == 'OUTBOUND' or #request.type().name() == 'ADJUST_OUT') and hasAuthority('inventory.outbound')) or ((#request.type().name() == 'INBOUND' or #request.type().name() == 'OPENING' or #request.type().name() == 'ADJUST_IN') and hasAuthority('inventory.inbound'))")
     TransactionResult transact(@Valid @RequestBody TransactionRequest request,
             @AuthenticationPrincipal AuthenticatedActor actor) {
         return service.transact(request.command(), actor);

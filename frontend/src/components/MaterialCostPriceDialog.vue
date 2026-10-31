@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
 import { onMounted, ref } from 'vue'
 import { costsApi, type MaterialPrice } from '@/api/costs'
 import { session } from '@/state/session'
@@ -37,6 +38,7 @@ async function save() { if (busy.value) return; busy.value = true; error.value =
         </p>
         <label>来源<select
           v-model="input.source"
+          v-single-select
           :disabled="!writable || busy"
         ><option value="MANUAL">手工核定</option><option
           v-if="session.canAccess(['purchases.read'])"
@@ -44,6 +46,7 @@ async function save() { if (busy.value) return; busy.value = true; error.value =
         >引用有效采购单</option></select></label>
         <label v-if="input.source === 'PURCHASE'">采购明细<select
           v-model="input.referenceId"
+          v-single-select
           required
           :disabled="!writable || busy"
           @change="selectReference"

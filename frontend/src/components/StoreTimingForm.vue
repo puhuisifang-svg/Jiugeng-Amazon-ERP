@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
+import DatePicker from '@/components/DatePicker.vue'
 import { computed, ref, watch } from 'vue'
 import { apiRequest } from '@/api/client'
 import SuccessToast from './SuccessToast.vue'
@@ -52,12 +54,15 @@ defineExpose({dirty,busy,loading,save})
             required
             aria-label="采集间隔天数"
           > 天</span></label>
-          <label>计划开始时间<input
+          <label>计划开始时间<DatePicker
             v-model="draft.localTime"
             type="time"
             required
-          ></label>
-          <label>时间所属时区<select v-model="draft.timeZone"><option value="Asia/Shanghai">北京时间</option><option value="America/Los_Angeles">美国太平洋时间（自动夏令时）</option></select></label>
+          /></label>
+          <label>时间所属时区<select
+            v-model="draft.timeZone"
+            v-single-select
+          ><option value="Asia/Shanghai">北京时间</option><option value="America/Los_Angeles">美国太平洋时间（自动夏令时）</option></select></label>
         </div>
       </fieldset>
       <div class="store-schedule-summary">

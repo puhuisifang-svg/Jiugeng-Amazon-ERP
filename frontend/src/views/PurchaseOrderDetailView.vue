@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DatePicker from '@/components/DatePicker.vue'
 import { confirmAction } from '@/state/uiConfirmation'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
@@ -15,7 +16,7 @@ type ReceiptPayload = Parameters<typeof purchaseApi.receive>[1]
 const pendingReceipt = ref<ReceiptPayload>()
 const receiptUncertain = ref(false)
 const returnPath = computed(() => ({ path: '/purchases/orders', query: { type: detail.value?.order.orderType || 'PRODUCT' } }))
-const writable = computed(() => session.canAccess(['purchases.write'])); const receivable = computed(() => session.canAccess(['purchases.receive']))
+const receivable = computed(() => session.canAccess(['purchases.receive']))
 const statusLabels: Record<PurchaseStatus,string> = { DRAFT: '草稿', SUBMITTED: '待收货', PARTIALLY_RECEIVED: '部分收货', COMPLETED: '已完成', CANCELLED: '已取消 / 余量关闭' }
 const actionLabels: Record<string,string> = { PURCHASE_ORDER_CREATE: '创建采购单', PURCHASE_ORDER_UPDATE: '编辑采购单', PURCHASE_ORDER_SUBMIT: '提交采购单', PURCHASE_ORDER_CANCEL: '取消采购单', PURCHASE_RECEIPT_CREATE: '采购收货' }
 function message(exception: unknown, fallback: string) { return exception instanceof ApiError ? exception.message : fallback }
@@ -121,7 +122,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
           </div>
         </dl><div class="purchase-detail-actions">
           <button
-            v-if="writable && detail.order.status === 'DRAFT'"
+            v-if="session.canAccess(['purchases.submit']) && detail.order.status === 'DRAFT'"
             :disabled="saving"
             type="button"
             @click="submitOrder"
@@ -135,7 +136,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
           >
             登记收货
           </button><button
-            v-if="writable && !['COMPLETED','CANCELLED'].includes(detail.order.status)"
+            v-if="session.canAccess(['purchases.cancel']) && !['COMPLETED','CANCELLED'].includes(detail.order.status)"
             :disabled="saving || Boolean(pendingReceipt)"
             type="button"
             class="secondary-button"
@@ -148,7 +149,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
       <section class="panel">
         <h2>采购明细</h2><div class="table-scroll">
           <TableViewport>
-            <table>
+            <table class="data-table">
               <thead><tr><th>项目</th><th>单位</th><th>采购数量</th><th>已收</th><th>{{ detail.order.status === 'CANCELLED' ? '已关闭余量' : '待收' }}</th><th>单价</th><th>金额</th></tr></thead><tbody>
                 <tr
                   v-for="line in detail.order.lines"
@@ -222,13 +223,13 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
         >
           {{ receiptError }}
         </p>
-        <label class="form-wide">实际收货时间<input
+        <label class="form-wide">实际收货时间<DatePicker
           v-model="receivedAt"
           type="datetime-local"
           step="1"
           required
           :disabled="saving || receiptUncertain"
-        ></label>
+        /></label>
         <label
           v-for="line in detail.order.lines.filter(item => item.remainingQuantity > 0)"
           :key="line.id"

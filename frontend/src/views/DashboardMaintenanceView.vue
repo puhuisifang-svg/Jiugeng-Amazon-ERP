@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
+import DatePicker from '@/components/DatePicker.vue'
 import { confirmAction, promptReason } from '@/state/uiConfirmation'
 import { shipmentUnit } from '@/ui/shipmentUnits'
 import ProductName from '@/components/ProductName.vue'
@@ -93,7 +95,7 @@ async function confirmDispatch() {
 let loadSequence = 0
 
 const isProduct = computed(() => props.kind === 'pending-products')
-const title = computed(() => props.kind === 'today-shipments' ? '今日发货管理' : props.kind === 'pending-shipments' ? '待发货管理' : '新品待开发管理')
+const title = computed(() => props.kind === 'today-shipments' ? '今日发货管理' : props.kind === 'pending-shipments' ? '待发货管理' : '样品待开发管理')
 const activeStatus = computed(() => props.kind === 'today-shipments' ? 'ACTIVE' : 'PENDING')
 const dateLabel = computed(() => props.kind === 'today-shipments' ? '发货日期' : '计划发货日期')
 const remarkModel = computed({ get: () => isProduct.value ? pendingProduct.remark : shipment.remark, set: value => { if (isProduct.value) pendingProduct.remark = value ?? ''; else shipment.remark = value ?? '' } })
@@ -357,11 +359,11 @@ onMounted(async () => {
               type="number"
               min="1"
             ></label>
-            <label>预计完成日期<input
+            <label>预计完成日期<DatePicker
               v-model="pendingProduct.expectedCompletionDate"
               required
               type="date"
-            ></label>
+            /></label>
           </template>
           <template v-else>
             <ShipmentCustomerPicker
@@ -373,17 +375,17 @@ onMounted(async () => {
               @select="selectCustomerProduct"
             />
             <small v-if="editing && !shipment.variantId">历史记录未绑定客户商品，请明确选择；原标签不会自动归属到新客户商品。</small>
-            <label v-if="kind !== 'today-shipments'">{{ dateLabel }}<input
+            <label v-if="kind !== 'today-shipments'">{{ dateLabel }}<DatePicker
               v-model="shipment.date"
               required
               type="date"
-            ></label>
-            <label v-if="kind !== 'today-shipments'">最晚发货日期<input
+            /></label>
+            <label v-if="kind !== 'today-shipments'">最晚发货日期<DatePicker
               v-model="latestShipDate"
               required
               type="date"
               :min="shipment.date"
-            ></label>
+            /></label>
             <label>发货数量（{{ shipmentUnit(editing && 'quantityUnit' in editing ? editing.quantityUnit : 'SET') }}）<input
               v-model.number="shipment.quantity"
               required
@@ -464,7 +466,10 @@ onMounted(async () => {
           maxlength="128"
           :placeholder="isProduct ? '搜索产品名称' : '搜索客户、客户产品编码、SKU或备注'"
         ></label>
-        <label>状态<select v-model="filters.status"><option value="">全部</option><option :value="activeStatus">{{ statusLabel(activeStatus) }}</option><option
+        <label>状态<select
+          v-model="filters.status"
+          v-single-select
+        ><option value="">全部</option><option :value="activeStatus">{{ statusLabel(activeStatus) }}</option><option
           v-if="isProduct"
           value="COMPLETED"
         >已完成</option><option
@@ -474,13 +479,12 @@ onMounted(async () => {
           v-if="kind === 'today-shipments'"
           value="SHIPPED"
         >已发货</option><option value="ARCHIVED">已归档</option></select></label>
-        <label>开始日期<input
+        <label class="date-range-filter">日期范围<DatePicker
           v-model="filters.from"
+          v-model:end="filters.to"
+          range
           type="date"
-        ></label><label>结束日期<input
-          v-model="filters.to"
-          type="date"
-        ></label>
+        /></label>
         <button type="submit">
           筛选
         </button>

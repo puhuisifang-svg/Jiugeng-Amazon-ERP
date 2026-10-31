@@ -6,6 +6,14 @@ import TableViewport from './TableViewport.vue'
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 describe('TableViewport', () => {
+  it('shows the scroll-region focus cue only after keyboard input, not pointer dialog dismissal', async () => {
+    const w=mount(TableViewport)
+    window.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab'}));await nextTick()
+    expect(w.classes()).toContain('is-keyboard-focus')
+    window.dispatchEvent(new Event('pointerdown'));await nextTick()
+    expect(w.classes()).not.toContain('is-keyboard-focus')
+    expect(w.attributes('tabindex')).toBe('0');w.unmount()
+  })
   it('uses the content boundary without reserving a second pagination bar when docked', async () => {
     const host = document.createElement('div')
     host.className = 'erp-shell'

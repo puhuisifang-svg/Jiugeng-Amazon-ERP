@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import { stateNames } from '@/api/launch'
 import { shipmentUnit } from '@/ui/shipmentUnits'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
-import { dashboardApi, loadDashboardSummary, type DashboardItem, type DashboardKind, type DashboardSummaryItem, type HomeSlice, type PendingProduct, type PendingShipment, type TodayShipment } from '@/api/dashboard'
+import { dashboardApi, loadDashboardSummary, type DashboardHomeItem as DashboardItem, type DashboardKind, type DashboardSummaryItem, type HomeSlice, type HomePendingProduct, type PendingShipment, type TodayShipment } from '@/api/dashboard'
 import AuthenticatedDashboardImage from '@/components/AuthenticatedDashboardImage.vue'
 import ShipmentProductImage from '@/components/ShipmentProductImage.vue'
 import DashboardShipmentRow from '@/components/DashboardShipmentRow.vue'
@@ -25,7 +26,7 @@ const slices = ref<Record<DashboardKind, HomeSlice<DashboardItem> | null>>({
 const tabs: Array<{ kind: DashboardKind; label: string; route: string; empty: string }> = [
   { kind: 'today-shipments', label: '今日发货', route: '/dashboard-maintenance/today-shipments', empty: '今日暂无发货安排' },
   { kind: 'pending-shipments', label: '待发货', route: '/dashboard-maintenance/pending-shipments', empty: '暂无待发货记录' },
-  { kind: 'pending-products', label: '新品待开发', route: '/dashboard-maintenance/pending-products', empty: '暂无待开发新品' },
+  { kind: 'pending-products', label: '样品待开发', route: '/dashboard-maintenance/pending-products', empty: '暂无待开发样品' },
 ]
 const currentTab = computed(() => tabs.find(tab => tab.kind === active.value) ?? tabs[0]!)
 const currentSlice = computed(() => slices.value[active.value])
@@ -90,7 +91,7 @@ function dateOf(item: DashboardItem) {
 function quantityOf(item: DashboardItem) { return 'expectedQuantity' in item ? item.expectedQuantity : item.quantity }
 function isLate(item: DashboardItem, businessDate?: string) {
   if ('latestShipAt' in item && 'shipDate' in item) return Date.now() > new Date(item.latestShipAt).getTime()
-  return dateOf(item) < (businessDate ?? new Date().toISOString().slice(0, 10))
+  return !!dateOf(item) && dateOf(item)! < (businessDate ?? new Date().toISOString().slice(0, 10))
 }
 async function load(silent = false) {
   const sequence = ++loadSequence
@@ -100,7 +101,7 @@ async function load(silent = false) {
     const [today, pending, products] = await Promise.all([
       dashboardApi.home<TodayShipment>('today-shipments'),
       dashboardApi.home<PendingShipment>('pending-shipments'),
-      dashboardApi.home<PendingProduct>('pending-products'),
+      dashboardApi.home<HomePendingProduct>('pending-products'),
     ])
     if (sequence !== loadSequence) return
     slices.value = { 'today-shipments': today, 'pending-shipments': pending, 'pending-products': products }
@@ -279,13 +280,25 @@ onBeforeUnmount(() => { window.clearInterval(refreshTimer); window.removeEventLi
                 :alt="item.productName"
               />
               <div class="worklist-row__main">
-                <strong>{{ item.productName }}</strong><small v-if="'productCode' in item">{{ item.productCode }}</small><small>{{ item.remark || '无备注' }}</small>
+                <RouterLink
+                  v-if="'developmentId' in item && item.developmentId && session.canAccess(['products.read'])"
+                  :to="`/product-development/${item.developmentId}`"
+                >
+                  {{ item.productName }}
+                </RouterLink><strong v-else>{{ item.productName }}</strong>
+                <small v-if="'developmentId' in item && item.developmentId">{{ item.number }} · {{ stateNames[item.developmentState ?? ''] ?? item.developmentState }} · {{ item.stage == null ? '阶段待确认' : ['方案确认','供应与打样','样品验证','定型风险复核','定型与建档'][item.stage] }}</small>
+                <small v-else-if="active === 'pending-products'">手工待办</small><small v-if="'productCode' in item">{{ item.productCode }}</small><small>{{ item.remark || '无备注' }}</small>
               </div>
-              <div><span class="worklist-label">{{ 'expectedQuantity' in item ? '预计数量' : '发货数量' }}</span><strong>{{ number(quantityOf(item)) }} 套</strong></div>
+              <div v-if="'developmentId' in item && item.developmentId">
+                <span class="worklist-label">负责人</span><strong>{{ item.owner || '待分配' }}</strong>
+              </div>
+              <div v-else>
+                <span class="worklist-label">{{ 'expectedQuantity' in item ? '预计数量' : '发货数量' }}</span><strong>{{ number(quantityOf(item) ?? 0) }} 套</strong>
+              </div>
               <div v-if="'boxCount' in item">
                 <span class="worklist-label">箱数</span><strong>{{ item.boxCount }}</strong>
               </div>
-              <div><span class="worklist-label">{{ 'expectedCompletionDate' in item ? '预计完成' : 'latestShipAt' in item ? '最晚时间' : '日期' }}</span><strong>{{ 'latestShipAt' in item ? shanghaiDateTime(item.latestShipAt) : dateOf(item) }}</strong></div>
+              <div><span class="worklist-label">{{ 'expectedCompletionDate' in item ? '预计完成' : 'latestShipAt' in item ? '最晚时间' : '日期' }}</span><strong>{{ 'latestShipAt' in item ? shanghaiDateTime(item.latestShipAt) : dateOf(item) || '待安排' }}</strong></div>
               <span
                 v-if="isLate(item, currentSlice?.businessDate)"
                 class="overdue-badge"

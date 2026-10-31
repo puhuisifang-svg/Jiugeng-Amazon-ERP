@@ -1,0 +1,124 @@
+/* Shared business workbench language. Layout/scroll ownership stays with each component. */
+:root {
+  --accent: #2675d8;
+  --accent-soft: #edf4ff;
+  --ui-primary-hover: #1c60b8;
+  --ui-canvas: #f5f7fa;
+  --ui-radius: 6px;
+  --line: #e3e8ef;
+  --muted: #6b778a;
+}
+body { background: var(--ui-canvas); }
+:is(input, select, textarea):focus { border-color: var(--accent); outline: 2px solid #2675d822; outline-offset: 0; }
+::placeholder { color: #929bab; font-size: 12px; font-weight: 400; }
+#main-content { background: var(--ui-canvas); }
+#main-content :is(.panel, .summary-card, .page-heading) { border-radius: var(--ui-radius); box-shadow: none; }
+#main-content .panel:not(.table-panel, .filter-panel, .material-toolbar, .dashboard-worklist-panel, .operation-form, .role-editor, .role-heading) { min-height: 0; padding: 14px; }
+#main-content :is(.page-stack, .domain-grid) { gap: var(--ui-section-gap); }
+#main-content :is(.summary-grid, .purchase-detail-grid, .dispatch-breakdowns) { gap: 10px; }
+#main-content .summary-card { padding: 14px; gap: 6px; }
+#main-content .summary-card strong { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+#main-content :is(.panel, .page-heading) > h2 { margin-block: 0 12px; font-size: 15px; font-weight: 600; }
+#main-content .table-title { padding: 10px 12px; margin: 0; font-size: 14px; }
+#main-content .data-table { font-size: 13px; }
+#main-content .data-table th { height: 36px; padding: 8px 12px; background: #f7f9fc; color: #69768a; font-weight: 500; }
+#main-content .data-table td { padding: 10px 12px; border-bottom-color: #edf0f5; }
+#main-content .data-table tbody tr:hover { background: #f3f7fd; }
+#main-content .data-table .shipment-row--selected { background: var(--accent-soft); }
+#main-content .data-table a:not(.primary-link, .status-badge) { color: var(--accent); text-decoration: none; }
+#main-content .data-table a:not(.primary-link):hover { text-decoration: underline; }
+#main-content .data-table .data-state { padding: 36px 12px; }
+#main-content .status-badge { border-radius: 4px; padding: 3px 7px; font-weight: 500; }
+#main-content .status-badge--draft { background: #fff6e6; color: #966014; }
+/* The search action is primary; reset, pagination, date and multi-select buttons retain their own semantics. */
+#main-content :is(.filter-panel, .dashboard-filters, .audit-filters) button[type=submit] { background: var(--accent); color: white; border: 1px solid var(--accent); border-radius: 4px; font-weight: 500; }
+#main-content :is(.filter-panel, .dashboard-filters, .audit-filters) button[type=submit]:hover:not(:disabled) { background: var(--ui-primary-hover); }
+#main-content :is(.primary-action, .primary-link, .material-toolbar > button, .material-toolbar > div > button, .purchase-detail-actions > button) { border-radius: 4px; font-size: 13px; font-weight: 500; }
+#main-content :is(.material-toolbar, .page-actions, .purchase-detail-actions) :is(.secondary-action, .secondary-button) { background: white; border: 1px solid #d7dee8; color: #43516a; }
+#main-content .material-toolbar :is(.secondary-action, .secondary-button):hover:not(:disabled) { color: var(--accent); border-color: #a9c8ef; background: #f5f9ff; }
+#main-content .material-toolbar :is(.secondary-action, .secondary-button).is-selected { color: white; background: #21834a; border-color: #21834a; }
+/* Detail navigation shares the underline treatment; semantic roles and keyboard handlers stay in the views. */
+#main-content :is(.detail-tabs, .ui-section-tabs, .dashboard-tabs, .product-editor-tabs, .sku-type-tabs, .purchase-tabs) { display: flex; flex-wrap: nowrap; gap: 22px; padding: 0 12px; border-bottom: 1px solid var(--line); background: white; overflow-x: auto; }
+#main-content :is(.detail-tabs, .ui-section-tabs, .dashboard-tabs, .product-editor-tabs, .sku-type-tabs, .purchase-tabs) > :is(a, button) { flex: none; min-height: 36px; padding: 8px 0; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font-size: 13px; font-weight: 400; white-space: nowrap; text-decoration: none; }
+#main-content :is(.detail-tabs, .ui-section-tabs, .dashboard-tabs, .product-editor-tabs, .sku-type-tabs, .purchase-tabs) > :is(.active, .is-active, .is-current, [aria-selected=true], [aria-pressed=true], .router-link-exact-active) { color: var(--accent); border-bottom-color: var(--accent); background: transparent; font-weight: 600; }
+#main-content .dashboard-tabs button span { background: #eef2f7; color: #627187; border-radius: 4px; }
+#main-content .dashboard-tabs button[aria-selected=true] span { background: var(--accent-soft); color: var(--accent); }
+/* Forms remain comfortable to edit: 40px fields, 13px text, quieter labels and grouped sections. */
+#main-content .operation-form:not(.filter-panel) { gap: 12px; padding: 16px; font-size: 13px; }
+#main-content .operation-form label { font-size: 13px; font-weight: 400; color: #536176; }
+#main-content .operation-form :is(input:not([type=checkbox]):not([type=radio]), select, textarea) { font-size: 13px; border-radius: 4px; }
+#main-content .operation-form :is(h2, legend) { font-size: 16px; font-weight: 600; }
+#main-content .operation-form button:not(.image-button, .password-toggle, .date-picker__trigger) { border-radius: 4px; font-weight: 500; }
+#main-content .operation-dialog__card { border-radius: 8px; }
+#main-content :is(.form-footer, .operation-form__actions, .dialog-footer) { gap: 8px; }
+#main-content .purchase-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+#main-content .purchase-header h1 { font-size: 16px; margin: 0; }
+#main-content .purchase-header p { font-size: 12px; }
+#main-content .purchase-detail-actions button { min-height: 32px; }
+#main-content .purchase-summary { gap: 14px; }
+#main-content .purchase-summary dd { font-size: 13px; }
+#main-content .import-summary p { font-size: 13px; line-height: 1.7; }
+#main-content .page-actions { padding: 4px 10px; background: white; border: 1px solid var(--line); border-radius: 6px; }
+#main-content .page-actions p { margin: 0; color: var(--muted); font-size: 12px; }
+#main-content .settings-toolbar .settings-password-button { background: var(--accent); border-color: var(--accent); }
+@media (max-width: 800px) {
+  #main-content .purchase-summary { grid-template-columns: minmax(0, 1fr); }
+  #main-content .purchase-summary dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  #main-content :is(.summary-grid, .purchase-detail-grid, .dispatch-breakdowns) { grid-template-columns: minmax(0, 1fr); }
+  #main-content .operation-form:not(.filter-panel) { padding: 12px; }
+  #main-content :is(.detail-tabs, .ui-section-tabs, .dashboard-tabs, .product-editor-tabs, .sku-type-tabs, .purchase-tabs) { gap: 18px; }
+}
+
+/* Row commands are links rather than large filled buttons. Explicitly scoped to action cells. */
+#main-content .data-table :is(.table-actions, .customer-actions, .customs-actions) :is(button, a) {
+  display: inline-flex; align-items: center; min-height: 28px; padding: 3px 6px;
+  border: 0; border-radius: 4px; background: transparent; color: var(--accent);
+  font-size: 13px; font-weight: 400; white-space: nowrap; text-decoration: none;
+}
+#main-content .data-table :is(.table-actions, .customer-actions, .customs-actions) button:hover:not(:disabled) { background: var(--accent-soft); }
+#main-content .data-table :is(.table-actions, .customer-actions, .customs-actions) :is(.danger, .danger-button, .delete-account, .access-danger, .danger-action) { color: #b42318; }
+#main-content .customer-action-buttons { display: flex; flex-wrap: wrap; gap: 2px 4px; max-width: 230px; }
+#main-content .customer-actions { width: 200px; min-width: 200px; }
+#main-content :is(.customer-dialog, .settings-dialog) { border-radius: 8px; }
+#main-content .customer-title-card { gap: 12px; padding: 12px; border-radius: 6px; background: #fafbfd; }
+#main-content .customer-title-card legend { font-size: 13px; font-weight: 600; }
+#main-content .operation-form h3 { font-size: 14px; margin-block: 8px 0; }
+
+#main-content :is(.page-heading, .purchase-header) .eyebrow { display: none; }
+#main-content .purchase-timeline { font-size: 13px; line-height: 1.6; }
+#main-content .purchase-header > button { min-height: 32px; font-size: 13px; font-weight: 500; }
+.login-card { border: 1px solid var(--line); border-radius: 8px; padding: 28px; }
+.login-card h1 { font-size: 24px; }
+.login-card > p:not(.eyebrow) { font-size: 13px; line-height: 1.7; color: var(--muted); }
+.login-form :is(input, select, button) { border-radius: 4px; font-size: 13px; }
+#main-content form.filter-panel > button:not([type=button]):not([type=reset]) { background: var(--accent); color: white; border: 1px solid var(--accent); border-radius: 4px; font-weight: 500; }
+#main-content .filter-panel > a { color: var(--accent); font-size: 13px; text-decoration: none; }
+#main-content .data-table td[colspan]:not(:has(*)) { color: var(--muted); text-align: center; padding-block: 28px; font-size: 13px; }
+#main-content .data-table.ui-action-table > tbody > tr > td:last-child > button { min-height: 28px; padding: 3px 6px; border: 0; border-radius: 4px; background: transparent; color: var(--accent); font-size: 13px; font-weight: 400; }
+#main-content .material-toolbar > p { margin: 0; color: var(--muted); font-size: 12px; }
+/* The single-column parent card must not inherit the two-column form-wide span. */
+#main-content .product-form__parent > * { grid-column: 1 / -1; }
+#main-content .product-form__variants-heading { padding: 12px 14px; border-radius: 6px; }
+#main-content .product-form__variants-heading h2 { font-size: 15px; }
+#main-content .variant-editor .card-heading h2 { font-size: 15px; }
+#main-content :is(.finance-dialog, .access-dialog, .customer-dialog) { border-radius: 8px; }
+#main-content .finance-dialog h2 { font-size: 16px; }
+#main-content .bill-form-grid :is(input, select, textarea) { font-size: 13px; border-radius: 4px; }
+@media (max-width: 640px) {
+  #main-content :is(.filter-panel, .audit-filters, .dashboard-filters, .monitor-filters, .mw-filters, .sku-filter-card) { max-height: min(30dvh, 180px); }
+  #main-content .finance-totals { gap: 6px; }
+  #main-content .finance-totals > .panel { padding: 8px 10px; gap: 4px; }
+  #main-content .finance-totals strong { font-size: 17px; }
+  /* Avoid a pinned operations cell consuming the entire mobile viewport. */
+  #main-content :is(.customer-actions, .customs-actions),
+  #main-content .data-table.ui-action-table > :is(thead, tbody) > tr > :last-child,
+  #main-content .finance-table :is(td, th):last-child { position: static; box-shadow: none; }
+}
+
+#main-content .detail-summary h2 { font-size: 17px; margin: 0 0 6px; }
+#main-content .detail-summary p { font-size: 13px; margin: 0; color: var(--muted); }
+#main-content .detail-summary .table-actions button { min-height: 32px; font-size: 13px; font-weight: 500; border-radius: 4px; }
+#main-content .detail-fields dd { font-size: 13px; }
+#main-content .product-detail h3 { font-size: 14px; }

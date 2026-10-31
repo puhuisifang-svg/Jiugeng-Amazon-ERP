@@ -79,10 +79,10 @@ describe('CandidatesView', () => {
     await flushPromises()
     await wrapper.get('input[placeholder^="ASIN"]').setValue('B0CAMP')
     expect(wrapper.findAll('.compact-panel')).toHaveLength(1)
-    expect(wrapper.get('button[type="button"]').text()).toContain('导出当前结果（1）')
+    expect(wrapper.findAll('button').find(b => b.text().startsWith('导出当前结果'))!.text()).toContain('导出当前结果（1）')
 
     await wrapper.get('input[placeholder^="ASIN"]').setValue('不存在')
-    expect(wrapper.get('button[type="button"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.findAll('button').find(b => b.text().startsWith('导出当前结果'))!.attributes('disabled')).toBeDefined()
     await wrapper.get('input[placeholder^="ASIN"]').setValue('B0CAMP')
 
     await wrapper.get('.evaluation-form input[name="owner"]').setValue('新负责人')

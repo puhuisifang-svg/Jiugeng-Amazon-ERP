@@ -5,6 +5,7 @@ import static com.jiugeng.erp.iam.AuditTypes.AuditPage;
 import static com.jiugeng.erp.iam.AuditTypes.Outcome;
 
 import java.time.Instant;
+import java.util.List;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
@@ -13,13 +14,11 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-@Validated
 @RestController
 @Profile("!mock")
 @RequestMapping("/api/v1/audit/events")
@@ -30,14 +29,20 @@ class AuditController {
         this.service = service;
     }
 
+    @GetMapping("/options")
+    @PreAuthorize("hasAnyAuthority('audit.read.all', 'audit.read.self')")
+    AuditTypes.FilterOptions options(@AuthenticationPrincipal IamTypes.SessionPrincipal principal) {
+        return service.options(principal.capabilities().contains("audit.read.all") ? null : principal.userId());
+    }
+
     @GetMapping
     @PreAuthorize("hasAnyAuthority('audit.read.all', 'audit.read.self')")
     AuditPage events(
             @AuthenticationPrincipal IamTypes.SessionPrincipal principal,
-            @RequestParam(required = false) @Size(max = 128) String actorLoginName,
-            @RequestParam(required = false) @Pattern(regexp = "[A-Z][A-Z0-9_]{0,31}") String category,
-            @RequestParam(required = false) @Pattern(regexp = "[A-Z][A-Z0-9_]{0,63}") String action,
-            @RequestParam(required = false) @Pattern(regexp = "[A-Z][A-Z0-9_]{0,63}") String resourceType,
+            @RequestParam(required = false) @Size(max = 200) List<@Size(max = 128) String> actorLoginName,
+            @RequestParam(required = false) @Size(max = 200) List<@Pattern(regexp = "[A-Z][A-Z0-9_]{0,31}") String> category,
+            @RequestParam(required = false) @Size(max = 200) List<@Pattern(regexp = "[A-Z][A-Z0-9_]{0,63}") String> action,
+            @RequestParam(required = false) @Size(max = 200) List<@Pattern(regexp = "[A-Z][A-Z0-9_]{0,63}") String> resourceType,
             @RequestParam(required = false) Outcome outcome,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,

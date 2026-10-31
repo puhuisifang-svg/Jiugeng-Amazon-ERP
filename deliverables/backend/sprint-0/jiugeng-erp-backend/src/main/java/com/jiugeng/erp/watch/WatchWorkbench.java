@@ -52,7 +52,7 @@ class WatchWorkbench {
             .param("remark",in.remark()).param("id",id).update();
         record(actor,"WATCH_STORE_REMARK",id);return repository.store(id).orElseThrow();
     }
-    @DeleteMapping("/stores/{id}") @PreAuthorize("hasAuthority('watch.write')")
+    @DeleteMapping("/stores/{id}") @PreAuthorize("hasAuthority('watch.remove')")
     void remove(@PathVariable String id,@RequestParam Long version,@AuthenticationPrincipal AuthenticatedActor actor){
         repository.lockStore(id);var store=repository.store(id).orElseThrow();version(version,store.version());
         jdbc.sql("UPDATE watch_store SET removed=TRUE,status='DISABLED',version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=:id")

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
 import ListPagination from '@/components/ListPagination.vue'
 import { watch } from 'vue'
 import SuccessToast from "@/components/SuccessToast.vue"
@@ -125,7 +126,13 @@ onMounted(load)
       <label class="form-wide">搜索<input
         v-model="query"
         placeholder="ASIN、标题、类目、负责人或标签"
-      ></label><label>状态<select v-model="statusFilter"><option value="">全部状态</option><option value="NEW">NEW</option><option value="REVIEWING">REVIEWING</option><option value="APPROVED">APPROVED</option><option value="REJECTED">REJECTED</option></select></label><label>负责人<select v-model="ownerFilter"><option value="">全部负责人</option><option
+      ></label><label>状态<select
+        v-model="statusFilter"
+        v-single-select
+      ><option value="">全部状态</option><option value="NEW">NEW</option><option value="REVIEWING">REVIEWING</option><option value="APPROVED">APPROVED</option><option value="REJECTED">REJECTED</option></select></label><label>负责人<select
+        v-model="ownerFilter"
+        v-single-select
+      ><option value="">全部负责人</option><option
         v-for="owner in owners"
         :key="owner"
         :value="owner"

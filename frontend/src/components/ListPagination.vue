@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
 import { computed, onMounted, ref, watch } from 'vue'
 defineOptions({ inheritAttrs: false })
 const pagination = ref<HTMLElement>()
@@ -97,6 +98,7 @@ function resize(event: Event) {
           <span aria-hidden="true">›</span>
         </button>
         <select
+          v-single-select
           :value="pageSize"
           aria-label="每页条数"
           :disabled="disabled || sizes.length < 2"
@@ -125,12 +127,12 @@ function resize(event: Event) {
 </template>
 
 <style scoped>
-.pagination.list-pagination { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; min-height: 49px; padding: 8px 12px; border-top: 1px solid var(--line); background: white; font-size: 13px; color: var(--muted); }
+.pagination.list-pagination { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; min-height: 41px; padding: 4px 10px; border-top: 1px solid var(--line); background: white; font-size: 13px; color: var(--muted); }
 .list-pagination__summary { min-width: 0; overflow-wrap: anywhere; }
 .list-pagination__controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; margin-left: auto; }
 .pagination.list-pagination button { display: inline-grid; place-items: center; min-width: 32px; min-height: 32px; padding: 0 8px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--ink); font-size: 13px; cursor: pointer; }
-.pagination.list-pagination button:hover:not(:disabled) { color: #a64b0b; background: var(--accent-soft); }
-.pagination.list-pagination button[aria-current="page"] { color: #a64b0b; background: var(--accent-soft); font-weight: 700; }
+.pagination.list-pagination button:hover:not(:disabled) { color: var(--accent); background: var(--accent-soft); }
+.pagination.list-pagination button[aria-current="page"] { color: var(--accent); background: var(--accent-soft); font-weight: 700; }
 .pagination.list-pagination button:disabled { color: #a0a7b3; background: transparent; cursor: not-allowed; }
 .pagination.list-pagination :is(input, select) { height: 32px; min-height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: 4px; background: white; color: var(--ink); font-size: 13px; }
 .pagination.list-pagination select { width: auto; max-width: 120px; }

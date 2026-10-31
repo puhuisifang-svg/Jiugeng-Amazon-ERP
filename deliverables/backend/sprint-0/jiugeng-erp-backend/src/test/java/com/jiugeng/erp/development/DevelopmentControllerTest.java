@@ -126,6 +126,7 @@ class DevelopmentControllerTest {
             .andExpect(jsonPath("$.status").value("DRAFT")).andExpect(jsonPath("$.version").value(0))
             .andReturn().getResponse().getContentAsString();
         String id=json.readTree(result).path("id").asText();
+        jdbc.update("DELETE FROM launch_workspace WHERE entity_id=?",id);
         assertThat(json.readTree(result).path("number").asText()).matches("ND-M-[0-9]{8,}");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM selection_candidate",Integer.class)).isZero();
         mvc.perform(get("/api/v1/product-development/"+id).header("Authorization",selector)).andExpect(status().isOk())
@@ -177,6 +178,8 @@ class DevelopmentControllerTest {
         String body=mvc.perform(post("/api/v1/selection/candidates").header("Authorization",selector).contentType(MediaType.APPLICATION_JSON)
             .content("{\"asinOrUrl\":\"B0DEV33001\",\"title\":\"开发测试\",\"score\":82}")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         String id=json.readTree(body).path("id").asText();
+        // Retained legacy workflow fixture; launch tests cover mandatory new workflow.
+        jdbc.update("DELETE FROM launch_workspace WHERE entity_id=?",id);
         jdbc.update("UPDATE selection_candidate SET owner='Synthetic researcher',selection_reason='Test evidence',weighted_score=80,research_json=? WHERE id=?", "{\"riskStatus\":\"ACCEPTABLE\",\"riskReason\":\"synthetic check\",\"conclusion\":\"test conclusion\",\"estimateId\":\"test-estimate\"}", id);
         jdbc.update("INSERT INTO selection_candidate_evidence(id,candidate_id,name,url,added_by_id,added_by_name,added_by_role) VALUES(?,?,'test','https://example.com/evidence','test','test','SELECTION')",UUID.randomUUID().toString(),id);
         jdbc.update("INSERT INTO selection_estimate(id,candidate_id,request_id,payload_json,result_json,revision) VALUES('test-estimate',?,'test-request','{}','{}',1)",id);
@@ -186,7 +189,7 @@ class DevelopmentControllerTest {
     private void approve(String id)throws Exception {candidateTransition(id,"REVIEWING",200);candidateTransition(id,"APPROVED",200);}
     private String user(String role)throws Exception {
         String id=UUID.randomUUID().toString(),name="dev-"+id.substring(0,8),password="Development-Test-42";
-        jdbc.update("INSERT INTO iam_user(id,login_name,display_name,password_hash,role,status,must_change_password) VALUES (?,?,?,?,?,'ENABLED',FALSE)",id,name,name,new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder().encode(password),role);
+        jdbc.update("INSERT INTO iam_user(id,login_name,display_name,password_hash,role,status,must_change_password) VALUES (?,?,?,?,?,'ENABLED',FALSE)",id,name,name,new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder().encode(password),role);jdbc.update("INSERT INTO iam_user_role(user_id,role_id) SELECT id,role FROM iam_user WHERE id=?",id);
         String body=mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("loginName",name,"password",password)))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         return "Bearer "+json.readTree(body).path("token").asText();
     }

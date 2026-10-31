@@ -2,6 +2,7 @@ package com.jiugeng.erp.iam;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -42,6 +43,33 @@ class IamControllerTest {
         jdbc.update("DELETE FROM iam_user");
         jdbc.update("UPDATE iam_security_setting SET setting_value = '7', updated_by = NULL");
         service.createUser("admin", "测试管理员", INITIAL_PASSWORD, Role.ADMIN);
+    }
+
+    @Test
+    void deletesAccountRevokesSessionsAndPreservesAudit() throws Exception {
+        String admin = loginAndChangeAdmin();
+        var target = service.createUser("delete-target", "Synthetic delete target", INITIAL_PASSWORD, Role.SELECTION);
+        String targetToken = login("delete-target", INITIAL_PASSWORD);
+        changePassword(targetToken, INITIAL_PASSWORD, CHANGED_PASSWORD);
+        mvc.perform(delete("/api/v1/users/" + target.id()).header("Authorization", bearer(targetToken)))
+                .andExpect(status().isForbidden());
+        String adminId = jdbc.queryForObject("SELECT id FROM iam_user WHERE login_name='admin'", String.class);
+        mvc.perform(delete("/api/v1/users/" + adminId).header("Authorization", bearer(admin)))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("SELF_DELETE_FORBIDDEN"));
+        mvc.perform(delete("/api/v1/users/" + target.id()).header("Authorization", bearer(admin)))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/auth/me").header("Authorization", bearer(targetToken)))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of("loginName", "delete-target", "password", CHANGED_PASSWORD))))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/v1/users/" + target.id() + "/enable").header("Authorization", bearer(admin)))
+                .andExpect(status().isNotFound());
+        mvc.perform(delete("/api/v1/users/" + target.id()).header("Authorization", bearer(admin)))
+                .andExpect(status().isNotFound());
+        assertThat(service.users()).noneMatch(user -> user.id().equals(target.id()));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM iam_user WHERE id=? AND deleted_at IS NOT NULL", Integer.class, target.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE action='ACCOUNT_DELETE'", Integer.class)).isEqualTo(1);
     }
 
     @Test
@@ -86,6 +114,7 @@ class IamControllerTest {
     @Test
     void usesTheApprovedMvpCapabilityContract() {
         assertThat(IamTypes.capabilities(Role.ADMIN)).containsExactlyInAnyOrder(
+                "finance.read", "finance.write",
                 "costs.read", "costs.write", "costs.publish", "costs.export",
                 "system.users.manage", "products.read", "products.write", "materials.read", "materials.write",
                 "inventory.read", "inventory.write", "selection.read", "selection.write", "watch.read",

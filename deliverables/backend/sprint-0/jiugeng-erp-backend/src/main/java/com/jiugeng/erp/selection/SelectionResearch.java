@@ -40,6 +40,7 @@ class SelectionResearch {
     List<Estimate> estimates(String id){return jdbc.sql("SELECT * FROM selection_estimate WHERE candidate_id=:id ORDER BY revision DESC")
         .param("id",id).query((r,n)->new Estimate(r.getString("id"),r.getInt("revision"),tree(r.getString("payload_json")),tree(r.getString("result_json")),r.getTimestamp("created_at").toInstant().toString())).list();}
     void check(String id,Long version){
+        if(jdbc.sql("SELECT COUNT(*) FROM launch_workspace WHERE kind='CANDIDATE' AND entity_id=:id").param("id",id).query(Long.class).single()>0)throw error(409,"请在新版候选工作台修改和审批");
         var row=jdbc.sql("SELECT version,status FROM selection_candidate WHERE id=:id FOR UPDATE").param("id",id)
             .query((r,n)->Map.entry(r.getLong(1),r.getString(2))).optional().orElseThrow(()->error(404,"候选不存在"));
         require(version!=null && version>=0,"版本号必填");

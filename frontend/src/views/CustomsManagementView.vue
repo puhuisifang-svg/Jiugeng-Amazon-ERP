@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
 import ListPagination from '@/components/ListPagination.vue'
 const listSize = ref(20)
 import { computed, nextTick, onMounted, ref } from 'vue'
@@ -59,7 +60,10 @@ onMounted(load)
         v-model="query"
         maxlength="128"
         placeholder="搜索SKU、产品名称、中英文品名或商品编码"
-      ></label><label>资料状态<select v-model="state"><option value="">全部</option><option value="MISSING">未维护</option><option value="DRAFT">草稿 / 待核对</option><option value="REVIEWED">资料已核对</option></select></label><button
+      ></label><label>资料状态<select
+        v-model="state"
+        v-single-select
+      ><option value="">全部</option><option value="MISSING">未维护</option><option value="DRAFT">草稿 / 待核对</option><option value="REVIEWED">资料已核对</option></select></label><button
         type="submit"
         :disabled="loading"
       >

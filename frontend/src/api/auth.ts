@@ -14,6 +14,10 @@ export interface AppUser {
   status: 'ENABLED' | 'DISABLED'
   mustChangePassword: boolean
   lockedAt?: string | null
+  roles?: import('./roles').RoleRef[]
+  authorizationVersion?: number
+  createdAt?: string
+  lastLoginAt?: string | null
   capabilities: Capability[]
 }
 
@@ -93,6 +97,7 @@ export const passwordRecoveryApi = {
 }
 
 export const usersApi = {
+  remove: (id: string) => apiRequest<void>(`/v1/users/${id}`, { method: 'DELETE' }),
   list: () => apiRequest<AppUser[]>('/v1/users'),
   create: (input: { loginName: string; displayName: string; email?: string; phone?: string; initialPassword: string; role: AppRole }) =>
     apiRequest<AppUser>('/v1/users', { method: 'POST', body: JSON.stringify(input) }),
@@ -110,4 +115,9 @@ export const usersApi = {
     apiRequest<AppUser>(`/v1/users/${id}/recovery-contacts`, {
       method: 'POST', body: JSON.stringify({ email, phone }),
     }),
+}
+
+export const userDefaultsApi = {
+  get: () => apiRequest<{initialPassword:string}>('/v1/settings/user-defaults'),
+  save: (initialPassword:string) => apiRequest<{initialPassword:string}>('/v1/settings/user-defaults',{method:'PUT',body:JSON.stringify({initialPassword})}),
 }

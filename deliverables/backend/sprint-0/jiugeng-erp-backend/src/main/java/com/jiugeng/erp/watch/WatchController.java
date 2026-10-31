@@ -9,7 +9,7 @@ import static com.jiugeng.erp.watch.WatchTypes.*;import com.jiugeng.erp.iam.Auth
   var existing=service.stores().stream().filter(v->v.storeKey().equals(seller)).findFirst();
   var store=existing.or(()->service.restoreStore(seller,a)).orElseGet(()->service.createStore(seller,name.isBlank()?seller:name,"https://www.amazon.com/sp?seller="+seller,a));collection.enqueue("STORE",store.id());return store;
  }
- @PostMapping("/stores/{id}/collect") @PreAuthorize("hasAuthority('watch.write')") void collect(@PathVariable String id){collection.enqueue("STORE",id);}
+ @PostMapping("/stores/{id}/collect") @PreAuthorize("hasAuthority('watch.collect')") void collect(@PathVariable String id){collection.enqueue("STORE",id);}
  static String seller(String value){try{var uri=java.net.URI.create(value);if(!"https".equals(uri.getScheme())||!java.util.Set.of("www.amazon.com","amazon.com").contains(uri.getHost())||uri.getUserInfo()!=null||(uri.getPort()!=-1&&uri.getPort()!=443))throw new IllegalArgumentException();
   var query=uri.getRawQuery();if(query!=null)for(String p:query.split("&")){var kv=p.split("=",2);if(kv.length==2&&java.util.Set.of("seller","me").contains(kv[0])&&kv[1].matches("[A-Z0-9]{8,30}"))return kv[1];}
  }catch(Exception ignored){}throw new WatchException(400,"WATCH_SELLER_URL","请填写包含 seller= 或 me= 的亚马逊美国站店铺地址");}

@@ -11,6 +11,7 @@ vi.mock('@/api/domain', () => ({
     createSupplier,
     updateSupplier: vi.fn(),
     disableSupplier: vi.fn(),
+    deleteSupplier: vi.fn(),
   },
 }))
 
@@ -24,6 +25,20 @@ describe('SuppliersView', () => {
   beforeEach(() => {
     suppliers.mockReset().mockResolvedValue({ items: [], totalCount: 0, page: 0, size: 100 })
     createSupplier.mockReset().mockResolvedValue({ id: 's1', name: '包装供应商', status: 'ACTIVE', version: 0 })
+  })
+
+  it('cancels deletion and deletes only the confirmed supplier', async () => {
+    suppliers.mockResolvedValue({ items: [{ id: 's1', name: '合成供应商', status: 'ACTIVE', version: 3 }], totalCount: 1 })
+    const w = mount(SuppliersView); await flushPromises()
+    await w.findAll('button').find(b => b.text() === '删除')!.trigger('click')
+    settleConfirmation(null); await flushPromises()
+    expect(domainApi.deleteSupplier).not.toHaveBeenCalled()
+    await w.findAll('button').find(b => b.text() === '删除')!.trigger('click')
+    settleConfirmation('confirmed'); await flushPromises()
+    expect(domainApi.deleteSupplier).toHaveBeenCalledWith('s1', 3)
+    expect(w.find('tbody tr').exists()).toBe(false)
+    expect(w.text()).toContain('供应商已删除')
+    w.unmount()
   })
 
   it('submits a plain supplier request and reports success', async () => {

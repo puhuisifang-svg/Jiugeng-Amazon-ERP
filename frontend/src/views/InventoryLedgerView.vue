@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
 import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
@@ -14,7 +15,7 @@ const reversalTarget = ref<LedgerEntryDto | null>(null); const reversalReason = 
 const filters = reactive({ keyword: '', type: '' })
 const page = ref(1); const pageSize = ref(20)
 const mockMode = runtimeConfig.authMode === 'mock'
-const writable = computed(() => !mockMode && session.canAccess(['inventory.write']))
+const writable = computed(() => !mockMode && session.canAccess(['inventory.reverse']))
 const transactionTypes = computed(() => [...new Set(entries.value.map(item => item.type))].sort())
 const reversedTransactionIds = computed(() => new Set(entries.value
   .filter(item => item.type === 'REVERSAL' && item.referenceTransactionId)
@@ -82,7 +83,10 @@ onMounted(load)
         v-model="filters.keyword"
         placeholder="辅料编码、名称、原因或操作人"
       ></label>
-      <label>流水类型<select v-model="filters.type"><option value="">全部类型</option><option
+      <label>流水类型<select
+        v-model="filters.type"
+        v-single-select
+      ><option value="">全部类型</option><option
         v-for="item in transactionTypes"
         :key="item"
         :value="item"

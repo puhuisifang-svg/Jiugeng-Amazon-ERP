@@ -27,10 +27,10 @@ export interface AuditPage {
 }
 
 export interface AuditQuery {
-  actorLoginName?: string | undefined
-  category?: string | undefined
-  action?: string | undefined
-  resourceType?: string | undefined
+  actorLoginName?: string | string[] | undefined
+  category?: string | string[] | undefined
+  action?: string | string[] | undefined
+  resourceType?: string | string[] | undefined
   outcome?: AuditOutcome | '' | undefined
   from?: string | undefined
   to?: string | undefined
@@ -41,12 +41,16 @@ export interface AuditQuery {
 export function auditQueryString(query: AuditQuery): string {
   const parameters = new URLSearchParams()
   for (const [key, value] of Object.entries(query)) {
-    if (value !== undefined && value !== '') parameters.set(key, String(value))
+    if (Array.isArray(value)) value.forEach(item => parameters.append(key, item))
+    else if (value !== undefined && value !== '') parameters.set(key, String(value))
   }
   const encoded = parameters.toString()
   return encoded ? `?${encoded}` : ''
 }
 
+export interface AuditOptions { actors: { value: string; label: string | null }[]; categories: string[]; actions: string[]; resources: string[] }
+
 export const auditApi = {
+  options: () => apiRequest<AuditOptions>('/v1/audit/events/options'),
   events: (query: AuditQuery = {}) => apiRequest<AuditPage>(`/v1/audit/events${auditQueryString(query)}`),
 }

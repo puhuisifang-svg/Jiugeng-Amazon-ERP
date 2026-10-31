@@ -14,7 +14,7 @@ describe('store collection timing',()=>{
   vi.mocked(apiRequest).mockResolvedValueOnce({...timing,intervalDays:3,localTime:'09:30',timeZone:'Asia/Shanghai',version:1})
   await w.get('form').trigger('submit');await flushPromises()
   const last=vi.mocked(apiRequest).mock.calls.at(-1)!;expect(last[0]).toBe('/v1/collection/stores/store1/timing');expect(JSON.parse(last[1]!.body as string)).toMatchObject({intervalDays:3,localTime:'09:30',timeZone:'Asia/Shanghai',version:0})
-  expect(w.emitted('saved')).toHaveLength(1);expect(w.get('form button').attributes('disabled')).toBeDefined();w.unmount()
+  expect(w.emitted('saved')).toHaveLength(1);expect(w.findAll('button').find(b=>b.text()==='保存采集计划')!.attributes('disabled')).toBeDefined();w.unmount()
  })
  it('does not permit a read-only user to save',async()=>{
   const w=mount(StoreTimingForm,{props:{storeId:'store1',writable:false}});await flushPromises();expect(w.get('fieldset').attributes('disabled')).toBeDefined()

@@ -1,0 +1,57 @@
+/* Shared workspace chrome only. Product rows, images and editing forms retain their sizing. */
+#main-content :is(.filter-panel, .audit-filters, .dashboard-filters, .monitor-filters, .mw-filters, .sku-filter-card) {
+  min-height: 0;
+  padding: 4px 10px;
+  gap: 6px 10px;
+  border-radius: 6px;
+  box-shadow: none;
+}
+#main-content :is(.filter-panel, .audit-filters, .dashboard-filters, .monitor-filters, .mw-filters, .sku-filter-card) :is(input:not([type=checkbox]):not([type=radio]), select, button) {
+  min-height: var(--ui-control-height);
+  height: var(--ui-control-height);
+  font-size: 13px;
+}
+#main-content :is(.material-toolbar, .monitor-toolbar, .mw-toolbar, .cost-list-toolbar) {
+  min-height: 0;
+  padding: 4px 10px;
+  gap: 6px 8px;
+  border-radius: 6px;
+  box-shadow: none;
+  flex-wrap: wrap;
+}
+#main-content :is(.material-toolbar, .monitor-toolbar, .mw-toolbar, .cost-list-toolbar) :is(button, .toolbar-link) {
+  min-height: var(--ui-control-height);
+  padding-block: 4px;
+  font-size: 13px;
+}
+#main-content .monitor-batch { padding: 4px 10px; gap: 6px; }
+#main-content .sku-filter-grid { gap: 6px 10px; }
+#main-content .page-stack > .page-heading { padding: 6px 10px; }
+#main-content .page-stack > .page-heading p { margin-block: 2px; }
+@media (min-width: 641px) {
+  #main-content :is(.filter-panel, .audit-filters, .dashboard-filters, .monitor-filters, .mw-filters) label {
+    display: flex; flex-direction: row; align-items: center; gap: 6px;
+    white-space: nowrap; min-width: 0;
+  }
+  #main-content :is(.filter-panel, .audit-filters, .dashboard-filters) label :is(input:not([type=checkbox]):not([type=radio]), select) {
+    flex: 1; width: 0; min-width: 0;
+  }
+}
+@media (max-width: 640px) {
+  #main-content .filter-panel:not(.ui-filter-row) label {
+    display: flex; flex-direction: row; align-items: center; gap: 4px; white-space: nowrap;
+  }
+  #main-content .filter-panel:not(.ui-filter-row) label :is(input:not([type=checkbox]):not([type=radio]), select) {
+    flex: 1; width: 0; min-width: 0;
+  }
+  #main-content :is(.filter-panel, .audit-filters, .dashboard-filters, .monitor-filters, .mw-filters, .sku-filter-card) {
+    max-height: 30dvh; overflow: auto;
+  }
+  #main-content :is(.material-toolbar, .monitor-toolbar, .mw-toolbar, .cost-list-toolbar) {
+    flex-direction: row; align-items: center;
+  }
+}
+@media (min-width: 641px) and (max-width: 1000px) {
+  #main-content .product-management-filters { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+  #main-content .product-management-filters > .filter-reset-button { grid-column: 3; grid-row: 1 / span 2; align-self: center; }
+}

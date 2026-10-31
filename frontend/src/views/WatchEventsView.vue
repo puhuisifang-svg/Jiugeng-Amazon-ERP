@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import SuccessToast from '@/components/SuccessToast.vue'
@@ -44,11 +45,17 @@ onMounted(load)
     <SyntheticNotice v-if="!formal" />
     <p>美国站 · 首次发现为监控观测时间，不等于亚马逊上架日期。</p>
     <div class="panel filter-panel operation-form ui-filter-row">
-      <label>ASIN / 标题<input v-model="query"></label><label>店铺<select v-model="store"><option value="">全部店铺</option><option
+      <label>ASIN / 标题<input v-model="query"></label><label>店铺<select
+        v-model="store"
+        v-single-select
+      ><option value="">全部店铺</option><option
         v-for="[id,name] in stores"
         :key="id"
         :value="id"
-      >{{ name }}</option></select></label><label>处理状态<select v-model="state"><option value="">全部</option><option
+      >{{ name }}</option></select></label><label>处理状态<select
+        v-model="state"
+        v-single-select
+      ><option value="">全部</option><option
         v-for="(name,key) in labels"
         :key="key"
         :value="key"

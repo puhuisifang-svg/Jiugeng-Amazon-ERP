@@ -162,7 +162,7 @@ class MonitoringControllerTest {
     private String create(String token,String asin)throws Exception{return mapper.readTree(mvc.perform(post(ROOT).header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("requestId",UUID.randomUUID().toString(),"asins",List.of(asin))))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).at("/0/id").asText();}
     private String login(String role)throws Exception{
         String id=UUID.randomUUID().toString(),name="monitor-"+id.substring(0,8),password="Monitor-Test-42";
-        jdbc.update("INSERT INTO iam_user(id,login_name,display_name,password_hash,role,status,must_change_password) VALUES(?,?,?,?,?,'ENABLED',FALSE)",id,name,name,new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder().encode(password),role);
+        jdbc.update("INSERT INTO iam_user(id,login_name,display_name,password_hash,role,status,must_change_password) VALUES(?,?,?,?,?,'ENABLED',FALSE)",id,name,name,new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder().encode(password),role);jdbc.update("INSERT INTO iam_user_role(user_id,role_id) SELECT id,role FROM iam_user WHERE id=?",id);
         return "Bearer "+mapper.readTree(mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(json(Map.of("loginName",name,"password",password)))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).get("token").asText();
     }
     private String json(Object value)throws Exception{return mapper.writeValueAsString(value);}

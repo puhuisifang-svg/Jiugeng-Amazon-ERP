@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { navigationDomains as definitions } from '@/config/navigation'
+import { pageTitles } from '@/state/pageTitles'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 
@@ -50,16 +52,7 @@ async function closeTabs(mode: 'current' | 'others' | 'all') {
   if (currentEntry.value?.path !== target.path && await router.push(`/${target.path}`)) return
   visited.value = target.path === 'home' ? [] : [target.path]
 }
-const definitions = [
-  { title: '工作台', icon: '⌂', groups: ['工作台', '工作台维护'] },
-  { title: '商品', icon: '◇', groups: ['产品管理'] },
-  { title: '发货', icon: '↗', groups: ['发货管理'] },
-  { title: '客户', icon: '客', groups: ['客户管理'] },
-  { title: '订单', icon: '单', groups: ['订单管理'] },
-  { title: '合规', icon: '✓', groups: ['报关管理'] },
-  { title: '选品', icon: '☆', groups: ['选品管理'] },
-  { title: '设置', icon: '⚙', groups: ['系统管理'] },
-]
+
 const entries = computed(() => (appRoutes.find(item => item.path === '/')?.children ?? [])
   .filter(item => !item.meta?.hidden && session.canAccess(item.meta?.capabilities)))
 const domains = computed(() => definitions.map(domain => ({
@@ -72,10 +65,10 @@ const currentEntry = computed(() => entries.value.find(item => `/${item.path}` =
   ?? entries.value.find(item => `/${item.path}` === route.meta.parentPath)
   ?? (route.path.startsWith('/inventory/') ? entries.value.find(item => item.path === 'materials') : undefined))
 const activeDomain = computed(() => domains.value.find(domain => domain.rows.some(row => row.items.includes(currentEntry.value!)))?.title)
-const breadcrumbs = computed(() => route.meta.breadcrumbs ?? [
+const breadcrumbs = computed(() => (route.meta.breadcrumbs ?? [
   { title: activeDomain.value ?? '工作台' },
   { title: String(route.meta.title) },
-])
+]).map((item,index,all)=>index===all.length-1 && pageTitles[route.path] ? {...item,title:pageTitles[route.path]!} : item))
 const home = computed(() => entries.value.find(item => item.path === 'home'))
 const tabs = computed(() => visited.value.map(path => entries.value.find(item => item.path === path)).filter(item => item !== undefined))
 const expanded = computed(() => domains.value.find(domain => domain.title === openDomain.value))
@@ -229,7 +222,7 @@ onBeforeUnmount(() => {
         <span
           class="erp-account__user"
           aria-label="当前账号"
-        >{{ session.user.value?.displayName }} · {{ session.user.value?.role }}</span>
+        >{{ session.user.value?.displayName }} · {{ session.user.value?.roles?.map(r=>r.name).join('、') || session.user.value?.role }}</span>
         <button
           type="button"
           @click="logout"
@@ -278,6 +271,29 @@ onBeforeUnmount(() => {
         class="tabs-hint"
       >从上方菜单打开功能，最近访问的页面将在这里显示</span>
     </nav>
+    <nav
+      class="page-heading"
+      aria-label="面包屑"
+    >
+      <div class="page-heading__trail">
+        <template
+          v-for="(item, index) in breadcrumbs"
+          :key="`${item.title}-${index}`"
+        >
+          <span
+            v-if="index"
+            aria-hidden="true"
+          >/</span><RouterLink
+            v-if="item.to"
+            :to="item.to"
+          >
+            {{ item.title }}
+          </RouterLink><h1 v-else-if="index === breadcrumbs.length - 1">
+            {{ item.title }}
+          </h1><span v-else>{{ item.title }}</span>
+        </template>
+      </div>
+    </nav>
     <div
       v-if="tabMenu"
       ref="tabMenuElement"
@@ -304,29 +320,6 @@ onBeforeUnmount(() => {
         关闭全部
       </button>
     </div>
-    <nav
-      class="page-heading"
-      aria-label="面包屑"
-    >
-      <div class="page-heading__trail">
-        <template
-          v-for="(item, index) in breadcrumbs"
-          :key="`${item.title}-${index}`"
-        >
-          <span
-            v-if="index"
-            aria-hidden="true"
-          >/</span><RouterLink
-            v-if="item.to"
-            :to="item.to"
-          >
-            {{ item.title }}
-          </RouterLink><h1 v-else-if="index === breadcrumbs.length - 1">
-            {{ item.title }}
-          </h1><span v-else>{{ item.title }}</span>
-        </template>
-      </div>
-    </nav>
     <main
       id="main-content"
       ref="content"
@@ -349,16 +342,16 @@ onBeforeUnmount(() => {
 .erp-shell > * { min-width: 0; }
 .erp-header { position: relative; z-index: 12; display: flex; align-items: stretch; justify-content: space-between; min-height: var(--ui-header-height); color: #e4e9f5; background: #101c3b; }
 .erp-navigation { display: flex; min-width: 0; align-items: stretch; }
-.erp-brand { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; padding: 0 24px 0 20px; color: inherit; white-space: nowrap; font-size: 17px; text-decoration: none; }
+.erp-brand { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; padding: 0 16px 0 12px; color: inherit; white-space: nowrap; font-size: 17px; text-decoration: none; }
 .erp-brand:hover { color: white; background: #192746; }
 .erp-brand strong { font-size: 13px; color: #9eaccb; font-weight: 500; }
-.erp-brand__mark { display: grid; width: 30px; height: 30px; place-items: center; color: #101c3b; background: #ffb448; border-radius: 8px; font-weight: 800; }
+.erp-brand__mark { display: grid; width: 26px; height: 26px; place-items: center; color: #101c3b; background: #ffb448; border-radius: 8px; font-weight: 800; }
 .domain-nav { display: flex; overflow-x: auto; }
-.domain-nav button { position: relative; flex: 0 0 auto; min-width: 72px; padding: 0 14px; color: #c8d0e3; border: 0; background: transparent; cursor: pointer; font-size: 14px; font-weight: 600; }
+.domain-nav button { position: relative; flex: 0 0 auto; min-width: 64px; padding: 0 12px; color: #c8d0e3; border: 0; background: transparent; cursor: pointer; font-size: 13px; line-height: 20px; font-weight: 500; }
 .domain-nav button:hover, .domain-nav button.is-open { color: white; background: #293858; }
 .domain-nav button.is-active::after { position: absolute; bottom: 0; left: 20px; right: 20px; height: 3px; background: #ffb448; content: ''; }
 .domain-chevron { margin-left: 6px; color: #8d9bb9; font-size: 12px; }
-.erp-account { display: flex; flex: 0 0 auto; align-items: center; gap: 18px; padding: 0 20px; font-size: 12px; }
+.erp-account { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; padding: 0 12px; font-size: 12px; }
 .platform-label { padding: 6px 12px; color: #cbd4ec; background: #283451; border-radius: 16px; }
 .erp-account button { padding: 8px 0; color: #d7dff0; border: 0; background: transparent; cursor: pointer; }
 .mega-panel { position: absolute; top: calc(100% + 6px); width: max-content; min-width: min(570px, calc(100vw - 16px)); max-width: calc(100vw - 16px); color: white; background: #232c48; border-radius: 4px; box-shadow: 0 6px 12px #10172b40; }
@@ -374,20 +367,21 @@ onBeforeUnmount(() => {
 .tab-context-menu button { display: block; width: 100%; min-height: 36px; padding: 0 12px; text-align: left; border: 0; border-radius: 4px; background: white; color: var(--ink); cursor: pointer; font-size: 13px; }
 .tab-context-menu button:hover { background: var(--accent-soft); }
 .mega-links a:hover, .mega-links a.is-current { color: #ffb448; background: #3a435d; }
-.workspace-tabs { display: flex; align-items: stretch; min-height: var(--ui-tabs-height); padding: 2px 12px 0; overflow-x: auto; color: #d8e0f6; background: #2b4083; }
-.home-tab { display: grid; flex: 0 0 44px; place-items: center; margin-right: 8px; border-radius: 6px 6px 0 0; text-decoration: none; font-size: 23px; }
-.workspace-tab { display: flex; flex: 0 0 auto; align-items: center; margin-right: 4px; border-radius: 6px 6px 0 0; font-size: 13px; }
-.workspace-tab a { display: flex; align-items: center; height: 100%; padding: 4px 8px 4px 12px; text-decoration: none; }
+.workspace-tabs { min-width: 0; display: flex; align-items: stretch; min-height: var(--ui-tabs-height); padding: 2px 8px 0; overflow-x: auto; color: #e0e6f6; background: #2b4083; }
+.home-tab { display: grid; flex: 0 0 44px; place-items: center; margin-right: 8px; border-radius: 4px 4px 0 0; text-decoration: none; font-size: 20px; }
+.workspace-tab { display: flex; flex: 0 0 auto; align-items: center; margin-right: 4px; border-radius: 4px 4px 0 0; font-size: 12px; line-height: 18px; }
+.workspace-tab a { display: flex; align-items: center; height: 100%; padding: 2px 10px; text-decoration: none; }
 .workspace-tab button { margin-right: 7px; width: 24px; height: 24px; color: inherit; background: transparent; border: 0; border-radius: 4px; cursor: pointer; }
 .workspace-tab button:hover { background: #8191bd40; }
-.workspace-tab:hover, .home-tab:hover { background: #405597; }
-.workspace-tab.is-current, .home-tab.is-current { color: #233b79; background: white; }
-.tabs-hint { padding: 4px 12px; color: #b0bfe4; font-size: 12px; white-space: nowrap; }
-.page-heading { display: flex; align-items: center; min-height: var(--ui-breadcrumb-height); padding: 3px 12px; background: white; border-bottom: 1px solid #e5e8ef; }
-.page-heading__trail { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; min-width: 0; color: #8992a4; font-size: 13px; }
-.page-heading__trail a { color: #53617a; font-weight: 700; text-decoration: none; }
+.workspace-tab:hover, .home-tab:hover { background: #3b5192; }
+.workspace-tab.is-current, .home-tab.is-current { color: #233b79; background: #f0f2f7; }
+.tabs-hint { padding: 4px 12px; color: #d0d9ef; font-size: 12px; white-space: nowrap; }
+.page-heading { display: flex; align-items: center; min-height: var(--ui-breadcrumb-height); padding: 0 12px; background: white; border-bottom: 1px solid #e5e8ef; }
+.page-heading__trail { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; min-width: 0; overflow-x: auto; white-space: nowrap; color: #8992a4; font-size: 12px; line-height: 18px; }
+.page-heading__trail > * { flex-shrink: 0; display: inline-flex; align-items: center; min-height: 24px; }
+.page-heading__trail a { color: #53617a; font-weight: 400; text-decoration: none; }
 .page-heading__trail a:hover { color: #ff8a34; }
-.page-heading h1 { margin: 0; color: #202c43; font-size: 13px; font-weight: 600; }
+.page-heading h1 { margin: 0; color: #202c43; font-size: 12px; font-weight: 600; }
 .page-heading__brand { color: #8a94a6; font-size: 12px; }
 .erp-content { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: var(--ui-page-padding); outline: none; }
 .erp-shell :is(a, button):focus-visible { outline: 2px solid #ffb448; outline-offset: -3px; }
@@ -395,7 +389,7 @@ onBeforeUnmount(() => {
 .skip-navigation:focus { top: 4px; }
 @media (max-width: 1100px) {
   .erp-brand { padding-inline: 16px; }
-  .domain-nav button { min-width: 76px; padding-inline: 14px; }
+  .domain-nav button { min-width: 60px; padding-inline: 10px; }
   .erp-account { gap: 10px; padding-inline: 14px; }
   .platform-label { display: none; }
 }
@@ -405,12 +399,13 @@ onBeforeUnmount(() => {
   .erp-brand { font-size: 14px; padding-inline: 12px; }
   .erp-brand strong { display: none; }
   .domain-nav { flex: 1; }
-  .domain-nav button { min-width: 70px; padding-inline: 10px; }
-  .erp-account { justify-content: flex-end; width: 100%; min-height: 32px; background: #192746; }
+  .domain-nav button { min-width: 60px; padding-inline: 10px; }
+  .erp-account { justify-content: flex-end; width: 100%; min-height: 28px; background: #192746; }
   .mega-panel__body { padding-inline: 12px; }
   .mega-row { grid-template-columns: 96px minmax(0, 1fr); }
-  .page-heading { padding: 3px 8px; }
-  .erp-content { padding: 8px; }
+  .page-heading { padding: 0 8px; }
+  .erp-content { padding: var(--ui-page-padding); }
+  .home-tab { flex-basis: 28px; margin-right: 2px; }
   .page-heading__brand { display: none; }
 }
 </style>

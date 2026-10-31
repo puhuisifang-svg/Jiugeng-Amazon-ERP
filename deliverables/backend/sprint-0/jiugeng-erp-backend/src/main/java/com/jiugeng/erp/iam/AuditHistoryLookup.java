@@ -8,6 +8,9 @@ import java.util.List;
 public interface AuditHistoryLookup {
     List<HistoryEvent> find(String resourceType, String resourceId);
 
+    record HistoryPage(List<HistoryEvent> items,long total,int page,int size) {}
+    HistoryPage page(String resourceType,String resourceId,int page,int size);
+
     record HistoryEvent(String id, String action, String actorLoginName, String actorDisplayName,
                         JsonNode beforeValue, JsonNode afterValue, String detail, Instant occurredAt) {}
 }

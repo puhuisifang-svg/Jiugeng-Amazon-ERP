@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
 import { onMounted, ref } from 'vue'
 import { customersApi, type Customer, type CustomerProduct } from '@/api/customers'
 import type { ShippingCustomerProduct } from '@/api/dashboard'
@@ -70,6 +71,7 @@ onMounted(async () => {
     </div>
     <label>客户<select
       v-model="customerId"
+      v-single-select
       required
       :aria-label="`${labelPrefix ?? '发货'}客户`"
       @change="changeCustomer"
@@ -111,6 +113,7 @@ onMounted(async () => {
     </div>
     <label>客户商品<select
       v-model="productId"
+      v-single-select
       required
       :aria-label="`${labelPrefix ?? '发货'}客户商品`"
       @change="selectProduct"

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
 import MonitoringPencil from '@/components/MonitoringPencil.vue'
 import { useAnchoredPopover } from '@/composables/useAnchoredPopover'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
@@ -22,6 +23,7 @@ const formal = runtimeConfig.authMode === 'password'
 const writable = computed(() => session.canAccess(['watch.write']))
 const items = ref<WatchStoreDto[]>([]), events = ref<WatchEventDto[]>([]), selectedStore = ref<WatchStoreDto>()
 const loading = ref(false), busyId = ref(''), error = ref(''), success = ref(''), selected = ref<string[]>([])
+const assignableStores = computed(() => { const name=session.user.value?.displayName; return name ? items.value.filter(s=>selected.value.includes(s.id) && s.owner!==name) : [] })
 const page = ref(1), pageSize = ref(20), query = ref(''), status = ref(''), owner = ref('')
 const owners = computed(() => [...new Set([session.user.value?.displayName, ...items.value.map(s=>s.owner)].filter(Boolean))] as string[])
 const filtered = computed(() => items.value.filter(s=>(!status.value||s.status===status.value)&&(!owner.value||s.owner===owner.value)&&[s.storeName,s.storeKey,s.owner,s.remark].join(' ').toLowerCase().includes(query.value.toLowerCase())))
@@ -93,8 +95,10 @@ async function refreshSelected(){
  }finally{busyId.value=''}
 }
 async function assignOwner(){
+ if(busyId.value || !writable.value || !assignableStores.value.length)return
+ const targets=[...assignableStores.value]
  busyId.value='batch';error.value=''
- try{for(const item of items.value.filter(s=>selected.value.includes(s.id)))await apiRequest(`/v1/watch/stores/${item.id}`,{method:'PUT',body:JSON.stringify({name:item.storeName,owner:session.user.value?.displayName??'',remark:item.remark??'',enabled:item.status==='ACTIVE',version:item.version})});success.value='已设置为我负责';selected.value=[];await load()}catch(e){error.value=e instanceof Error?e.message:'设置失败'}finally{busyId.value=''}
+ try{for(const item of targets)await apiRequest(`/v1/watch/stores/${item.id}`,{method:'PUT',body:JSON.stringify({name:item.storeName,owner:session.user.value?.displayName??'',remark:item.remark??'',enabled:item.status==='ACTIVE',version:item.version})});success.value='已设置为我负责';selected.value=[];await load()}catch(e){error.value=e instanceof Error?e.message:'设置失败'}finally{busyId.value=''}
 }
 async function run(item:WatchStoreDto,mode:WatchRunMode){busyId.value=item.id;try{const result=await domainApi.runWatchStore(item.id,mode,(snapshots.value[item.id]??'').split(/[\s,]+/).filter(Boolean));success.value=result.baselineChanged?'完整快照已提升为基线，本次没有新增事件。':'快照被安全拒绝，继续保留基线。';items.value=items.value.map(s=>s.id===item.id?result.item:s)}catch{error.value='快照运行失败'}finally{busyId.value=''}}
 onMounted(load)
@@ -106,12 +110,21 @@ onMounted(load)
       class="panel mw-filters"
       @submit.prevent="page=1"
     >
-      <label>站点<select disabled><option>美国</option></select></label>
-      <label>监控人<select v-model="owner"><option value="">全部监控人</option><option
+      <label>站点<select
+        v-single-select
+        disabled
+      ><option>美国</option></select></label>
+      <label>监控人<select
+        v-model="owner"
+        v-single-select
+      ><option value="">全部监控人</option><option
         v-for="name in owners"
         :key="name"
       >{{ name }}</option></select></label>
-      <label>状态<select v-model="status"><option value="">全部状态</option><option value="ACTIVE">监控中</option><option value="DISABLED">已暂停</option></select></label>
+      <label>状态<select
+        v-model="status"
+        v-single-select
+      ><option value="">全部状态</option><option value="ACTIVE">监控中</option><option value="DISABLED">已暂停</option></select></label>
       <label>店铺名称<input
         v-model="query"
         placeholder="店铺名称、标识或备注"
@@ -143,13 +156,13 @@ onMounted(load)
         </button>
         <button
           v-if="writable&&formal"
-          :disabled="!selected.length||!!busyId"
+          :disabled="!assignableStores.length||!!busyId||loading"
           @click="assignOwner"
         >
           设为我负责
         </button>
         <button
-          v-if="formal"
+          v-if="(formal) && session.canAccess(['watch.collect'])"
           :disabled="!writable||!selected.length||!!busyId"
           :class="{'mw-selected-update':selected.length>0}"
           aria-label="更新所选店铺"
@@ -254,7 +267,7 @@ onMounted(load)
                 >
                   详情
                 </button><button
-                  v-if="writable&&formal"
+                  v-if="formal && session.canAccess(['watch.remove'])"
                   class="mw-link"
                   :disabled="!!busyId"
                   @click="removeStore(item)"
@@ -329,7 +342,13 @@ onMounted(load)
         @submit.prevent="createStore"
       >
         <div class="mw-form-row">
-          <label>站点<select disabled><option>美国</option></select></label><label>监控人<select v-model="addOwner"><option value="">未分配</option><option
+          <label>站点<select
+            v-single-select
+            disabled
+          ><option>美国</option></select></label><label>监控人<select
+            v-model="addOwner"
+            v-single-select
+          ><option value="">未分配</option><option
             v-for="name in owners"
             :key="name"
           >{{ name }}</option></select></label>

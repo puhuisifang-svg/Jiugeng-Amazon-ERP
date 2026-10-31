@@ -21,7 +21,7 @@ describe('ContinuousWorklist', () => {
   })
   it('disables automatic movement when reduced motion is requested', async () => {
     vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })))
-    const wrapper = mount(ContinuousWorklist, { props: { items: Array.from({ length: 10 }, (_, index) => ({ id: String(index) })), label: '新品待开发' } })
+    const wrapper = mount(ContinuousWorklist, { props: { items: Array.from({ length: 10 }, (_, index) => ({ id: String(index) })), label: '样品待开发' } })
     await nextTick()
     expect(wrapper.findAll('.worklist-row')).toHaveLength(10)
     expect(wrapper.find('.worklist-track--animated').exists()).toBe(false)

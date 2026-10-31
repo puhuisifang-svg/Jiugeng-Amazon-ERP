@@ -25,6 +25,7 @@ describe('store product monitoring', () => {
     expect(wrapper.findAll('tbody tr')).toHaveLength(12);expect(wrapper.text()).toContain('Synthetic 31');wrapper.unmount()
   })
   it('renders only today event products with the same product table, including empty days', async () => {
+    vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date('2026-10-27T16:00:00Z'))
     const wrapper = await open(true)
     await wrapper.setProps({newProducts:[{asin:'B000000002',title:'Today item',detectedAt:'2026-10-27T12:00:00Z'} as WatchEventDto]})
     expect(wrapper.text()).toContain('今日上架')

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
 import ListPagination from '@/components/ListPagination.vue'
 const listSize = ref(20)
 import { computed, nextTick, reactive, ref, watch } from 'vue'
@@ -188,7 +189,10 @@ watch(() => [props.kind, customerFilter.value], () => {
         maxlength="128"
         :placeholder="isProduct ? '搜索客户、SKU、客户产品编码或特殊需求' : '搜索客户名称、1688账号、联系人或手机号'"
       ></label>
-      <label>状态<select v-model="status"><option value="">全部</option><option value="ACTIVE">启用</option><option value="DISABLED">停用</option></select></label>
+      <label>状态<select
+        v-model="status"
+        v-single-select
+      ><option value="">全部</option><option value="ACTIVE">启用</option><option value="DISABLED">停用</option></select></label>
       <button
         type="submit"
         :disabled="loading"
@@ -226,7 +230,7 @@ watch(() => [props.kind, customerFilter.value], () => {
               </tr>
               <tr v-else>
                 <th>客户</th><th>产品图片</th><th>产品名称 / SKU</th><th>供货价（人民币）</th><th>客户产品编码</th><th>产品特殊需求</th><th>状态</th><th
-                  v-if="writable"
+                  v-if="writable || session.canAccess(['customers.delete'])"
                   class="customer-actions"
                 >
                   操作
@@ -303,7 +307,7 @@ watch(() => [props.kind, customerFilter.value], () => {
                 </td><td>{{ item.customerProductCode || '—' }}</td><td class="customer-long-text">
                   {{ item.requirements || '—' }}
                 </td><td>{{ item.status === 'ACTIVE' ? '启用' : '停用' }}</td><td
-                  v-if="writable"
+                  v-if="writable || session.canAccess(['customers.delete'])"
                   class="customer-actions"
                 >
                   <button
@@ -313,6 +317,7 @@ watch(() => [props.kind, customerFilter.value], () => {
                     编辑
                   </button>
                   <button
+                    v-if="session.canAccess(['customers.delete'])"
                     type="button"
                     class="secondary-button"
                     :disabled="deleting"
@@ -455,6 +460,7 @@ watch(() => [props.kind, customerFilter.value], () => {
             :disabled="saving"
           ></label><label>状态<select
             v-model="customerForm.status"
+            v-single-select
             :disabled="saving"
           ><option value="ACTIVE">启用</option><option value="DISABLED">停用</option></select></label>
           <label class="form-wide">收货地址<input
@@ -498,6 +504,7 @@ watch(() => [props.kind, customerFilter.value], () => {
                 </button>
               </div>
               <select
+                v-single-select
                 :value="productForm.customerId"
                 aria-label="选择客户"
                 @change="pickCustomer"
@@ -553,6 +560,7 @@ watch(() => [props.kind, customerFilter.value], () => {
                 </button>
               </div>
               <select
+                v-single-select
                 :value="productForm.variantId"
                 aria-label="选择SKU"
                 @change="pickSku"
@@ -613,6 +621,7 @@ watch(() => [props.kind, customerFilter.value], () => {
           ></label>
           <label>状态<select
             v-model="productForm.status"
+            v-single-select
             :disabled="saving"
           ><option value="ACTIVE">启用</option><option value="DISABLED">停用</option></select></label>
           <label class="form-wide">产品特殊需求<input

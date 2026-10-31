@@ -112,7 +112,7 @@ public class CollectionService {
                 try{target=port(current.kind()).prepare(current.targetId());}catch(ResponseStatusException e){cancel(claim.job().id());return;}
                 if(adapter(current.provider(),current.kind()).isEmpty()||!current.enabled()||current.version()!=claim.job().scheduleVersion()||target.version()!=claim.job().targetVersion()){cancel(claim.job().id());return;}
                 if(observation==null||observation.observedAt()==null||observation.observedAt().isAfter(Instant.now().plusSeconds(60))||observation.observedAt().isBefore(Instant.parse("2000-01-01T00:00:00Z")))throw error(400,"来源观测时间无效");
-                boolean partialProduct=Set.of("PRODUCT","WATCH_NOVELTY").contains(current.kind())&&current.provider().equals(AmazonPublicAdapter.SOURCE)&&"PARTIAL".equals(observation.quality());
+                boolean partialProduct=Set.of("PRODUCT","WATCH_NOVELTY","CANDIDATE").contains(current.kind())&&current.provider().equals(AmazonPublicAdapter.SOURCE)&&"PARTIAL".equals(observation.quality());
                 if((!"COMPLETE".equals(observation.quality())&&!partialProduct)||!observation.pagesComplete()){finish(claim,"PARTIAL","分页或字段不完整，保留原基线");notify(claim,"采集不完整，保留原基线");return;}
                 String message=port(current.kind()).apply(target,current.provider(),claim.job().id(),observation);
                 boolean incompleteMonitor=partialProduct&&current.kind().equals("PRODUCT");

@@ -43,6 +43,37 @@ import org.springframework.test.web.servlet.MockMvc;
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class DashboardControllerTest {
+    @Test void onlyApprovedDevelopmentProjectsAppearInBothProductionLists() throws Exception {
+        String token=bearer(user("home-development-admin","ADMIN"));
+        String created=mvc.perform(post("/api/v1/development/workbench").header("Authorization",token)
+                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("requestId",UUID.randomUUID().toString(),"title","Synthetic linked development","owner","Developer","reason","Synthetic integration"))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String id=json.readTree(created).path("id").asText();
+        try {
+            String detail=mvc.perform(get("/api/v1/development/workbench/"+id).header("Authorization",token)).andReturn().getResponse().getContentAsString();
+            var w=json.readTree(detail).path("workspace");var doc=(com.fasterxml.jackson.databind.node.ObjectNode)w.path("document");doc.put("endDate","2099-01-01").put("owner","New owner");
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/development/workbench/"+id).header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("version",w.path("version").asLong(),"document",doc)))).andExpect(status().isOk());
+            mvc.perform(get("/api/v1/dashboard/pending-products").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(0));
+            mvc.perform(get("/api/v1/dashboard/production-products").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0));
+            // Synthetic approval evidence, equivalent to the append-only approval action record.
+            jdbc.update("INSERT INTO launch_revision(id,kind,entity_id,version,action,actor_id,actor_name,snapshot_json) VALUES(?,'DEVELOPMENT',?,99,'APPROVE','test','Synthetic reviewer','{}')",UUID.randomUUID().toString(),id);
+            for(String state:new String[]{"DRAFT","ACTIVE","FINAL_REVIEW"}){
+                jdbc.update("UPDATE launch_workspace SET state=?,stage=2 WHERE kind='DEVELOPMENT' AND entity_id=?",state,id);
+                mvc.perform(get("/api/v1/dashboard/pending-products").header("Authorization",token)).andExpect(status().isOk())
+                    .andExpect(jsonPath("$.items[?(@.developmentId == '"+id+"')].owner").value(org.hamcrest.Matchers.hasItem("New owner")))
+                    .andExpect(jsonPath("$.items[?(@.developmentId == '"+id+"')].developmentState").value(org.hamcrest.Matchers.hasItem(state)));
+            }
+            mvc.perform(get("/api/v1/dashboard/production-products").param("keyword","New owner").param("from","2099-01-01").param("to","2099-01-01").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1)).andExpect(jsonPath("$.items[0].developmentId").value(id));
+            mvc.perform(get("/api/v1/dashboard/production-products").param("keyword","no-match").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0));
+            for(String state:new String[]{"PROJECT_REVIEW","PAUSED","COMPLETED","VOID"}){
+                jdbc.update("UPDATE launch_workspace SET state=? WHERE kind='DEVELOPMENT' AND entity_id=?",state,id);
+                mvc.perform(get("/api/v1/dashboard/pending-products").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.items[?(@.developmentId == '"+id+"')]").isEmpty());
+            }
+            mvc.perform(get("/api/v1/dashboard/production-products").param("page","-1").header("Authorization",token)).andExpect(status().isBadRequest());
+            mvc.perform(get("/api/v1/dashboard/production-products")).andExpect(status().isUnauthorized());
+        } finally {jdbc.update("DELETE FROM launch_revision WHERE entity_id=?",id);jdbc.update("DELETE FROM launch_workspace WHERE entity_id=?",id);jdbc.update("DELETE FROM product_development WHERE id=?",id);}
+    }
+
     @Test
     void shipmentPreflightAllowsIdempotencyHeader() throws Exception {
         var response = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
@@ -401,9 +432,10 @@ class DashboardControllerTest {
                     .andExpect(status().isOk());
         }
         mvc.perform(get("/api/v1/dashboard/pending-products").header("Authorization",bearer(productToken)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(10))
-                .andExpect(jsonPath("$.totalCount").value(11)).andExpect(jsonPath("$.truncated").value(true))
-                .andExpect(jsonPath("$.items[0].productName").value("新品0"));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(0))
+                .andExpect(jsonPath("$.totalCount").value(0)).andExpect(jsonPath("$.truncated").value(false));
+        mvc.perform(get("/api/v1/dashboard/production-products").header("Authorization",bearer(selectionToken)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0));
 
         Map<String,Object> transfer=Map.of("quantity",5,"boxCount",2,"remark","当日安排",
                 "latestShipTime",LocalDateTime.of(today,java.time.LocalTime.of(18,0)).toString(),"version",0);
@@ -619,11 +651,11 @@ class DashboardControllerTest {
     private String user(String login,String role)throws Exception{String id=UUID.randomUUID().toString();var encoder=new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder();jdbc.update("""
             INSERT INTO iam_user (id,login_name,display_name,password_hash,role,status,must_change_password)
             VALUES (?,?,?,?,?,'ENABLED',FALSE)
-            """,id,login,login,encoder.encode(PASSWORD),role);String response=mvc.perform(post("/api/v1/auth/login")
+            """,id,login,login,encoder.encode(PASSWORD),role);jdbc.update("INSERT INTO iam_user_role(user_id,role_id) SELECT id,role FROM iam_user WHERE id=?",id);String response=mvc.perform(post("/api/v1/auth/login")
             .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("loginName",login,"password",PASSWORD))))
             .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();return json.readTree(response).get("token").asText();}
     private String bearer(String token){return "Bearer "+token;}
-    private void clean(){for(String table:new String[]{"dashboard_shipment_dispatch","dashboard_shipment_document","dashboard_command","dashboard_today_shipment","dashboard_pending_shipment",
+    private void clean(){for(String table:new String[]{"launch_revision","launch_workspace","product_development","dashboard_shipment_dispatch","dashboard_shipment_document","dashboard_command","dashboard_today_shipment","dashboard_pending_shipment",
             "dashboard_pending_product","dashboard_image_asset","product_auxiliary_material","variant_attribute","customer_product","product_variant","product",
             "iam_password_reset_challenge","audit_event","iam_session","iam_user"}){jdbc.update("DELETE FROM "+table);}}
 }

@@ -6,6 +6,8 @@ import router from './router'
 import { session } from './state/session'
 import './styles/main.css'
 import './styles/uiConsistency.css'
+import './styles/workspaceDensity.css'
+import './styles/workbenchTheme.css'
 
 async function bootstrap() {
   await session.initialize()

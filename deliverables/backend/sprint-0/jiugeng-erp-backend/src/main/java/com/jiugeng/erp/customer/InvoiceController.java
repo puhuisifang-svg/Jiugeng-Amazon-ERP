@@ -12,22 +12,22 @@ import org.springframework.web.bind.annotation.*;
 class InvoiceController {
     private final InvoiceService service;
     InvoiceController(InvoiceService service) { this.service=service; }
-    @GetMapping @PreAuthorize("hasAuthority('customers.read')")
+    @GetMapping @PreAuthorize("hasAuthority('invoices.read')")
     CustomerTypes.Page<InvoiceTypes.View> list(@RequestParam(defaultValue="") @Size(max=128) String q,
         @RequestParam(required=false) Boolean shipped, @RequestParam(required=false) Boolean invoiced,
         @RequestParam(defaultValue="0") @Min(0) @Max(100000) int page,
         @RequestParam(defaultValue="20") @Min(1) @Max(100) int size) {
         return service.list(q,shipped,invoiced,page,size);
     }
-    @GetMapping("/draft") @PreAuthorize("hasAuthority('customers.write')")
+    @GetMapping("/draft") @PreAuthorize("hasAuthority('invoices.write')")
     InvoiceTypes.Draft draft(@RequestParam @NotBlank @Size(max=36) String customerProductId) {
         return service.draft(customerProductId);
     }
-    @PostMapping @PreAuthorize("hasAuthority('customers.write')")
+    @PostMapping @PreAuthorize("hasAuthority('invoices.write')")
     InvoiceTypes.View create(@Valid @RequestBody InvoiceTypes.Input input,@AuthenticationPrincipal AuthenticatedActor actor) {
         return service.save(null,input,actor);
     }
-    @PutMapping("/{id}") @PreAuthorize("hasAuthority('customers.write')")
+    @PutMapping("/{id}") @PreAuthorize("hasAuthority('invoices.write')")
     InvoiceTypes.View update(@PathVariable String id,@Valid @RequestBody InvoiceTypes.Input input,@AuthenticationPrincipal AuthenticatedActor actor) {
         return service.save(id,input,actor);
     }

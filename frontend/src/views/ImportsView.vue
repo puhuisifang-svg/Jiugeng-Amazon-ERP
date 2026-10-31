@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, ref } from 'vue'
@@ -71,7 +72,10 @@ onMounted(load)
       @submit.prevent="upload"
     >
       <h2>上传 XLSX</h2>
-      <label>导入类型<select v-model="type"><option
+      <label>导入类型<select
+        v-model="type"
+        v-single-select
+      ><option
         v-for="item in activeImportTypes"
         :key="item"
         :value="item"

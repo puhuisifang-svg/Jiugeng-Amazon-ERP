@@ -46,11 +46,19 @@ class DashboardController {
     DashboardController(DashboardService service){this.service=service;}
 
     @GetMapping("/dashboard/today-shipments") @PreAuthorize("hasAuthority('dashboard.read')")
-    HomeSlice<TodayShipment> homeToday(){return service.homeToday();}
+    HomeSlice<TodayShipment> homeToday(Authentication auth){return service.homeToday();}
     @GetMapping("/dashboard/pending-shipments") @PreAuthorize("hasAuthority('dashboard.read')")
-    HomeSlice<PendingShipment> homePendingShipments(){return service.homePendingShipments();}
+    HomeSlice<PendingShipment> homePendingShipments(Authentication auth){return service.homePendingShipments();}
     @GetMapping("/dashboard/pending-products") @PreAuthorize("hasAuthority('dashboard.read')")
-    HomeSlice<PendingProduct> homePendingProducts(){return service.homePendingProducts();}
+    HomeSlice<HomePendingProduct> homePendingProducts(Authentication auth){return service.homePendingProducts();}
+
+    @GetMapping("/dashboard/production-products") @PreAuthorize("hasAuthority('dashboard.pending-products.manage')")
+    Page<HomePendingProduct> productionProducts(@RequestParam(defaultValue="") @Size(max=128) String keyword,
+            @RequestParam(required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required=false) @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue="0") @Min(0) int page,@RequestParam(defaultValue="20") @Min(1) @Max(100) int size){
+        return service.productionProducts(keyword,from,to,page,size);
+    }
 
     @GetMapping("/dashboard-maintenance/today-shipments") @PreAuthorize("hasAuthority('dashboard.shipments.manage')")
     Page<TodayShipment> todayList(@RequestParam(required=false) @Size(max=128) String keyword,

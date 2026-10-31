@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
 import ProductNameEditor from './ProductNameEditor.vue'
 import { computed, nextTick, onMounted, reactive, ref, toRaw } from 'vue'
 import { RouterLink } from 'vue-router'
@@ -132,7 +133,10 @@ onMounted(loadReferences)
           v-model="model.productType"
           maxlength="100"
         ></label>
-        <label>状态<select v-model="model.status"><option value="ACTIVE">启用</option><option value="DRAFT">待定</option><option value="DISABLED">停用</option></select></label>
+        <label>状态<select
+          v-model="model.status"
+          v-single-select
+        ><option value="ACTIVE">启用</option><option value="DRAFT">待定</option><option value="DISABLED">停用</option></select></label>
         <fieldset
           class="form-wide catalog-image-editor parent-image-editor"
           :disabled="busy || uploading !== null"
@@ -326,7 +330,10 @@ onMounted(loadReferences)
                 v-model:styles="variant.nameStyles"
                 :highlighted="variant.nameHighlighted"
               />
-              <label>状态<select v-model="variant.status"><option value="ACTIVE">启用</option><option value="DRAFT">待定</option><option value="DISABLED">停用</option></select></label>
+              <label>状态<select
+                v-model="variant.status"
+                v-single-select
+              ><option value="ACTIVE">启用</option><option value="DRAFT">待定</option><option value="DISABLED">停用</option></select></label>
             </div>
             <section
               v-show="activeTab(variantIndex) === 'specs'"
@@ -405,6 +412,7 @@ onMounted(loadReferences)
               </RouterLink>；档案独立保存，关联随产品整体保存。
             </p>
             <select
+              v-single-select
               aria-label="添加供应商"
               :disabled="loadingReferences"
               value=""
@@ -455,6 +463,7 @@ onMounted(loadReferences)
           >
             <h3>关联辅料</h3>
             <select
+              v-single-select
               aria-label="添加辅料"
               :disabled="loadingReferences"
               value=""

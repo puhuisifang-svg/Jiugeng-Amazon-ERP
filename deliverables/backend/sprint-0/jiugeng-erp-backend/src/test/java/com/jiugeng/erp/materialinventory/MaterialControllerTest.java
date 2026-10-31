@@ -190,7 +190,7 @@ class MaterialControllerTest {
                 INSERT INTO iam_user
                     (id, login_name, display_name, password_hash, role, status, must_change_password)
                 VALUES (?, ?, ?, ?, ?, 'ENABLED', FALSE)
-                """, id, loginName, loginName, encoder.encode(PASSWORD), role);
+                """, id, loginName, loginName, encoder.encode(PASSWORD), role);jdbc.update("INSERT INTO iam_user_role(user_id,role_id) SELECT id,role FROM iam_user WHERE id=?",id);
         String body = mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("loginName", loginName, "password", PASSWORD))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();

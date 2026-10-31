@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { costsApi, type CostRow, type CostVersion, type CostInput, type CostSnapshot, type CostOperation } from '@/api/costs'
@@ -83,6 +84,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
       ></label>
       <label><span>成本状态</span><select
         v-model="state"
+        v-single-select
         aria-label="成本状态"
       ><option value="">全部状态</option><option value="MISSING">未生效</option><option value="DRAFT">有草稿</option><option value="EFFECTIVE">有生效成本</option><option value="STALE">来源变化待核算</option><option value="INCOMPLETE">成本待完善</option></select></label>
       <button
@@ -267,6 +269,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
               <section class="cost-setting-card">
                 <h3>复用成本</h3><label>同父体 SKU<select
                   v-model="copySku"
+                  v-single-select
                   aria-label="复制同父体成本"
                   :disabled="busy"
                 ><option value="">选择已有成本的 SKU</option><option
@@ -320,6 +323,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
                 <div class="cost-add-bar">
                   <label><span class="sr-only">选择辅料</span><select
                     v-model="materialId"
+                    v-single-select
                     aria-label="选择辅料"
                     :disabled="busy"
                   ><option value="">选择已有辅料</option><option
@@ -453,6 +457,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
                 <div class="cost-add-bar">
                   <label><span class="sr-only">选择工序</span><select
                     v-model="operationId"
+                    v-single-select
                     aria-label="选择工序"
                     :disabled="busy"
                   ><option value="">选择工序</option><option
@@ -486,6 +491,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
                         </td><td>
                           <select
                             v-model="l.basis"
+                            v-single-select
                             aria-label="工价方式"
                             :disabled="busy"
                             @change="l.perProducts = 1"
@@ -635,13 +641,17 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
                 class="cost-version-picker"
               >
                 <label>查看版本<select
+                  v-single-select
                   :value="viewed?.id"
                   @change="viewed = versions.find(v => v.id === ($event.target as HTMLSelectElement).value)"
                 ><option
                   v-for="v in versions"
                   :key="v.id"
                   :value="v.id"
-                >V{{ v.versionNumber }} · {{ labels[v.status] }}</option></select></label><label>对比版本<select v-model="compare"><option value="">不对比</option><option
+                >V{{ v.versionNumber }} · {{ labels[v.status] }}</option></select></label><label>对比版本<select
+                  v-model="compare"
+                  v-single-select
+                ><option value="">不对比</option><option
                   v-for="v in versions.filter(v => v.id !== viewed?.id)"
                   :key="v.id"
                   :value="v.id"
@@ -721,7 +731,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
               >
                 导出成本明细
               </button><button
-                v-if="viewed.status === 'DRAFT' && writable"
+                v-if="viewed.status === 'DRAFT' && session.canAccess(['costs.delete'])"
                 class="cost-button cost-button--danger"
                 :disabled="busy"
                 @click="confirm = 'delete'"

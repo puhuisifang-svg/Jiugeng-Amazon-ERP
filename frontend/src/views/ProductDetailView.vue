@@ -111,7 +111,7 @@ watch([section, () => product.value?.id, () => product.value?.updatedAt, () => p
             />
           </button>
           <div><h2>{{ product.productName }}</h2><p>{{ product.productCode }} · {{ product.productType || '未填写类型' }} · {{ product.variants.length }} 个 SKU</p></div>
-          <span class="placeholder-badge">{{ statusLabel(product.status) }}</span>
+          <span :class="['status-badge', `status-badge--${product.status.toLowerCase()}`]">{{ statusLabel(product.status) }}</span>
           <div
             v-if="writable"
             class="table-actions"

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
+import ProductImagePreview from './ProductImagePreview.vue'
+import DatePicker from '@/components/DatePicker.vue'
 import { computed, nextTick, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { useCollectionStatus } from '@/composables/useCollectionStatus'
@@ -130,20 +133,20 @@ async function markNovelty(event:WatchEventDto,action:string){
           class="store-product-filters"
           :class="{'store-record-filters':isRecord}"
         >
-          <label>{{ isRecord?'发现日期':'首次发现' }}<input
+          <label class="date-range-filter"><span class="store-date-label">发现日期</span><DatePicker
             v-model="from"
+            v-model:end="to"
+            range
             type="date"
-            :aria-label="isRecord?'上架开始日期':'首次发现开始日期'"
-          ></label><label>至<input
-            v-model="to"
-            type="date"
-            :aria-label="isRecord?'上架结束日期':'首次发现结束日期'"
-          ></label><label class="store-search">搜索<input
+            :start-label="isRecord?'上架开始日期':'首次发现开始日期'"
+            :end-label="isRecord?'上架结束日期':'首次发现结束日期'"
+          /></label><label class="store-search">搜索<input
             v-model="q"
             placeholder="商品标题 / ASIN"
             aria-label="搜索标题或ASIN"
           ></label><label v-if="tab==='novelty'">判断结果<select
             v-model="judgement"
+            v-single-select
             aria-label="新品判断结果"
           ><option value="NOVEL">新品候选 / 疑似 / 已确认</option><option value="PENDING">待核实</option><option value="OLD">老链接</option><option value="EXCLUDED">已排除</option><option value="ALL">全部记录</option></select></label><button
             v-if="isRecord"
@@ -214,12 +217,11 @@ async function markNovelty(event:WatchEventDto,action:string){
                   >
                 </td><td>
                   <div class="mw-cell-product">
-                    <img
+                    <ProductImagePreview
                       v-if="p.imageUrl"
                       :src="p.imageUrl"
-                      alt="商品主图"
-                      loading="lazy"
-                    ><span
+                      :alt="p.asin + ' 商品图片'"
+                    /><span
                       v-else
                       class="store-image-empty"
                     >暂无图片</span><div>
@@ -318,7 +320,10 @@ async function markNovelty(event:WatchEventDto,action:string){
                 ></label><label>监控人<input
                   v-model="draft.owner"
                   maxlength="100"
-                ></label><label>监控状态<select v-model="draft.enabled"><option :value="true">监控中</option><option :value="false">暂停监控</option></select></label><label class="store-form-wide">备注<textarea
+                ></label><label>监控状态<select
+                  v-model="draft.enabled"
+                  v-single-select
+                ><option :value="true">监控中</option><option :value="false">暂停监控</option></select></label><label class="store-form-wide">备注<textarea
                   v-model="draft.remark"
                   maxlength="1000"
                   rows="3"

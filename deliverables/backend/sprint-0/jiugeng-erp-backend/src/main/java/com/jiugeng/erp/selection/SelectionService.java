@@ -23,11 +23,13 @@ import org.springframework.transaction.annotation.Transactional;
 class SelectionService implements SelectionCandidateGateway {
     private static final Pattern ASIN = Pattern.compile("[A-Z0-9]{10,16}");
     private static final Pattern PATH = Pattern.compile("/(?:DP|GP/PRODUCT)/([A-Z0-9]{10,16})(?:/|$)");
+    private final com.jiugeng.erp.launch.LaunchWorkspace work;
     private final SelectionRepository repository;
     private final AuditTrail audit;
     private final SelectionResearch research;
     private final org.springframework.context.ApplicationEventPublisher events;
-    SelectionService(SelectionRepository repository, AuditTrail audit, org.springframework.context.ApplicationEventPublisher events, SelectionResearch research) {
+    SelectionService(SelectionRepository repository, AuditTrail audit, org.springframework.context.ApplicationEventPublisher events, SelectionResearch research,com.jiugeng.erp.launch.LaunchWorkspace work) {
+        this.work=work;
         this.repository=repository; this.audit=audit; this.events=events; this.research=research;
     }
 
@@ -49,6 +51,7 @@ class SelectionService implements SelectionCandidateGateway {
         try { repository.insert(id,asin,cleanTitle,cleanScore,canonical(asin),actor.userId()); }
         catch(DataIntegrityViolationException e){ throw conflict("CANDIDATE_ASIN_EXISTS","该 ASIN 已存在候选："+asin); }
         CandidateView created=candidate(id);
+        seedWorkspace(created);
         audit.record(operation(actor,"CANDIDATE_CREATE",id,null,snapshot(created),"创建候选"));
         return created;
     }
@@ -122,10 +125,15 @@ class SelectionService implements SelectionCandidateGateway {
             String found=repository.findByAsin(normalized).orElseThrow(()->conflict("CANDIDATE_ASIN_EXISTS","ASIN 并发确认冲突")).id(); repository.linkSource(found,eventId,runId); return new Confirmation(found,true);
         }
         CandidateView created=candidate(id);
+        seedWorkspace(created);
         audit.record(operation(actor,"CANDIDATE_CREATE_FROM_WATCH",id,null,snapshot(created),"确认监控事件生成候选"));
         repository.linkSource(id,eventId,runId); return new Confirmation(id,false);
     }
 
+    private void seedWorkspace(CandidateView c){
+        var d=(com.fasterxml.jackson.databind.node.ObjectNode)work.blank();d.put("name",c.title());d.put("asin",c.asin());d.put("market","US");d.put("sourceUrl",c.sourceUrl());d.put("owner",c.owner());d.put("reason",c.selectionReason());d.put("specVersion","1");
+        work.create("CANDIDATE",c.id(),"NEW",d,null);
+    }
     private CandidateView candidate(String id){ return repository.findById(id).orElseThrow(()->new SelectionException(404,"CANDIDATE_NOT_FOUND","候选不存在："+id)); }
     private String extractAsin(String input){
         String value=input.trim(), upper=value.toUpperCase(Locale.ROOT);

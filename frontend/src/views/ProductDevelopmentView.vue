@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
+import DatePicker from '@/components/DatePicker.vue'
 import { confirmAction } from '@/state/uiConfirmation'
 import ListPagination from '@/components/ListPagination.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
@@ -346,27 +348,30 @@ watch(id, () => {
                 v-model="form.buyer"
                 maxlength="100"
               ></label>
-              <label>推荐星级<select v-model.number="form.stars"><option :value="0">未评定</option><option
+              <label>推荐星级<select
+                v-model.number="form.stars"
+                v-single-select
+              ><option :value="0">未评定</option><option
                 v-for="n in 5"
                 :key="n"
                 :value="n"
               >{{ n }} 星</option></select></label>
-              <label>开发开始日期<input
+              <label>开发开始日期<DatePicker
                 v-model="form.startDate"
                 type="date"
                 min="2000-01-01"
                 max="9999-12-31"
-              ></label><label>开发结束日期<input
+              /></label><label>开发结束日期<DatePicker
                 v-model="form.endDate"
                 type="date"
                 min="2000-01-01"
                 max="9999-12-31"
-              ></label><label>预计开售日期<input
+              /></label><label>预计开售日期<DatePicker
                 v-model="form.launchDate"
                 type="date"
                 min="2000-01-01"
                 max="9999-12-31"
-              ></label>
+              /></label>
             </div>
           </section>
           <section class="panel">
@@ -420,6 +425,7 @@ watch(id, () => {
             </p>
             <label v-if="editable">关联产品<select
               v-model="form.linkedProductId"
+              v-single-select
               aria-label="关联产品"
             ><option :value="null">尚未关联</option><option
               v-for="product in products"

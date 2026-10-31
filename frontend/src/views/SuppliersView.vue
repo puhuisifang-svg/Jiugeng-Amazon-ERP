@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
 import { confirmAction } from '@/state/uiConfirmation'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
@@ -34,6 +35,18 @@ function supplierInput(): SupplierInput {
 }
 async function save() { saving.value = true; error.value = ''; success.value = ''; try { const input = supplierInput(); const result = editing.value ? await domainApi.updateSupplier(editing.value.id, input) : await domainApi.createSupplier(input); items.value = editing.value ? items.value.map(item => item.id === result.id ? result : item) : [result, ...items.value]; success.value = editing.value ? '供应商已更新。' : '供应商已创建。'; reset() } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '供应商保存失败。' } finally { saving.value = false } }
 async function disable(item: SupplierDto) { if (!await confirmAction(`确认停用供应商 ${item.name}？`)) return; saving.value = true; try { const result = await domainApi.disableSupplier(item.id, item.version); items.value = items.value.map(value => value.id === item.id ? result : value); success.value = '供应商已停用。' } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '供应商停用失败。' } finally { saving.value = false } }
+async function remove(item: SupplierDto) {
+  if (!writable.value || saving.value) return
+  if (!await confirmAction(`确认删除供应商“${item.name}”？删除后无法恢复；已关联产品、辅料或采购单的供应商无法删除。`)) return
+  saving.value = true; error.value = ''; success.value = ''
+  try {
+    await domainApi.deleteSupplier(item.id, item.version)
+    items.value = items.value.filter(value => value.id !== item.id)
+    if (editing.value?.id === item.id) reset()
+    success.value = '供应商已删除。'
+  } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '供应商删除失败，请稍后重试。' }
+  finally { saving.value = false }
+}
 onMounted(load)
 </script>
 
@@ -50,6 +63,7 @@ onMounted(load)
         placeholder="名称 / 电话 / 微信号"
       ></label><label>状态<select
         v-model="status"
+        v-single-select
       ><option value="">全部</option><option value="ACTIVE">启用</option><option value="DISABLED">停用</option></select></label><button
         type="submit"
       >
@@ -124,6 +138,7 @@ onMounted(load)
           @change="upload"
         ></label><label>状态<select
           v-model="form.status"
+          v-single-select
           class="status-select"
         ><option value="ACTIVE">启用</option><option value="DISABLED">停用</option></select></label><label class="form-wide">备注<textarea
           v-model="form.remark"
@@ -210,7 +225,7 @@ onMounted(load)
           >
             <thead>
               <tr>
-                <th>二维码</th><th>名称</th><th>联系人</th><th>电话</th><th>微信号</th><th>1688</th><th>状态</th><th v-if="writable">
+                <th>二维码</th><th>名称</th><th>联系人</th><th>电话</th><th>微信号</th><th>1688</th><th>状态</th><th v-if="writable || session.canAccess(['suppliers.delete'])">
                   操作
                 </th>
               </tr>
@@ -250,20 +265,31 @@ onMounted(load)
                     target="_blank"
                     rel="noopener noreferrer"
                   >打开</a><span v-else>—</span>
-                </td><td><span :class="['status-badge', `status-badge--${item.status.toLowerCase()}`]">{{ item.status === 'ACTIVE' ? '启用' : '停用' }}</span></td><td v-if="writable">
+                </td><td><span :class="['status-badge', `status-badge--${item.status.toLowerCase()}`]">{{ item.status === 'ACTIVE' ? '启用' : '停用' }}</span></td><td v-if="writable || session.canAccess(['suppliers.delete'])">
                   <div class="table-actions">
                     <button
+                      v-if="session.canAccess(['suppliers.write'])"
                       type="button"
+                      :disabled="saving"
                       @click="edit(item)"
                     >
                       编辑
                     </button><button
+                      v-if="session.canAccess(['suppliers.write'])"
                       type="button"
                       class="danger-button"
-                      :disabled="item.status === 'DISABLED'"
+                      :disabled="saving || item.status === 'DISABLED'"
                       @click="disable(item)"
                     >
                       停用
+                    </button><button
+                      v-if="session.canAccess(['suppliers.delete'])"
+                      type="button"
+                      class="danger-button"
+                      :disabled="saving"
+                      @click="remove(item)"
+                    >
+                      删除
                     </button>
                   </div>
                 </td>

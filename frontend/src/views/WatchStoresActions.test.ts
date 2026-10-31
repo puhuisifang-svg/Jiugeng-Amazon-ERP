@@ -16,6 +16,16 @@ async function setup(){
 }
 beforeEach(()=>{vi.clearAllMocks();vi.mocked(apiRequest).mockImplementation(async(path)=>path==='/v1/watch/stores'?[store]:path==='/v1/watch/events'?[]:store)})
 describe('watch list actions',()=>{
+ it('only assigns selected stores not already owned by the current user',async()=>{
+  vi.mocked(apiRequest).mockImplementation(async(path)=>path==='/v1/watch/stores'?[{...store,owner:'Tester'},{...store,id:'store2',storeName:'Other Store',owner:'Other'}]:path==='/v1/watch/events'?[]:store)
+  const w=await setup();const button=w.findAll('button').find(b=>b.text()==='设为我负责')!
+  expect(button.attributes('disabled')).toBeDefined()
+  await w.get('[aria-label="选择 Test Store"]').setValue(true);expect(button.attributes('disabled')).toBeDefined()
+  await w.get('[aria-label="选择 Other Store"]').setValue(true);expect(button.attributes('disabled')).toBeUndefined()
+  await button.trigger('click');await flushPromises()
+  expect(vi.mocked(apiRequest).mock.calls.filter(c=>c[1]?.method==='PUT').map(c=>c[0])).toEqual(['/v1/watch/stores/store2'])
+  w.unmount()
+ })
  it('links the store name to its Amazon storefront and underlines the today action',async()=>{
   const w=await setup();const link=w.get('a[aria-label="Test Store（打开亚马逊店铺）"]')
   expect(link.attributes('href')).toBe('https://www.amazon.com/s?me=TESTSELLER&marketplaceID=ATVPDKIKX0DER')

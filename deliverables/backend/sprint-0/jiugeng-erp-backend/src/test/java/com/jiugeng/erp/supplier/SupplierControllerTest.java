@@ -2,6 +2,7 @@ package com.jiugeng.erp.supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -166,6 +167,32 @@ class SupplierControllerTest {
                 Integer.class, materialId)).isEqualTo(2);
     }
 
+    @Test
+    void deletesUnlinkedSupplierWithVersionPermissionAndAuditChecks() throws Exception {
+        String writer=createUserAndLogin("delete-writer","PRODUCT_MATERIAL");
+        String reader=createUserAndLogin("delete-reader","SELECTION");
+        String id=createSupplier(writer,"可删除合成供应商","10001");
+        mvc.perform(delete("/api/v1/suppliers/{id}?version=0",id).header("Authorization",bearer(reader))).andExpect(status().isForbidden());
+        mvc.perform(delete("/api/v1/suppliers/{id}?version=1",id).header("Authorization",bearer(writer))).andExpect(status().isConflict());
+        mvc.perform(delete("/api/v1/suppliers/{id}?version=-1",id).header("Authorization",bearer(writer))).andExpect(status().isBadRequest());
+        mvc.perform(delete("/api/v1/suppliers/{id}?version=0",id).header("Authorization",bearer(writer))).andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/suppliers/{id}",id).header("Authorization",bearer(writer))).andExpect(status().isNotFound());
+        mvc.perform(delete("/api/v1/suppliers/{id}?version=0",id).header("Authorization",bearer(writer))).andExpect(status().isNotFound());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE action='SUPPLIER_DELETE' AND resource_id=?",Integer.class,id)).isEqualTo(1);
+    }
+
+    @Test
+    void refusesDeletionOfSupplierReferencedByMaterial() throws Exception {
+        String writer=createUserAndLogin("linked-delete-writer","PRODUCT_MATERIAL");
+        String id=createSupplier(writer,"有关联合成供应商","10002");
+        String materialId=UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO auxiliary_material(id,material_code,material_code_normalized,name,material_type,unit,status,created_by,updated_by) VALUES(?,?,?,'合成辅料','PACKAGING','个','ACTIVE','test','test')",materialId,materialId,materialId);
+        mvc.perform(put("/api/v1/suppliers/material/{id}",materialId).header("Authorization",bearer(writer)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("links",List.of(Map.of("supplierId",id,"primary",true)))))).andExpect(status().isOk());
+        mvc.perform(delete("/api/v1/suppliers/{id}?version=0",id).header("Authorization",bearer(writer))).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SUPPLIER_IN_USE"));
+        mvc.perform(get("/api/v1/suppliers/{id}",id).header("Authorization",bearer(writer))).andExpect(status().isOk());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE action='SUPPLIER_DELETE' AND resource_id=?",Integer.class,id)).isZero();
+    }
+
     private String createSupplier(String token, String name, String phone) throws Exception {
         String body = mvc.perform(post("/api/v1/suppliers").header("Authorization", bearer(token))
                         .contentType(MediaType.APPLICATION_JSON).content(json(supplier(name, phone, null, null))))
@@ -190,7 +217,7 @@ class SupplierControllerTest {
                 INSERT INTO iam_user
                     (id, login_name, display_name, password_hash, role, status, must_change_password)
                 VALUES (?, ?, ?, ?, ?, 'ENABLED', FALSE)
-                """, id, loginName, loginName, encoder.encode(PASSWORD), role);
+                """, id, loginName, loginName, encoder.encode(PASSWORD), role);jdbc.update("INSERT INTO iam_user_role(user_id,role_id) SELECT id,role FROM iam_user WHERE id=?",id);
         String body = mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("loginName", loginName, "password", PASSWORD))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();

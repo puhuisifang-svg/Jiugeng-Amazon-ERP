@@ -605,7 +605,7 @@ class ImportControllerTest {
                 .andExpect(status().is(expectedStatus)).andReturn().getResponse().getContentAsString();
     }
     private String user(String login,String role)throws Exception{String id=UUID.randomUUID().toString();var encoder=new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder();
-        jdbc.update("INSERT INTO iam_user (id,login_name,display_name,password_hash,role,status,must_change_password) VALUES (?,?,?,?,?,'ENABLED',FALSE)",id,login,login,encoder.encode(PASSWORD),role);
+        jdbc.update("INSERT INTO iam_user (id,login_name,display_name,password_hash,role,status,must_change_password) VALUES (?,?,?,?,?,'ENABLED',FALSE)",id,login,login,encoder.encode(PASSWORD),role);jdbc.update("INSERT INTO iam_user_role(user_id,role_id) SELECT id,role FROM iam_user WHERE id=?",id);
         String body=mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(Map.of("loginName",login,"password",PASSWORD))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();return mapper.readTree(body).get("token").asText();}
     private String bearer(String token){return "Bearer "+token;}

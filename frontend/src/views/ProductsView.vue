@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
+import { catalogApi } from '@/api/catalog'
 import ProductName from '@/components/ProductName.vue'
 import ListPagination from '@/components/ListPagination.vue'
 import RowMoreActions from '@/components/RowMoreActions.vue'
@@ -18,7 +20,17 @@ import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
 
+const imageDownloading = ref(false)
+const imageDownloadError = ref('')
+async function downloadPreviewImage() {
+  if (!imagePreview.value || imageDownloading.value) return
+  imageDownloading.value = true; imageDownloadError.value = ''
+  try { await catalogApi.downloadImage(imagePreview.value) }
+  catch (exception) { imageDownloadError.value = exception instanceof Error ? exception.message : '图片下载失败，请重试。' }
+  finally { imageDownloading.value = false }
+}
 const imagePreview = ref<{ imageAssetId?: string | undefined; imageUrl?: string | undefined; variantName: string } | null>(null)
+watch(imagePreview, () => { imageDownloadError.value = '' })
 type ColumnKey = 'image' | 'sku' | 'product' | 'status' | 'dimensions' | 'weight' | 'supplier' | 'material' | 'updated' | 'stock'
 const columns: Array<{ key: ColumnKey; label: string }> = [
   { key: 'image', label: '图片' }, { key: 'sku', label: '品名 / SKU编码' },
@@ -239,13 +251,22 @@ onMounted(load)
         placeholder="SKU、品名或规格模糊搜索"
         @input="filters.field = 'KEYWORD'; filters.exact = false"
       ></label>
-      <label>产品类型<select v-model="filters.productType"><option value="">全部类型</option><option
+      <label>产品类型<select
+        v-model="filters.productType"
+        v-single-select
+      ><option value="">全部类型</option><option
         v-for="type in productTypes"
         :key="type"
         :value="type"
       >{{ type }}</option></select></label>
-      <label>产品状态<select v-model="filters.productStatus"><option value="">全部状态</option><option value="ACTIVE">启用</option><option value="DRAFT">待定</option><option value="DISABLED">停用</option></select></label>
-      <label>库存状态<select v-model="filters.stock"><option value="">全部库存</option><option value="UNINITIALIZED">未建账</option></select></label>
+      <label>产品状态<select
+        v-model="filters.productStatus"
+        v-single-select
+      ><option value="">全部状态</option><option value="ACTIVE">启用</option><option value="DRAFT">待定</option><option value="DISABLED">停用</option></select></label>
+      <label>库存状态<select
+        v-model="filters.stock"
+        v-single-select
+      ><option value="">全部库存</option><option value="UNINITIALIZED">未建账</option></select></label>
       <button
         type="button"
         class="filter-reset-button"
@@ -281,6 +302,7 @@ onMounted(load)
         >
           导入
         </RouterLink><button
+          v-if="session.canAccess(['products.export'])"
           class="secondary-button"
           type="button"
           :disabled="!rows.length"
@@ -452,7 +474,7 @@ onMounted(load)
                         详情
                       </RouterLink>
                       <RowMoreActions
-                        v-if="writable"
+                        v-if="writable || session.canAccess(['products.delete'])"
                         :label="`父体 ${group.product.productCode} 更多操作`"
                       >
                         <button
@@ -464,7 +486,7 @@ onMounted(load)
                           编辑父体
                         </button>
                         <button
-                          v-if="writable"
+                          v-if="session.canAccess(['products.delete'])"
                           type="button"
                           class="secondary-button"
                           :disabled="saving || deleting"
@@ -577,7 +599,7 @@ onMounted(load)
                           详情
                         </button>
                         <RowMoreActions
-                          v-if="writable"
+                          v-if="writable || session.canAccess(['products.delete'])"
                           :label="`SKU ${row.variant.skuCode} 更多操作`"
                         >
                           <button
@@ -598,7 +620,7 @@ onMounted(load)
                             复制
                           </button>
                           <button
-                            v-if="writable"
+                            v-if="session.canAccess(['products.delete'])"
                             type="button"
                             class="secondary-button"
                             :disabled="saving || deleting"
@@ -621,18 +643,19 @@ onMounted(load)
           </table>
         </TableViewport>
       </div>
-      <ListPagination
-        v-model:page-size="size"
-        :page="page + 1"
-        :total="total"
-        :disabled="loading"
-        @update:page="changePage($event - 1)"
-      >
-        <template #summary>
-          已选 {{ selected.length }} 个 SKU，共 {{ total }} 个父体 / {{ matchingSkuCount }} 个子体
-        </template>
-      </ListPagination>
     </article>
+    <ListPagination
+      v-model:page-size="size"
+      :page="page + 1"
+      :total="total"
+      :disabled="loading"
+      @update:page="changePage($event - 1)"
+    >
+      <template #summary>
+        已选 {{ selected.length }} 个 SKU，共 {{ total }} 个父体 / {{ matchingSkuCount }} 个子体
+      </template>
+    </ListPagination>
+
 
     <div
       v-if="showAddSku"
@@ -662,6 +685,7 @@ onMounted(load)
         </p>
         <label>所属产品<select
           v-model="addSkuProductId"
+          v-single-select
           required
         ><option value="">请选择产品</option><option
           v-for="product in selectedProducts"
@@ -935,6 +959,7 @@ onMounted(load)
           type="checkbox"
         >SKU 状态<select
           v-model="batch.status"
+          v-single-select
           :disabled="!batch.statusSelected"
         ><option value="ACTIVE">启用</option><option value="DRAFT">待定</option><option value="DISABLED">停用</option></select></label><fieldset>
           <legend>
@@ -944,6 +969,7 @@ onMounted(load)
             >产品规格（cm）</label>
           </legend><select
             v-model="batch.itemDimensionsMode"
+            v-single-select
             :disabled="!batch.itemDimensionsSelected"
             aria-label="产品规格修改方式"
           >
@@ -984,6 +1010,7 @@ onMounted(load)
             >包装规格（cm）</label>
           </legend><select
             v-model="batch.packageDimensionsMode"
+            v-single-select
             :disabled="!batch.packageDimensionsSelected"
             aria-label="包装规格修改方式"
           >
@@ -1021,6 +1048,7 @@ onMounted(load)
           type="checkbox"
         >包装重量（克）<select
           v-model="batch.packageWeightMode"
+          v-single-select
           :disabled="!batch.packageWeightSelected"
           aria-label="包装重量修改方式"
         ><option value="SET">填入值</option><option value="CLEAR">清空</option></select><input
@@ -1089,7 +1117,27 @@ onMounted(load)
           referrerpolicy="no-referrer"
         >
         <p>{{ imagePreview.variantName }}</p>
+        <button
+          type="button"
+          class="product-image-save"
+          :disabled="imageDownloading"
+          @click="downloadPreviewImage"
+        >
+          {{ imageDownloading ? '正在下载…' : '保存图片' }}
+        </button>
+        <p
+          v-if="imageDownloadError"
+          role="alert"
+        >
+          {{ imageDownloadError }}
+        </p>
       </div>
     </div>
   </section>
 </template>
+
+<style scoped>
+.image-dialog .product-image-save { position: static; width: auto; height: auto; min-height: 32px; padding: 6px 16px; border-radius: 6px; font-size: 14px; background: var(--primary-color, #dc731d); }
+.image-dialog .material-preview { max-height: 95dvh; overflow: auto; }
+.image-dialog .material-preview .catalog-image, .image-dialog .material-preview__image { max-height: calc(95dvh - 140px); }
+</style>

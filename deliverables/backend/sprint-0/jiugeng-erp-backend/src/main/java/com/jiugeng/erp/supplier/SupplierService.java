@@ -7,6 +7,14 @@ SupplierService(SupplierRepository repo,CatalogImageGateway images,AuditTrail au
 @Transactional View create(Input raw,AuthenticatedActor actor){Input i=valid(raw,false);String id=UUID.randomUUID().toString();repo.insert(id,i,actor.userId());images.attach(i.qrImageId(),CatalogImageGateway.Purpose.SUPPLIER_QR,"SUPPLIER",id,actor);View value=get(id);audit(actor,"SUPPLIER_CREATE",id,null,snapshot(value));return value;}
 @Transactional View update(String id,Input raw,AuthenticatedActor actor){View before=get(id);Input i=valid(raw,true);long version=raw.version()==null?-1:raw.version();if(repo.update(id,i,actor.userId(),version)!=1)throw conflict();images.attach(i.qrImageId(),CatalogImageGateway.Purpose.SUPPLIER_QR,"SUPPLIER",id,actor);images.releaseReplaced(before.qrImageId(),i.qrImageId(),"SUPPLIER",id);View after=get(id);audit(actor,"SUPPLIER_UPDATE",id,snapshot(before),snapshot(after));return after;}
 @Transactional View disable(String id,long version,AuthenticatedActor actor){View before=get(id);Input i=new Input(before.name(),before.contactPerson(),before.phone(),before.wechatId(),before.sourceUrl(),before.qrImageUrl(),before.qrImageId(),before.remark(),Status.DISABLED,version);return update(id,i,actor);}
+@Transactional void delete(String id,long version,AuthenticatedActor actor){
+    View before=get(id);
+    if(before.version()!=version)throw conflict();
+    try{if(repo.delete(id,version)!=1)throw conflict();}
+    catch(org.springframework.dao.DataIntegrityViolationException e){throw new SupplierException(409,"SUPPLIER_IN_USE","该供应商已关联产品、辅料或采购单，无法删除。请先解除关联；有采购记录的供应商请使用停用。");}
+    images.releaseReplaced(before.qrImageId(),null,"SUPPLIER",id);
+    audit(actor,"SUPPLIER_DELETE",id,snapshot(before),null);
+}
 @Transactional(readOnly=true)List<LinkView> variantLinks(String id){return repo.links("product_variant_supplier","variant_id",id);}
 @Transactional(readOnly=true)List<LinkView> materialLinks(String id){return repo.links("auxiliary_material_supplier","auxiliary_material_id",id);}
 @Transactional void replaceMaterialLinks(String id,List<LinkInput> values,AuthenticatedActor actor){replace("auxiliary_material_supplier","auxiliary_material_id",id,values,actor);audit(actor,"MATERIAL_SUPPLIERS_REPLACE",id,null,Map.of("supplierIds",values.stream().map(LinkInput::supplierId).toList()));}

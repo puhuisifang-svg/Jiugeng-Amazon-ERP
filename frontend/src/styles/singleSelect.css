@@ -1,0 +1,19 @@
+/* Shared single-value dropdown. Native select retains the model and form contract. */
+#app select.single-select-native{position:absolute!important;width:1px!important;height:1px!important;min-width:0!important;min-height:0!important;padding:0!important;margin:0!important;opacity:0;pointer-events:none;clip-path:inset(50%)}
+#app .single-select-trigger{display:inline-flex;align-items:center;justify-content:space-between;gap:10px;flex:0 1 auto;min-width:0;max-width:100%;height:32px;min-height:32px;padding:0 10px;border:1px solid #d5d9e0;border-radius:4px;background:white;color:var(--ink);font:400 13px/1.5 system-ui,sans-serif;text-align:left;cursor:pointer;vertical-align:middle}
+.single-select-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.single-select-arrow{width:7px;height:7px;flex:none;border-right:1.5px solid #909399;border-bottom:1.5px solid #909399;transform:rotate(45deg);margin:0 2px 4px}
+#app .single-select-trigger:hover:not(:disabled){border-color:#aab3c2}
+#app .single-select-trigger[aria-expanded=true],#app .single-select-trigger:focus-visible{border-color:#2864c5;outline:1px solid #2864c5;outline-offset:-1px}
+.single-select-trigger[aria-expanded=true] .single-select-arrow{transform:rotate(225deg);margin-top:6px}
+#app .single-select-trigger:disabled{background:#f5f7fa;color:#a0a7b2;cursor:not-allowed}
+.single-select-panel{position:fixed;inset:auto;margin:0;padding:4px 0;border:1px solid #e0e4eb;border-radius:4px;background:white;color:#202733;box-shadow:0 4px 16px #17203326;overflow:auto;z-index:10000;font:400 13px/1.5 system-ui,sans-serif;box-sizing:border-box}
+.single-select-panel[hidden]{display:none}
+.single-select-panel [role=option]{min-height:32px;padding:6px 12px;box-sizing:border-box;cursor:pointer;overflow-wrap:anywhere;white-space:normal}
+.single-select-panel [role=option]:hover,.single-select-panel [role=option].is-active{background:#f2f6fc}
+.single-select-panel [aria-selected=true]{color:#2864c5;font-weight:600}
+.single-select-panel [aria-disabled=true]{color:#a0a7b2;cursor:not-allowed}
+#app label:has(>select.single-select-native)>.single-select-trigger{flex:1;min-width:0}
+#app .access-form label>.single-select-trigger,#app .operation-form label>.single-select-trigger{min-height:40px;height:40px}
+
+#app .monitor-search>.single-select-trigger{width:100px;flex:0 0 100px}

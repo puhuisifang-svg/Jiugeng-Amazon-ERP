@@ -332,6 +332,7 @@ export const domainApi = {
   supplier: (id: string) => apiRequest<SupplierDto>(`/v1/suppliers/${id}`),
   createSupplier: (input: SupplierInput) => apiRequest<SupplierDto>('/v1/suppliers', { method: 'POST', body: JSON.stringify(input) }),
   updateSupplier: (id: string, input: SupplierInput) => apiRequest<SupplierDto>(`/v1/suppliers/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
+  deleteSupplier: (id: string, version: number) => apiRequest<void>(`/v1/suppliers/${encodeURIComponent(id)}?version=${version}`, { method: 'DELETE' }),
   disableSupplier: (id: string, version: number) => apiRequest<SupplierDto>(`/v1/suppliers/${id}/disable`, { method: 'POST', body: JSON.stringify({ version }) }),
   materialSupplierLinks: (id: string) => apiRequest<SupplierLinkDto[]>(`/v1/suppliers/material/${id}`),
   replaceMaterialSupplierLinks: (id: string, links: SupplierAssignmentDto[]) => apiRequest<SupplierLinkDto[]>(`/v1/suppliers/material/${id}`, { method: 'PUT', body: JSON.stringify({ links }) }),

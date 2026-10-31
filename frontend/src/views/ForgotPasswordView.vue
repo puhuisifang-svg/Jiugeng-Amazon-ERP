@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
 import SuccessToast from "@/components/SuccessToast.vue"
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -69,7 +70,7 @@ async function resetPassword() {
       <p>使用账号已绑定的邮箱或手机号接收 6 位验证码。</p>
       <form class="login-form" @submit.prevent="requested ? resetPassword() : requestCode()">
         <label for="recovery-channel">验证方式</label>
-        <select id="recovery-channel" v-model="channel" :disabled="requested">
+        <select id="recovery-channel" v-model="channel" v-single-select :disabled="requested">
           <option value="EMAIL">邮箱验证码</option>
           <option value="SMS">手机短信验证码</option>
         </select>

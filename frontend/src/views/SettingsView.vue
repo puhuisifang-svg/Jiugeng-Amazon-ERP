@@ -148,7 +148,7 @@ onMounted(initialize)
       <div class="settings-toolbar" aria-label="账号与安全操作">
         <button type="button" class="settings-password-button" :disabled="loading" @click="openEditor('password')">修改密码</button>
         <button v-if="isAdmin" type="button" class="settings-security-button" :disabled="loading" @click="openEditor('security')">安全设置</button>
-        <button v-if="isAdmin" type="button" class="settings-security-button" :disabled="loading" @click="openEditor('defaults')">用户初始密码</button>
+        <button v-if="isAdmin" type="button" class="settings-defaults-button" :disabled="loading" @click="openEditor('defaults')">用户初始密码</button>
         <span v-if="isAdmin" class="settings-policy-summary">免登录期限：{{ savedDays }} 天</span>
       </div>
       <dialog ref="editorDialog" class="settings-dialog" aria-labelledby="settings-editor-title" @cancel.prevent="cancelEditor">
@@ -185,7 +185,10 @@ onMounted(initialize)
 .settings-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: white; }
 .settings-toolbar button { color: var(--ink); background: #f5f6f8; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; min-height: var(--ui-control-height); padding: 4px 12px; font-size: 13px; }
 .settings-toolbar .settings-password-button { color: white; background: #c65a0a; border-color: #c65a0a; }
-.settings-toolbar .settings-security-button { color: white; background: #2864c5; border-color: #2864c5; }
+.settings-toolbar .settings-security-button { color: white; background: #16745a; border-color: #16745a; }
+.settings-toolbar .settings-defaults-button { color: white; background: #7450ad; border-color: #7450ad; }
+.settings-toolbar button:not(:disabled):hover { filter: brightness(.92); }
+.settings-toolbar button:focus-visible { outline: 2px solid #24334b; outline-offset: 3px; }
 .settings-toolbar button:disabled { opacity: .5; cursor: not-allowed; }
 .settings-page .table-actions .delete-account { color: #b42318; }
 .settings-page .table-actions .delete-account:hover { background: #fff1f0; }

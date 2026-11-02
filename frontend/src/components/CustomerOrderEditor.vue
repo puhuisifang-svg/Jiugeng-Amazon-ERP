@@ -14,6 +14,7 @@ const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai' }).fo
 const form = reactive<OrderInput>(props.initial ? { ...JSON.parse(JSON.stringify(props.initial.details)), lines: props.initial.lines.map(l => ({ ...l.details, id: l.id })), version: props.initial.version } : { customerId: '', source: 'OFFLINE', externalNumber: '', contractNumber: '', orderDate: today, deliveryDate: today, invoiceRequired: false, invoiceTitle: '', taxNumber: '', recipient: '', phone: '', address: '', remark: '', lines: [] })
 const initialSnapshot = ref(JSON.stringify(form)), discard = ref(false), localError = ref(''), selecting = ref(false)
 const customers = ref<Customer[]>([]), chosen = ref<Customer>(), pickerOpen=ref(false)
+const productReferences = ref<Record<string, { customerProductCode: string; skuCode: string }>>(Object.fromEntries((props.initial?.lines ?? []).map(l => [l.details.customerProductId, { customerProductCode: l.product?.customerProductCode ?? '', skuCode: l.skuCode ?? '' }])))
 const titleIndex = ref('')
 const orderReference=computed({get:()=>form.externalNumber||form.contractNumber||'',set:(value:string)=>{form.externalNumber=value;form.contractNumber=''}})
 const titles = computed(() => chosen.value?.invoiceTitles ?? [])
@@ -24,13 +25,14 @@ async function searchCustomers() {
 }
 async function changeCustomer() {
   chosen.value = customers.value.find(c => c.id === form.customerId)
-  form.lines = []; pickerOpen.value=false; titleIndex.value = ''; form.invoiceTitle = ''; form.taxNumber = ''
+  form.lines = []; productReferences.value = {}; pickerOpen.value=false; titleIndex.value = ''; form.invoiceTitle = ''; form.taxNumber = ''
   form.recipient = chosen.value?.contactPerson ?? ''; form.phone = chosen.value?.phone ?? ''; form.address = chosen.value?.address ?? ''
   if (titles.value.length === 1) { titleIndex.value = '0'; chooseTitle() }
 }
 function chooseTitle() { const t = titleIndex.value === 'snapshot' ? props.initial?.invoiceTitle : titleIndex.value === '' ? undefined : titles.value[Number(titleIndex.value)]; form.invoiceTitle = t?.invoiceTitle ?? ''; form.taxNumber = t?.taxNumber ?? '' }
 function addProducts(products:CustomerProduct[]) {
  for(const p of products){if(form.lines.some(line=>line.customerProductId===p.id))continue
+  productReferences.value[p.id] = { customerProductCode: p.customerProductCode ?? '', skuCode: p.skuCode ?? '' }
   form.lines.push({ customerProductId: p.id, name: p.productName, specification: '', unit: p.priceUnit || '套', quantity: 1, netUnitPrice: '', taxRate: 1, deliveryDate: form.deliveryDate, remark: p.requirements || '' })
  }
  pickerOpen.value=false
@@ -155,8 +157,8 @@ onMounted(async () => {
             aria-label="订单商品明细，可左右滚动"
           >
             <table class="data-table">
-              <colgroup><col style="width:220px"><col style="width:160px"><col style="width:80px"><col style="width:110px"><col style="width:130px"><col style="width:90px"><col style="width:120px"><col style="width:160px"><col style="width:220px"><col style="width:76px"></colgroup>
-              <thead><tr><th>品名</th><th>规格型号</th><th>单位</th><th>数量</th><th>不含税单价</th><th>税率%</th><th>含税金额</th><th>交期</th><th>特殊需求/备注</th><th>操作</th></tr></thead><tbody>
+              <colgroup><col style="width:220px"><col style="width:160px"><col style="width:160px"><col style="width:80px"><col style="width:110px"><col style="width:130px"><col style="width:90px"><col style="width:120px"><col style="width:160px"><col style="width:220px"><col style="width:76px"></colgroup>
+              <thead><tr><th>品名 / SKU</th><th>客户编码</th><th>规格型号</th><th>单位</th><th>数量</th><th>不含税单价</th><th>税率%</th><th>含税金额</th><th>交期</th><th>特殊需求/备注</th><th>操作</th></tr></thead><tbody>
                 <tr
                   v-for="(l,i) in form.lines"
                   :key="i"
@@ -169,6 +171,9 @@ onMounted(async () => {
                       maxlength="128"
                       rows="2"
                     />
+                    <small class="order-line-sku">SKU：{{ productReferences[l.customerProductId]?.skuCode || '—' }}</small>
+                  </td><td class="order-customer-code">
+                    {{ productReferences[l.customerProductId]?.customerProductCode || '未填写' }}
                   </td><td>
                     <input
                       v-model="l.specification"
@@ -236,7 +241,7 @@ onMounted(async () => {
                 </tr>
                 <tr v-if="!form.lines.length">
                   <td
-                    colspan="10"
+                    colspan="11"
                     class="order-lines-empty"
                   >
                     请点击“选择客户商品”添加订单明细
@@ -286,7 +291,8 @@ onMounted(async () => {
 </template>
 <style scoped>
 .order-editor{box-sizing:border-box;width:min(1400px,100%);max-width:100%;min-width:0;min-height:0;margin:0;max-height:calc(100dvh - 64px);display:flex;flex-direction:column;overflow:hidden}.order-editor-body{flex:1;min-height:0;min-width:0;overflow:auto}.order-editor fieldset{min-width:0;border:0;padding:8px;margin:0}.order-editor label{align-self:start;min-width:0}.order-lines-scroll{overflow:auto;min-width:0}.order-lines-scroll table{min-width:1300px}.order-lines-scroll input{min-width:0;width:100%;box-sizing:border-box}.order-lines-scroll textarea{min-width:0;width:100%;box-sizing:border-box;padding:8px!important;min-height:64px!important;height:64px}.form-footer{flex-shrink:0;background:white;padding-top:12px}.order-editor h2{margin:8px 0;flex-shrink:0}
-.order-editor .form-wide,.order-section-title,.order-line-toolbar,.order-line-hint{grid-column:1 / -1}.order-section-title{border-bottom:1px solid var(--line);padding:6px 0 8px;margin:0;font-size:14px}.order-line-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px}.order-line-toolbar h3{margin:0}.order-line-toolbar small{font-weight:400;color:var(--muted);margin-left:8px}.order-line-hint{margin:0;color:var(--muted);font-size:12px}.order-lines-scroll{max-height:380px}.order-lines-scroll table{table-layout:fixed;width:1466px}.order-lines-scroll th{position:sticky;top:0;background:#f5f7fa;z-index:2}.order-lines-scroll td:first-child,.order-lines-scroll th:first-child{position:sticky;left:0;background:white;z-index:1}.order-lines-scroll td:last-child,.order-lines-scroll th:last-child{position:sticky;right:0;background:white;z-index:1}.order-lines-scroll th:first-child,.order-lines-scroll th:last-child{background:#f5f7fa;z-index:3}.order-editor .order-line-remove{background:transparent;color:#b42318;padding:0 4px;min-height:28px}.order-lines-empty{text-align:center;color:var(--muted);height:80px}.order-editor .shipping-address{grid-column:3}.order-editor .operation-form{grid-template-columns:repeat(3,minmax(0,1fr))}
+.order-customer-code{overflow-wrap:anywhere}.order-line-sku{display:block;color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.order-editor .form-wide,.order-section-title,.order-line-toolbar,.order-line-hint{grid-column:1 / -1}.order-section-title{border-bottom:1px solid var(--line);padding:6px 0 8px;margin:0;font-size:14px}.order-line-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px}.order-line-toolbar h3{margin:0}.order-line-toolbar small{font-weight:400;color:var(--muted);margin-left:8px}.order-line-hint{margin:0;color:var(--muted);font-size:12px}.order-lines-scroll{max-height:380px}.order-lines-scroll table{table-layout:fixed;width:1626px}.order-lines-scroll th{position:sticky;top:0;background:#f5f7fa;z-index:2}.order-lines-scroll td:first-child,.order-lines-scroll th:first-child{position:sticky;left:0;background:white;z-index:1}.order-lines-scroll td:last-child,.order-lines-scroll th:last-child{position:sticky;right:0;background:white;z-index:1}.order-lines-scroll th:first-child,.order-lines-scroll th:last-child{background:#f5f7fa;z-index:3}.order-editor .order-line-remove{background:transparent;color:#b42318;padding:0 4px;min-height:28px}.order-lines-empty{text-align:center;color:var(--muted);height:80px}.order-editor .shipping-address{grid-column:3}.order-editor .operation-form{grid-template-columns:repeat(3,minmax(0,1fr))}
 @media(max-width:800px){.order-editor .operation-form{grid-template-columns:repeat(2,minmax(0,1fr))}.order-editor .shipping-address{grid-column:1 / -1}.order-lines-scroll td:first-child,.order-lines-scroll th:first-child,.order-lines-scroll td:last-child,.order-lines-scroll th:last-child{position:static}}
 @media(max-width:640px){.order-editor{max-height:calc(100dvh - 24px);padding:12px}}
 </style>

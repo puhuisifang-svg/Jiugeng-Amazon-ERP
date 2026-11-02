@@ -136,7 +136,7 @@ onMounted(async () => { await load(); await openFromRoute() })
         <p>抬头：{{ selected.snapshot.invoiceTitle.invoiceTitle }} · 税号：{{ selected.snapshot.invoiceTitle.taxNumber }}</p><p>注册地址：{{ selected.snapshot.invoiceTitle.registeredAddress }} · 电话：{{ selected.snapshot.invoiceTitle.registeredPhone }}</p><p>开户银行：{{ selected.snapshot.invoiceTitle.bankName }} · 账号：{{ selected.snapshot.invoiceTitle.bankAccount }}</p>
         <div class="invoice-lines">
           <table class="data-table">
-            <thead><tr><th>品名</th><th>规格及型号</th><th>单位</th><th>数量</th><th>不含税单价</th><th>税率%</th><th>不含税金额</th><th>税额</th><th>含税金额</th></tr></thead><tbody>
+            <thead><tr><th>品名</th><th>客户编码</th><th>规格及型号</th><th>单位</th><th>数量</th><th>不含税单价</th><th>税率%</th><th>不含税金额</th><th>税额</th><th>含税金额</th></tr></thead><tbody>
               <tr
                 v-for="l in selected.snapshot.lines"
                 :key="l.id"
@@ -147,7 +147,7 @@ onMounted(async () => { await load(); await openFromRoute() })
                     :styles="l.namePresentation?.styles"
                     :highlighted="l.namePresentation?.highlighted"
                   />
-                </td><td>{{ l.details.specification }}</td><td>{{ l.details.unit }}</td><td>{{ l.details.quantity }}</td><td>{{ l.details.netUnitPrice }}</td><td>{{ l.details.taxRate }}</td><td>{{ l.netAmount }}</td><td>{{ l.taxAmount }}</td><td>{{ l.totalAmount }}</td>
+                </td><td>{{ l.product?.customerProductCode || '未填写' }}</td><td>{{ l.details.specification }}</td><td>{{ l.details.unit }}</td><td>{{ l.details.quantity }}</td><td>{{ l.details.netUnitPrice }}</td><td>{{ l.details.taxRate }}</td><td>{{ l.netAmount }}</td><td>{{ l.taxAmount }}</td><td>{{ l.totalAmount }}</td>
               </tr>
             </tbody>
           </table>

@@ -82,8 +82,8 @@ class RoleService {
     }
     private User requireUser(String id) { return users.findUserById(id).orElseThrow(()->new IamException(404,"USER_NOT_FOUND","用户不存在")); }
     private Set<String> assignment(Assignment a) {
-        reason(a.reason());
-        if(a.roleIds()==null || a.roleIds().isEmpty() || a.roleIds().size()>20 || a.roleIds().stream().anyMatch(Objects::isNull)) throw new IamException(400,"USER_ROLES_INVALID","请选择1至20个启用角色");
+        if(a.reason()!=null && a.reason().length()>200) throw new IamException(400,"REASON_INVALID","变更原因最多200字");
+        if(a.roleIds()==null || a.roleIds().size()>20 || a.roleIds().stream().anyMatch(Objects::isNull)) throw new IamException(400,"USER_ROLES_INVALID","最多选择20个启用角色");
         var ids=new TreeSet<>(a.roleIds());
         if(ids.contains("ADMIN") && ids.size()>1) throw new IamException(400,"ADMIN_ROLE_EXCLUSIVE","系统管理员不能混绑其他角色");
         for(var id:ids) if(!roles.require(id).status().equals("ENABLED")) throw new IamException(400,"ROLE_NOT_ENABLED","不能分配草稿或停用角色");
@@ -91,20 +91,26 @@ class RoleService {
     }
     Preview previewAssignment(String id, Assignment a) {
         var user=requireUser(id); var ids=assignment(a); var codes=new TreeSet<String>();
-        for(var rid:ids) codes.addAll(roles.permissions(rid)); codes.add("audit.read.self");
+        for(var rid:ids) codes.addAll(roles.permissions(rid)); if(!codes.isEmpty()) codes.add("audit.read.self");
         return difference(user.effectivePermissions(),codes,List.of(user.view()));
     }
     UserView assign(String id, Assignment a, SessionPrincipal actor) {
         roles.lock(); roles.requireAdministrator(actor.userId()); var before=requireUser(id);
         if(id.equals(actor.userId())) throw new IamException(400,"SELF_ROLE_CHANGE_FORBIDDEN","不能修改自己的角色");
         if(before.authorizationVersion()!=a.version()) throw new IamException(409,"USER_VERSION_CONFLICT","账号授权已变化，请重新加载后确认");
-        var ids=assignment(a); roles.bind(id,ids); roles.guardAvailableAdministrator(); users.revokeUserSessions(id);
+        var ids=assignment(a); roles.bind(id,ids);
+        if(ids.isEmpty()) users.setStatus(id,Status.DISABLED);
+        roles.guardAvailableAdministrator(); users.revokeUserSessions(id);
         var after=requireUser(id).view();
+        if(ids.isEmpty() && before.status()!=Status.DISABLED)
+            audit.account(AuditTypes.Actor.authenticated(actor),"ACCOUNT_DISABLE",before.view(),after,"移除全部角色后停用账号"+(a.reason()==null || a.reason().isBlank() ? "" : "："+a.reason()));
         audit.append(AuditTypes.Actor.authenticated(actor),"ACCOUNT","USER_ROLES_CHANGE","ACCOUNT",id,AuditTypes.Outcome.SUCCESS,before.view().roles(),after.roles(),a.reason());
         return after;
     }
     UserView createUser(String login, String display, String email, String phone, String password, List<String> ids, SessionPrincipal actor, IamService service) {
-        roles.lock(); roles.requireAdministrator(actor.userId()); assignment(new Assignment(ids,0,"创建用户"));
+        roles.lock(); roles.requireAdministrator(actor.userId());
+        if(ids!=null && ids.isEmpty()) throw new IamException(400,"USER_ROLES_INVALID","创建用户时请选择至少一个启用角色");
+        assignment(new Assignment(ids,0,"创建用户"));
         // Create and bind atomically without depending on a deletable preset role.
         var user=service.createUserForRoleAssignment(login,display,email,phone,password,actor);
         roles.bind(user.id(),ids);

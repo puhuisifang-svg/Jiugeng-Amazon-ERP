@@ -29,7 +29,25 @@ class RoleControllerTest {
     JsonNode create(String name) throws Exception { return json.readTree(mvc.perform(post("/api/v1/roles").header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("name",name,"description","Synthetic role")))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()); }
     Map<String,Object> edit(JsonNode role,List<String> permissions,String status) { return Map.of("name",role.path("name").asText(),"description","Synthetic role","status",status,"permissions",permissions,"version",role.path("version").asLong(),"reason","Synthetic verification"); }
     JsonNode save(JsonNode role,List<String> permissions) throws Exception { ((com.fasterxml.jackson.databind.node.ObjectNode)role).put("version",jdbc.queryForObject("SELECT version FROM iam_role WHERE id=?",Long.class,role.path("id").asText())); return json.readTree(mvc.perform(put("/api/v1/roles/"+role.path("id").asText()).header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(edit(role,permissions,"ENABLED")))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()); }
-    void assign(String... ids) throws Exception { long v=jdbc.queryForObject("SELECT authorization_version FROM iam_user WHERE id=?",Long.class,userId);mvc.perform(put("/api/v1/users/"+userId+"/roles").header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("roleIds",List.of(ids),"version",v,"reason","Synthetic assignment")))).andExpect(status().isOk()); }
+    void assign(String... ids) throws Exception { long v=jdbc.queryForObject("SELECT authorization_version FROM iam_user WHERE id=?",Long.class,userId);mvc.perform(put("/api/v1/users/"+userId+"/roles").header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("roleIds",List.of(ids),"version",v,"reason","")))).andExpect(status().isOk()); }
+    @Test void removingLastRoleDisablesUserRevokesSessionAndAllowsRoleDeletion() throws Exception {
+        var role=save(create("待移除角色"),List.of("products.read")); String id=role.path("id").asText(); assign(id);
+        String old=login("rbac-user");
+        long v=jdbc.queryForObject("SELECT authorization_version FROM iam_user WHERE id=?",Long.class,userId);
+        mvc.perform(post("/api/v1/users/"+userId+"/roles/preview").header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("roleIds",List.of(),"version",v,"reason",""))))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.removed").isArray());
+        assign();
+        assertThat(jdbc.queryForObject("SELECT status FROM iam_user WHERE id=?",String.class,userId)).isEqualTo("DISABLED");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM iam_user_role WHERE user_id=?",Integer.class,userId)).isZero();
+        mvc.perform(get("/api/v1/auth/me").header("Authorization",old)).andExpect(status().isUnauthorized());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE action='ACCOUNT_DISABLE'",Integer.class)).isEqualTo(1);
+        long version=jdbc.queryForObject("SELECT version FROM iam_role WHERE id=?",Long.class,id);
+        mvc.perform(delete("/api/v1/roles/"+id).header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("version",version,"reason","Synthetic deletion")))).andExpect(status().isOk());
+        assign("SELECTION");
+        assertThat(jdbc.queryForObject("SELECT status FROM iam_user WHERE id=?",String.class,userId)).isEqualTo("DISABLED");
+        mvc.perform(post("/api/v1/users/"+userId+"/enable").header("Authorization",admin)).andExpect(status().isOk());
+        login("rbac-user");
+    }
     @Test void multipleRolesUnionDependenciesAndSessionRevocation() throws Exception {
         var product=save(create("只读产品"),List.of("products.read"));var finance=save(create("账单维护"),List.of("finance.write"));
         String old=login("rbac-user");assign(product.path("id").asText(),finance.path("id").asText());

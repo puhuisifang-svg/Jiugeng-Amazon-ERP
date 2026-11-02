@@ -9,7 +9,8 @@ const emit = defineEmits<{ close: []; saved: [] }>()
 const selected = ref<string[]>([]), reason = ref(''), error = ref(''), busy = ref(false), preview = ref<PermissionPreview>()
 onMounted(() => { selected.value = (props.user.roles ?? []).map(r => r.id) })
 const input = computed(() => ({ roleIds: selected.value, version: props.user.authorizationVersion ?? 0, reason: reason.value }))
-const dirty = computed(() => JSON.stringify(selected.value) !== JSON.stringify((props.user.roles ?? []).map(r => r.id)) || !!reason.value)
+const rolesChanged = computed(() => [...selected.value].sort().join(',') !== (props.user.roles ?? []).map(r => r.id).sort().join(','))
+const dirty = computed(() => rolesChanged.value || !!reason.value)
 function toggle(id: string) { if (selected.value.includes(id)) selected.value = selected.value.filter(r => r !== id); else selected.value = id === 'ADMIN' ? ['ADMIN'] : [...selected.value.filter(r => r !== 'ADMIN'), id]; preview.value = undefined }
 async function review() { busy.value = true; error.value = ''; try { preview.value = await rolesApi.previewAssignment(props.user.id, input.value) } catch (e) { error.value = e instanceof Error ? e.message : '预览失败' } finally { busy.value = false } }
 async function save() { busy.value = true; error.value = ''; try { await rolesApi.assign(props.user.id, input.value); emit('saved') } catch (e) { error.value = e instanceof Error ? e.message : '保存失败'; preview.value = undefined } finally { busy.value = false } }
@@ -27,6 +28,13 @@ async function save() { busy.value = true; error.value = ''; try { await rolesAp
       class="data-state--error"
     >
       {{ error }}
+    </p>
+    <p
+      v-if="!selected.length"
+      role="status"
+      class="data-state--warning"
+    >
+      移除全部角色后，该账号将同时停用并退出登录；账号资料和历史记录保留。重新使用时，请先分配角色，再到用户管理启用账号。
     </p>
     <PermissionDifference
       v-if="preview"
@@ -49,12 +57,11 @@ async function save() { busy.value = true; error.value = ''; try { await rolesAp
         :checked="selected.includes(role.id)"
         @change="toggle(role.id)"
       >{{ role.name }}{{ role.status !== 'ENABLED' ? '（已停用，请移除）' : '' }}<span class="access-muted">{{ role.kind === 'BUILTIN' ? '系统预置' : '自定义' }}</span></label>
-      <label>变更原因<textarea
+      <label>变更原因（选填）<textarea
         v-model="reason"
-        minlength="2"
         maxlength="200"
         rows="2"
-        required
+        placeholder="可补充本次调整原因，最多200字"
       /></label>
     </div>
     <template #footer>
@@ -66,10 +73,10 @@ async function save() { busy.value = true; error.value = ''; try { await rolesAp
         返回修改
       </button><button
         class="primary-button"
-        :disabled="busy || !selected.length || reason.trim().length < 2"
+        :disabled="busy || !rolesChanged || reason.length > 200"
         @click="preview ? save() : review()"
       >
-        {{ busy ? '处理中…' : preview ? '确认分配角色' : '预览权限变化' }}
+        {{ busy ? '处理中…' : preview ? (selected.length ? '确认分配角色' : '移除角色并停用账号') : '预览权限变化' }}
       </button>
     </template>
   </AccessDialog>

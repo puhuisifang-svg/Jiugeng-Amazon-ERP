@@ -242,7 +242,7 @@ watch(() => route.params.id, load); onMounted(load)
       </article>
       <TableViewport>
         <table class="data-table">
-          <thead><tr><th>品名 / SKU</th><th>规格型号</th><th>数量 / 单位</th><th>不含税单价</th><th>税率%</th><th>含税金额</th><th>交期</th><th>已安排未发</th><th>已发货</th><th>特殊需求/备注</th></tr></thead><tbody>
+          <thead><tr><th>品名 / SKU</th><th>客户编码</th><th>规格型号</th><th>数量 / 单位</th><th>不含税单价</th><th>税率%</th><th>含税金额</th><th>交期</th><th>已安排未发</th><th>已发货</th><th>特殊需求/备注</th></tr></thead><tbody>
             <tr
               v-for="l in detail.lines"
               :key="l.id"
@@ -253,7 +253,7 @@ watch(() => route.params.id, load); onMounted(load)
                   :styles="l.namePresentation?.styles"
                   :highlighted="l.namePresentation?.highlighted"
                 /><small>{{ l.skuCode }}</small>
-              </td><td>{{ l.details.specification }}</td><td>{{ l.details.quantity }} {{ l.details.unit }}</td><td>{{ l.details.netUnitPrice }}</td><td>{{ l.details.taxRate }}</td><td>{{ l.totalAmount }}</td><td>{{ l.details.deliveryDate }}</td><td>{{ l.allocatedQuantity }}</td><td>{{ l.shippedQuantity }}</td><td>{{ l.details.remark }}</td>
+              </td><td>{{ l.product?.customerProductCode || '未填写' }}</td><td>{{ l.details.specification }}</td><td>{{ l.details.quantity }} {{ l.details.unit }}</td><td>{{ l.details.netUnitPrice }}</td><td>{{ l.details.taxRate }}</td><td>{{ l.totalAmount }}</td><td>{{ l.details.deliveryDate }}</td><td>{{ l.allocatedQuantity }}</td><td>{{ l.shippedQuantity }}</td><td>{{ l.details.remark }}</td>
             </tr>
           </tbody>
         </table>
@@ -368,7 +368,7 @@ watch(() => route.params.id, load); onMounted(load)
           maxlength="500"
         ></label><div class="form-wide order-scroll">
           <table class="data-table">
-            <thead><tr><th>选择</th><th>商品</th><th>可安排</th><th>本次数量</th><th>箱数</th><th>计划日期</th><th>最晚日期</th><th>备注</th></tr></thead><tbody>
+            <thead><tr><th>选择</th><th>商品</th><th>客户编码</th><th>可安排</th><th>本次数量</th><th>箱数</th><th>计划日期</th><th>最晚日期</th><th>备注</th></tr></thead><tbody>
               <tr
                 v-for="a in arrangeItems"
                 :key="a.lineId"
@@ -386,7 +386,7 @@ watch(() => route.params.id, load); onMounted(load)
                     :styles="arranging.lines.find(l=>l.id===a.lineId)?.namePresentation?.styles"
                     :highlighted="arranging.lines.find(l=>l.id===a.lineId)?.namePresentation?.highlighted"
                   />
-                </td><td>{{ a.available }} {{ a.unit }}</td><td>
+                </td><td>{{ arranging.lines.find(l=>l.id===a.lineId)?.product?.customerProductCode || '未填写' }}</td><td>{{ a.available }} {{ a.unit }}</td><td>
                   <input
                     v-model.number="a.quantity"
                     aria-label="本次数量"

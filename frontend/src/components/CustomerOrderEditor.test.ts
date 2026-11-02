@@ -7,7 +7,7 @@ vi.mock('@/api/customers', () => ({ customersApi: { list: vi.fn(), defaultCustom
 import { customersApi } from '@/api/customers'
 import CustomerOrderEditor from './CustomerOrderEditor.vue'
 const customer = { id: 'c1', name: '合成客户', status: 'ACTIVE', contactPerson: '测试', phone: 'SYN', address: '测试地址', invoiceTitles: [{ invoiceTitle: '测试抬头', taxNumber: 'SYN-TAX' }] } as Customer
-const product = { id: 'cp1', productName: '测试商品\n红色规格', priceUnit: '米' } as CustomerProduct
+const product = { id: 'cp1', productName: '测试商品\n红色规格', priceUnit: '米', skuCode: 'SYN-SKU', customerProductCode: 'CLIENT-001' } as CustomerProduct
 beforeEach(() => {
   HTMLDialogElement.prototype.showModal = function () { this.open = true }
   HTMLDialogElement.prototype.close = function () { this.open = false }
@@ -17,6 +17,8 @@ it('retains input on backdrop, confirms discard, defaults unique title and emits
   const w = mount(CustomerOrderEditor, { props: { busy: false, error: '' } }); await flushPromises()
   const labels = w.findAll('label'), byLabel = (name: string) => labels.find(l => l.text().startsWith(name))!
   await w.findAll('button').find(b=>b.text()==='选择客户商品')!.trigger('click');await flushPromises();await w.get('input[type=checkbox]').setValue(true);await w.findAll('button').find(b=>b.text()==='添加所选（1）')!.trigger('click')
+  expect(w.get('.order-customer-code').text()).toBe('CLIENT-001')
+  expect(w.get('.order-line-sku').text()).toContain('SYN-SKU')
   await w.get('[aria-label="数量"]').setValue('1.25'); await w.get('[aria-label="不含税单价"]').setValue('10')
   await byLabel('是否需要开票').get('select').setValue('true')
   await w.get('[aria-label="客户订单表单"]').trigger('click'); expect(w.emitted('close')).toBeUndefined()
@@ -29,8 +31,10 @@ it('retains input on backdrop, confirms discard, defaults unique title and emits
 it('can edit a reactive order snapshot without DataCloneError or losing line IDs', async () => {
   const { reactive } = await import('vue')
   const line = { id: 'l1', customerProductId: 'cp1', name: '原订单商品', specification: '', quantity: 2, unit: '米', netUnitPrice: '10', taxRate: 1, deliveryDate: '2026-10-26', remark: '' }
-  const initial = reactive({ id: 'o1', customerName: customer.name, version: 3, details: { customerId: 'c1', lines: [line], invoiceTitle: '历史抬头', taxNumber: 'SYN-OLD' }, invoiceTitle: { invoiceTitle: '历史抬头', taxNumber: 'SYN-OLD' }, lines: [{ id: 'l1', details: line }] }) as unknown as CustomerOrder
+  const initial = reactive({ id: 'o1', customerName: customer.name, version: 3, details: { customerId: 'c1', lines: [line], invoiceTitle: '历史抬头', taxNumber: 'SYN-OLD' }, invoiceTitle: { invoiceTitle: '历史抬头', taxNumber: 'SYN-OLD' }, lines: [{ id: 'l1', details: line, product: { customerProductCode: 'HISTORICAL-001' }, skuCode: 'SYN-OLD' }] }) as unknown as CustomerOrder
   const w = mount(CustomerOrderEditor, { props: { initial, busy: false, error: '' } }); await flushPromises()
+  expect(w.get('.order-customer-code').text()).toBe('HISTORICAL-001')
+  expect(customersApi.products).not.toHaveBeenCalled()
   expect(w.text()).toContain('编辑客户订单'); await w.get('form').trigger('submit')
   expect(w.emitted('save')?.[0]?.[0]).toMatchObject({ version: 3, invoiceTitle: '历史抬头', lines: [expect.objectContaining({ id: 'l1' })] }); w.unmount()
 })
@@ -45,4 +49,17 @@ it('uses one order reference and keeps shipping fields together without customer
  await w.get('[aria-label="不含税单价"]').setValue('10');await w.get('form').trigger('submit')
  expect(w.emitted('save')?.[0]?.[0]).toMatchObject({externalNumber:'SYN-REF',contractNumber:''})
  expect(w.findAll('button').some(b=>b.text()==='保存')).toBe(true);expect(w.text()).not.toContain('保存草稿');w.unmount()
+})
+
+it('clears codes with customer changes and never substitutes SKU for a missing customer code', async () => {
+ const other={...customer,id:'c2',name:'另一个合成客户'}
+ vi.mocked(customersApi.list).mockResolvedValue({items:[customer,other],totalCount:2,page:0,size:100})
+ const w=mount(CustomerOrderEditor,{props:{busy:false,error:''}});await flushPromises()
+ const add=async(p:CustomerProduct)=>{await w.findAll('button').find(b=>b.text()==='选择客户商品')!.trigger('click');await flushPromises();w.findComponent({name:'CustomerOrderProductPicker'}).vm.$emit('confirm',[p]);await flushPromises()}
+ await add(product);expect(w.get('.order-customer-code').text()).toBe('CLIENT-001')
+ await w.findAll('label').find(l=>l.text().startsWith('客户 *'))!.get('select').setValue('c2')
+ expect(w.find('.order-customer-code').exists()).toBe(false)
+ await add({...product,id:'cp2',customerProductCode:'',skuCode:'OTHER-SKU'})
+ expect(w.get('.order-customer-code').text()).toBe('未填写')
+ expect(w.get('.order-line-sku').text()).toContain('OTHER-SKU');w.unmount()
 })

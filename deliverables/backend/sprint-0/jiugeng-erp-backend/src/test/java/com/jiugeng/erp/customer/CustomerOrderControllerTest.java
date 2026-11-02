@@ -28,12 +28,15 @@ class CustomerOrderControllerTest {
         input.put("totalAmount",0);var order=body(send(token,BASE,input).andExpect(status().isOk()));String id=order.path("id").asText();
         assertThat(new java.math.BigDecimal(order.path("totalAmount").asText())).isEqualByComparingTo("30.30");
         assertThat(order.path("lines").size()).isEqualTo(2);
+        assertThat(order.path("lines").get(0).path("product").path("customerProductCode").asText()).isEqualTo("SYN-CUSTOMER-CODE");
+        jdbc.update("UPDATE customer_product SET customer_product_code='CHANGED-CODE' WHERE id=?",cp);
         send(token,BASE+"/"+id+"/invoice",Map.of()).andExpect(status().isConflict());
         confirm(token,id);
         jdbc.update("UPDATE customer SET invoice_title='修改后的抬头' WHERE id=?",cp);
         var invoice=body(send(token,BASE+"/"+id+"/invoice",Map.of()).andExpect(status().isOk()));
         assertThat(invoice.path("snapshot").path("invoiceTitle").path("invoiceTitle").asText()).isEqualTo("合成抬头");
         assertThat(invoice.path("snapshot").path("lines").size()).isEqualTo(2);
+        assertThat(invoice.path("snapshot").path("lines").get(0).path("product").path("customerProductCode").asText()).isEqualTo("SYN-CUSTOMER-CODE");
         send(token,BASE+"/"+id+"/invoice",Map.of()).andExpect(status().isOk()).andExpect(jsonPath("$.id").value(invoice.path("id").asText()));
         String invoicePath=BASE+"/invoices/"+invoice.path("id").asText();
         mvc.perform(put(invoicePath).header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(Map.of("version",0,"invoiced",true,"invoiceNumber","SYN-INV","invoiceDate",date())))).andExpect(status().isOk());
@@ -42,6 +45,7 @@ class CustomerOrderControllerTest {
     }
     @Test void fractionalAllocationRoundTripAndDispatchNeverDoubleCount() throws Exception {
         String token=login("ADMIN"),cp=fixture();var order=body(send(token,BASE,input(cp)).andExpect(status().isOk()));String id=order.path("id").asText();confirm(token,id);
+        jdbc.update("UPDATE customer_product SET customer_product_code='CHANGED-CODE' WHERE id=?",cp);
         String line=order.path("lines").get(0).path("id").asText();var request=arrange(line,"0.500");
         var allocation=body(arrange(token,id,request,"same-key").andExpect(status().isOk())).get(0);
         arrange(token,id,request,"same-key").andExpect(status().isOk());
@@ -50,6 +54,7 @@ class CustomerOrderControllerTest {
         String pending=allocation.path("pendingId").asText();String pendingPath="/api/v1/dashboard-maintenance/pending-shipments/"+pending;
         var transfer=Map.of("quantity",0.5,"boxCount",1,"latestShipTime",date()+"T23:59:00","version",0);
         var today=body(send(token,pendingPath+"/transfer-to-today",transfer).andExpect(status().isOk()));String todayId=today.path("id").asText();
+        assertThat(today.path("customerProduct").path("customerProductCode").asText()).isEqualTo("SYN-CUSTOMER-CODE");
         assertThat(today.path("quantity").decimalValue()).isEqualByComparingTo("0.5");assertThat(today.path("quantityUnit").asText()).isEqualTo("米");
         var returned=body(send(token,"/api/v1/dashboard-maintenance/today-shipments/"+todayId+"/transfer-to-pending",Map.of("version",0,"reason","合成调整")).andExpect(status().isOk()));
         assertThat(returned.path("id").asText()).isEqualTo(pending);
@@ -137,7 +142,7 @@ class CustomerOrderControllerTest {
         jdbc.update("INSERT INTO customer(id,name,invoice_title,tax_number,status,created_by,updated_by) VALUES(?,'合成客户','合成抬头','SYN-TAX','ACTIVE','test','test')",id);
         jdbc.update("INSERT INTO product(id,product_code,product_code_normalized,name_zh,status,created_by,updated_by) VALUES(?,?,?,'合成父体','ACTIVE','test','test')",id,id,id);
         jdbc.update("INSERT INTO product_variant(id,product_id,sku_code,sku_code_normalized,variant_name,status,attribute_signature) VALUES(?,?,?,?,'合成商品','ACTIVE',?)",id,id,id,id,id);
-        jdbc.update("INSERT INTO customer_product(id,customer_id,product_id,variant_id,sku_code,product_name,price_unit,status,created_by,updated_by) VALUES(?,?,?,?,?,'合成商品','米','ACTIVE','test','test')",id,id,id,id,id);return id;
+        jdbc.update("INSERT INTO customer_product(id,customer_id,product_id,variant_id,sku_code,product_name,price_unit,status,created_by,updated_by) VALUES(?,?,?,?,?,'合成商品','米','ACTIVE','test','test')",id,id,id,id,id);jdbc.update("UPDATE customer_product SET customer_product_code='SYN-CUSTOMER-CODE' WHERE id=?",id);return id;
     }
     ResultActions send(String token,String path,Object input)throws Exception {return mvc.perform(post(path).header("Authorization",token).header("Idempotency-Key",UUID.randomUUID().toString()).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(input)));}
     JsonNode body(ResultActions result)throws Exception {return mapper.readTree(result.andReturn().getResponse().getContentAsString());}

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SingleFileUpload from '@/components/SingleFileUpload.vue'
 import { vSingleSelect } from '@/directives/singleSelect'
 import ProductNameEditor from './ProductNameEditor.vue'
 import { computed, nextTick, onMounted, reactive, ref, toRaw } from 'vue'
@@ -32,15 +33,13 @@ function addSupplier(variant: ProductVariantInput, event: Event) { const element
 function addMaterial(variant: ProductVariantInput, event: Event) { const element = event.target as HTMLSelectElement; const id = element.value; element.value = ''; const material = materials.value.find(item => item.id === id); if (material && !variant.materials.some(item => item.materialId === id)) variant.materials.push({ materialId: id, standardQuantity: 1, unit: material.unit, lossRate: 0, enabled: true }) }
 function makePrimary(variant: ProductVariantInput, id: string) { variant.suppliers.forEach(item => { item.primary = item.supplierId === id }) }
 function useImageUrl(variant: ProductVariantInput) { if (variant.imageUrl?.trim()) variant.imageAssetId = undefined }
-async function uploadImage(variant: ProductVariantInput, index: number, event: Event) { const file = (event.target as HTMLInputElement).files?.[0]; if (!file) return; uploading.value = index; imageError.value = ''; try { variant.imageAssetId = (await catalogApi.uploadImage('SKU_MAIN', file)).id; variant.imageUrl = undefined } catch (error) { imageError.value = error instanceof Error ? error.message : '图片上传失败。' } finally { uploading.value = null } }
-async function uploadParentImage(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
+async function uploadImage(variant: ProductVariantInput, index: number, file: File) { if (props.busy || uploading.value !== null) return false; uploading.value = index; imageError.value = ''; try { variant.imageAssetId = (await catalogApi.uploadImage('SKU_MAIN', file)).id; variant.imageUrl = undefined } catch (error) { imageError.value = error instanceof Error ? error.message : '图片上传失败。' ; return false } finally { uploading.value = null } }
+async function uploadParentImage(file: File) {
   if (!file || props.busy || uploading.value !== null) return
   uploading.value = -1; imageError.value = ''
   try { model.imageAssetId = (await catalogApi.uploadImage('PRODUCT_MAIN', file)).id }
-  catch (error) { imageError.value = error instanceof Error ? error.message : '父体图片上传失败。' }
-  finally { uploading.value = null; input.value = '' }
+  catch (error) { imageError.value = error instanceof Error ? error.message : '父体图片上传失败。' ; return false }
+  finally { uploading.value = null }
 }
 async function loadReferences() {
   if (runtimeConfig.authMode !== 'password') return
@@ -153,12 +152,14 @@ onMounted(loadReferences)
             role="img"
             aria-label="父体暂无图片"
           />
-          <label>{{ uploading === -1 ? '上传中…' : '上传父体图片' }}<input
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            aria-label="上传父体图片"
-            @change="uploadParentImage"
-          ></label>
+          <SingleFileUpload
+            hint="图片立即上传，保存表单后关联"
+            title="父体图片"
+            accept=".png,.jpg,.jpeg,.webp"
+            :max-mb="5"
+            :disabled="busy || uploading !== null"
+            :upload="uploadParentImage"
+          />
           <button
             v-if="model.imageAssetId"
             type="button"
@@ -299,13 +300,14 @@ onMounted(loadReferences)
                 placeholder="https://..."
                 @input="useImageUrl(variant)"
               ></label>
-              <label class="secondary-action">{{ uploading === variantIndex ? '上传中…' : '上传主图' }}<input
-                class="sr-only"
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                :disabled="uploading !== null"
-                @change="uploadImage(variant, variantIndex, $event)"
-              ></label>
+              <SingleFileUpload
+                hint="图片立即上传，保存表单后关联"
+                title="SKU 主图"
+                accept=".png,.jpg,.jpeg,.webp"
+                :max-mb="5"
+                :disabled="busy || uploading !== null"
+                :upload="(file) => uploadImage(variant, variantIndex, file)"
+              />
               <button
                 v-if="variant.imageAssetId || variant.imageUrl"
                 type="button"

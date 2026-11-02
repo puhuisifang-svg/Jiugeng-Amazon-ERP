@@ -153,7 +153,7 @@ watch(() => route.params.id, load); onMounted(load)
               <td>
                 <RouterLink :to="`/orders/customers/${o.id}`">
                   {{ o.orderNumber }}
-                </RouterLink><small>{{ o.details.externalNumber || '—' }}</small>
+                </RouterLink><small>{{ o.details.externalNumber || o.details.contractNumber || '—' }}</small>
               </td><td>{{ o.customerName }}</td><td>
                 <ProductName
                   v-if="o.lines[0]"
@@ -238,7 +238,7 @@ watch(() => route.params.id, load); onMounted(load)
         </button>
       </div>
       <article class="panel order-information">
-        <h2>订单信息</h2><p>客户：{{ detail.customerName }} · 来源：{{ detail.details.source === '1688' ? '1688' : '线下' }}</p><p>客户订单号：{{ detail.details.externalNumber || '—' }} · 合同号：{{ detail.details.contractNumber || '—' }}</p><p>下单日期：{{ detail.details.orderDate }} · 交期：{{ detail.details.deliveryDate }}</p><p>收货：{{ detail.details.recipient }} · {{ detail.details.phone }} · {{ detail.details.address }}</p><p>开票抬头：{{ detail.details.invoiceRequired ? detail.invoiceTitle.invoiceTitle || '尚未选择' : '无需开票' }}</p><p>备注：{{ detail.details.remark || '—' }}</p>
+        <h2>订单信息</h2><p>客户：{{ detail.customerName }} · 来源：{{ detail.details.source === '1688' ? '1688' : '线下' }}</p><p>客户订单号 / 合同号：{{ detail.details.externalNumber || detail.details.contractNumber || '—' }}<span v-if="detail.details.externalNumber && detail.details.contractNumber && detail.details.externalNumber !== detail.details.contractNumber"> · 历史合同号：{{ detail.details.contractNumber }}</span></p><p>下单日期：{{ detail.details.orderDate }} · 交期：{{ detail.details.deliveryDate }}</p><p>收货：{{ detail.details.recipient }} · {{ detail.details.phone }} · {{ detail.details.address }}</p><p>开票抬头：{{ detail.details.invoiceRequired ? detail.invoiceTitle.invoiceTitle || '尚未选择' : '无需开票' }}</p><p>备注：{{ detail.details.remark || '—' }}</p>
       </article>
       <TableViewport>
         <table class="data-table">

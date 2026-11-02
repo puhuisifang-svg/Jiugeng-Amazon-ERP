@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref, useId } from 'vue'
-withDefaults(defineProps<{ message?: string }>(), { message: '本次填写的内容尚未保存。关闭后将丢失这些修改，已保存的数据不受影响。' })
+withDefaults(defineProps<{ message?: string; discardLabel?: string }>(), { discardLabel: '放弃并关闭', message: '本次填写的内容尚未保存。关闭后将丢失这些修改，已保存的数据不受影响。' })
 const emit = defineEmits<{ keep: []; discard: [] }>()
 const dialog = ref<HTMLDialogElement>(), keepButton = ref<HTMLButtonElement>()
 const id = useId()
@@ -40,7 +40,7 @@ onBeforeUnmount(() => { dialog.value?.close(); previousFocus?.focus() })
         class="unsaved-discard"
         @click="emit('discard')"
       >
-        放弃并关闭
+        {{ discardLabel }}
       </button>
       <button
         ref="keepButton"

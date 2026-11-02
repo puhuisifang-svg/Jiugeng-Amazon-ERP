@@ -16,7 +16,7 @@ beforeEach(() => { vi.clearAllMocks(); vi.mocked(customersApi.list).mockResolved
 it('retains input on backdrop, confirms discard, defaults unique title and emits decimal lines', async () => {
   const w = mount(CustomerOrderEditor, { props: { busy: false, error: '' } }); await flushPromises()
   const labels = w.findAll('label'), byLabel = (name: string) => labels.find(l => l.text().startsWith(name))!
-  await byLabel('添加商品').get('select').setValue('cp1'); await byLabel('添加商品').findAll('button').find(b => b.text() === '添加明细')!.trigger('click')
+  await w.findAll('button').find(b=>b.text()==='选择客户商品')!.trigger('click');await flushPromises();await w.get('input[type=checkbox]').setValue(true);await w.findAll('button').find(b=>b.text()==='添加所选（1）')!.trigger('click')
   await w.get('[aria-label="数量"]').setValue('1.25'); await w.get('[aria-label="不含税单价"]').setValue('10')
   await byLabel('是否需要开票').get('select').setValue('true')
   await w.get('[aria-label="客户订单表单"]').trigger('click'); expect(w.emitted('close')).toBeUndefined()
@@ -33,4 +33,16 @@ it('can edit a reactive order snapshot without DataCloneError or losing line IDs
   const w = mount(CustomerOrderEditor, { props: { initial, busy: false, error: '' } }); await flushPromises()
   expect(w.text()).toContain('编辑客户订单'); await w.get('form').trigger('submit')
   expect(w.emitted('save')?.[0]?.[0]).toMatchObject({ version: 3, invoiceTitle: '历史抬头', lines: [expect.objectContaining({ id: 'l1' })] }); w.unmount()
+})
+
+it('uses one order reference and keeps shipping fields together without customer search',async()=>{
+ const w=mount(CustomerOrderEditor,{props:{busy:false,error:''}});await flushPromises()
+ expect(w.find('input[placeholder="客户名称或1688账号"]').exists()).toBe(false)
+ const reference=w.findAll('label').find(l=>l.text().startsWith('客户订单号 / 合同号'))!
+ await reference.get('input').setValue('SYN-REF')
+ await w.findAll('button').find(b=>b.text()==='选择客户商品')!.trigger('click');await flushPromises()
+ await w.get('input[type=checkbox]').setValue(true);await w.findAll('button').find(b=>b.text()==='添加所选（1）')!.trigger('click')
+ await w.get('[aria-label="不含税单价"]').setValue('10');await w.get('form').trigger('submit')
+ expect(w.emitted('save')?.[0]?.[0]).toMatchObject({externalNumber:'SYN-REF',contractNumber:''})
+ expect(w.findAll('button').some(b=>b.text()==='保存')).toBe(true);expect(w.text()).not.toContain('保存草稿');w.unmount()
 })

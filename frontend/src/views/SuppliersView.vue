@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SingleFileUpload from '@/components/SingleFileUpload.vue'
 import { vSingleSelect } from '@/directives/singleSelect'
 import { confirmAction } from '@/state/uiConfirmation'
 import SuccessToast from "@/components/SuccessToast.vue"
@@ -18,7 +19,7 @@ function reset() { Object.assign(form, { name: '', contactPerson: '', phone: '',
 function openCreate() { reset(); showForm.value = true; error.value = ''; success.value = '' }
 function edit(item: SupplierDto) { editing.value = item; Object.assign(form, { name: item.name, contactPerson: item.contactPerson ?? '', phone: item.phone ?? '', wechatId: item.wechatId ?? '', sourceUrl: item.sourceUrl ?? '', qrImageUrl: item.qrImageUrl ?? '', qrImageId: item.qrImageId ?? '', remark: item.remark ?? '', status: item.status, version: item.version }); showForm.value = true; error.value = ''; success.value = '' }
 async function load() { loading.value = true; error.value = ''; try { const result = await domainApi.suppliers({ ...(query.value ? { q: query.value } : {}), ...(status.value ? { status: status.value as 'ACTIVE' | 'DISABLED' } : {}), size: 100 }); items.value = result.items } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '供应商加载失败。' } finally { loading.value = false } }
-async function upload(event: Event) { const file = (event.target as HTMLInputElement).files?.[0]; if (!file) return; saving.value = true; try { form.qrImageId = (await catalogApi.uploadImage('SUPPLIER_QR', file)).id; form.qrImageUrl = '' } catch (exception) { error.value = exception instanceof Error ? exception.message : '二维码上传失败。' } finally { saving.value = false } }
+async function upload(file: File) { if (saving.value) return false; saving.value = true; try { form.qrImageId = (await catalogApi.uploadImage('SUPPLIER_QR', file)).id; form.qrImageUrl = '' } catch (exception) { error.value = exception instanceof Error ? exception.message : '二维码上传失败。' ; return false } finally { saving.value = false } }
 function useQrUrl() { if (form.qrImageUrl?.trim()) form.qrImageId = '' }
 function supplierInput(): SupplierInput {
   return {
@@ -132,11 +133,14 @@ onMounted(load)
           maxlength="500"
           placeholder="https://example.com/wechat-qr.png"
           @input="useQrUrl"
-        ></label><label>上传微信二维码<input
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          @change="upload"
-        ></label><label>状态<select
+        ></label><SingleFileUpload
+          hint="图片立即上传，保存表单后关联"
+          title="微信二维码"
+          accept=".png,.jpg,.jpeg,.webp"
+          :max-mb="5"
+          :disabled="saving"
+          :upload="upload"
+        /><label>状态<select
           v-model="form.status"
           v-single-select
           class="status-select"

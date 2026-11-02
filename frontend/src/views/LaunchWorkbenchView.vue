@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SingleFileUpload from '@/components/SingleFileUpload.vue'
 import { vSingleSelect } from '@/directives/singleSelect'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
@@ -46,7 +47,7 @@ const actions=computed(()=>{
 })
 const sourceCandidate=computed(()=>{const item=legacy.value.item as {source?:{candidateId:string}}|undefined;return item?.source?.candidateId})
 async function readFiles(){files.value=await attachmentList(development.value?'DEVELOPMENT':'CANDIDATE',id.value)}
-async function upload(event:Event){const file=(event.target as HTMLInputElement).files?.[0];if(!file)return;busy.value=true;try{const receipt=await uploadAttachment(development.value?'DEVELOPMENT':'CANDIDATE',id.value,file);await readFiles();success.value=`附件已保存：${receipt.name}；可在证据中引用附件编号。`}catch(e){error.value=message(e)}finally{busy.value=false}}
+async function upload(file:File){if(busy.value)return false;busy.value=true;try{const receipt=await uploadAttachment(development.value?'DEVELOPMENT':'CANDIDATE',id.value,file);await readFiles();success.value=`附件已保存：${receipt.name}；可在证据中引用附件编号。`}catch(e){error.value=message(e); return false }finally{busy.value=false}}
 async function download(file:LaunchAttachment){try{await downloadAttachment(development.value?'DEVELOPMENT':'CANDIDATE',id.value,file)}catch(e){error.value=message(e)}}
 async function findProducts(){try{products.value=(await domainApi.products()).items.filter(p=>`${p.productName} ${p.productCode}`.toLowerCase().includes(productQuery.value.toLowerCase()))}catch(e){error.value=message(e)}}
 function chooseProduct(product:ProductDetailDto){draft.value.productId=product.id;draft.value.skus=product.variants.map(v=>({id:crypto.randomUUID(),skuId:v.id??'',name:v.variantName,sampleId:''}));success.value='已带入商品及SKU，请移除本次未涉及的SKU后保存。'}
@@ -390,12 +391,14 @@ watch(()=>route.fullPath,()=>{workspace.value=undefined;tab.value='overview';sel
               @click="readFiles"
             >
               查看已上传附件
-            </button><label v-if="writable">上传证据（PDF / PNG / JPEG，最多5MB）<input
-              type="file"
+            </button><SingleFileUpload
+              v-if="writable"
+              title="证据附件"
               accept=".pdf,.png,.jpg,.jpeg"
+              :max-mb="5"
               :disabled="busy"
-              @change="upload"
-            ></label><p
+              :upload="upload"
+            /><p
               v-for="file in files"
               :key="file.id"
             >

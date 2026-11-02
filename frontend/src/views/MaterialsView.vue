@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SingleFileUpload from '@/components/SingleFileUpload.vue'
 import { vSingleSelect } from '@/directives/singleSelect'
 import { confirmAction } from '@/state/uiConfirmation'
 import SuccessToast from "@/components/SuccessToast.vue"
@@ -127,12 +128,10 @@ async function openPurchase(item: MaterialDetailDto) {
   } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '供应商采购信息加载失败。' }
   finally { purchaseLoading.value = false }
 }
-async function uploadImage(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0]
-  if (!file) return
+async function uploadImage(file: File) {
   uploading.value = true; imageError.value = ''
   try { form.imageAssetId = (await catalogApi.uploadImage('MATERIAL_IMAGE', file)).id; form.imageUrl = '' }
-  catch (exception) { imageError.value = exception instanceof Error ? exception.message : '图片上传失败。' }
+  catch (exception) { imageError.value = exception instanceof Error ? exception.message : '图片上传失败。' ; return false }
   finally { uploading.value = false }
 }
 function newRequestId() { return `web-${Date.now()}-${Math.random().toString(16).slice(2)}` }
@@ -385,13 +384,14 @@ onMounted(load)
             :image-id="form.imageAssetId"
             alt="辅料图片"
           />
-          <label class="secondary-action">{{ uploading ? '上传中…' : '上传辅料图片' }}<input
-            class="sr-only"
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            :disabled="uploading"
-            @change="uploadImage"
-          ></label>
+          <SingleFileUpload
+            hint="图片立即上传，保存表单后关联"
+            title="辅料图片"
+            accept=".png,.jpg,.jpeg,.webp"
+            :max-mb="5"
+            :disabled="saving || uploading"
+            :upload="uploadImage"
+          />
           <button
             v-if="form.imageAssetId"
             type="button"

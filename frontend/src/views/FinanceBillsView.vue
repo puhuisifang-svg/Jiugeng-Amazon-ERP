@@ -6,6 +6,7 @@ import { onBeforeRouteLeave } from 'vue-router'
 import { financeApi, type FinanceShop, type FinanceBill, type BillFilter, type BillInput, type BillPage, type BillAttachment, type BillHistory } from '@/api/finance'
 import { session } from '@/state/session'
 import { confirmAction } from '@/state/uiConfirmation'
+import VoucherUpload from '@/components/VoucherUpload.vue'
 import FinanceVoucher from '@/components/FinanceVoucher.vue'
 import TableViewport from '@/components/TableViewport.vue'
 import ListPagination from '@/components/ListPagination.vue'
@@ -31,22 +32,29 @@ async function exportBills(){busy.value=true;error.value='';try{await financeApi
 async function voidBill(b:FinanceBill){if(busy.value||!await confirmAction(`确认作废 ${b.date} 的${b.direction==='INCOME'?'收入':'支出'} ${money(b.amount)} 元？作废后不再计入有效账单汇总，原记录和凭证仍保留。`))return;busy.value=true;error.value='';try{await financeApi.void(b);success.value='账单已作废';await load()}catch(e){error.value=message(e)}finally{busy.value=false}}
 const modal=ref<HTMLDialogElement>(),mode=ref<'bill'|'detail'|'shops'|''>(''),formError=ref(''),discard=ref(false),initial=ref(''),editing=ref<FinanceBill>(),shopEditing=ref<FinanceShop>()
 const bill=reactive<BillInput>({shopId:'',date:today,direction:'EXPENSE',category:'',detail:'',account:'',amount:'',remark:''})
+const shopScreen=ref<'list'|'create'|'edit'>('list'),shopQuery=ref(''),shopStatus=ref(''),shopPage=ref(1),shopSize=ref(10),discardTarget=ref<'close'|'shops'>('close')
+const filteredShops=computed(()=>shops.value.filter(s=>(!shopStatus.value||(shopStatus.value==='active')===s.active)&&(!shopQuery.value.trim()||`${s.name} ${s.remark}`.toLowerCase().includes(shopQuery.value.trim().toLowerCase()))))
+const shownShops=computed(()=>filteredShops.value.slice((shopPage.value-1)*shopSize.value,shopPage.value*shopSize.value))
 const shopForm=reactive({name:'',remark:'',active:true})
 const files=ref<File[]>([]),attachments=ref<BillAttachment[]>([]),history=ref<BillHistory[]>([]),detailLoading=ref(false)
 const categories=computed(()=>bill.direction==='INCOME'?['平台回款','销售收入','退款返还','其他收入']:['采购货款','物流运费','广告推广','平台费用','软件服务','样品费用','其他支出'])
 function snapshot(){return JSON.stringify(mode.value==='shops'?shopForm:[bill,files.value.map(f=>[f.name,f.size,f.lastModified])])}
-const dirty=computed(()=>['bill','shops'].includes(mode.value)&&initial.value!==snapshot())
+const dirty=computed(()=>(mode.value==='bill'||(mode.value==='shops'&&shopScreen.value!=='list'))&&initial.value!==snapshot())
 async function show(kind:typeof mode.value){mode.value=kind;formError.value='';discard.value=false;initial.value=snapshot();await nextTick();modal.value?.showModal()}
 function close(){modal.value?.close();mode.value='';discard.value=false;files.value=[]}
-function requestClose(){if(busy.value)return;if(dirty.value){discard.value=true;return}close()}
-function newShop(){shopEditing.value=undefined;Object.assign(shopForm,{name:'',remark:'',active:true});initial.value=snapshot()}
-async function manageShops(){newShop();await show('shops')}
-async function editShop(s:FinanceShop){if(dirty.value&&!await confirmAction('放弃当前未保存的店铺内容？'))return;shopEditing.value=s;Object.assign(shopForm,{name:s.name,remark:s.remark,active:s.active});initial.value=snapshot()}
-async function saveShop(){busy.value=true;formError.value='';try{const s=await financeApi.saveShop({...shopForm,...(shopEditing.value?{version:shopEditing.value.version}:{})},shopEditing.value?.id);await loadShops();filter.shopId=s.id;applied.value={...filter};page.value=1;newShop();success.value='店铺已保存';await load()}catch(e){formError.value=message(e)}finally{busy.value=false}}
+function requestClose(){if(busy.value)return;discardTarget.value='close';if(dirty.value){discard.value=true;return}close()}
+function shopList(){shopScreen.value='list';formError.value='';discard.value=false;shopEditing.value=undefined}
+function cancelShop(){if(busy.value)return;if(dirty.value){discardTarget.value='shops';discard.value=true}else shopList()}
+function discardChanges(){if(discardTarget.value==='shops')shopList();else close()}
+function newShop(){shopEditing.value=undefined;shopScreen.value='create';formError.value='';Object.assign(shopForm,{name:'',remark:'',active:true});initial.value=snapshot();void nextTick(()=>modal.value?.querySelector<HTMLInputElement>('[data-shop-name]')?.focus())}
+async function manageShops(){shopScreen.value='list';shopQuery.value='';shopStatus.value='';shopPage.value=1;await show('shops')}
+function editShop(s:FinanceShop){shopEditing.value=s;shopScreen.value='edit';formError.value='';Object.assign(shopForm,{name:s.name,remark:s.remark,active:s.active});initial.value=snapshot();void nextTick(()=>modal.value?.querySelector<HTMLInputElement>('[data-shop-name]')?.focus())}
+async function saveShop(){if(busy.value||shopScreen.value==='list'||!dirty.value)return;if(!shopForm.name.trim()){formError.value='请填写店铺名称';return}busy.value=true;formError.value='';try{const created=shopScreen.value==='create';const saved=await financeApi.saveShop({...shopForm,name:shopForm.name.trim(),...(shopEditing.value?{version:shopEditing.value.version}:{})},shopEditing.value?.id);shops.value=created?[...shops.value,saved]:shops.value.map(s=>s.id===saved.id?saved:s);shopQuery.value='';shopStatus.value='';shopPage.value=Math.max(1,Math.ceil((shops.value.findIndex(s=>s.id===saved.id)+1)/shopSize.value));shopList();initial.value=snapshot();success.value=created?'店铺已创建':'店铺修改已保存';if(!applied.value.shopId){filter.shopId=saved.id;applied.value={...applied.value,shopId:saved.id};await load()}}catch(e){formError.value=message(e)}finally{busy.value=false}}
 async function editBill(b?:FinanceBill){editing.value=b;files.value=[];attachments.value=[];history.value=[];Object.assign(bill,{shopId:b?.shopId??applied.value.shopId,date:b?.date??today,direction:b?.direction??'EXPENSE',category:b?.category??'',detail:b?.detail??'',account:b?.account??'',amount:b?String(b.amount):'',remark:b?.remark??'',version:b?.version});await show('bill');if(b)await loadDetails(b)}
 async function detail(b:FinanceBill){editing.value=b;attachments.value=[];history.value=[];await show('detail');await loadDetails(b)}
 async function loadDetails(b:FinanceBill){detailLoading.value=true;try{const [a,h]=await Promise.all([financeApi.attachments(b.id),financeApi.history(b.id)]);if(editing.value?.id===b.id){attachments.value=a;history.value=h}}catch(e){formError.value=message(e)}finally{detailLoading.value=false}}
-function pickFiles(e:Event){const input=e.target as HTMLInputElement;const picked=Array.from(input.files??[]);if(picked.length+files.value.length+attachments.value.length>5){formError.value='每笔账单最多5个凭证';input.value='';return}if(picked.some(f=>f.size===0||f.size>5*1024*1024||!(/\.(png|jpe?g|pdf)$/i.test(f.name)))){formError.value='请选择5MB以内的 PNG、JPG 或 PDF 文件';input.value='';return}files.value.push(...picked);input.value='';formError.value=''}
+const voucherUpload=ref<InstanceType<typeof VoucherUpload>>()
+function pasteVoucher(e:ClipboardEvent){if(mode.value==='bill'&&!discard.value)voucherUpload.value?.paste(e)}
 async function saveBill(){if(busy.value)return;busy.value=true;formError.value='';try{const saved=await financeApi.save({...bill,...(editing.value?{version:editing.value.version}:{})},editing.value?.id);editing.value=saved;bill.version=saved.version;while(files.value.length){attachments.value.push(await financeApi.upload(saved.id,files.value[0]!));files.value.shift()}initial.value=snapshot();close();success.value='账单及凭证已保存';await load()}catch(e){formError.value=`${message(e)}${editing.value?'（已保存的账单不会重复新增，可重试）':''}`}finally{busy.value=false}}
 async function download(a:BillAttachment){if(!editing.value)return;formError.value='';try{await financeApi.download(editing.value.id,a)}catch(e){formError.value=message(e)}}
 async function removeAttachment(a:BillAttachment){if(!editing.value||busy.value||!await confirmAction(`移除凭证 ${a.name}？`))return;busy.value=true;try{await financeApi.removeAttachment(editing.value.id,a.id);attachments.value=attachments.value.filter(x=>x.id!==a.id);success.value='凭证已移除';await load()}catch(e){formError.value=message(e)}finally{busy.value=false}}
@@ -55,7 +63,7 @@ const labels:Record<string,string>={date:'日期',direction:'收支',category:'�
 function changes(h:BillHistory){try{const before=JSON.parse(h.before||'{}') as Record<string,unknown>,after=JSON.parse(h.after||'{}') as Record<string,unknown>;return Object.entries(labels).filter(([key])=>JSON.stringify(before[key])!==JSON.stringify(after[key])).map(([key,label])=>`${label}：${display(before[key])} → ${display(after[key])}`).join('；')||'凭证或账单信息已更新'}catch{return '记录已保存'}}
 function display(v:unknown){if(Array.isArray(v)&&v.length===3&&v.every(x=>typeof x==='number'))return v.map((x,i)=>i?String(x).padStart(2,'0'):String(x)).join('-');if(v===null||v===undefined||v==='')return '—';if(typeof v==='boolean')return v?'是':'否';if(v==='INCOME')return '收入';if(v==='EXPENSE')return '支出';return String(v)}
 function beforeUnload(e:BeforeUnloadEvent){if(dirty.value){e.preventDefault();e.returnValue=''}}
-onBeforeRouteLeave(()=>{if(busy.value)return false;if(dirty.value){discard.value=true;return false}return true})
+onBeforeRouteLeave(()=>{if(busy.value)return false;if(dirty.value){discardTarget.value='close';discard.value=true;return false}return true})
 onMounted(async()=>{window.addEventListener('beforeunload',beforeUnload);try{await loadShops();await load()}catch(e){error.value=message(e)}})
 onBeforeUnmount(()=>{++sequence;window.removeEventListener('beforeunload',beforeUnload);modal.value?.close()})
 </script>
@@ -301,12 +309,13 @@ onBeforeUnmount(()=>{++sequence;window.removeEventListener('beforeunload',before
     <dialog
       ref="modal"
       class="finance-dialog"
-      :aria-label="mode==='shops'?'店铺管理':mode==='detail'?'账单详情':editing?'编辑账单':'新增账单'"
+      :aria-label="mode==='shops'?(shopScreen==='list'?'店铺管理':shopScreen==='create'?'新增店铺':'编辑店铺'):mode==='detail'?'账单详情':editing?'编辑账单':'新增账单'"
+      @paste="pasteVoucher"
       @cancel.prevent="requestClose"
     >
       <form @submit.prevent="mode==='shops'?saveShop():saveBill()">
         <header>
-          <h2>{{ mode==='shops'?'店铺管理':mode==='detail'?'账单详情':editing?'编辑账单':'新增账单' }}</h2><button
+          <h2>{{ mode==='shops'?(shopScreen==='list'?'店铺管理':shopScreen==='create'?'新增店铺':'编辑店铺'):mode==='detail'?'账单详情':editing?'编辑账单':'新增账单' }}</h2><button
             type="button"
             class="secondary-button"
             :disabled="busy"
@@ -325,43 +334,109 @@ onBeforeUnmount(()=>{++sequence;window.removeEventListener('beforeunload',before
             {{ formError }}
           </p>
           <template v-if="mode==='shops'">
-            <p class="muted">
-              维护自己的运营店铺。每个店铺独立记账，停用后保留历史账单。
-            </p>
-            <div class="shop-list">
-              <button
-                v-for="s in shops"
-                :key="s.id"
-                type="button"
-                :disabled="busy"
-                :class="{'selected-shop':shopEditing?.id===s.id}"
-                @click="editShop(s)"
-              >
-                {{ s.name }} · {{ s.active?'启用':'停用' }}
-              </button><button
-                type="button"
-                :disabled="busy||dirty"
-                @click="newShop"
-              >
-                ＋新增店铺
-              </button>
-            </div>
-            <div class="bill-form-grid">
-              <label>店铺名称<input
-                v-model="shopForm.name"
-                required
-                maxlength="128"
-                :disabled="busy"
-              ></label><label>状态<select
-                v-model="shopForm.active"
-                v-single-select
-                :disabled="busy"
-              ><option :value="true">启用</option><option :value="false">停用</option></select></label><label class="wide">备注<textarea
-                v-model="shopForm.remark"
-                maxlength="500"
-                :disabled="busy"
-              /></label>
-            </div>
+            <template v-if="shopScreen==='list'">
+              <p class="shop-manager-intro">
+                各店铺独立记账。停用后不能新增账单，历史账单仍可查看。
+              </p>
+              <div class="shop-manager-toolbar">
+                <label class="shop-manager-search">搜索店铺<input
+                  v-model="shopQuery"
+                  type="search"
+                  placeholder="店铺名称或备注"
+                  @input="shopPage=1"
+                  @keydown.enter.prevent
+                ></label>
+                <label>状态<select
+                  v-model="shopStatus"
+                  v-single-select
+                  @change="shopPage=1"
+                ><option value="">全部状态</option><option value="active">启用</option><option value="inactive">停用</option></select></label>
+                <button
+                  type="button"
+                  class="shop-create-button"
+                  @click="newShop"
+                >
+                  ＋ 新增店铺
+                </button>
+              </div>
+              <TableViewport class="shop-manager-table">
+                <table class="data-table">
+                  <thead><tr><th>店铺名称</th><th>状态</th><th>备注</th><th>操作</th></tr></thead><tbody>
+                    <tr
+                      v-for="s in shownShops"
+                      :key="s.id"
+                    >
+                      <td><strong>{{ s.name }}</strong><small v-if="s.id===applied.shopId">当前记账店铺</small></td><td>
+                        <span
+                          class="shop-status"
+                          :class="{inactive:!s.active}"
+                        >{{ s.active?'启用':'停用' }}</span>
+                      </td><td class="shop-remark">
+                        {{ s.remark||'—' }}
+                      </td><td>
+                        <button
+                          type="button"
+                          class="text-action"
+                          @click="editShop(s)"
+                        >
+                          编辑
+                        </button>
+                      </td>
+                    </tr>
+                    <tr v-if="!shownShops.length">
+                      <td
+                        colspan="4"
+                        class="shop-empty"
+                      >
+                        {{ shops.length?'没有匹配店铺，请调整搜索条件':'暂无店铺，点击“新增店铺”开始独立记账' }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </TableViewport>
+              <ListPagination
+                :page="shopPage"
+                :page-size="shopSize"
+                :total="filteredShops.length"
+                @update:page="shopPage=$event"
+                @update:page-size="shopSize=$event;shopPage=1"
+              />
+            </template>
+            <template v-else>
+              <div class="shop-edit-heading">
+                <button
+                  type="button"
+                  :disabled="busy"
+                  @click="cancelShop"
+                >
+                  ‹ 返回店铺列表
+                </button><span>{{ shopScreen==='create'?'创建独立的店铺账本':'修改店铺资料，不影响历史账单' }}</span>
+              </div>
+              <div class="bill-form-grid">
+                <label class="wide">店铺名称<input
+                  v-model="shopForm.name"
+                  data-shop-name
+                  required
+                  maxlength="128"
+                  :disabled="busy"
+                  placeholder="填写便于识别的店铺名称"
+                ></label>
+                <label>状态<select
+                  v-model="shopForm.active"
+                  v-single-select
+                  :disabled="busy"
+                ><option :value="true">启用</option><option :value="false">停用</option></select></label>
+                <p class="shop-state-help">
+                  {{ shopForm.active?'启用后可为该店铺新增账单。':'停用后停止新增账单，历史记录仍保留；之后可重新启用。' }}
+                </p>
+                <label class="wide">备注（选填）<textarea
+                  v-model="shopForm.remark"
+                  maxlength="500"
+                  :disabled="busy"
+                  placeholder="例如站点、品牌或记账说明"
+                /></label>
+              </div>
+            </template>
           </template>
           <template v-else-if="mode==='bill'">
             <p class="bill-shop">
@@ -430,16 +505,12 @@ onBeforeUnmount(()=>{++sequence;window.removeEventListener('beforeunload',before
               /></label>
             </div>
             <section class="bill-attachments">
-              <h3>凭证</h3><p class="muted">
-                PNG / JPG / PDF，单个不超过5MB，每笔最多5个。
-              </p><input
-                aria-label="上传凭证"
-                type="file"
-                multiple
-                accept="image/png,image/jpeg,application/pdf"
+              <VoucherUpload
+                ref="voucherUpload"
+                v-model="files"
+                :existing-count="attachments.length"
                 :disabled="busy||detailLoading"
-                @change="pickFiles"
-              >
+              />
               <ul>
                 <li
                   v-for="a in attachments"
@@ -459,18 +530,6 @@ onBeforeUnmount(()=>{++sequence;window.removeEventListener('beforeunload',before
                     @click="removeAttachment(a)"
                   >
                     移除
-                  </button>
-                </li><li
-                  v-for="(f,i) in files"
-                  :key="i"
-                >
-                  <span>{{ f.name }}（待保存）</span><button
-                    type="button"
-                    class="text-action danger"
-                    :disabled="busy"
-                    @click="files.splice(i,1)"
-                  >
-                    取消
                   </button>
                 </li>
               </ul>
@@ -525,23 +584,25 @@ onBeforeUnmount(()=>{++sequence;window.removeEventListener('beforeunload',before
             type="button"
             class="secondary-button"
             :disabled="busy"
-            @click="requestClose"
+            @click="mode==='shops'&&shopScreen!=='list'?cancelShop():requestClose()"
           >
-            {{ mode==='detail'?'关闭':'取消' }}
+            {{ mode==='detail'||(mode==='shops'&&shopScreen==='list')?'关闭':'取消' }}
           </button><button
-            v-if="mode!=='detail'"
+            v-if="mode!=='detail'&&(mode!=='shops'||shopScreen!=='list')"
             type="submit"
-            :disabled="busy||detailLoading"
+            :disabled="busy||detailLoading||(mode==='shops'&&!dirty)"
           >
-            {{ busy?'保存中…':mode==='shops'?'保存店铺':'保存账单' }}
+            {{ busy?'保存中…':mode==='shops'?(shopScreen==='create'?'创建店铺':'保存修改'):'保存账单' }}
           </button>
         </footer>
       </form>
     </dialog>
     <UnsavedChangesDialog
       v-if="discard"
+      :discard-label="discardTarget==='shops'?'放弃并返回列表':'放弃并关闭'"
+      :message="discardTarget==='shops'?'本次店铺资料尚未保存。放弃后返回店铺列表，已保存的数据不受影响。':'本次填写的内容尚未保存。关闭后将丢失这些修改，已保存的数据不受影响。'"
       @keep="discard=false"
-      @discard="close"
+      @discard="discardChanges"
     />
   </section>
 </template>
@@ -549,4 +610,5 @@ onBeforeUnmount(()=>{++sequence;window.removeEventListener('beforeunload',before
 .finance-ui .panel{min-height:0}.finance-filters{display:flex;flex-wrap:wrap}.finance-filters label{flex:0 1 160px;min-width:120px}.finance-filters label:first-child{flex:0 1 240px}.finance-filters .date-filter{flex:0 0 215px}.finance-filters .keyword{flex:1 1 240px}.finance-actions{display:flex;gap:8px;flex-wrap:wrap}.finance-totals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.finance-totals article{padding:12px 16px;display:grid;gap:6px}.finance-totals article>span,.finance-totals small{color:var(--muted);font-size:12px}.finance-totals strong{font-size:22px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.income{color:#15803d}.expense{color:#b54708}.amount{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.finance-table{min-width:1120px;width:100%}.finance-summary{width:100%;min-width:640px}.bill-detail{min-width:160px;max-width:320px;white-space:pre-wrap;overflow-wrap:anywhere}.finance-table td:last-child,.finance-table th:last-child{min-width:174px;width:174px}.finance-table small{display:block}.finance-ui .text-action{background:transparent;border:0;color:var(--accent);font-size:13px;min-height:32px;padding:4px 6px;cursor:pointer}.finance-ui .danger{color:#b42318}.finance-ui button:disabled{opacity:.5;cursor:default}
 .finance-dialog{width:min(840px,calc(100vw - 32px));max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);padding:0;border:0;border-radius:12px;overflow:hidden}.finance-dialog::backdrop{background:#17203366}.finance-dialog form{display:flex;flex-direction:column;max-height:calc(100dvh - 32px);min-width:0}.finance-dialog header,.finance-dialog footer{display:flex;align-items:center;gap:8px;padding:12px 16px;flex-shrink:0}.finance-dialog header{justify-content:space-between;border-bottom:1px solid var(--line)}.finance-dialog footer{justify-content:flex-end;border-top:1px solid var(--line)}.finance-dialog h2{font-size:18px;margin:0}.finance-dialog h3{font-size:14px;margin:16px 0 8px}.finance-dialog-body{overflow:auto;padding:16px;min-height:0}.finance-dialog header button,.finance-dialog footer button,.shop-list button{min-height:36px;padding:6px 14px;border:1px solid var(--line);border-radius:6px;background:white;color:var(--text);cursor:pointer}.finance-dialog footer button[type=submit]{background:var(--accent);color:white}.bill-form-grid,.bill-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.bill-form-grid label{display:grid;gap:6px;font-size:13px}.bill-form-grid .wide{grid-column:1/-1}.bill-form-grid input,.bill-form-grid select,.bill-form-grid textarea{width:100%;min-width:0;box-sizing:border-box;min-height:40px;border:1px solid var(--line);border-radius:6px;padding:8px;font:inherit}.bill-form-grid textarea{min-height:70px;resize:vertical}.bill-shop{margin:0 0 16px;font-weight:600}.bill-attachments{border-top:1px solid var(--line);margin-top:16px}.bill-attachments input{max-width:100%}.bill-attachments li{display:flex;align-items:center;justify-content:space-between;gap:8px;overflow-wrap:anywhere}.bill-facts>div{display:grid;gap:6px;padding:10px;background:#f5f7fa;border-radius:6px;overflow-wrap:anywhere}.bill-facts span{color:var(--muted);font-size:12px}.preserve{white-space:pre-wrap;overflow-wrap:anywhere}.bill-history{padding-left:20px}.bill-history li{margin:12px 0}.bill-history span{display:block;font-size:12px;margin-top:4px}.bill-history p{font-size:13px;overflow-wrap:anywhere}.shop-list{display:flex;gap:6px;flex-wrap:wrap;padding-bottom:16px}.shop-list .selected-shop{color:var(--accent);border-color:var(--accent)}
 @media(max-width:600px){.finance-filters .date-filter{flex:1 1 130px}.finance-filters label:first-child{flex:1 1 100%}.finance-ui .finance-filters{max-height:180px}.finance-totals{grid-template-columns:1fr}.finance-totals article{display:flex;align-items:center;flex-wrap:wrap;justify-content:space-between;padding:8px 12px}.finance-totals strong{font-size:18px}.finance-totals small{flex-basis:100%}.finance-filters label{flex:1 1 130px;min-width:0}.bill-form-grid,.bill-facts{grid-template-columns:1fr}.finance-dialog{width:calc(100vw - 16px);max-width:calc(100vw - 16px)}}
+.shop-manager-intro{font-size:12px;color:var(--muted);margin:0 0 12px;line-height:1.6}.shop-manager-toolbar{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:12px}.shop-manager-toolbar label{display:grid;gap:5px;font-size:12px;color:var(--muted)}.shop-manager-search{flex:1;min-width:160px}.shop-manager-toolbar input,.shop-manager-toolbar select{height:32px;min-width:0;width:100%;border:1px solid var(--line);border-radius:4px;padding:5px 9px;font-size:13px;background:white}.shop-create-button{height:32px;padding:5px 12px;border:1px solid var(--accent);border-radius:4px;background:var(--accent);color:white;font-size:13px}.shop-manager-table{max-height:330px;min-height:120px}.shop-manager-table table{width:100%;min-width:540px}.shop-manager-table th:last-child{width:70px}.shop-manager-table td:first-child{min-width:150px;max-width:240px;white-space:normal;overflow-wrap:anywhere}.shop-manager-table strong{font-weight:500}.shop-manager-table small{display:block;margin-top:4px;font-size:11px;color:var(--accent)}.shop-status{font-size:12px;border-radius:4px;padding:3px 7px;color:#167447;background:#eaf7ef;white-space:nowrap}.shop-status.inactive{color:#6b7280;background:#eef0f3}.shop-remark{max-width:300px;white-space:normal;overflow-wrap:anywhere;color:var(--muted)}.shop-empty{text-align:center;padding:30px!important;color:var(--muted)}.shop-edit-heading{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:18px}.shop-edit-heading button{border:0;background:transparent;color:var(--accent);font-size:13px;padding:4px 0}.shop-edit-heading span,.shop-state-help{font-size:12px;color:var(--muted);line-height:1.6}.shop-state-help{align-self:end;margin:0 0 4px}
 </style>

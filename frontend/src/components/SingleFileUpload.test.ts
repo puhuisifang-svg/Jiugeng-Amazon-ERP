@@ -1,0 +1,11 @@
+import {flushPromises,mount} from '@vue/test-utils'
+import {beforeEach,describe,expect,it,vi} from 'vitest'
+import SingleFileUpload from './SingleFileUpload.vue'
+const image=()=>new File(['synthetic'],'sample.webp',{type:'image/webp'})
+async function paste(w:ReturnType<typeof mount>,file=image()){await w.get('.voucher-upload-zone').trigger('paste',{clipboardData:{items:[{kind:'file',type:file.type,getAsFile:()=>file}]}});await flushPromises()}
+beforeEach(()=>{URL.createObjectURL=vi.fn(()=> 'blob:test');URL.revokeObjectURL=vi.fn()})
+describe('SingleFileUpload',()=>{
+ it('uploads pasted WebP only to the targeted card and retains a failed image for retry',async()=>{const upload=vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(undefined);const other=vi.fn();const w=mount(SingleFileUpload,{props:{title:'SKU 主图',accept:'.png,.jpg,.jpeg,.webp',upload}}),second=mount(SingleFileUpload,{props:{title:'父体图片',upload:other}});await paste(w);expect(upload).toHaveBeenCalledOnce();expect(other).not.toHaveBeenCalled();expect(w.text()).toContain('上传失败');await w.findAll('button').find(b=>b.text()==='重试上传')!.trigger('click');await flushPromises();expect(upload).toHaveBeenCalledTimes(2);expect(upload.mock.calls[0]![0]).toBe(upload.mock.calls[1]![0]);expect(w.text()).toContain('已上传');w.unmount();second.unmount()})
+ it('blocks duplicate input during upload and frees preview resources',async()=>{let resolve!:(v:unknown)=>void;const upload=vi.fn(()=>new Promise(r=>{resolve=r}));const w=mount(SingleFileUpload,{props:{title:'图片',accept:'.webp',upload}});await paste(w);await paste(w);expect(upload).toHaveBeenCalledOnce();expect(w.text()).toContain('正在上传');resolve(undefined);await flushPromises();w.unmount();expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:test')})
+ it('retains non-image document formats and displays deferred save honestly',async()=>{const upload=vi.fn();const w=mount(SingleFileUpload,{props:{title:'标签',accept:'.png,.zpl',maxMb:10,upload,deferred:true}});const f=new File(['label'],'label.zpl');const input=w.get('input');Object.defineProperty(input.element,'files',{value:[f]});await input.trigger('change');await flushPromises();expect(upload).toHaveBeenCalledWith(f);expect(w.text()).toContain('待保存');expect(w.text()).toContain('ZPL');w.unmount()})
+})

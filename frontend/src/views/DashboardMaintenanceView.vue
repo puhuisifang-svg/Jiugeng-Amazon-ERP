@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SingleFileUpload from '@/components/SingleFileUpload.vue'
 import { vSingleSelect } from '@/directives/singleSelect'
 import DatePicker from '@/components/DatePicker.vue'
 import { confirmAction, promptReason } from '@/state/uiConfirmation'
@@ -157,11 +158,9 @@ async function load() {
   }
   finally { if (sequence === loadSequence) loading.value = false }
 }
-async function chooseImage(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0]
-  if (!file) return
-  if (file.size > 5 * 1024 * 1024) { error.value = '图片不能超过 5 MB。'; return }
-  imageFile.value = file; previewUrl.value = URL.createObjectURL(file)
+async function chooseImage(file: File) {
+  if (file.size > 5 * 1024 * 1024) { error.value = '图片不能超过 5 MB。'; return false }
+  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value); imageFile.value = file; previewUrl.value = URL.createObjectURL(file)
 }
 async function uploadIfNeeded() {
   if (!imageFile.value) return imageId.value || undefined
@@ -404,11 +403,15 @@ onMounted(async () => {
               maxlength="500"
             ></label>
           </template>
-          <label v-if="isProduct">产品图案<input
-            accept="image/jpeg,image/png,image/webp"
-            type="file"
-            @change="chooseImage"
-          ></label>
+          <SingleFileUpload
+            v-if="isProduct"
+            deferred
+            title="产品图案"
+            accept=".png,.jpg,.jpeg,.webp"
+            :max-mb="5"
+            :disabled="saving"
+            :upload="chooseImage"
+          />
           <div class="dashboard-image-preview">
             <ShipmentProductImage
               v-if="!isProduct"

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { vSingleSelect } from '@/directives/singleSelect'
+import CustomerOrderProductPicker from './CustomerOrderProductPicker.vue'
 import DatePicker from '@/components/DatePicker.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import UnsavedChangesDialog from './UnsavedChangesDialog.vue'
@@ -12,32 +13,27 @@ const emit = defineEmits<{ save: [input: OrderInput]; close: [] }>()
 const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai' }).format(new Date())
 const form = reactive<OrderInput>(props.initial ? { ...JSON.parse(JSON.stringify(props.initial.details)), lines: props.initial.lines.map(l => ({ ...l.details, id: l.id })), version: props.initial.version } : { customerId: '', source: 'OFFLINE', externalNumber: '', contractNumber: '', orderDate: today, deliveryDate: today, invoiceRequired: false, invoiceTitle: '', taxNumber: '', recipient: '', phone: '', address: '', remark: '', lines: [] })
 const initialSnapshot = ref(JSON.stringify(form)), discard = ref(false), localError = ref(''), selecting = ref(false)
-const customers = ref<Customer[]>([]), products = ref<CustomerProduct[]>([]), chosen = ref<Customer>()
-const customerQuery = ref(''), productQuery = ref(''), selectedProduct = ref(''), titleIndex = ref('')
-let sequence = 0
+const customers = ref<Customer[]>([]), chosen = ref<Customer>(), pickerOpen=ref(false)
+const titleIndex = ref('')
+const orderReference=computed({get:()=>form.externalNumber||form.contractNumber||'',set:(value:string)=>{form.externalNumber=value;form.contractNumber=''}})
 const titles = computed(() => chosen.value?.invoiceTitles ?? [])
 async function searchCustomers() {
   selecting.value = true
-  try { customers.value = (await customersApi.list({ q: customerQuery.value, status: 'ACTIVE', size: 100 })).items }
+  try {const all:Customer[]=[];let page=0;while(true){const result=await customersApi.list({status:'ACTIVE',size:100,page});all.push(...result.items);if(all.length>=result.totalCount||!result.items.length)break;page++}customers.value=all}
   catch (e) { localError.value = String(e) } finally { selecting.value = false }
-}
-async function searchProducts() {
-  const seq = ++sequence; selecting.value = true; localError.value = ''
-  try { const result = await customersApi.products({ customerId: form.customerId, q: productQuery.value, status: 'ACTIVE', size: 100 }); if (seq === sequence) products.value = result.items }
-  catch (e) { if (seq === sequence) localError.value = String(e) } finally { if (seq === sequence) selecting.value = false }
 }
 async function changeCustomer() {
   chosen.value = customers.value.find(c => c.id === form.customerId)
-  form.lines = []; products.value = []; selectedProduct.value = ''; titleIndex.value = ''; form.invoiceTitle = ''; form.taxNumber = ''
+  form.lines = []; pickerOpen.value=false; titleIndex.value = ''; form.invoiceTitle = ''; form.taxNumber = ''
   form.recipient = chosen.value?.contactPerson ?? ''; form.phone = chosen.value?.phone ?? ''; form.address = chosen.value?.address ?? ''
   if (titles.value.length === 1) { titleIndex.value = '0'; chooseTitle() }
-  if (form.customerId) await searchProducts()
 }
 function chooseTitle() { const t = titleIndex.value === 'snapshot' ? props.initial?.invoiceTitle : titleIndex.value === '' ? undefined : titles.value[Number(titleIndex.value)]; form.invoiceTitle = t?.invoiceTitle ?? ''; form.taxNumber = t?.taxNumber ?? '' }
-function addLine() {
-  const p = products.value.find(p => p.id === selectedProduct.value); if (!p) return
+function addProducts(products:CustomerProduct[]) {
+ for(const p of products){if(form.lines.some(line=>line.customerProductId===p.id))continue
   form.lines.push({ customerProductId: p.id, name: p.productName, specification: '', unit: p.priceUnit || '套', quantity: 1, netUnitPrice: '', taxRate: 1, deliveryDate: form.deliveryDate, remark: p.requirements || '' })
-  selectedProduct.value = ''
+ }
+ pickerOpen.value=false
 }
 function close() { if (props.busy) return; if (initialSnapshot.value !== JSON.stringify(form)) discard.value = true; else emit('close') }
 function submit() {
@@ -54,7 +50,7 @@ onMounted(async () => {
     chosen.value = customers.value.find(c => c.id === form.customerId)
     if (!chosen.value) { const matches = await customersApi.list({ q: props.initial.customerName, size: 100 }); chosen.value = matches.items.find(c => c.id === form.customerId); if (chosen.value) customers.value.push(chosen.value) }
     const index = titles.value.findIndex(t => t.invoiceTitle === form.invoiceTitle && t.taxNumber === form.taxNumber)
-    titleIndex.value = index < 0 && form.invoiceTitle ? 'snapshot' : index < 0 ? '' : String(index); await searchProducts()
+    titleIndex.value = index < 0 && form.invoiceTitle ? 'snapshot' : index < 0 ? '' : String(index)
   }
 })
 </script>
@@ -81,13 +77,9 @@ onMounted(async () => {
           class="operation-form"
           :disabled="selecting || props.busy"
         >
-          <label>搜索客户<input
-            v-model="customerQuery"
-            placeholder="客户名称或1688账号"
-          ><button
-            type="button"
-            @click="searchCustomers"
-          >搜索</button></label>
+          <h3 class="order-section-title">
+            订单信息
+          </h3>
           <label>客户 *<select
             v-model="form.customerId"
             v-single-select
@@ -102,14 +94,10 @@ onMounted(async () => {
             v-model="form.source"
             v-single-select
           ><option value="OFFLINE">线下</option><option value="1688">1688</option></select></label>
-          <label>客户订单号<input
-            v-model="form.externalNumber"
+          <label>客户订单号 / 合同号<input
+            v-model="orderReference"
             maxlength="100"
             :required="form.source === '1688'"
-          ></label>
-          <label>合同号<input
-            v-model="form.contractNumber"
-            maxlength="100"
           ></label>
           <label>下单日期<DatePicker
             v-model="form.orderDate"
@@ -136,41 +124,38 @@ onMounted(async () => {
             :key="i"
             :value="String(i)"
           >{{ t.invoiceTitle }} · {{ t.taxNumber }}</option></select></label>
+          <h3 class="order-section-title">
+            发货信息
+          </h3>
           <label>收货人<input
             v-model="form.recipient"
             maxlength="100"
           ></label><label>联系电话<input
             v-model="form.phone"
             maxlength="32"
-          ></label><label class="form-wide">发货地址<input
+          ></label><label class="shipping-address">发货地址<input
             v-model="form.address"
             maxlength="500"
           ></label>
-          <label>搜索客户商品<input
-            v-model="productQuery"
-            placeholder="品名或客户商品编码"
-          ><button
-            type="button"
-            :disabled="!form.customerId"
-            @click="searchProducts"
-          >搜索商品</button></label>
-          <label>添加商品<select
-            v-model="selectedProduct"
-            v-single-select
-          ><option value="">请选择客户商品</option><option
-            v-for="p in products"
-            :key="p.id"
-            :value="p.id"
-          >{{ p.productName }} · {{ p.customerProductCode || p.skuCode }}</option></select><button
-            type="button"
-            :disabled="!selectedProduct"
-            @click="addLine"
-          >添加明细</button></label>
-          <p class="form-wide">
-            每次检索最多展示100项，可输入关键词缩小范围。供货价未约定含税口径，请明确填写本单不含税单价。
+          <div class="order-line-toolbar">
+            <h3>订单商品 <small>共 {{ form.lines.length }} 项</small></h3><button
+              type="button"
+              :disabled="!form.customerId"
+              @click="pickerOpen=true"
+            >
+              选择客户商品
+            </button>
+          </div>
+          <p class="order-line-hint">
+            请填写本单不含税单价；宽表可左右滚动查看全部字段。
           </p>
-          <div class="form-wide order-lines-scroll">
+          <div
+            class="form-wide order-lines-scroll"
+            tabindex="0"
+            aria-label="订单商品明细，可左右滚动"
+          >
             <table class="data-table">
+              <colgroup><col style="width:220px"><col style="width:160px"><col style="width:80px"><col style="width:110px"><col style="width:130px"><col style="width:90px"><col style="width:120px"><col style="width:160px"><col style="width:220px"><col style="width:76px"></colgroup>
               <thead><tr><th>品名</th><th>规格型号</th><th>单位</th><th>数量</th><th>不含税单价</th><th>税率%</th><th>含税金额</th><th>交期</th><th>特殊需求/备注</th><th>操作</th></tr></thead><tbody>
                 <tr
                   v-for="(l,i) in form.lines"
@@ -242,10 +227,19 @@ onMounted(async () => {
                   </td><td>
                     <button
                       type="button"
+                      class="order-line-remove"
                       @click="form.lines.splice(i,1)"
                     >
                       移除
                     </button>
+                  </td>
+                </tr>
+                <tr v-if="!form.lines.length">
+                  <td
+                    colspan="10"
+                    class="order-lines-empty"
+                  >
+                    请点击“选择客户商品”添加订单明细
                   </td>
                 </tr>
               </tbody>
@@ -277,13 +271,22 @@ onMounted(async () => {
           type="submit"
           :disabled="props.busy || selecting"
         >
-          {{ props.busy ? '保存中…' : props.initial ? '保存修改' : '保存草稿' }}
+          {{ props.busy ? '保存中…' : props.initial ? '保存修改' : '保存' }}
         </button>
       </footer>
     </form>
+    <CustomerOrderProductPicker
+      v-if="pickerOpen"
+      :customer-id="form.customerId"
+      :existing="form.lines.map(line=>line.customerProductId)"
+      @close="pickerOpen=false"
+      @confirm="addProducts"
+    />
   </div>
 </template>
 <style scoped>
-.order-editor{box-sizing:border-box;width:min(1400px,100%);max-width:100%;min-width:0;min-height:0;margin:0;max-height:calc(100dvh - 64px);display:flex;flex-direction:column;overflow:hidden}.order-editor-body{flex:1;min-height:0;min-width:0;overflow:auto}.order-editor fieldset{min-width:0;border:0;padding:8px;margin:0}.order-editor label{align-self:start;min-width:0}.order-lines-scroll{overflow:auto;min-width:0}.order-lines-scroll table{min-width:1300px}.order-lines-scroll input{min-width:95px;width:100%}.order-lines-scroll textarea{min-width:200px}.form-footer{flex-shrink:0;background:white;padding-top:12px}.order-editor h2{margin:8px 0;flex-shrink:0}
+.order-editor{box-sizing:border-box;width:min(1400px,100%);max-width:100%;min-width:0;min-height:0;margin:0;max-height:calc(100dvh - 64px);display:flex;flex-direction:column;overflow:hidden}.order-editor-body{flex:1;min-height:0;min-width:0;overflow:auto}.order-editor fieldset{min-width:0;border:0;padding:8px;margin:0}.order-editor label{align-self:start;min-width:0}.order-lines-scroll{overflow:auto;min-width:0}.order-lines-scroll table{min-width:1300px}.order-lines-scroll input{min-width:0;width:100%;box-sizing:border-box}.order-lines-scroll textarea{min-width:0;width:100%;box-sizing:border-box;padding:8px!important;min-height:64px!important;height:64px}.form-footer{flex-shrink:0;background:white;padding-top:12px}.order-editor h2{margin:8px 0;flex-shrink:0}
+.order-editor .form-wide,.order-section-title,.order-line-toolbar,.order-line-hint{grid-column:1 / -1}.order-section-title{border-bottom:1px solid var(--line);padding:6px 0 8px;margin:0;font-size:14px}.order-line-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px}.order-line-toolbar h3{margin:0}.order-line-toolbar small{font-weight:400;color:var(--muted);margin-left:8px}.order-line-hint{margin:0;color:var(--muted);font-size:12px}.order-lines-scroll{max-height:380px}.order-lines-scroll table{table-layout:fixed;width:1466px}.order-lines-scroll th{position:sticky;top:0;background:#f5f7fa;z-index:2}.order-lines-scroll td:first-child,.order-lines-scroll th:first-child{position:sticky;left:0;background:white;z-index:1}.order-lines-scroll td:last-child,.order-lines-scroll th:last-child{position:sticky;right:0;background:white;z-index:1}.order-lines-scroll th:first-child,.order-lines-scroll th:last-child{background:#f5f7fa;z-index:3}.order-editor .order-line-remove{background:transparent;color:#b42318;padding:0 4px;min-height:28px}.order-lines-empty{text-align:center;color:var(--muted);height:80px}.order-editor .shipping-address{grid-column:3}.order-editor .operation-form{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:800px){.order-editor .operation-form{grid-template-columns:repeat(2,minmax(0,1fr))}.order-editor .shipping-address{grid-column:1 / -1}.order-lines-scroll td:first-child,.order-lines-scroll th:first-child,.order-lines-scroll td:last-child,.order-lines-scroll th:last-child{position:static}}
 @media(max-width:640px){.order-editor{max-height:calc(100dvh - 24px);padding:12px}}
 </style>

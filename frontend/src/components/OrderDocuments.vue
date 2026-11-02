@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SingleFileUpload from '@/components/SingleFileUpload.vue'
 import { ref, onMounted, watch } from 'vue'
 import { apiRequest, getSessionToken, ApiError, SESSION_EXPIRED_EVENT } from '@/api/client'
 import { runtimeConfig } from '@/config/runtime'
@@ -13,10 +14,10 @@ async function request(suffix: string, init: { method?: string; body?: FormData 
   if (!response.ok) { if (response.status === 401) window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT)); const p = await response.json().catch(() => null); throw new ApiError(response.status, p?.code ?? 'DOCUMENT_FAILED', p?.message ?? '附件操作失败') }
   return response
 }
-async function upload(event: Event) {
-  const target = event.target as HTMLInputElement, file = target.files?.[0]; if (!file || busy.value) return
+async function upload(file: File) {
+  if (busy.value) return false
   busy.value = true; error.value = ''; success.value = ''
-  try { if (file.size > 10 * 1024 * 1024) throw new Error('附件不得超过10MB'); const body = new FormData(); body.set('file', file); await request('', { method: 'POST', body }); success.value = '附件已上传。'; await load() } catch (e) { error.value = String(e) } finally { busy.value = false; target.value = '' }
+  try { if (file.size > 10 * 1024 * 1024) throw new Error('附件不得超过10MB'); const body = new FormData(); body.set('file', file); await request('', { method: 'POST', body }); success.value = '附件已上传。'; await load() } catch (e) { error.value = String(e) ; return false } finally { busy.value = false }
 }
 async function download(item: typeof rows.value[number]) { busy.value = true; error.value = ''; try { const response = await request(`/${item.id}`, {}); const url = URL.createObjectURL(await response.blob()); const a = document.createElement('a'); a.href = url; a.download = item.fileName; a.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000) } catch (e) { error.value = String(e) } finally { busy.value = false } }
 watch(() => [props.orderId,props.scope], load); onMounted(load)
@@ -28,12 +29,14 @@ watch(() => [props.orderId,props.scope], load); onMounted(load)
       role="alert"
     >
       {{ error }}
-    </p><label v-if="writable">上传附件（PDF、PNG、JPG，≤10MB）<input
-      type="file"
+    </p><SingleFileUpload
+      v-if="writable"
+      title="订单 / 发票附件"
       accept=".pdf,.png,.jpg,.jpeg"
+      :max-mb="10"
       :disabled="busy"
-      @change="upload"
-    ></label><p v-if="!rows.length">
+      :upload="upload"
+    /><p v-if="!rows.length">
       暂无附件
     </p><p
       v-for="item in rows"

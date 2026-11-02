@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SingleFileUpload from '@/components/SingleFileUpload.vue'
 import { ref, watch } from 'vue'
 import { dashboardApi, type ShipmentDocument } from '@/api/dashboard'
 import { ApiError } from '@/api/client'
@@ -14,15 +15,14 @@ async function load() {
   finally { if (request === sequence) loading.value = false }
 }
 watch(() => [props.scope, props.shipmentId, props.kind], () => { files.value = []; void load() }, { immediate: true })
-async function upload(event: Event) {
-  const input = event.target as HTMLInputElement; const file = input.files?.[0]
+async function upload(file: File) {
   if (!file || busy.value) return
   error.value = ''; success.value = ''
-  if (!file.size || file.size > 10 * 1024 * 1024) { error.value = '文件不能为空，且不能超过 10 MB。'; input.value = ''; return }
+  if (!file.size || file.size > 10 * 1024 * 1024) { error.value = '文件不能为空，且不能超过 10 MB。';  return false }
   busy.value = true
   try { const document = await dashboardApi.uploadDocument(props.shipmentId, props.kind, file); files.value.unshift(document); success.value = '标签上传成功。' }
-  catch (e) { error.value = e instanceof ApiError ? e.message : '上传失败，请重试。' }
-  finally { busy.value = false; input.value = '' }
+  catch (e) { error.value = e instanceof ApiError ? e.message : '上传失败，请重试。' ; return false }
+  finally { busy.value = false }
 }
 async function download(file: ShipmentDocument) {
   busy.value = true; error.value = ''
@@ -50,16 +50,14 @@ async function download(file: ShipmentDocument) {
     >
       ↓ {{ file.fileName }}
     </button>
-    <label
+    <SingleFileUpload
       v-if="editable"
-      class="shipment-upload"
-    >{{ busy ? '处理中…' : '+ 上传文件' }}<input
-      type="file"
+      title="标签文件"
       accept=".pdf,.png,.jpg,.jpeg,.txt,.zpl"
-      :aria-label="kind === 'LABEL' ? '上传商品标签' : '上传外箱标签'"
+      :max-mb="10"
       :disabled="busy || loading"
-      @change="upload"
-    ></label>
+      :upload="upload"
+    />
     <small v-if="editable">PDF / 图片 / TXT / ZPL，≤10 MB</small>
     <p
       v-if="error"

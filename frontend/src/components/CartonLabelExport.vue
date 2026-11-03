@@ -189,7 +189,7 @@ onBeforeUnmount(clearPreview)
             </button>
           </details>
         </article>
-        <footer>
+        <footer class="ui-dialog-actions">
           <button
             type="submit"
             :disabled="!ready"

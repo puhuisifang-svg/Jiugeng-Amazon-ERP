@@ -31,7 +31,6 @@ class RoleRepository {
     }
     Set<String> capabilities(String userId) {
         var result = new TreeSet<>(sources(userId).keySet());
-        if (!result.isEmpty()) result.add("audit.read.self");
         return result;
     }
     List<String> permissions(String id) {
@@ -62,9 +61,5 @@ class RoleRepository {
             .query(Integer.class).single();
         if(count<1) throw new IamException(409,"LAST_ADMIN_REQUIRED","必须保留至少一名启用且未锁定的系统管理员");
     }
-    void guardEnabledUsers() {
-        int count=jdbc.sql("SELECT COUNT(*) FROM iam_user u WHERE u.deleted_at IS NULL AND u.status='ENABLED' AND NOT EXISTS (SELECT 1 FROM iam_user_role ur JOIN iam_role r ON r.id=ur.role_id WHERE ur.user_id=u.id AND r.status='ENABLED' AND r.deleted_at IS NULL)")
-            .query(Integer.class).single();
-        if(count>0) throw new IamException(409,"USER_REQUIRES_ROLE","部分启用账号将失去全部有效角色，请先分配替代角色或停用账号");
-    }
+
 }

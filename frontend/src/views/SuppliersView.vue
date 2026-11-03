@@ -189,7 +189,7 @@ onMounted(load)
           >
             移除二维码 URL
           </button>
-        </div><div class="operation-form__actions">
+        </div><div class="operation-form__actions ui-dialog-actions">
           <button
             type="button"
             class="secondary-button"

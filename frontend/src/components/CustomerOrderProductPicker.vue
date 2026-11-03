@@ -97,7 +97,7 @@ onMounted(()=>{dialog.value?.showModal();void load()})
       @update:page="page=$event;load()"
       @update:page-size="resize"
     />
-    <footer>
+    <footer class="ui-dialog-actions">
       <span>已选 {{ selected.length }} 项</span><button
         type="button"
         class="secondary-action"
@@ -105,6 +105,7 @@ onMounted(()=>{dialog.value?.showModal();void load()})
       >
         取消
       </button><button
+        class="ui-button-primary"
         type="button"
         :disabled="busy||!selected.length"
         @click="emit('confirm',selected)"

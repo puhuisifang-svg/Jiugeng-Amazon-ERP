@@ -47,7 +47,7 @@ function submit() { if (uiConfirmation.value?.input && !reason.value.trim()) ret
             placeholder="请输入原因，便于后续追溯"
           ></label>
         </div>
-        <footer>
+        <footer class="ui-dialog-actions">
           <button
             ref="cancel"
             type="button"

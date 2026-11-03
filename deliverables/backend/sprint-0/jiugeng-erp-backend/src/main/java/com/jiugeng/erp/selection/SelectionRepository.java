@@ -18,7 +18,7 @@ class SelectionRepository {
 
     List<CandidateView> findAll(String keyword, CandidateStatus status, String owner) {
         StringBuilder sql = new StringBuilder("""
-                SELECT * FROM selection_candidate WHERE 1=1
+                SELECT * FROM selection_candidate WHERE deleted_at IS NULL
                 """);
         if (keyword != null) sql.append(" AND (UPPER(asin) LIKE :keyword OR UPPER(title) LIKE :keyword OR UPPER(COALESCE(category,'')) LIKE :keyword OR UPPER(COALESCE(owner,'')) LIKE :keyword OR EXISTS (SELECT 1 FROM selection_candidate_tag t WHERE t.candidate_id=selection_candidate.id AND UPPER(t.tag) LIKE :keyword))");
         if (status != null) sql.append(" AND status=:status");
@@ -32,7 +32,7 @@ class SelectionRepository {
     }
 
     Optional<CandidateView> findById(String id) {
-        return jdbc.sql("SELECT * FROM selection_candidate WHERE id=:id").param("id", id)
+        return jdbc.sql("SELECT * FROM selection_candidate WHERE id=:id AND deleted_at IS NULL").param("id", id)
                 .query(this::mapCandidate).optional();
     }
 
@@ -42,7 +42,7 @@ class SelectionRepository {
             jdbc.sql("INSERT INTO selection_source_link(candidate_id,event_id,source_run_id) VALUES(:id,:event,:run)").param("id",id).param("event",event).param("run",run).update();
     }
     void lock(String id) {
-        jdbc.sql("SELECT id FROM selection_candidate WHERE id=:id FOR UPDATE").param("id", id)
+        jdbc.sql("SELECT id FROM selection_candidate WHERE id=:id AND deleted_at IS NULL FOR UPDATE").param("id", id)
                 .query(String.class).optional().orElseThrow(() -> new SelectionException(404,"CANDIDATE_NOT_FOUND","候选不存在"));
     }
 
@@ -92,7 +92,7 @@ class SelectionRepository {
     }
 
     void transition(String id, CandidateStatus status, String reason, String actorId) {
-        jdbc.sql("UPDATE selection_candidate SET status=:status,rejection_reason=:reason,updated_by=:actor,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=:id")
+        jdbc.sql("UPDATE selection_candidate SET status=:status,rejection_reason=:reason,updated_by=:actor,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=:id AND deleted_at IS NULL")
                 .param("status", status.name()).param("reason", reason).param("actor", actorId).param("id", id).update();
     }
 

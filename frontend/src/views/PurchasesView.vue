@@ -421,7 +421,7 @@ onMounted(load)
             placeholder="包装要求、供货约定等（单行文本）"
           /></label>
         </fieldset>
-        <div class="operation-form__actions">
+        <div class="operation-form__actions ui-dialog-actions">
           <button
             type="button"
             class="secondary-button"

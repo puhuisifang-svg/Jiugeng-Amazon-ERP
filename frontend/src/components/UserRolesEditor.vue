@@ -4,10 +4,16 @@ import { rolesApi, type Role, type Permission, type PermissionPreview } from '@/
 import type { AppUser } from '@/api/auth'
 import AccessDialog from './AccessDialog.vue'
 import PermissionDifference from './PermissionDifference.vue'
-const props = defineProps<{ user: AppUser; roles: Role[]; catalog: Permission[] }>()
+const props = defineProps<{ user: AppUser; roles: Role[]; catalog: Permission[]; scopedRole?: Role }>()
 const emit = defineEmits<{ close: []; saved: [] }>()
 const selected = ref<string[]>([]), reason = ref(''), error = ref(''), busy = ref(false), preview = ref<PermissionPreview>()
-onMounted(() => { selected.value = (props.user.roles ?? []).map(r => r.id) })
+const dialog = ref<InstanceType<typeof AccessDialog>>()
+const removing = computed(() => !!props.scopedRole && (props.user.roles ?? []).some(r => r.id === props.scopedRole!.id))
+const title = computed(() => props.scopedRole ? `${removing.value ? '移除成员' : '添加成员'} · ${props.scopedRole.name}` : `分配角色 · ${props.user.displayName}`)
+onMounted(() => {
+  const existing = (props.user.roles ?? []).map(r => r.id)
+  selected.value = !props.scopedRole ? existing : removing.value ? existing.filter(id => id !== props.scopedRole!.id) : [...existing, props.scopedRole.id]
+})
 const input = computed(() => ({ roleIds: selected.value, version: props.user.authorizationVersion ?? 0, reason: reason.value }))
 const rolesChanged = computed(() => [...selected.value].sort().join(',') !== (props.user.roles ?? []).map(r => r.id).sort().join(','))
 const dirty = computed(() => rolesChanged.value || !!reason.value)
@@ -17,11 +23,16 @@ async function save() { busy.value = true; error.value = ''; try { await rolesAp
 </script>
 <template>
   <AccessDialog
-    :title="`分配角色 · ${user.displayName}`"
+    ref="dialog"
+    :title="title"
+    dialog-class="assignment-dialog"
     :dirty="dirty"
     :busy="busy"
     @close="emit('close')"
   >
+    <div class="assignment-summary">
+      <strong>{{ user.displayName }}</strong><span>{{ user.loginName }}</span><p>{{ scopedRole ? `本次仅${removing ? '移除' : '添加'}「${scopedRole.name}」，其他角色保持不变。` : '选择岗位角色，核对权限变化后保存。' }}</p>
+    </div>
     <p
       v-if="error"
       role="alert"
@@ -34,7 +45,7 @@ async function save() { busy.value = true; error.value = ''; try { await rolesAp
       role="status"
       class="data-state--warning"
     >
-      移除全部角色后，该账号将同时停用并退出登录；账号资料和历史记录保留。重新使用时，请先分配角色，再到用户管理启用账号。
+      移除全部角色后，账号状态保持不变，现有登录会话将失效。启用的账号仍可登录，但暂无功能权限；重新分配角色后即可使用。账号资料和历史记录保留。
     </p>
     <PermissionDifference
       v-if="preview"
@@ -45,13 +56,17 @@ async function save() { busy.value = true; error.value = ''; try { await rolesAp
       v-else
       class="access-form"
     >
-      <p class="access-muted">
+      <p
+        v-if="!scopedRole"
+        class="access-muted"
+      >
         多个角色的权限取并集。管理员角色不能与其他角色混用。
       </p>
       <label
-        v-for="role in roles.filter(r => r.status === 'ENABLED' || selected.includes(r.id))"
+        v-for="role in (scopedRole ? [] : roles.filter(r => r.status === 'ENABLED' || selected.includes(r.id)))"
         :key="role.id"
         class="role-choice"
+        :class="{'role-choice-selected': selected.includes(role.id)}"
       ><input
         type="checkbox"
         :checked="selected.includes(role.id)"
@@ -65,18 +80,28 @@ async function save() { busy.value = true; error.value = ''; try { await rolesAp
       /></label>
     </div>
     <template #footer>
+      <span class="assignment-step">{{ preview ? '确认变更' : scopedRole ? '核对成员' : `已选择 ${selected.length} 个角色` }}</span>
+      <button
+        v-if="!preview"
+        class="assignment-secondary"
+        :disabled="busy"
+        @click="dialog?.requestClose()"
+      >
+        取消
+      </button>
       <button
         v-if="preview"
+        class="assignment-secondary"
         :disabled="busy"
         @click="preview = undefined"
       >
         返回修改
       </button><button
-        class="primary-button"
+        class="primary-button assignment-primary"
         :disabled="busy || !rolesChanged || reason.length > 200"
         @click="preview ? save() : review()"
       >
-        {{ busy ? '处理中…' : preview ? (selected.length ? '确认分配角色' : '移除角色并停用账号') : '预览权限变化' }}
+        {{ busy ? '处理中…' : preview ? (scopedRole ? (removing ? '确认移除成员' : '确认添加成员') : selected.length ? '确认分配角色' : '确认移除全部角色') : '预览权限变化' }}
       </button>
     </template>
   </AccessDialog>

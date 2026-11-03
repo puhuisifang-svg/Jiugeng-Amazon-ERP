@@ -136,12 +136,11 @@ class IamControllerTest {
     }
 
     @Test
-    void forcesFirstPasswordChangeAndEnforcesCapabilityOnUserAdministration() throws Exception {
+    void allowsInitialPasswordWithoutChangeAndEnforcesCapabilityOnUserAdministration() throws Exception {
         String adminToken = login("admin", INITIAL_PASSWORD);
 
         mvc.perform(get("/api/v1/users").header("Authorization", bearer(adminToken)))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("PASSWORD_CHANGE_REQUIRED"));
+                .andExpect(status().isOk());
 
         changePassword(adminToken, INITIAL_PASSWORD, CHANGED_PASSWORD);
         mvc.perform(get("/api/v1/users").header("Authorization", bearer(adminToken)))
@@ -156,10 +155,12 @@ class IamControllerTest {
                                 "initialPassword", INITIAL_PASSWORD,
                                 "role", "SELECTION"))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.mustChangePassword").value(true));
+                .andExpect(jsonPath("$.mustChangePassword").value(false));
 
         String selectionToken = login("selector", INITIAL_PASSWORD);
-        changePassword(selectionToken, INITIAL_PASSWORD, CHANGED_PASSWORD);
+        mvc.perform(get("/api/v1/auth/me").header("Authorization", bearer(selectionToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mustChangePassword").value(false));
         mvc.perform(get("/api/v1/users").header("Authorization", bearer(selectionToken)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("CAPABILITY_DENIED"));
@@ -177,64 +178,69 @@ class IamControllerTest {
     }
 
     @Test
-    void locksAfterConfiguredFailuresAndAdminCanUnlock() throws Exception {
-        service.createUser("locked-user", "待锁定账号", INITIAL_PASSWORD, Role.SELECTION);
+    void disablesAfterConfiguredFailuresAndAdminCanEnable() throws Exception {
+        service.createUser("locked-user", "待停用账号", INITIAL_PASSWORD, Role.SELECTION);
 
+        String activeToken = login("locked-user", INITIAL_PASSWORD);
         for (int attempt = 1; attempt < 5; attempt++) {
             mvc.perform(loginRequest("locked-user", "wrong-password"))
                     .andExpect(status().isUnauthorized())
                     .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
         }
         mvc.perform(loginRequest("locked-user", "wrong-password"))
-                .andExpect(status().isLocked())
-                .andExpect(jsonPath("$.code").value("ACCOUNT_LOCKED"));
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCOUNT_DISABLED"));
         mvc.perform(loginRequest("locked-user", INITIAL_PASSWORD))
-                .andExpect(status().isLocked());
+                .andExpect(status().isForbidden());
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM audit_event WHERE actor_login_name = 'locked-user' AND action = 'LOGIN_FAILED'",
                 Integer.class)).isEqualTo(6);
         assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM audit_event WHERE actor_login_name = 'locked-user' AND action = 'ACCOUNT_LOCK'",
+                "SELECT COUNT(*) FROM audit_event WHERE actor_login_name = 'locked-user' AND action = 'ACCOUNT_DISABLE'",
                 Integer.class)).isEqualTo(1);
 
+        mvc.perform(get("/api/v1/auth/me").header("Authorization", bearer(activeToken))).andExpect(status().isUnauthorized());
         String adminToken = loginAndChangeAdmin();
         String userId = jdbc.queryForObject(
                 "SELECT id FROM iam_user WHERE login_name = 'locked-user'", String.class);
-        mvc.perform(post("/api/v1/users/{id}/unlock", userId).header("Authorization", bearer(adminToken)))
+        mvc.perform(post("/api/v1/users/{id}/enable", userId).header("Authorization", bearer(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.lockedAt").doesNotExist());
         assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM audit_event WHERE resource_id = ? AND action = 'ACCOUNT_UNLOCK'",
+                "SELECT COUNT(*) FROM audit_event WHERE resource_id = ? AND action = 'ACCOUNT_ENABLE'",
                 Integer.class, userId)).isEqualTo(1);
 
+        assertThat(jdbc.queryForObject("SELECT failed_login_count FROM iam_user WHERE id=?",Integer.class,userId)).isZero();
+        mvc.perform(loginRequest("locked-user", "wrong-password")).andExpect(status().isUnauthorized());
         assertThat(login("locked-user", INITIAL_PASSWORD)).isNotBlank();
+        mvc.perform(get("/api/v1/auth/me").header("Authorization", bearer(activeToken))).andExpect(status().isUnauthorized());
     }
 
     @Test
-    void administratorCanManuallyLockAndRestoreAnAccount() throws Exception {
+    void administratorCanDisableAndRestoreAnAccount() throws Exception {
         service.createUser("operator", "操作员", INITIAL_PASSWORD, Role.PRODUCT_MATERIAL);
         String operatorToken = login("operator", INITIAL_PASSWORD);
         String adminToken = loginAndChangeAdmin();
         String userId = jdbc.queryForObject(
                 "SELECT id FROM iam_user WHERE login_name = 'operator'", String.class);
 
-        mvc.perform(post("/api/v1/users/{id}/lock", userId).header("Authorization", bearer(adminToken)))
+        mvc.perform(post("/api/v1/users/{id}/disable", userId).header("Authorization", bearer(adminToken)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.lockedAt").isNotEmpty());
+                .andExpect(jsonPath("$.status").value("DISABLED"));
         mvc.perform(get("/api/v1/auth/me").header("Authorization", bearer(operatorToken)))
                 .andExpect(status().isUnauthorized());
-        mvc.perform(loginRequest("operator", INITIAL_PASSWORD)).andExpect(status().isLocked());
+        mvc.perform(loginRequest("operator", INITIAL_PASSWORD)).andExpect(status().isForbidden());
 
-        mvc.perform(post("/api/v1/users/{id}/unlock", userId).header("Authorization", bearer(adminToken)))
+        mvc.perform(post("/api/v1/users/{id}/enable", userId).header("Authorization", bearer(adminToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.lockedAt").doesNotExist());
         assertThat(login("operator", INITIAL_PASSWORD)).isNotBlank();
 
         String adminId = jdbc.queryForObject(
                 "SELECT id FROM iam_user WHERE login_name = 'admin'", String.class);
-        mvc.perform(post("/api/v1/users/{id}/lock", adminId).header("Authorization", bearer(adminToken)))
+        mvc.perform(post("/api/v1/users/{id}/disable", adminId).header("Authorization", bearer(adminToken)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("SELF_LOCK_FORBIDDEN"));
+                .andExpect(jsonPath("$.code").value("SELF_DISABLE_FORBIDDEN"));
     }
 
     @Test

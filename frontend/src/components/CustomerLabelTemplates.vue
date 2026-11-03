@@ -167,7 +167,7 @@ onBeforeUnmount(clearPreview)
             下移
           </button>
         </div><p>字段行高按权重分配，长文字会自动换行并适度缩小；过长无法清晰打印时会提示修改。模板预览使用合成示例数据。</p>
-        <footer>
+        <footer class="ui-dialog-actions">
           <button
             type="button"
             @click="preview"

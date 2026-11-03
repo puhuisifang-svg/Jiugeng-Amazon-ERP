@@ -590,7 +590,7 @@ watch(()=>route.fullPath,()=>{workspace.value=undefined;tab.value='overview';sel
           >
             {{ error }}
           </p>
-        </div><footer>
+        </div><footer class="ui-dialog-actions">
           <button
             type="button"
             class="secondary-button"
@@ -598,7 +598,10 @@ watch(()=>route.fullPath,()=>{workspace.value=undefined;tab.value='overview';sel
             @click="createOpen=false"
           >
             取消
-          </button><button :disabled="busy">
+          </button><button
+            class="ui-button-primary"
+            :disabled="busy"
+          >
             {{ busy?'创建中…':'创建并评估' }}
           </button>
         </footer>
@@ -633,7 +636,7 @@ watch(()=>route.fullPath,()=>{workspace.value=undefined;tab.value='overview';sel
           >
             {{ error }}
           </p>
-        </div><footer>
+        </div><footer class="ui-dialog-actions">
           <button
             type="button"
             class="secondary-button"
@@ -641,7 +644,10 @@ watch(()=>route.fullPath,()=>{workspace.value=undefined;tab.value='overview';sel
             @click="confirm=''"
           >
             取消
-          </button><button :disabled="busy">
+          </button><button
+            class="ui-button-primary"
+            :disabled="busy"
+          >
             {{ busy?'处理中…':'确认' }}
           </button>
         </footer>

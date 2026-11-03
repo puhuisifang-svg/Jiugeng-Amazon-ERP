@@ -48,7 +48,7 @@ onMounted(load)
       tone="error"
     />
     <div class="material-toolbar">
-      <p>按 SKU 维护产品申报资料，与产品管理实时共用；不是逐票报关业务。</p><RouterLink to="/products">
+      <p>维护 SKU 常用申报资料，新建报关单据时可选入；每票资料独立保存。</p><RouterLink to="/products">
         前往产品管理
       </RouterLink>
     </div>
@@ -168,7 +168,7 @@ onMounted(load)
           class="form-wide data-state--error"
         >
           {{ formError }}
-        </p><div class="operation-form__actions">
+        </p><div class="operation-form__actions ui-dialog-actions">
           <button
             class="secondary-button"
             type="button"

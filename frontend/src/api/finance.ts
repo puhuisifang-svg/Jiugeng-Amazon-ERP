@@ -1,6 +1,7 @@
 import { apiRequest, ApiError, getSessionToken, SESSION_EXPIRED_EVENT } from './client'
 import { runtimeConfig } from '@/config/runtime'
 export interface FinanceShop { id:string;name:string;remark:string;active:boolean;version:number }
+export interface FinanceAccount { id:string;shopId:string;name:string;active:boolean;version:number }
 export interface BillInput { shopId:string;date:string;direction:'INCOME'|'EXPENSE';category:string;detail:string;account:string;amount:string;remark:string;version?:number }
 export interface FinanceBill extends Omit<BillInput,'amount'> { id:string;shopName:string;amount:number;voided:boolean;version:number;attachments:number }
 export interface BillTotal { label:string;income:number;expense:number;balance:number;count:number }
@@ -17,8 +18,10 @@ async function fileRequest(path:string,init:RequestInit={}) {
 }
 function saveBlob(blob:Blob,name:string){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();window.setTimeout(()=>URL.revokeObjectURL(url),1000)}
 export const financeApi={
+ accounts:(shopId:string)=>apiRequest<FinanceAccount[]>(`${base}/shops/${shopId}/accounts`),
+ saveAccount:(shopId:string,input:{name:string;active:boolean;version?:number},id?:string)=>apiRequest<FinanceAccount>(`${base}/shops/${shopId}/accounts${id?`/${id}`:''}`,{method:id?'PUT':'POST',body:JSON.stringify(input)}),
  shops:()=>apiRequest<FinanceShop[]>(`${base}/shops`),
- saveShop:(input:{name:string;remark:string;active:boolean;version?:number},id?:string)=>apiRequest<FinanceShop>(`${base}/shops${id?`/${id}`:''}`,{method:id?'PUT':'POST',body:JSON.stringify(input)}),
+ saveShop:(input:{name:string;remark:string;active:boolean;version?:number;accounts?:string[]},id?:string)=>apiRequest<FinanceShop>(`${base}/shops${id?`/${id}`:''}`,{method:id?'PUT':'POST',body:JSON.stringify(input)}),
  list:(filter:BillFilter,page:number,size:number)=>apiRequest<BillPage>(`${base}/bills?${new URLSearchParams({...filter,page:String(page),size:String(size)})}`),
  save:(input:BillInput,id?:string)=>apiRequest<FinanceBill>(`${base}/bills${id?`/${id}`:''}`,{method:id?'PUT':'POST',body:JSON.stringify(input)}),
  void:(bill:FinanceBill)=>apiRequest<FinanceBill>(`${base}/bills/${bill.id}/void?version=${bill.version}`,{method:'POST'}),

@@ -41,7 +41,7 @@ final class PermissionCatalog {
         new Permission("imports.cancel", "数据导入", "取消导入", List.of("imports.read"), false, true),
         new Permission("imports.result.download", "数据导入", "下载导入结果", List.of("imports.read"), false, true),
         new Permission("audit.read.all", "审计日志", "查看全部审计日志", List.of("audit.read.self"), true, true),
-        new Permission("audit.read.self", "审计日志", "查看本人审计日志", List.of(), false, false),
+        new Permission("audit.read.self", "审计日志", "查看本人审计日志", List.of(), false, true),
         new Permission("dashboard.read", "工作台", "查看首页发货与样品概览", List.of(), false, true),
         new Permission("dashboard.shipments.manage", "工作台", "管理发货工作台", List.of("dashboard.read"), false, true),
         new Permission("dashboard.pending-products.manage", "工作台", "管理已通过的样品任务", List.of("dashboard.read"), false, true),

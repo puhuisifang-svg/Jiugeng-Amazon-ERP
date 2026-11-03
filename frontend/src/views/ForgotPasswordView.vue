@@ -78,11 +78,11 @@ async function resetPassword() {
         <input id="recovery-destination" v-model.trim="destination" :disabled="requested" maxlength="254" required>
         <template v-if="requested">
           <label for="verification-code">验证码</label>
-          <input id="verification-code" v-model.trim="code" autocomplete="one-time-code" inputmode="numeric" maxlength="6" pattern="\\d{6}" required>
+          <input id="verification-code" v-model.trim="code" autocomplete="one-time-code" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required>
           <label for="recovery-password">新密码</label>
-          <PasswordField id="recovery-password" v-model="newPassword" autocomplete="new-password" :minlength="6" pattern="(?=.*[A-Za-z])(?=.*\\d).{6,128}" required />
+          <PasswordField id="recovery-password" v-model="newPassword" autocomplete="new-password" :minlength="6" pattern="(?=.*[A-Za-z])(?=.*[0-9]).{6,128}" required />
           <label for="recovery-confirmation">确认新密码</label>
-          <PasswordField id="recovery-confirmation" v-model="confirmation" autocomplete="new-password" :minlength="6" pattern="(?=.*[A-Za-z])(?=.*\\d).{6,128}" required />
+          <PasswordField id="recovery-confirmation" v-model="confirmation" autocomplete="new-password" :minlength="6" pattern="(?=.*[A-Za-z])(?=.*[0-9]).{6,128}" required />
         </template>
         <SuccessToast :message="message" />
         <p v-if="errorMessage" class="data-state data-state--error" role="alert">{{ errorMessage }}</p>

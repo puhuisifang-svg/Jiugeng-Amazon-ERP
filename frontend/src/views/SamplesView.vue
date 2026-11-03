@@ -247,7 +247,7 @@ onBeforeUnmount(()=>{++listSequence;++skuSequence;window.removeEventListener('be
             同一 SKU 可登记多个库位，同一库位不能重复登记该 SKU。
           </p>
         </div>
-        <footer>
+        <footer class="ui-dialog-actions">
           <button
             type="button"
             class="secondary-action"

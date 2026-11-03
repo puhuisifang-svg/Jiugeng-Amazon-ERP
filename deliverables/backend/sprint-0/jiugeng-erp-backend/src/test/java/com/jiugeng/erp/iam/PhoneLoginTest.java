@@ -25,14 +25,14 @@ class PhoneLoginTest {
  }
  @Test void usernameAndPhoneResolveSameAccountAndPreserveFirstLoginAndAudit() throws Exception {
  for(String identifier:new String[]{"phone-user"," PHONE-USER ",PHONE,"155 0000-9901"}) {
- login(identifier,PASSWORD).andExpect(status().isOk()).andExpect(jsonPath("$.user.id").value(id)).andExpect(jsonPath("$.user.loginName").value("phone-user")).andExpect(jsonPath("$.user.mustChangePassword").value(true));
+ login(identifier,PASSWORD).andExpect(status().isOk()).andExpect(jsonPath("$.user.id").value(id)).andExpect(jsonPath("$.user.loginName").value("phone-user")).andExpect(jsonPath("$.user.mustChangePassword").value(false));
  }
  assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE resource_id=? AND action='LOGIN' AND actor_login_name='phone-user'",Integer.class,id)).isEqualTo(4);
  }
- @Test void bothIdentifiersShareFailureCounterAndLock() throws Exception {
+ @Test void bothIdentifiersShareFailureCounterAndDisable() throws Exception {
  for(int i=0;i<4;i++)login(i%2==0?PHONE:"phone-user","wrong").andExpect(status().isUnauthorized());
- login(PHONE,"wrong").andExpect(status().isLocked());
- login("phone-user",PASSWORD).andExpect(status().isLocked());login(PHONE,PASSWORD).andExpect(status().isLocked());
+ login(PHONE,"wrong").andExpect(status().isForbidden());
+ login("phone-user",PASSWORD).andExpect(status().isForbidden());login(PHONE,PASSWORD).andExpect(status().isForbidden());
  }
  @Test void disabledAndDeletedAccountsCannotLoginAndUpdatedPhoneTakesEffect() throws Exception {
  jdbc.update("UPDATE iam_user SET status='DISABLED' WHERE id=?",id);login(PHONE,PASSWORD).andExpect(status().isForbidden());

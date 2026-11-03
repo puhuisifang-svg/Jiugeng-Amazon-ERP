@@ -245,7 +245,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
           v-model="remark"
           :disabled="saving || receiptUncertain"
           maxlength="500"
-        /></label><div class="operation-form__actions">
+        /></label><div class="operation-form__actions ui-dialog-actions">
           <button
             type="button"
             class="secondary-button"
@@ -292,7 +292,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
           maxlength="500"
           :disabled="saving"
         /></label>
-        <div class="operation-form__actions">
+        <div class="operation-form__actions ui-dialog-actions">
           <button
             type="button"
             class="secondary-button"

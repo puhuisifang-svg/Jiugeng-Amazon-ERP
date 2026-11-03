@@ -264,7 +264,7 @@ onMounted(async () => {
       >
         {{ props.error || localError }}
       </p>
-      <footer class="form-footer">
+      <footer class="ui-dialog-actions form-footer">
         <button
           type="button"
           class="secondary-action"

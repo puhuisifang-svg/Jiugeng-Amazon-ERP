@@ -183,7 +183,7 @@ watch(() => props.detailRow, async row => {
           </table>
         </TableViewport>
       </div>
-      <footer class="dialog-footer">
+      <footer class="ui-dialog-actions dialog-footer">
         <RouterLink
           v-if="!hideParentLink"
           :to="`/products/${detailRow.productId}`"

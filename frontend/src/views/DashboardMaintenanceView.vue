@@ -434,7 +434,7 @@ onMounted(async () => {
             v-model="remarkModel"
             maxlength="500"
           ></label>
-          <div class="operation-form__actions">
+          <div class="operation-form__actions ui-dialog-actions">
             <button
               :disabled="saving"
               type="submit"

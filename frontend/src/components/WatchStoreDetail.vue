@@ -343,7 +343,7 @@ async function markNovelty(event:WatchEventDto,action:string){
         />
       </div>
     </div>
-    <footer>
+    <footer class="ui-dialog-actions">
       <ListPagination
         v-if="tab!=='settings'"
         v-model:page="page"

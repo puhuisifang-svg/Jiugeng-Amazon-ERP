@@ -461,7 +461,7 @@ watch(id, () => {
         </fieldset>
         <footer
           v-if="editable"
-          class="panel development-actions"
+          class="ui-dialog-actions panel development-actions"
         >
           <button
             class="primary-link"
@@ -541,7 +541,7 @@ watch(id, () => {
           required
           maxlength="500"
           :disabled="saving"
-        /></label><div class="operation-form__actions">
+        /></label><div class="operation-form__actions ui-dialog-actions">
           <button
             type="button"
             class="secondary-button"

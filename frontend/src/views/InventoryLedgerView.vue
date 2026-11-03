@@ -192,7 +192,7 @@ onMounted(load)
           role="alert"
         >
           {{ reversalError }}
-        </p><div class="operation-form__actions">
+        </p><div class="operation-form__actions ui-dialog-actions">
           <button
             type="button"
             class="secondary-button"

@@ -2,8 +2,10 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import RolesView from './RolesView.vue'
+import { usersApi, type AppUser } from '@/api/auth'
 import { pageTitles } from '@/state/pageTitles'
 import { rolesApi, type Role } from '@/api/roles'
+vi.mock('@/api/auth', () => ({ usersApi: { list:vi.fn() } }))
 vi.mock('@/api/roles', () => ({ rolesApi: { list:vi.fn(), permissions:vi.fn(), members:vi.fn(), history:vi.fn(), preview:vi.fn(), save:vi.fn() } }))
 vi.mock('@/state/uiConfirmation',()=>({confirmAction:vi.fn().mockResolvedValue(true),promptReason:vi.fn()}))
 const role:Role={id:'custom',name:'只读角色',description:'合成测试',kind:'CUSTOM',status:'ENABLED',version:2,permissions:['products.read'],memberCount:0,updatedAt:'2026-01-01T00:00:00Z'}
@@ -16,6 +18,41 @@ beforeEach(()=>{
 afterEach(()=>wrappers.splice(0).forEach(w=>w.unmount()))
 async function setup(path = '/system/roles/custom'){const router=createRouter({history:createMemoryHistory(),routes:[{path:'/system/roles/:id?',component:RolesView}]});await router.push(path);await router.isReady();const w=mount(RolesView,{global:{plugins:[router]}});wrappers.push(w);await flushPromises();return w}
 describe('role authorization editor',()=>{
+ it('excludes existing members and scopes the picker to the current role',async()=>{
+  const member={id:'existing',loginName:'existing',displayName:'已有成员',roles:[{id:'custom',name:'只读角色',status:'ENABLED'}],status:'ENABLED'} as AppUser
+  const candidate={id:'new',loginName:'new',displayName:'待添加用户',roles:[],status:'ENABLED'} as unknown as AppUser
+  vi.mocked(rolesApi.members).mockResolvedValue([member])
+  vi.mocked(usersApi.list).mockResolvedValue([member,candidate])
+  const w=await setup('/system/roles/custom?tab=members')
+  expect(w.text()).not.toContain('分配或移除角色')
+  expect(w.findAll('button').some(b=>b.text()==='移除成员')).toBe(true)
+  await w.get('.role-member-add').trigger('click');await flushPromises()
+  expect(w.get('.member-picker-list').text()).not.toContain('已有成员')
+  expect(w.get('.member-picker-list').text()).toContain('待添加用户')
+  await w.get('.member-picker-select').trigger('click');await flushPromises()
+  expect(w.get('.assignment-summary').text()).toContain('本次仅添加「只读角色」')
+  expect(w.find('.assignment-dialog input[type=checkbox]').exists()).toBe(false)
+ })
+
+ it('separates role basics and previews edits from both tabs together',async()=>{
+  const w=await setup();expect(w.find('.role-profile-fields').exists()).toBe(false)
+  await w.get('[title="products.write"] input').setValue(true)
+  await w.get('#role-tab-basics').trigger('click')
+  await w.get('.role-profile-fields input').setValue('采购专员')
+  await w.get('.role-profile-fields textarea').setValue('负责采购')
+  expect(w.find('.permission-browser').exists()).toBe(false)
+  await w.get('#role-tab-permissions').trigger('click')
+  expect((w.get('[title="products.write"] input').element as HTMLInputElement).checked).toBe(true)
+  vi.mocked(rolesApi.preview).mockResolvedValue({added:['products.write'],removed:[],members:[]})
+  await w.get('.role-save-primary').trigger('click');await flushPromises()
+  expect(w.get('.role-basic-diff').text()).toContain('采购专员')
+  expect(w.get('.role-basic-diff').text()).toContain('负责采购')
+  expect(rolesApi.preview).toHaveBeenCalledWith('custom',expect.objectContaining({name:'采购专员',description:'负责采购',permissions:['products.read','products.write']}))
+  await w.findAll('dialog button').find(b=>b.text()==='返回修改')!.trigger('click')
+  expect(rolesApi.save).not.toHaveBeenCalled()
+  await w.get('#role-tab-basics').trigger('click')
+  expect((w.get('.role-profile-fields input').element as HTMLInputElement).value).toBe('采购专员')
+ })
  it('allows permission changes without a reason and disables save after reverting',async()=>{
   const w=await setup();const save=w.get('.role-save-primary')
   expect(save.attributes('disabled')).toBeDefined()
@@ -63,7 +100,7 @@ describe('role authorization editor',()=>{
  it('uses a stable detail breadcrumb and keyboard accessible tabs without discarding edits',async()=>{
   const w=await setup(); expect(pageTitles['/system/roles/custom']).toBe('详情')
   await w.get('.role-reason input').setValue('保留草稿内容')
-  await w.get('[role=tab]').trigger('keydown',{key:'ArrowRight'})
+  await w.get('#role-tab-permissions').trigger('keydown',{key:'ArrowRight'})
   expect(w.get('[role=tabpanel]').attributes('aria-labelledby')).toBe('role-tab-members')
   expect(w.get('#role-tab-members').attributes('aria-selected')).toBe('true')
   await w.get('#role-tab-permissions').trigger('click')
@@ -73,7 +110,7 @@ describe('role authorization editor',()=>{
   const w=await setup();await w.get('[title="products.write"] input').setValue(true)
   await w.get('.role-reason input').setValue('合成测试变更')
   vi.mocked(rolesApi.preview).mockResolvedValue({added:['products.write'],removed:[],members:[]})
-  await w.findAll('button').find(b=>b.text() === '保存权限')!.trigger('click');await flushPromises()
+  await w.findAll('button').find(b=>b.text() === '保存变更')!.trigger('click');await flushPromises()
   expect(rolesApi.preview).toHaveBeenCalledWith('custom',expect.objectContaining({version:2,permissions:['products.read','products.write']}))
   expect(rolesApi.save).not.toHaveBeenCalled()
   vi.mocked(rolesApi.save).mockRejectedValue(new Error('角色已更新，请重新加载后确认'))

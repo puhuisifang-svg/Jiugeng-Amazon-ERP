@@ -468,7 +468,7 @@ onMounted(load)
             </button>
           </div>
         </section>
-        <div class="operation-form__actions">
+        <div class="operation-form__actions ui-dialog-actions">
           <button
             class="secondary-button"
             type="button"
@@ -571,7 +571,7 @@ onMounted(load)
         >
           {{ inventoryError }}
         </p>
-        <div class="operation-form__actions">
+        <div class="operation-form__actions ui-dialog-actions">
           <button
             class="secondary-button"
             type="button"
@@ -801,7 +801,7 @@ onMounted(load)
         >
           {{ deleteError }}
         </p>
-        <div class="operation-form__actions">
+        <div class="operation-form__actions ui-dialog-actions">
           <button
             type="button"
             class="secondary-button"

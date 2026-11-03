@@ -184,7 +184,7 @@ onMounted(async () => { await load(); await openFromRoute() })
           class="data-state--error"
         >
           {{ error }}
-        </p><footer class="form-footer">
+        </p><footer class="ui-dialog-actions form-footer">
           <button
             type="button"
             class="secondary-action"
@@ -194,6 +194,7 @@ onMounted(async () => { await load(); await openFromRoute() })
             关闭
           </button><button
             v-if="writable && !selected.invoiced"
+            class="ui-button-primary"
             :disabled="saving"
           >
             保存

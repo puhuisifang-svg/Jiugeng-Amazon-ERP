@@ -337,7 +337,7 @@ onMounted(load)
         >
           {{ formError }}
         </p>
-        <div class="operation-form__actions">
+        <div class="operation-form__actions ui-dialog-actions">
           <button
             type="button"
             class="secondary-button"

@@ -17,7 +17,7 @@ public class DevelopmentWorklist {
     public record Result(List<Item> items,long total){}
     public Result pending(){return pending("",null,null,0,10);}
     public Result pending(String keyword,LocalDate start,LocalDate end,int page,int size){
-        String from=" FROM product_development d LEFT JOIN launch_workspace w ON w.kind='DEVELOPMENT' AND w.entity_id=d.id WHERE COALESCE(w.state,d.status) IN ('DRAFT','ACTIVE','IN_PROGRESS','FINAL_REVIEW') AND (EXISTS (SELECT 1 FROM selection_candidate c WHERE c.id=d.candidate_id AND c.status='APPROVED') OR EXISTS (SELECT 1 FROM launch_revision r WHERE r.kind='DEVELOPMENT' AND r.entity_id=d.id AND r.action='APPROVE'))";
+        String from=" FROM product_development d LEFT JOIN launch_workspace w ON w.kind='DEVELOPMENT' AND w.entity_id=d.id WHERE d.deleted_at IS NULL AND COALESCE(w.state,d.status) IN ('DRAFT','ACTIVE','IN_PROGRESS','FINAL_REVIEW') AND (EXISTS (SELECT 1 FROM selection_candidate c WHERE c.id=d.candidate_id AND c.status='APPROVED') OR EXISTS (SELECT 1 FROM launch_revision r WHERE r.kind='DEVELOPMENT' AND r.entity_id=d.id AND r.action='APPROVE'))";
         // Fetch the small identity projection; sort by the actual plan, including legacy projects.
         var items=jdbc.sql("SELECT d.id,d.name,d.number,d.developer,d.status,w.state,w.stage,w.document_json,d.fields_json"+from).query((r,n)->{
             try{

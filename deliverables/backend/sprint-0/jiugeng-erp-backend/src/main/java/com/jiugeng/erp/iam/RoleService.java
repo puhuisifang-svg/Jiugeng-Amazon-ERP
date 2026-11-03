@@ -53,7 +53,7 @@ class RoleService {
         if(edit.permissions()==null || edit.permissions().size()>200 || edit.permissions().stream().anyMatch(Objects::isNull)) throw new IamException(400,"PERMISSION_INVALID","权限集合无效");
         var codes=PermissionCatalog.normalize(edit.permissions());
         if(!List.of("DRAFT","ENABLED","DISABLED").contains(edit.status())) throw new IamException(400,"ROLE_STATUS_INVALID","角色状态无效");
-        if(edit.status().equals("ENABLED") && (codes.isEmpty() || codes.equals(Set.of("audit.read.self")))) throw new IamException(400,"ROLE_PERMISSION_REQUIRED","启用角色至少需要一项业务权限");
+        if(edit.status().equals("ENABLED") && codes.isEmpty()) throw new IamException(400,"ROLE_PERMISSION_REQUIRED","启用角色至少需要一项权限");
         return codes;
     }
     Preview preview(String id, Edit edit) {
@@ -65,7 +65,7 @@ class RoleService {
         if(!before.status().equals("DRAFT") && edit.status().equals("DRAFT")) throw new IamException(400,"ROLE_STATE_INVALID","已发布角色不能退回草稿，请停用");
         jdbc.sql("UPDATE iam_role SET name=:name,description=:description,status=:status,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=:id")
             .param("name",edit.name().trim()).param("description",edit.description().trim()).param("status",edit.status()).param("id",id).update();
-        replacePermissions(id,next); roles.guardEnabledUsers(); roles.guardAvailableAdministrator();
+        replacePermissions(id,next); roles.guardAvailableAdministrator();
         if(!new HashSet<>(before.permissions()).equals(next) || !before.status().equals(edit.status())) {
             for(String member:roles.memberIds(id)) {
                 users.revokeUserSessions(member);
@@ -91,7 +91,7 @@ class RoleService {
     }
     Preview previewAssignment(String id, Assignment a) {
         var user=requireUser(id); var ids=assignment(a); var codes=new TreeSet<String>();
-        for(var rid:ids) codes.addAll(roles.permissions(rid)); if(!codes.isEmpty()) codes.add("audit.read.self");
+        for(var rid:ids) codes.addAll(roles.permissions(rid));
         return difference(user.effectivePermissions(),codes,List.of(user.view()));
     }
     UserView assign(String id, Assignment a, SessionPrincipal actor) {
@@ -99,11 +99,8 @@ class RoleService {
         if(id.equals(actor.userId())) throw new IamException(400,"SELF_ROLE_CHANGE_FORBIDDEN","不能修改自己的角色");
         if(before.authorizationVersion()!=a.version()) throw new IamException(409,"USER_VERSION_CONFLICT","账号授权已变化，请重新加载后确认");
         var ids=assignment(a); roles.bind(id,ids);
-        if(ids.isEmpty()) users.setStatus(id,Status.DISABLED);
         roles.guardAvailableAdministrator(); users.revokeUserSessions(id);
         var after=requireUser(id).view();
-        if(ids.isEmpty() && before.status()!=Status.DISABLED)
-            audit.account(AuditTypes.Actor.authenticated(actor),"ACCOUNT_DISABLE",before.view(),after,"移除全部角色后停用账号"+(a.reason()==null || a.reason().isBlank() ? "" : "："+a.reason()));
         audit.append(AuditTypes.Actor.authenticated(actor),"ACCOUNT","USER_ROLES_CHANGE","ACCOUNT",id,AuditTypes.Outcome.SUCCESS,before.view().roles(),after.roles(),a.reason());
         return after;
     }

@@ -236,7 +236,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', leave))
             /></label>
           </div>
         </div>
-        <footer>
+        <footer class="ui-dialog-actions">
           <button
             type="button"
             :disabled="busy"

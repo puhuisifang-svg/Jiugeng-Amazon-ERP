@@ -1,0 +1,39 @@
+/* Shared dialog action styles. Pagination and embedded picker controls are excluded. */
+:root {
+  --ui-dialog-button-height: 34px;
+  --ui-dialog-button-primary: #21834a;
+  --ui-dialog-button-primary-hover: #196d3c;
+}
+:is(#app, body) .ui-dialog-actions:not(:has(.list-pagination)) > button,
+:is(#app, body) .ui-dialog-actions:not(:has(.list-pagination)) > div > button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  box-sizing: border-box; min-height: var(--ui-dialog-button-height); height: auto;
+  padding: 7px 16px; border: 1px solid #d7dfe8; border-radius: 5px;
+  background: #fff; color: #475569; font-size: 13px; font-weight: 500; line-height: 18px;
+  white-space: nowrap; box-shadow: none; cursor: pointer;
+}
+:is(#app, body) .ui-dialog-actions > button:is(.primary-button,.assignment-primary,.mw-primary,.candidate-primary,.factory-primary,.primary,.primary-action,.primary-link,.cost-button--primary,.ui-confirm-primary,.unsaved-keep,.ui-button-primary,[type=submit]),
+:is(#app, body) .ui-dialog-actions > div > button:is(.candidate-primary,.factory-primary) {
+  background: var(--ui-dialog-button-primary); border-color: var(--ui-dialog-button-primary); color: white;
+}
+:is(#app, body) .ui-dialog-actions > button:is(.primary-button,.assignment-primary,.mw-primary,.candidate-primary,.factory-primary,.primary,.primary-action,.primary-link,.cost-button--primary,.ui-confirm-primary,.unsaved-keep,.ui-button-primary,[type=submit]):hover:not(:disabled),
+:is(#app, body) .ui-dialog-actions > div > button:is(.candidate-primary,.factory-primary):hover:not(:disabled) {
+  background: var(--ui-dialog-button-primary-hover); border-color: var(--ui-dialog-button-primary-hover);
+}
+:is(#app, body) .ui-dialog-actions > button:is(.unsaved-discard,.cost-button--danger,.development-danger,.danger),
+:is(#app, body) .ui-dialog-actions > div > button.development-danger {
+  background: #fff5f4; border-color: #f1c6c2; color: #b42318;
+}
+:is(#app, body) .ui-dialog-actions > button:disabled,
+:is(#app, body) .ui-dialog-actions > div > button:disabled {
+  background: #e8edf1; border-color: #e0e5eb; color: #98a2b3; opacity: 1; cursor: not-allowed;
+}
+:is(#app, body) .ui-dialog-actions > button:focus-visible,
+:is(#app, body) .ui-dialog-actions > div > button:focus-visible {
+  outline: 2px solid #21834a; outline-offset: 2px;
+}
+
+:is(#app, body) .ui-dialog-actions > button:is(.unsaved-discard,.cost-button--danger,.development-danger,.danger):hover:not(:disabled),
+:is(#app, body) .ui-dialog-actions > div > button.development-danger:hover:not(:disabled) {
+  background: #fee9e7; border-color: #e7aaa4; color: #9d2017;
+}

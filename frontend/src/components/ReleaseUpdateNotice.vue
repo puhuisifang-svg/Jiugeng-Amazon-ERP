@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { confirmAction } from '@/state/uiConfirmation'
 import { onMounted, onBeforeUnmount, ref } from 'vue'
-import { hasNewRelease, moduleEntry } from '@/ui/releaseVersion'
+import { hasNewRelease, moduleEntry, freshPageUrl } from '@/ui/releaseVersion'
 const changed = ref(false)
+const resourceFailed = ref(false)
 let timer: ReturnType<typeof setInterval> | undefined
 let checking = false
 let current: string | null = null
@@ -16,10 +17,11 @@ async function check() {
 }
 function preloadFailure(event: Event) {
   event.preventDefault()
+  resourceFailed.value = true
   changed.value = true
 }
 async function reload() {
-  if (await confirmAction('请确认当前填写内容已保存。刷新将加载最新版本，未保存内容会丢失。')) window.location.reload()
+  if (await confirmAction('请确认当前填写内容已保存。刷新将加载最新版本，未保存内容会丢失。')) window.location.replace(freshPageUrl(window.location.href))
 }
 onMounted(() => {
   mounted = true
@@ -45,7 +47,7 @@ onBeforeUnmount(() => {
     class="release-update-notice"
     role="status"
   >
-    <strong>系统版本已更新或页面资源已失效</strong>
+    <strong>{{ resourceFailed ? '页面资源加载失败' : '系统有新版本可用' }}</strong>
     <span>请先保存当前内容，再刷新加载最新功能。</span>
     <button
       type="button"

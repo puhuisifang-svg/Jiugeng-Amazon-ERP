@@ -103,8 +103,6 @@ export const usersApi = {
     apiRequest<AppUser>('/v1/users', { method: 'POST', body: JSON.stringify(input) }),
   disable: (id: string) => apiRequest<AppUser>(`/v1/users/${id}/disable`, { method: 'POST' }),
   enable: (id: string) => apiRequest<AppUser>(`/v1/users/${id}/enable`, { method: 'POST' }),
-  unlock: (id: string) => apiRequest<AppUser>(`/v1/users/${id}/unlock`, { method: 'POST' }),
-  lock: (id: string) => apiRequest<AppUser>(`/v1/users/${id}/lock`, { method: 'POST' }),
   setRole: (id: string, role: AppRole) => apiRequest<AppUser>(`/v1/users/${id}/role`, {
     method: 'POST', body: JSON.stringify({ role }),
   }),

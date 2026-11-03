@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { vSingleSelect } from '@/directives/singleSelect'
+import FinanceAccountsManager from '@/components/FinanceAccountsManager.vue'
 import DatePicker from '@/components/DatePicker.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
-import { financeApi, type FinanceShop, type FinanceBill, type BillFilter, type BillInput, type BillPage, type BillAttachment, type BillHistory } from '@/api/finance'
+import { financeApi, type FinanceShop, type FinanceAccount, type FinanceBill, type BillFilter, type BillInput, type BillPage, type BillAttachment, type BillHistory } from '@/api/finance'
 import { session } from '@/state/session'
 import { confirmAction } from '@/state/uiConfirmation'
 import VoucherUpload from '@/components/VoucherUpload.vue'
@@ -25,6 +26,7 @@ let sequence=0
 async function load(){if(!applied.value.shopId){result.value={items:[],totalCount:0,totals:[],accounts:[],months:[]};return}const seq=++sequence;loading.value=true;error.value='';try{const r=await financeApi.list(applied.value,page.value-1,size.value);if(seq===sequence){result.value=r;if(page.value>1&&!r.items.length){page.value--;await load()}}}catch(e){if(seq===sequence)error.value=message(e)}finally{if(seq===sequence)loading.value=false}}
 async function loadShops(){shops.value=await financeApi.shops();if(!filter.shopId&&shops.value.length){filter.shopId=shops.value[0]!.id;applied.value={...filter}}}
 function search(){if(!filter.from||!filter.to||filter.from>filter.to){error.value='请选择有效日期范围';return}applied.value={...filter};result.value={items:[],totalCount:0,totals:[],accounts:[],months:[]};page.value=1;void load()}
+function previousMonth(){const current=new Date();filter.from=dateString(new Date(current.getFullYear(),current.getMonth()-1,1));filter.to=dateString(new Date(current.getFullYear(),current.getMonth(),0));search()}
 function period(year=false){filter.from=year?`${today.slice(0,4)}-01-01`:monthStart;filter.to=today;search()}
 function changePage(v:number){if(v===page.value)return;page.value=v;void load()}
 function changeSize(v:number){size.value=v;page.value=1;void load()}
@@ -36,9 +38,12 @@ const shopScreen=ref<'list'|'create'|'edit'>('list'),shopQuery=ref(''),shopStatu
 const filteredShops=computed(()=>shops.value.filter(s=>(!shopStatus.value||(shopStatus.value==='active')===s.active)&&(!shopQuery.value.trim()||`${s.name} ${s.remark}`.toLowerCase().includes(shopQuery.value.trim().toLowerCase()))))
 const shownShops=computed(()=>filteredShops.value.slice((shopPage.value-1)*shopSize.value,shopPage.value*shopSize.value))
 const shopForm=reactive({name:'',remark:'',active:true})
+const shopAccounts=ref([''])
 const files=ref<File[]>([]),attachments=ref<BillAttachment[]>([]),history=ref<BillHistory[]>([]),detailLoading=ref(false)
-const categories=computed(()=>bill.direction==='INCOME'?['平台回款','销售收入','退款返还','其他收入']:['采购货款','物流运费','广告推广','平台费用','软件服务','样品费用','其他支出'])
-function snapshot(){return JSON.stringify(mode.value==='shops'?shopForm:[bill,files.value.map(f=>[f.name,f.size,f.lastModified])])}
+const accountShop=ref<FinanceShop>(),accounts=ref<FinanceAccount[]>([]),accountsLoading=ref(false)
+const availableAccounts=computed(()=>accounts.value.filter(a=>a.active))
+async function loadAccounts(){accountsLoading.value=true;try{accounts.value=await financeApi.accounts(bill.shopId)}catch(e){formError.value=message(e)}finally{accountsLoading.value=false}}
+function snapshot(){return JSON.stringify(mode.value==='shops'?[shopForm,shopAccounts.value]:[bill,files.value.map(f=>[f.name,f.size,f.lastModified])])}
 const dirty=computed(()=>(mode.value==='bill'||(mode.value==='shops'&&shopScreen.value!=='list'))&&initial.value!==snapshot())
 async function show(kind:typeof mode.value){mode.value=kind;formError.value='';discard.value=false;initial.value=snapshot();await nextTick();modal.value?.showModal()}
 function close(){modal.value?.close();mode.value='';discard.value=false;files.value=[]}
@@ -46,16 +51,16 @@ function requestClose(){if(busy.value)return;discardTarget.value='close';if(dirt
 function shopList(){shopScreen.value='list';formError.value='';discard.value=false;shopEditing.value=undefined}
 function cancelShop(){if(busy.value)return;if(dirty.value){discardTarget.value='shops';discard.value=true}else shopList()}
 function discardChanges(){if(discardTarget.value==='shops')shopList();else close()}
-function newShop(){shopEditing.value=undefined;shopScreen.value='create';formError.value='';Object.assign(shopForm,{name:'',remark:'',active:true});initial.value=snapshot();void nextTick(()=>modal.value?.querySelector<HTMLInputElement>('[data-shop-name]')?.focus())}
+function newShop(){shopAccounts.value=[''];shopEditing.value=undefined;shopScreen.value='create';formError.value='';Object.assign(shopForm,{name:'',remark:'',active:true});initial.value=snapshot();void nextTick(()=>modal.value?.querySelector<HTMLInputElement>('[data-shop-name]')?.focus())}
 async function manageShops(){shopScreen.value='list';shopQuery.value='';shopStatus.value='';shopPage.value=1;await show('shops')}
-function editShop(s:FinanceShop){shopEditing.value=s;shopScreen.value='edit';formError.value='';Object.assign(shopForm,{name:s.name,remark:s.remark,active:s.active});initial.value=snapshot();void nextTick(()=>modal.value?.querySelector<HTMLInputElement>('[data-shop-name]')?.focus())}
-async function saveShop(){if(busy.value||shopScreen.value==='list'||!dirty.value)return;if(!shopForm.name.trim()){formError.value='请填写店铺名称';return}busy.value=true;formError.value='';try{const created=shopScreen.value==='create';const saved=await financeApi.saveShop({...shopForm,name:shopForm.name.trim(),...(shopEditing.value?{version:shopEditing.value.version}:{})},shopEditing.value?.id);shops.value=created?[...shops.value,saved]:shops.value.map(s=>s.id===saved.id?saved:s);shopQuery.value='';shopStatus.value='';shopPage.value=Math.max(1,Math.ceil((shops.value.findIndex(s=>s.id===saved.id)+1)/shopSize.value));shopList();initial.value=snapshot();success.value=created?'店铺已创建':'店铺修改已保存';if(!applied.value.shopId){filter.shopId=saved.id;applied.value={...applied.value,shopId:saved.id};await load()}}catch(e){formError.value=message(e)}finally{busy.value=false}}
-async function editBill(b?:FinanceBill){editing.value=b;files.value=[];attachments.value=[];history.value=[];Object.assign(bill,{shopId:b?.shopId??applied.value.shopId,date:b?.date??today,direction:b?.direction??'EXPENSE',category:b?.category??'',detail:b?.detail??'',account:b?.account??'',amount:b?String(b.amount):'',remark:b?.remark??'',version:b?.version});await show('bill');if(b)await loadDetails(b)}
+function editShop(s:FinanceShop){shopAccounts.value=[];shopEditing.value=s;shopScreen.value='edit';formError.value='';Object.assign(shopForm,{name:s.name,remark:s.remark,active:s.active});initial.value=snapshot();void nextTick(()=>modal.value?.querySelector<HTMLInputElement>('[data-shop-name]')?.focus())}
+async function saveShop(){if(busy.value||shopScreen.value==='list'||!dirty.value)return;if(!shopForm.name.trim()){formError.value='请填写店铺名称';return}busy.value=true;formError.value='';try{const created=shopScreen.value==='create';const saved=await financeApi.saveShop({...shopForm,name:shopForm.name.trim(),...(created?{accounts:shopAccounts.value.map(a=>a.trim()).filter(Boolean)}:{}),...(shopEditing.value?{version:shopEditing.value.version}:{})},shopEditing.value?.id);shops.value=created?[...shops.value,saved]:shops.value.map(s=>s.id===saved.id?saved:s);shopQuery.value='';shopStatus.value='';shopPage.value=Math.max(1,Math.ceil((shops.value.findIndex(s=>s.id===saved.id)+1)/shopSize.value));shopList();initial.value=snapshot();success.value=created?'店铺已创建':'店铺修改已保存';if(!applied.value.shopId){filter.shopId=saved.id;applied.value={...applied.value,shopId:saved.id};await load()}}catch(e){formError.value=message(e)}finally{busy.value=false}}
+async function editBill(b?:FinanceBill){editing.value=b;files.value=[];attachments.value=[];history.value=[];Object.assign(bill,{shopId:b?.shopId??applied.value.shopId,date:b?.date??today,direction:b?.direction??'EXPENSE',category:b?.category??'',detail:b?.detail??'',account:b?.account??'',amount:b?String(b.amount):'',remark:b?.remark??'',version:b?.version});accounts.value=[];await show('bill');await loadAccounts();if(b)await loadDetails(b)}
 async function detail(b:FinanceBill){editing.value=b;attachments.value=[];history.value=[];await show('detail');await loadDetails(b)}
 async function loadDetails(b:FinanceBill){detailLoading.value=true;try{const [a,h]=await Promise.all([financeApi.attachments(b.id),financeApi.history(b.id)]);if(editing.value?.id===b.id){attachments.value=a;history.value=h}}catch(e){formError.value=message(e)}finally{detailLoading.value=false}}
 const voucherUpload=ref<InstanceType<typeof VoucherUpload>>()
 function pasteVoucher(e:ClipboardEvent){if(mode.value==='bill'&&!discard.value)voucherUpload.value?.paste(e)}
-async function saveBill(){if(busy.value)return;busy.value=true;formError.value='';try{const saved=await financeApi.save({...bill,...(editing.value?{version:editing.value.version}:{})},editing.value?.id);editing.value=saved;bill.version=saved.version;while(files.value.length){attachments.value.push(await financeApi.upload(saved.id,files.value[0]!));files.value.shift()}initial.value=snapshot();close();success.value='账单及凭证已保存';await load()}catch(e){formError.value=`${message(e)}${editing.value?'（已保存的账单不会重复新增，可重试）':''}`}finally{busy.value=false}}
+async function saveBill(){if(busy.value||accountsLoading.value)return;if(!bill.account){formError.value='请选择收支账户';return;}busy.value=true;formError.value='';try{const saved=await financeApi.save({...bill,...(editing.value?{version:editing.value.version}:{})},editing.value?.id);editing.value=saved;bill.version=saved.version;while(files.value.length){attachments.value.push(await financeApi.upload(saved.id,files.value[0]!));files.value.shift()}initial.value=snapshot();close();success.value='账单及凭证已保存';await load()}catch(e){formError.value=`${message(e)}${editing.value?'（已保存的账单不会重复新增，可重试）':''}`}finally{busy.value=false}}
 async function download(a:BillAttachment){if(!editing.value)return;formError.value='';try{await financeApi.download(editing.value.id,a)}catch(e){formError.value=message(e)}}
 async function removeAttachment(a:BillAttachment){if(!editing.value||busy.value||!await confirmAction(`移除凭证 ${a.name}？`))return;busy.value=true;try{await financeApi.removeAttachment(editing.value.id,a.id);attachments.value=attachments.value.filter(x=>x.id!==a.id);success.value='凭证已移除';await load()}catch(e){formError.value=message(e)}finally{busy.value=false}}
 const actions:Record<string,string>={FINANCE_BILL_CREATE:'新增账单',FINANCE_BILL_UPDATE:'修改账单',FINANCE_BILL_VOID:'作废账单',FINANCE_ATTACHMENT_ADD:'添加凭证',FINANCE_ATTACHMENT_REMOVE:'移除凭证'}
@@ -105,7 +110,7 @@ onBeforeUnmount(()=>{++sequence;window.removeEventListener('beforeunload',before
         v-model="filter.q"
         maxlength="200"
         type="search"
-        placeholder="明细 / 分类 / 账户 / 备注"
+        placeholder="明细 / 账户 / 备注"
       ></label>
       <button
         type="submit"
@@ -119,6 +124,13 @@ onBeforeUnmount(()=>{++sequence;window.removeEventListener('beforeunload',before
         @click="period()"
       >
         本月
+      </button><button
+        type="button"
+        class="filter-reset-button"
+        :disabled="loading"
+        @click="previousMonth"
+      >
+        上月
       </button><button
         type="button"
         class="filter-reset-button"
@@ -196,7 +208,7 @@ onBeforeUnmount(()=>{++sequence;window.removeEventListener('beforeunload',before
         >
           <thead>
             <tr>
-              <th>日期</th><th>收支</th><th>分类</th><th>收支明细</th><th>账户</th><th class="amount">
+              <th>日期</th><th>收支</th><th>收支明细</th><th>账户</th><th class="amount">
                 金额（CNY）
               </th><th>凭证</th><th>备注</th><th>操作</th>
             </tr>
@@ -210,7 +222,7 @@ onBeforeUnmount(()=>{++sequence;window.removeEventListener('beforeunload',before
                   v-if="b.voided"
                   class="muted"
                 >已作废</small>
-              </td><td>{{ b.category }}</td><td class="bill-detail">
+              </td><td class="bill-detail">
                 {{ b.detail }}
               </td><td>{{ b.account }}</td><td class="amount">
                 {{ money(b.amount) }}
@@ -251,7 +263,7 @@ onBeforeUnmount(()=>{++sequence;window.removeEventListener('beforeunload',before
             </tr>
             <tr v-if="!result.items.length">
               <td
-                colspan="9"
+                colspan="8"
                 class="data-state"
               >
                 {{ loading?'正在加载…':shops.length?'当前条件下没有账单，可新增或调整日期范围':'暂无记账店铺，请点击“店铺管理”添加店铺' }}
@@ -380,6 +392,12 @@ onBeforeUnmount(()=>{++sequence;window.removeEventListener('beforeunload',before
                           @click="editShop(s)"
                         >
                           编辑
+                        </button><button
+                          type="button"
+                          class="text-action"
+                          @click="accountShop=s"
+                        >
+                          收支账户
                         </button>
                       </td>
                     </tr>
@@ -421,6 +439,46 @@ onBeforeUnmount(()=>{++sequence;window.removeEventListener('beforeunload',before
                   :disabled="busy"
                   placeholder="填写便于识别的店铺名称"
                 ></label>
+                <section
+                  v-if="shopScreen==='create'"
+                  class="wide shop-account-fields"
+                >
+                  <div class="shop-account-heading">
+                    <strong>收支账户</strong><button
+                      type="button"
+                      class="text-action"
+                      :disabled="busy || shopAccounts.length>=100"
+                      @click="shopAccounts.push('')"
+                    >
+                      ＋ 添加账户
+                    </button>
+                  </div>
+                  <p class="muted">
+                    可填写多个账户，创建店铺后即可在新增账单中选择；也可稍后补充。
+                  </p>
+                  <div
+                    v-for="(_,index) in shopAccounts"
+                    :key="index"
+                    class="shop-account-row"
+                  >
+                    <label :for="`shop-account-${index}`">账户 {{ index+1 }}</label><input
+                      :id="`shop-account-${index}`"
+                      v-model="shopAccounts[index]"
+                      maxlength="100"
+                      :disabled="busy"
+                      placeholder="例如：小黄、小吴（每行一个）"
+                    >
+                    <button
+                      type="button"
+                      class="text-action"
+                      :disabled="busy"
+                      :aria-label="`移除账户 ${index+1}`"
+                      @click="shopAccounts.splice(index,1)"
+                    >
+                      移除
+                    </button>
+                  </div>
+                </section>
                 <label>状态<select
                   v-model="shopForm.active"
                   v-single-select
@@ -455,32 +513,30 @@ onBeforeUnmount(()=>{++sequence;window.removeEventListener('beforeunload',before
                 v-model="bill.direction"
                 v-single-select
                 :disabled="busy"
-                @change="bill.category=''"
               ><option value="EXPENSE">支出</option><option value="INCOME">收入</option></select></label>
-              <label>分类<input
-                v-model="bill.category"
-                list="bill-categories"
-                required
-                maxlength="64"
-                placeholder="可选择或输入"
-                :disabled="busy"
-              ><datalist id="bill-categories"><option
-                v-for="c in categories"
-                :key="c"
-                :value="c"
-              /></datalist></label>
-              <label>收支账户<input
+              <label>收支账户<select
                 v-model="bill.account"
-                list="bill-accounts"
+                v-single-select
                 required
-                maxlength="100"
-                placeholder="例如：经办人 / 支付账户"
-                :disabled="busy"
-              ><datalist id="bill-accounts"><option
-                v-for="a in result.accounts"
-                :key="a.label"
-                :value="a.label"
-              /></datalist></label>
+                :disabled="busy || accountsLoading"
+              >
+                <option
+                  value=""
+                  disabled
+                >{{ accountsLoading?'加载中…':'请选择收支账户' }}</option>
+                <option
+                  v-if="editing?.account && !availableAccounts.some(a=>a.name===editing?.account)"
+                  :value="editing.account"
+                >{{ editing.account }}（历史账户）</option>
+                <option
+                  v-for="a in availableAccounts"
+                  :key="a.id"
+                  :value="a.name"
+                >{{ a.name }}</option>
+              </select><small
+                v-if="!accountsLoading && !availableAccounts.length"
+                class="muted"
+              >暂无可用账户，请在店铺管理 → 收支账户中添加。</small></label>
               <label>金额（CNY）<input
                 v-model="bill.amount"
                 type="number"
@@ -537,7 +593,7 @@ onBeforeUnmount(()=>{++sequence;window.removeEventListener('beforeunload',before
           </template>
           <template v-else-if="mode==='detail'&&editing">
             <div class="bill-facts">
-              <div><span>店铺</span><strong>{{ editing.shopName }}</strong></div><div><span>日期</span><strong>{{ editing.date }}</strong></div><div><span>{{ editing.direction==='INCOME'?'收入':'支出' }} · {{ editing.category }}</span><strong :class="editing.direction==='INCOME'?'income':'expense'">¥ {{ money(editing.amount) }}</strong></div><div><span>账户</span><strong>{{ editing.account }}</strong></div>
+              <div><span>店铺</span><strong>{{ editing.shopName }}</strong></div><div><span>日期</span><strong>{{ editing.date }}</strong></div><div><span>{{ editing.direction==='INCOME'?'收入':'支出' }}</span><strong :class="editing.direction==='INCOME'?'income':'expense'">¥ {{ money(editing.amount) }}</strong></div><div><span>账户</span><strong>{{ editing.account }}</strong></div>
             </div>
             <h3>收支明细</h3><p class="preserve">
               {{ editing.detail }}
@@ -579,7 +635,7 @@ onBeforeUnmount(()=>{++sequence;window.removeEventListener('beforeunload',before
             </ol>
           </template>
         </div>
-        <footer>
+        <footer class="ui-dialog-actions">
           <button
             type="button"
             class="secondary-button"
@@ -597,6 +653,11 @@ onBeforeUnmount(()=>{++sequence;window.removeEventListener('beforeunload',before
         </footer>
       </form>
     </dialog>
+    <FinanceAccountsManager
+      v-if="accountShop"
+      :shop="accountShop"
+      @close="accountShop=undefined"
+    />
     <UnsavedChangesDialog
       v-if="discard"
       :discard-label="discardTarget==='shops'?'放弃并返回列表':'放弃并关闭'"
@@ -608,7 +669,16 @@ onBeforeUnmount(()=>{++sequence;window.removeEventListener('beforeunload',before
 </template>
 <style scoped>
 .finance-ui .panel{min-height:0}.finance-filters{display:flex;flex-wrap:wrap}.finance-filters label{flex:0 1 160px;min-width:120px}.finance-filters label:first-child{flex:0 1 240px}.finance-filters .date-filter{flex:0 0 215px}.finance-filters .keyword{flex:1 1 240px}.finance-actions{display:flex;gap:8px;flex-wrap:wrap}.finance-totals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.finance-totals article{padding:12px 16px;display:grid;gap:6px}.finance-totals article>span,.finance-totals small{color:var(--muted);font-size:12px}.finance-totals strong{font-size:22px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.income{color:#15803d}.expense{color:#b54708}.amount{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.finance-table{min-width:1120px;width:100%}.finance-summary{width:100%;min-width:640px}.bill-detail{min-width:160px;max-width:320px;white-space:pre-wrap;overflow-wrap:anywhere}.finance-table td:last-child,.finance-table th:last-child{min-width:174px;width:174px}.finance-table small{display:block}.finance-ui .text-action{background:transparent;border:0;color:var(--accent);font-size:13px;min-height:32px;padding:4px 6px;cursor:pointer}.finance-ui .danger{color:#b42318}.finance-ui button:disabled{opacity:.5;cursor:default}
-.finance-dialog{width:min(840px,calc(100vw - 32px));max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);padding:0;border:0;border-radius:12px;overflow:hidden}.finance-dialog::backdrop{background:#17203366}.finance-dialog form{display:flex;flex-direction:column;max-height:calc(100dvh - 32px);min-width:0}.finance-dialog header,.finance-dialog footer{display:flex;align-items:center;gap:8px;padding:12px 16px;flex-shrink:0}.finance-dialog header{justify-content:space-between;border-bottom:1px solid var(--line)}.finance-dialog footer{justify-content:flex-end;border-top:1px solid var(--line)}.finance-dialog h2{font-size:18px;margin:0}.finance-dialog h3{font-size:14px;margin:16px 0 8px}.finance-dialog-body{overflow:auto;padding:16px;min-height:0}.finance-dialog header button,.finance-dialog footer button,.shop-list button{min-height:36px;padding:6px 14px;border:1px solid var(--line);border-radius:6px;background:white;color:var(--text);cursor:pointer}.finance-dialog footer button[type=submit]{background:var(--accent);color:white}.bill-form-grid,.bill-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.bill-form-grid label{display:grid;gap:6px;font-size:13px}.bill-form-grid .wide{grid-column:1/-1}.bill-form-grid input,.bill-form-grid select,.bill-form-grid textarea{width:100%;min-width:0;box-sizing:border-box;min-height:40px;border:1px solid var(--line);border-radius:6px;padding:8px;font:inherit}.bill-form-grid textarea{min-height:70px;resize:vertical}.bill-shop{margin:0 0 16px;font-weight:600}.bill-attachments{border-top:1px solid var(--line);margin-top:16px}.bill-attachments input{max-width:100%}.bill-attachments li{display:flex;align-items:center;justify-content:space-between;gap:8px;overflow-wrap:anywhere}.bill-facts>div{display:grid;gap:6px;padding:10px;background:#f5f7fa;border-radius:6px;overflow-wrap:anywhere}.bill-facts span{color:var(--muted);font-size:12px}.preserve{white-space:pre-wrap;overflow-wrap:anywhere}.bill-history{padding-left:20px}.bill-history li{margin:12px 0}.bill-history span{display:block;font-size:12px;margin-top:4px}.bill-history p{font-size:13px;overflow-wrap:anywhere}.shop-list{display:flex;gap:6px;flex-wrap:wrap;padding-bottom:16px}.shop-list .selected-shop{color:var(--accent);border-color:var(--accent)}
+.finance-dialog{width:min(840px,calc(100vw - 32px));max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);padding:0;border:0;border-radius:12px;overflow:hidden}.finance-dialog::backdrop{background:#17203366}.finance-dialog form{display:flex;flex-direction:column;max-height:calc(100dvh - 32px);min-width:0}.finance-dialog header,.finance-dialog footer{display:flex;align-items:center;gap:8px;padding:12px 16px;flex-shrink:0}.finance-dialog header{justify-content:space-between;border-bottom:1px solid var(--line)}.finance-dialog footer{justify-content:flex-end;border-top:1px solid var(--line)}.finance-dialog h2{font-size:18px;margin:0}.finance-dialog h3{font-size:14px;margin:16px 0 8px}.finance-dialog-body{overflow:auto;padding:16px;min-height:0}.finance-dialog header button,.finance-dialog footer button,.shop-list button{min-height:36px;padding:6px 14px;border:1px solid var(--line);border-radius:6px;background:white;color:var(--text);cursor:pointer}.finance-dialog footer button[type=submit]{background:var(--accent);color:white}.bill-form-grid,.bill-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.bill-form-grid label{display:grid;align-content:start;gap:6px;font-size:13px}.bill-form-grid .wide{grid-column:1/-1}.bill-form-grid input,.bill-form-grid select,.bill-form-grid textarea{width:100%;min-width:0;box-sizing:border-box;min-height:40px;border:1px solid var(--line);border-radius:6px;padding:8px;font:inherit}.bill-form-grid textarea{min-height:70px;resize:vertical}.bill-shop{margin:0 0 16px;font-weight:600}.bill-attachments{border-top:1px solid var(--line);margin-top:16px}.bill-attachments input{max-width:100%}.bill-attachments li{display:flex;align-items:center;justify-content:space-between;gap:8px;overflow-wrap:anywhere}.bill-facts>div{display:grid;gap:6px;padding:10px;background:#f5f7fa;border-radius:6px;overflow-wrap:anywhere}.bill-facts span{color:var(--muted);font-size:12px}.preserve{white-space:pre-wrap;overflow-wrap:anywhere}.bill-history{padding-left:20px}.bill-history li{margin:12px 0}.bill-history span{display:block;font-size:12px;margin-top:4px}.bill-history p{font-size:13px;overflow-wrap:anywhere}.shop-list{display:flex;gap:6px;flex-wrap:wrap;padding-bottom:16px}.shop-list .selected-shop{color:var(--accent);border-color:var(--accent)}
 @media(max-width:600px){.finance-filters .date-filter{flex:1 1 130px}.finance-filters label:first-child{flex:1 1 100%}.finance-ui .finance-filters{max-height:180px}.finance-totals{grid-template-columns:1fr}.finance-totals article{display:flex;align-items:center;flex-wrap:wrap;justify-content:space-between;padding:8px 12px}.finance-totals strong{font-size:18px}.finance-totals small{flex-basis:100%}.finance-filters label{flex:1 1 130px;min-width:0}.bill-form-grid,.bill-facts{grid-template-columns:1fr}.finance-dialog{width:calc(100vw - 16px);max-width:calc(100vw - 16px)}}
 .shop-manager-intro{font-size:12px;color:var(--muted);margin:0 0 12px;line-height:1.6}.shop-manager-toolbar{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:12px}.shop-manager-toolbar label{display:grid;gap:5px;font-size:12px;color:var(--muted)}.shop-manager-search{flex:1;min-width:160px}.shop-manager-toolbar input,.shop-manager-toolbar select{height:32px;min-width:0;width:100%;border:1px solid var(--line);border-radius:4px;padding:5px 9px;font-size:13px;background:white}.shop-create-button{height:32px;padding:5px 12px;border:1px solid var(--accent);border-radius:4px;background:var(--accent);color:white;font-size:13px}.shop-manager-table{max-height:330px;min-height:120px}.shop-manager-table table{width:100%;min-width:540px}.shop-manager-table th:last-child{width:70px}.shop-manager-table td:first-child{min-width:150px;max-width:240px;white-space:normal;overflow-wrap:anywhere}.shop-manager-table strong{font-weight:500}.shop-manager-table small{display:block;margin-top:4px;font-size:11px;color:var(--accent)}.shop-status{font-size:12px;border-radius:4px;padding:3px 7px;color:#167447;background:#eaf7ef;white-space:nowrap}.shop-status.inactive{color:#6b7280;background:#eef0f3}.shop-remark{max-width:300px;white-space:normal;overflow-wrap:anywhere;color:var(--muted)}.shop-empty{text-align:center;padding:30px!important;color:var(--muted)}.shop-edit-heading{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:18px}.shop-edit-heading button{border:0;background:transparent;color:var(--accent);font-size:13px;padding:4px 0}.shop-edit-heading span,.shop-state-help{font-size:12px;color:var(--muted);line-height:1.6}.shop-state-help{align-self:end;margin:0 0 4px}
+</style>
+
+<style>
+#app .finance-dialog .bill-form-grid .single-select-trigger{width:100%;height:40px;min-height:40px;padding:8px 12px;font-size:13px;border-radius:6px}
+#app .finance-dialog .bill-form-grid .single-select{width:100%;max-width:none}
+</style>
+
+<style>
+.shop-account-fields{border:1px solid var(--line);border-radius:6px;padding:12px}.shop-account-heading{display:flex;align-items:center;justify-content:space-between;font-size:13px}.shop-account-fields p{font-size:12px;margin:6px 0 10px}.shop-account-row{display:flex;align-items:center;gap:10px;margin-top:8px}.shop-account-row label,.shop-account-row button{flex-shrink:0}.shop-account-row input{flex:1;min-width:0}
 </style>

@@ -53,7 +53,27 @@ class SelectionResearchTest {
             mvc.perform(put(base(id)+"/research").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(new SelectionResearch.Research(5L,"change","","","PENDING","",research.criteria(),estimate,"")))).andExpect(status().isConflict());
             mvc.perform(post(base(id)+"/notes").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content("{\"content\":\"Append after approval\"}")).andExpect(status().isOk());
             mvc.perform(get(base(id)+"/research")).andExpect(status().isUnauthorized());
+            long deletionVersion=jdbc.queryForObject("SELECT version FROM selection_candidate WHERE id=?",Long.class,id);
+            mvc.perform(delete("/api/v1/selection/workbench/"+id).param("version",""+deletionVersion).header("Authorization",token)).andExpect(status().isOk());
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product_development WHERE candidate_id=?",Long.class,id)).isEqualTo(1);
+            assertThat(jdbc.queryForObject("SELECT selection_research_json FROM product_development WHERE id=?",String.class,id)).contains("Proceed with prototype");
         }finally{jdbc.update("DELETE FROM product_development WHERE id=?",id);jdbc.update("DELETE FROM selection_candidate WHERE id=?",id);}
+    }
+    @Test void candidateDeletionPreservesHistoryAndAllowsReaddingAsin() throws Exception {
+        String token=user("SELECTION"),reader=user("PRODUCT_MATERIAL"),base="/api/v1/selection/workbench";
+        String body=json.writeValueAsString(Map.of("type","AMAZON","asinOrUrl","B0DELET901","title","Synthetic deletion","owner","Synthetic","reason","Test"));
+        String id=json.readTree(mvc.perform(post(base).header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("id").asText();
+        long version=jdbc.queryForObject("SELECT version FROM launch_workspace WHERE kind='CANDIDATE' AND entity_id=?",Long.class,id);
+        mvc.perform(delete(base+"/"+id).param("version",""+version).header("Authorization",reader)).andExpect(status().isForbidden());
+        mvc.perform(delete(base+"/"+id).param("version",""+(version+1)).header("Authorization",token)).andExpect(status().isConflict());
+        mvc.perform(delete(base+"/"+id).param("version",""+version).header("Authorization",token)).andExpect(status().isOk());
+        mvc.perform(get(base).param("q",id).header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
+        mvc.perform(get(base+"/"+id).header("Authorization",token)).andExpect(status().isNotFound());
+        mvc.perform(delete(base+"/"+id).param("version",""+version).header("Authorization",token)).andExpect(status().isNotFound());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM launch_revision WHERE kind='CANDIDATE' AND entity_id=?",Long.class,id)).isGreaterThan(0);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM collection_schedule WHERE kind='CANDIDATE' AND target_id=? AND enabled=TRUE",Long.class,id)).isZero();
+        String replacement=json.readTree(mvc.perform(post(base).header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("id").asText();
+        assertThat(replacement).isNotEqualTo(id);
     }
     private static SelectionResearch.EstimateInput input(long version){return new SelectionResearch.EstimateInput(version,"estimate-test-098","Base",new BigDecimal("20"),"USD",List.of(cost("purchase","8"),cost("pack","0"),cost("freight","0"),cost("fulfilment","0"),cost("other","0")),new BigDecimal(".15"),new BigDecimal(".10"),new BigDecimal(".05"),LocalDate.now(),"Synthetic fee evidence");}
     private static SelectionResearch.Cost cost(String name,String amount){return new SelectionResearch.Cost(name,new BigDecimal(amount),"USD",BigDecimal.ONE,"Synthetic confirmed amount");}

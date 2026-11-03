@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { hasNewRelease, moduleEntry } from './releaseVersion'
+import { hasNewRelease, moduleEntry, freshPageUrl } from './releaseVersion'
 const html = (name: string) => `<script type="module" src="/assets/${name}.js"></script>`
 it('accepts same-origin hashed entry and rejects fallback/error or remote scripts', () => {
   expect(moduleEntry(html('current'), 'https://erp.example')).toBe('/assets/current.js')
@@ -18,4 +18,13 @@ it('does not confuse gateway failures or JSON responses with a deployment', asyn
   expect(await hasNewRelease('/assets/old.js', fetcher)).toBe(false)
   fetcher.mockResolvedValue(new Response('{}', { headers: { 'content-type': 'application/json' } }))
   expect(await hasNewRelease('/assets/old.js', fetcher)).toBe(false)
+})
+
+it('reloads with a fresh URL while preserving the page and query', () => {
+  const next = new URL(freshPageUrl('https://erp.example/system/users?page=2&_release=old#detail'))
+  expect(next.pathname).toBe('/system/users')
+  expect(next.searchParams.get('page')).toBe('2')
+  expect(next.searchParams.get('_release')).not.toBe('old')
+  expect(next.searchParams.getAll('_release')).toHaveLength(1)
+  expect(next.hash).toBe('#detail')
 })

@@ -435,7 +435,7 @@ onMounted(load)
           {{ addError }}
         </p>
       </form>
-      <footer>
+      <footer class="ui-dialog-actions">
         <button
           :disabled="saving"
           @click="closeAdd"
@@ -486,7 +486,7 @@ onMounted(load)
           {{ remarkError }}
         </p>
       </form>
-      <footer>
+      <footer class="ui-dialog-actions">
         <button
           :disabled="remarkBusy"
           @click="closeRemark"

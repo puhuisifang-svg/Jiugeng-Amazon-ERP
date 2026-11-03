@@ -692,7 +692,7 @@ onMounted(load)
           :key="product.id"
           :value="product.id"
         >{{ product.productCode }} · {{ product.productName }}</option></select></label>
-        <footer class="dialog-footer">
+        <footer class="ui-dialog-actions dialog-footer">
           <button
             class="secondary-action"
             type="button"
@@ -741,7 +741,7 @@ onMounted(load)
           placeholder="SKU-001&#10;SKU-002"
           autofocus
         />
-        <footer class="dialog-footer">
+        <footer class="ui-dialog-actions dialog-footer">
           <span>{{ [...new Set(batchSearchText.split(/\r?\n/).map(value => value.trim()).filter(Boolean))].length }} 个有效编码</span><button
             class="secondary-action"
             type="button"
@@ -860,7 +860,7 @@ onMounted(load)
               </button>
             </li>
           </ol>
-        </div><footer class="dialog-footer">
+        </div><footer class="ui-dialog-actions dialog-footer">
           <button
             class="secondary-action"
             type="button"
@@ -868,6 +868,7 @@ onMounted(load)
           >
             恢复默认
           </button><button
+            class="ui-button-primary"
             type="button"
             @click="persistColumns"
           >
@@ -913,7 +914,7 @@ onMounted(load)
           value="SELECTED"
           :disabled="!selected.length"
         >已选记录（{{ selected.length }} 条）</label>
-        <footer class="dialog-footer">
+        <footer class="ui-dialog-actions dialog-footer">
           <button
             class="secondary-action"
             type="button"
@@ -1069,7 +1070,7 @@ onMounted(load)
               包装重量 → {{ batch.packageWeightMode === 'CLEAR' ? '清空' : `${batch.packageWeightGrams ?? '—'} g` }}
             </li>
           </ul>
-        </section><footer class="dialog-footer">
+        </section><footer class="ui-dialog-actions dialog-footer">
           <button
             class="secondary-action"
             type="button"

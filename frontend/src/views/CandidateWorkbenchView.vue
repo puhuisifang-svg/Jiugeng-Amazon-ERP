@@ -19,12 +19,14 @@ const query=ref(''),owner=ref(''),source=ref(''),state=ref(''),page=ref(1),size=
 const createOpen=ref(false),creating=ref(false),createError=ref(''),initial=ref(''),preview=ref('')
 const createDraft=ref({type:'AMAZON',title:'',asinOrUrl:'',owner:'',reason:'',sourceUrl:'',requestId:''})
 const createDirty=computed(()=>createOpen.value&&JSON.stringify(createDraft.value)!==initial.value)
+const deleting=ref('')
+async function remove(item:CandidateItem){if(deleting.value)return;if(!await confirmAction(`确定删除候选「${item.title}」？删除后不再显示在候选池，历史评估和已生成的新品开发记录保留。`))return;deleting.value=item.id;error.value='';try{await candidatesApi.remove(item.id,item.version);success.value='候选已删除';await load()}catch(e){error.value=e instanceof Error?e.message:'删除失败，请重试'}finally{deleting.value=''}}
 let request=0
 const totalStates=computed(()=>Object.values(counts.value).reduce((a,b)=>a+b,0))
 const image=(item:CandidateItem)=>safeLink(item.document.imageUrl)||safeLink(item.observation?.imageUrl)
 const sourceLabel=(item:CandidateItem)=>item.source==='WATCH'?'上新监控':item.asin?'亚马逊商品':'非亚马逊产品'
 const nextStep=(s:string)=>({NEW:'开始评估',EVALUATING:'继续评估',RETURNED:'补充资料',REVIEW:'查看审核',APPROVED:'查看通过方案',REJECTED:'查看淘汰原因'}[s]??'详情')
-async function load(){const n=++request;loading.value=true;error.value='';try{const result=await candidatesApi.list({...applied.value,state:state.value,page:page.value,size:size.value});if(n!==request)return;items.value=result.items;total.value=result.total;counts.value=result.counts??{};owners.value=result.owners??[];if(page.value>1&&!items.value.length&&result.total){page.value=Math.ceil(result.total/size.value);void load()}}catch(e){if(n===request)error.value=e instanceof Error?e.message:'候选加载失败'}finally{if(n===request)loading.value=false}}
+async function load(){const n=++request;loading.value=true;error.value='';try{const result=await candidatesApi.list({...applied.value,state:state.value,page:page.value,size:size.value});if(n!==request)return;items.value=result.items;total.value=result.total;counts.value=result.counts??{};owners.value=result.owners??[];if(page.value>1&&!items.value.length ){page.value=Math.max(1,Math.ceil(result.total/size.value));void load()}}catch(e){if(n===request)error.value=e instanceof Error?e.message:'候选加载失败'}finally{if(n===request)loading.value=false}}
 function search(){applied.value={q:query.value.trim(),owner:owner.value,source:source.value};page.value=1;void load()}
 function reset(){query.value='';owner.value='';source.value='';state.value='';search()}
 function chooseState(value:string){state.value=value;page.value=1;void load()}
@@ -59,7 +61,7 @@ void load()
             <tr v-for="item in items" :key="item.id">
               <td class="candidate-product-fixed"><div class="candidate-product"><button v-if="image(item)" class="candidate-thumbnail" aria-label="放大产品图片" @click="preview=image(item)"><img :src="image(item)" alt="产品图片"></button><span v-else class="candidate-image-empty">暂无图片</span><div><RouterLink :to="`/selection/candidates/${item.id}`">{{ item.title }}</RouterLink><small>{{ item.asin||'非亚马逊产品' }}</small><small v-if="item.document.reason" class="candidate-reason" :title="String(item.document.reason)">{{ item.document.reason }}</small></div></div></td>
               <td><span class="candidate-badge" :data-state="item.state">{{ stateNames[item.state]??'待启用' }}</span></td><td>{{ sourceLabel(item) }}<small>{{ item.document.owner||item.owner||'待分配' }}</small></td>
-              <td>{{ item.document.salesValue||'待补充' }}<small>{{ ({OBSERVED:'前台展示',MANUAL:'人工录入',ESTIMATE:'估算'} as Record<string,string>)[String(item.document.salesType)]|| (item.document.salesMissingReason?'已记录无数据原因':'') }}</small></td><td>{{ item.document.referencePrice??item.observation?.price??'—' }}</td><td>{{ item.document.price!=null&&item.document.price!==''?'$'+item.document.price:'—' }}</td><td>{{ candidateScore(item.document)??'未完成' }}<small v-if="candidateScore(item.document)!=null">满分 100</small></td><td>{{ riskProgress(item.document) }} / 5 类<small>{{ rows(item.document,'risks').some(r=>['BLOCKED','DOUBT','REMEDIATE'].includes(String(r.conclusion)))?'存在待处理风险':riskProgress(item.document)===5?'待审核复核':'待完善调查' }}</small></td><td class="candidate-time">{{ formatDate(item.updatedAt) }}</td><td class="candidate-action-fixed"><RouterLink :to="`/selection/candidates/${item.id}`">{{ nextStep(item.state) }}</RouterLink><RouterLink v-if="item.state==='APPROVED'&&session.canAccess(['development.read'])" :to="`/product-development/${item.id}`">新品开发 ↗</RouterLink></td>
+              <td>{{ item.document.salesValue||'待补充' }}<small>{{ ({OBSERVED:'前台展示',MANUAL:'人工录入',ESTIMATE:'估算'} as Record<string,string>)[String(item.document.salesType)]|| (item.document.salesMissingReason?'已记录无数据原因':'') }}</small></td><td>{{ item.document.referencePrice??item.observation?.price??'—' }}</td><td>{{ item.document.price!=null&&item.document.price!==''?'$'+item.document.price:'—' }}</td><td>{{ candidateScore(item.document)??'未完成' }}<small v-if="candidateScore(item.document)!=null">满分 100</small></td><td>{{ riskProgress(item.document) }} / 5 类<small>{{ rows(item.document,'risks').some(r=>['BLOCKED','DOUBT','REMEDIATE'].includes(String(r.conclusion)))?'存在待处理风险':riskProgress(item.document)===5?'待审核复核':'待完善调查' }}</small></td><td class="candidate-time">{{ formatDate(item.updatedAt) }}</td><td class="candidate-action-fixed"><RouterLink :to="`/selection/candidates/${item.id}`">{{ nextStep(item.state) }}</RouterLink><RouterLink v-if="item.state==='APPROVED'&&item.hasDevelopment!==false&&session.canAccess(['development.read'])" :to="`/product-development/${item.id}`">新品开发 ↗</RouterLink><button v-if="writable" class="candidate-delete" :disabled="!!deleting" @click="remove(item)">{{ deleting===item.id?'删除中…':'删除' }}</button></td>
             </tr>
             <tr v-if="!items.length"><td colspan="10" class="data-state"><strong>{{ loading?'正在加载候选…':error?'候选加载失败':'暂无符合条件的候选' }}</strong><p v-if="!loading&&!error">可从产品监控、上新监控加入，或手动添加 ASIN、样品与原创产品。</p><button v-if="!loading&&writable&&!error" @click="openCreate">添加第一个候选</button></td></tr>
           </tbody>
@@ -73,3 +75,7 @@ void load()
   </section>
 </template>
 <style src="@/styles/candidateWorkbench.css"></style>
+
+<style scoped>
+.candidate-delete{border:0;background:transparent;color:#dc2626;padding:4px 0;font-size:13px;cursor:pointer}.candidate-delete:disabled{opacity:.5;cursor:wait}
+</style>

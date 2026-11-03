@@ -61,7 +61,7 @@ class DevelopmentService {
     Page list(Status status,String q,int page,int size) {
         if(page<0 || page>100000 || !Set.of(20,50,100).contains(size)) throw invalid("分页参数不正确");
         String search=text(q,300);
-        String where=" WHERE 1=1";
+        String where=" WHERE deleted_at IS NULL";
         if(status!=null) where+=" AND status=:status";
         if(search!=null) where+=" AND (LOWER(number) LIKE :q OR LOWER(name) LIKE :q OR LOWER(source_asin) LIKE :q OR LOWER(COALESCE(developer,'')) LIKE :q)";
         var count=jdbc.sql("SELECT COUNT(*) FROM product_development"+where);
@@ -147,8 +147,18 @@ class DevelopmentService {
         View after=get(id,false); record(actor,"DEVELOPMENT_"+target.name(),after,"新品开发状态变更"); return after;
     }
 
+    @Transactional
+    void delete(String id,long expected,AuthenticatedActor actor){
+        View before=get(id,true);
+        long current=work.exists("DEVELOPMENT",id)?jdbc.sql("SELECT version FROM launch_workspace WHERE kind='DEVELOPMENT' AND entity_id=:id FOR UPDATE").param("id",id).query(Long.class).single():before.version();
+        if(current!=expected)throw conflict("项目已更新，请刷新后重新确认删除");
+        jdbc.sql("UPDATE product_development SET deleted_at=CURRENT_TIMESTAMP,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=:id").param("id",id).update();
+        record(actor,"DEVELOPMENT_DELETE",before,"删除开发项目；保留来源候选、产品档案及历史记录");
+    }
+    void lockActive(String id){get(id,true);}
+
     private View get(String id,boolean lock) {
-        return jdbc.sql("SELECT * FROM product_development WHERE id=:id"+(lock?" FOR UPDATE":""))
+        return jdbc.sql("SELECT * FROM product_development WHERE id=:id AND deleted_at IS NULL"+(lock?" FOR UPDATE":""))
                 .param("id",id).query(this::map).optional()
                 .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"新品开发不存在，请返回列表核对"));
     }

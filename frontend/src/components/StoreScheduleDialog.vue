@@ -58,7 +58,7 @@ onBeforeRouteLeave(()=>{if(props.open&&form.value?.busy)return false;if(props.op
         选择店铺后，可查看并修改它的采集计划。
       </p>
     </div>
-    <footer>
+    <footer class="ui-dialog-actions">
       <button
         :disabled="form?.busy"
         @click="close"

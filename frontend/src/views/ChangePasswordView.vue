@@ -47,9 +47,9 @@ async function submit() {
         <label for="current-password">当前密码</label>
         <PasswordField id="current-password" v-model="currentPassword" autocomplete="current-password" required />
         <label for="new-password">新密码</label>
-        <PasswordField id="new-password" v-model="newPassword" autocomplete="new-password" :minlength="6" pattern="(?=.*[A-Za-z])(?=.*\\d).{6,128}" required />
+        <PasswordField id="new-password" v-model="newPassword" autocomplete="new-password" :minlength="6" pattern="(?=.*[A-Za-z])(?=.*[0-9]).{6,128}" required />
         <label for="confirm-password">确认新密码</label>
-        <PasswordField id="confirm-password" v-model="confirmation" autocomplete="new-password" :minlength="6" pattern="(?=.*[A-Za-z])(?=.*\\d).{6,128}" required />
+        <PasswordField id="confirm-password" v-model="confirmation" autocomplete="new-password" :minlength="6" pattern="(?=.*[A-Za-z])(?=.*[0-9]).{6,128}" required />
         <p v-if="errorMessage" class="data-state data-state--error" role="alert">{{ errorMessage }}</p>
         <button :disabled="loading" type="submit">{{ loading ? '正在保存…' : '保存新密码' }}</button>
       </form>

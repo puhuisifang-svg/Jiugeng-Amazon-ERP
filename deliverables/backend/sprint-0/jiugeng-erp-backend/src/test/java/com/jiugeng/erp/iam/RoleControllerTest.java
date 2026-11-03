@@ -30,23 +30,55 @@ class RoleControllerTest {
     Map<String,Object> edit(JsonNode role,List<String> permissions,String status) { return Map.of("name",role.path("name").asText(),"description","Synthetic role","status",status,"permissions",permissions,"version",role.path("version").asLong(),"reason","Synthetic verification"); }
     JsonNode save(JsonNode role,List<String> permissions) throws Exception { ((com.fasterxml.jackson.databind.node.ObjectNode)role).put("version",jdbc.queryForObject("SELECT version FROM iam_role WHERE id=?",Long.class,role.path("id").asText())); return json.readTree(mvc.perform(put("/api/v1/roles/"+role.path("id").asText()).header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(edit(role,permissions,"ENABLED")))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()); }
     void assign(String... ids) throws Exception { long v=jdbc.queryForObject("SELECT authorization_version FROM iam_user WHERE id=?",Long.class,userId);mvc.perform(put("/api/v1/users/"+userId+"/roles").header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("roleIds",List.of(ids),"version",v,"reason","")))).andExpect(status().isOk()); }
-    @Test void removingLastRoleDisablesUserRevokesSessionAndAllowsRoleDeletion() throws Exception {
+    @Test void removingLastRolePreservesStatusRevokesSessionAndAllowsRoleDeletion() throws Exception {
         var role=save(create("待移除角色"),List.of("products.read")); String id=role.path("id").asText(); assign(id);
         String old=login("rbac-user");
         long v=jdbc.queryForObject("SELECT authorization_version FROM iam_user WHERE id=?",Long.class,userId);
         mvc.perform(post("/api/v1/users/"+userId+"/roles/preview").header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("roleIds",List.of(),"version",v,"reason",""))))
             .andExpect(status().isOk()).andExpect(jsonPath("$.removed").isArray());
         assign();
-        assertThat(jdbc.queryForObject("SELECT status FROM iam_user WHERE id=?",String.class,userId)).isEqualTo("DISABLED");
+        assertThat(jdbc.queryForObject("SELECT status FROM iam_user WHERE id=?",String.class,userId)).isEqualTo("ENABLED");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM iam_user_role WHERE user_id=?",Integer.class,userId)).isZero();
         mvc.perform(get("/api/v1/auth/me").header("Authorization",old)).andExpect(status().isUnauthorized());
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE action='ACCOUNT_DISABLE'",Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE action='ACCOUNT_DISABLE'",Integer.class)).isZero();
         long version=jdbc.queryForObject("SELECT version FROM iam_role WHERE id=?",Long.class,id);
         mvc.perform(delete("/api/v1/roles/"+id).header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("version",version,"reason","Synthetic deletion")))).andExpect(status().isOk());
+        String noRole=login("rbac-user");
+        mvc.perform(get("/api/v1/auth/me").header("Authorization",noRole)).andExpect(status().isOk()).andExpect(jsonPath("$.capabilities").isEmpty());
+        mvc.perform(get("/api/v1/audit/events").header("Authorization",noRole)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/products").header("Authorization",noRole)).andExpect(status().isForbidden());
+        assign("SELECTION");
+        assertThat(jdbc.queryForObject("SELECT status FROM iam_user WHERE id=?",String.class,userId)).isEqualTo("ENABLED");
+        login("rbac-user");
+    }
+    @Test void roleAssignmentNeverChangesDisabledAccountStatusAndNoRoleCanBeEnabled() throws Exception {
+        mvc.perform(post("/api/v1/users/"+userId+"/disable").header("Authorization",admin)).andExpect(status().isOk());
+        assign();
+        assertThat(jdbc.queryForObject("SELECT status FROM iam_user WHERE id=?",String.class,userId)).isEqualTo("DISABLED");
         assign("SELECTION");
         assertThat(jdbc.queryForObject("SELECT status FROM iam_user WHERE id=?",String.class,userId)).isEqualTo("DISABLED");
+        assign();
         mvc.perform(post("/api/v1/users/"+userId+"/enable").header("Authorization",admin)).andExpect(status().isOk());
         login("rbac-user");
+    }
+    @Test void selfAuditRequiresExplicitRoleGrantAndCanBeRevoked() throws Exception {
+        assertThat(PermissionCatalog.ALL.stream().filter(p->p.code().equals("audit.read.self")).findFirst().orElseThrow().assignable()).isTrue();
+        var role=save(create("审计权限测试"),List.of("products.read"));
+        assign(role.path("id").asText());
+        String token=login("rbac-user");
+        mvc.perform(get("/api/v1/auth/me").header("Authorization",token)).andExpect(status().isOk())
+            .andExpect(jsonPath("$.capabilities[?(@ == 'audit.read.self')]").isEmpty());
+        mvc.perform(get("/api/v1/audit/events").header("Authorization",token)).andExpect(status().isForbidden());
+        role=save(role,List.of("products.read","audit.read.self"));
+        token=login("rbac-user");
+        mvc.perform(get("/api/v1/audit/events").header("Authorization",token)).andExpect(status().isOk());
+        role=save(role,List.of("products.read"));
+        mvc.perform(get("/api/v1/audit/events").header("Authorization",token)).andExpect(status().isUnauthorized());
+        token=login("rbac-user");
+        mvc.perform(get("/api/v1/audit/events").header("Authorization",token)).andExpect(status().isForbidden());
+        save(role,List.of("audit.read.self"));
+        token=login("rbac-user");
+        mvc.perform(get("/api/v1/audit/events").header("Authorization",token)).andExpect(status().isOk());
     }
     @Test void multipleRolesUnionDependenciesAndSessionRevocation() throws Exception {
         var product=save(create("只读产品"),List.of("products.read"));var finance=save(create("账单维护"),List.of("finance.write"));
@@ -67,11 +99,11 @@ class RoleControllerTest {
         mvc.perform(delete("/api/v1/roles/ADMIN").header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content("{\"version\":0,\"reason\":\"Synthetic test\"}")).andExpect(status().isBadRequest());
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE action='AUTHORIZATION_CHANGE_FAILED'",Integer.class)).isEqualTo(2);
     }
-    @Test void disallowDisablingLastEffectiveRoleAndDeletingMembers() throws Exception {
+    @Test void allowsDisablingLastRoleButStillProtectsRoleWithMembers() throws Exception {
         var role=save(create("单一职责"),List.of("products.read"));String id=role.path("id").asText();assign(id);((com.fasterxml.jackson.databind.node.ObjectNode)role).put("version",jdbc.queryForObject("SELECT version FROM iam_role WHERE id=?",Long.class,id));
-        mvc.perform(put("/api/v1/roles/"+id).header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(edit(role,List.of("products.read"),"DISABLED")))).andExpect(status().isConflict());
-        assertThat(jdbc.queryForObject("SELECT status FROM iam_role WHERE id=?",String.class,id)).isEqualTo("ENABLED");
-        mvc.perform(delete("/api/v1/roles/"+id).header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("version",role.path("version").asLong(),"reason","Synthetic delete")))).andExpect(status().isConflict());
+        mvc.perform(put("/api/v1/roles/"+id).header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(edit(role,List.of("products.read"),"DISABLED")))).andExpect(status().isOk());
+        assertThat(jdbc.queryForObject("SELECT status FROM iam_role WHERE id=?",String.class,id)).isEqualTo("DISABLED");
+        mvc.perform(delete("/api/v1/roles/"+id).header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("version",role.path("version").asLong()+1,"reason","Synthetic delete")))).andExpect(status().isConflict());
     }
     @Test void staleVersionDoesNotOverwriteAndNoOpPermissionsKeepsSession() throws Exception {
         var draft=create("版本检查");var role=save(draft,List.of("products.read"));assign(role.path("id").asText());String token=login("rbac-user");

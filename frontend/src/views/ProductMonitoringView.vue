@@ -526,7 +526,7 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
           >
             {{ result.asin }} — {{ result.message }}
           </li>
-        </ul><footer>
+        </ul><footer class="ui-dialog-actions">
           <button
             type="button"
             :disabled="busy"
@@ -583,7 +583,7 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
               ↓
             </button>
           </li>
-        </ol><footer>
+        </ol><footer class="ui-dialog-actions">
           <button
             type="button"
             :disabled="busy"
@@ -677,7 +677,7 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
           maxlength="500"
           :required="observation.quality !== 'COMPLETE'"
           rows="2"
-        /></label><footer>
+        /></label><footer class="ui-dialog-actions">
           <button
             type="button"
             :disabled="busy"

@@ -81,7 +81,7 @@ class IamRepository {
         jdbc.sql("""
                 INSERT INTO iam_user
                     (id, login_name, display_name, email, phone, password_hash, role, status, must_change_password)
-                VALUES (:id, :loginName, :displayName, :email, :phone, :passwordHash, :role, 'ENABLED', TRUE)
+                VALUES (:id, :loginName, :displayName, :email, :phone, :passwordHash, :role, 'ENABLED', FALSE)
                 """).param("id", id).param("loginName", loginName).param("displayName", displayName)
                 .param("email", email).param("phone", phone).param("passwordHash", passwordHash)
                 .param("role", role.name()).update();
@@ -92,7 +92,7 @@ class IamRepository {
         int failures = user.failedLoginCount() + 1;
         jdbc.sql("""
                 UPDATE iam_user SET failed_login_count = :failures,
-                    locked_at = CASE WHEN :failures >= :maxFailures THEN CURRENT_TIMESTAMP ELSE locked_at END,
+                    status = CASE WHEN :failures >= :maxFailures THEN 'DISABLED' ELSE status END,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
                 """).param("failures", failures).param("maxFailures", maxFailures).param("id", user.id()).update();
@@ -242,17 +242,6 @@ class IamRepository {
         jdbc.sql("UPDATE iam_user SET role = :role, updated_at = CURRENT_TIMESTAMP WHERE id = :id")
                 .param("role", role.name()).param("id", userId).update();
         roles.bind(userId, java.util.List.of(role.name()));
-    }
-
-    void unlock(String userId) {
-        clearFailedLogins(userId);
-    }
-
-    void lock(String userId) {
-        jdbc.sql("""
-                UPDATE iam_user SET locked_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-                WHERE id = :id
-                """).param("id", userId).update();
     }
 
     int staySignedInDays() {

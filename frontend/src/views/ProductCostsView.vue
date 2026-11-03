@@ -699,7 +699,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
             </section>
           </div>
         </div>
-        <footer class="cost-sheet__footer">
+        <footer class="ui-dialog-actions cost-sheet__footer">
           <template v-if="form">
             <p class="cost-footer-hint">
               {{ !preview ? '请先核算，再保存草稿。' : !recalculated ? '输入已变化，请重新核算。' : !reason.trim() ? '请填写变更原因。' : '保存草稿后，可由有权限的人员确认生效。' }}
@@ -863,7 +863,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
             placeholder="说明本次确认生效的原因"
             :disabled="busy"
           ></label>
-        </div><footer class="cost-sheet__footer">
+        </div><footer class="ui-dialog-actions cost-sheet__footer">
           <button
             class="cost-button"
             :disabled="busy"

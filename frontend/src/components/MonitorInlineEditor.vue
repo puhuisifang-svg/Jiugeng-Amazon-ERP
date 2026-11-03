@@ -69,7 +69,7 @@ async function save(){if(!props.target||busy.value)return;busy.value=true;error.
         :disabled="busy"
       ><small>手动录入；留空表示未知，采集不会覆盖。</small></label>
     </form>
-    <footer>
+    <footer class="ui-dialog-actions">
       <button
         type="button"
         :disabled="busy"

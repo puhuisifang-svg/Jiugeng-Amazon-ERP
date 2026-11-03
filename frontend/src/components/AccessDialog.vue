@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref } from 'vue'
 import UnsavedChangesDialog from './UnsavedChangesDialog.vue'
-const props = defineProps<{ title: string; dirty?: boolean; busy?: boolean; wide?: boolean }>()
+const props = defineProps<{ title: string; dirty?: boolean; busy?: boolean; wide?: boolean; dialogClass?: string }>()
 const emit = defineEmits<{ close: [] }>()
 const dialog = ref<HTMLDialogElement>(), confirm = ref(false)
 let focus: HTMLElement | null = null
@@ -14,7 +14,7 @@ onBeforeUnmount(() => { dialog.value?.close(); focus?.focus() })
   <dialog
     ref="dialog"
     class="access-dialog"
-    :class="{ 'access-dialog--wide': wide, 'access-dialog--paginated': !!$slots.pagination }"
+    :class="[dialogClass, { 'access-dialog--wide': wide, 'access-dialog--paginated': !!$slots.pagination }]"
     :aria-label="title"
     @cancel.prevent.stop="cancel"
   >
@@ -31,7 +31,7 @@ onBeforeUnmount(() => { dialog.value?.close(); focus?.focus() })
     <div class="access-dialog-body">
       <slot />
     </div>
-    <footer :class="{ 'access-dialog-pagination': !!$slots.pagination }">
+    <footer :class="{ 'access-dialog-pagination': !!$slots.pagination, 'ui-dialog-actions': !$slots.pagination }">
       <slot
         v-if="$slots.pagination"
         name="pagination"
@@ -82,4 +82,21 @@ onBeforeUnmount(() => { dialog.value?.close(); focus?.focus() })
 .access-dialog--paginated .access-dialog-body{flex:1;min-height:0}
 .access-dialog > .access-dialog-pagination{min-height:48px;padding:0;display:flex;align-items:center;flex-shrink:0}
 .access-dialog-pagination .list-pagination{width:100%;border-top:0;box-sizing:border-box}
+</style>
+<style>
+#app .access-dialog.assignment-dialog{width:min(700px,calc(100vw - 24px))}
+#app .access-dialog.member-picker-dialog{width:min(760px,calc(100vw - 24px))}
+.assignment-step{margin-right:auto;font-size:12px;color:var(--muted)}
+.assignment-summary{background:#f7f9fc;border:1px solid var(--line);border-radius:6px;padding:12px;margin-bottom:14px}
+.assignment-summary>strong{font-size:14px}.assignment-summary>span{margin-left:10px;font-size:12px;color:var(--muted)}.assignment-summary>p{font-size:12px;line-height:1.6;color:var(--muted);margin:6px 0 0}
+#app .assignment-dialog .role-choice{margin:0;min-height:42px;padding:9px 12px;font-size:13px;border-color:#dde4ed;border-radius:5px}
+#app .assignment-dialog .role-choice-selected{background:#edf7f1;border-color:#9bcbb0}
+#app .assignment-dialog .role-choice .access-muted{margin-left:auto}
+.member-picker-note{font-size:12px;color:var(--muted);line-height:1.6;margin:0 0 12px}
+.member-picker-search{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+#app .member-picker-search input{height:32px;min-height:32px;max-width:320px;width:100%;padding:0 10px;font-size:13px;border:1px solid var(--line);border-radius:4px}
+.member-picker-search>span{font-size:12px;color:var(--muted);white-space:nowrap}
+.member-picker-list{max-height:min(440px,55vh);overflow:auto;border:1px solid var(--line);border-radius:5px}
+.member-picker-list table{width:100%;min-width:480px}.member-picker-list thead{position:sticky;top:0;background:#f6f8fb;z-index:1}.member-picker-list td{padding:10px;font-size:13px}.member-picker-list td small{display:block;color:var(--muted);font-size:12px;margin-top:4px}
+#app .member-picker-select{color:#21834a;background:#edf7f1;border:1px solid #b7dbc5;min-height:28px;font-size:12px;padding:3px 12px}
 </style>

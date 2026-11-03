@@ -78,18 +78,16 @@ class IamService {
             auditService.security(actor, "LOGIN_FAILED", user.id(), Outcome.FAILURE, "ACCOUNT_DISABLED");
             throw new IamException(403, "ACCOUNT_DISABLED", "账号已停用");
         }
-        if (user.lockedAt() != null) {
-            auditService.security(actor, "LOGIN_FAILED", user.id(), Outcome.FAILURE, "ACCOUNT_LOCKED");
-            throw new IamException(423, "ACCOUNT_LOCKED", "账号已锁定，请联系管理员解锁");
-        }
         if (!passwordEncoder.matches(password, user.passwordHash())) {
             int failures = repository.recordFailedLogin(user, maxFailedLogins);
-            boolean locked = failures >= maxFailedLogins;
+            boolean disabled = failures >= maxFailedLogins;
             auditService.security(actor, "LOGIN_FAILED", user.id(), Outcome.FAILURE,
-                    locked ? "ACCOUNT_LOCKED" : "INVALID_CREDENTIALS");
-            if (locked) auditService.security(actor, "ACCOUNT_LOCK", user.id(), Outcome.SUCCESS,
-                    "FAILURE_THRESHOLD_REACHED");
-            if (locked) throw new IamException(423, "ACCOUNT_LOCKED", "登录失败次数过多，账号已锁定");
+                    disabled ? "ACCOUNT_DISABLED" : "INVALID_CREDENTIALS");
+            if (disabled) {
+                repository.revokeUserSessions(user.id());
+                auditService.security(actor, "ACCOUNT_DISABLE", user.id(), Outcome.SUCCESS, "FAILURE_THRESHOLD_REACHED");
+                throw new IamException(403, "ACCOUNT_DISABLED", "登录失败次数过多，账号已停用，请联系管理员启用");
+            }
             throw new IamException(401, "INVALID_CREDENTIALS", "账号或密码错误");
         }
         repository.clearFailedLogins(user.id());
@@ -249,7 +247,8 @@ class IamService {
         User user = requireUser(userId);
         UserView before = user.view();
         repository.setStatus(userId, status);
-        roles.guardAvailableAdministrator(); roles.guardEnabledUsers();
+        if (status == Status.ENABLED) repository.clearFailedLogins(userId);
+        roles.guardAvailableAdministrator();
         if (status == Status.DISABLED) repository.revokeUserSessions(userId);
         UserView after = repository.findUserById(userId).orElseThrow().view();
         auditService.account(Actor.authenticated(principal),
@@ -272,33 +271,6 @@ class IamService {
         repository.revokeUserSessions(userId);
         UserView after = repository.findUserById(userId).orElseThrow().view();
         auditService.account(Actor.authenticated(principal), "ROLE_CHANGE", before, after, null);
-        return after;
-    }
-
-    @Transactional
-    UserView unlock(String userId, SessionPrincipal principal) {
-        roles.lock(); roles.requireAdministrator(principal.userId());
-        User user = requireUser(userId);
-        UserView before = user.view();
-        repository.unlock(userId);
-        UserView after = repository.findUserById(userId).orElseThrow().view();
-        auditService.account(Actor.authenticated(principal), "ACCOUNT_UNLOCK", before, after, null);
-        return after;
-    }
-
-    @Transactional
-    UserView lock(String userId, SessionPrincipal principal) {
-        roles.lock(); roles.requireAdministrator(principal.userId());
-        if (userId.equals(principal.userId())) {
-            throw new IamException(400, "SELF_LOCK_FORBIDDEN", "不能锁定当前登录账号");
-        }
-        User user = requireUser(userId);
-        UserView before = user.view();
-        repository.lock(userId);
-        roles.guardAvailableAdministrator();
-        repository.revokeUserSessions(userId);
-        UserView after = repository.findUserById(userId).orElseThrow().view();
-        auditService.account(Actor.authenticated(principal), "ACCOUNT_LOCK", before, after, "MANUAL_ADMIN_LOCK");
         return after;
     }
 

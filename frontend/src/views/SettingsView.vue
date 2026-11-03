@@ -156,9 +156,9 @@ onMounted(initialize)
         <form v-if="editor === 'password'" class="settings-form" @submit.prevent="savePassword">
           <h2 id="settings-editor-title">修改本人密码</h2>
           <label>当前密码<PasswordField id="settings-current-password" v-model="currentPassword" autocomplete="current-password" required /></label>
-          <label>新密码<PasswordField id="settings-new-password" v-model="newPassword" autocomplete="new-password" :minlength="6" pattern="(?=.*[A-Za-z])(?=.*\d).{6,128}" required /></label>
-          <label>确认新密码<PasswordField id="settings-confirm-password" v-model="passwordConfirmation" autocomplete="new-password" :minlength="6" pattern="(?=.*[A-Za-z])(?=.*\d).{6,128}" required /></label>
-          <div class="settings-form-actions"><button :disabled="loading" type="submit">保存新密码</button><button :disabled="loading" type="button" class="secondary-button" @click="cancelEditor">取消</button></div>
+          <label>新密码<PasswordField id="settings-new-password" v-model="newPassword" autocomplete="new-password" :minlength="6" pattern="(?=.*[A-Za-z])(?=.*[0-9]).{6,128}" required /></label>
+          <label>确认新密码<PasswordField id="settings-confirm-password" v-model="passwordConfirmation" autocomplete="new-password" :minlength="6" pattern="(?=.*[A-Za-z])(?=.*[0-9]).{6,128}" required /></label>
+          <div class="settings-form-actions ui-dialog-actions"><button :disabled="loading" type="submit">保存新密码</button><button :disabled="loading" type="button" class="secondary-button" @click="cancelEditor">取消</button></div>
         </form>
 
         <form v-if="editor === 'security'" key="session-policy" class="settings-form" autocomplete="off" @submit.prevent="saveSessionPolicy">
@@ -168,13 +168,13 @@ onMounted(initialize)
           </label>
           <p id="session-duration-hint">请输入 1 至 30 天。</p>
           <p class="form-wide">用户勾选登录页的免登录选项后，会话将在此期限内保持有效；未勾选时使用普通短会话。</p>
-          <div class="settings-form-actions"><button :disabled="loading" type="submit">保存设置</button><button :disabled="loading" type="button" class="secondary-button" @click="cancelEditor">取消</button></div>
+          <div class="settings-form-actions ui-dialog-actions"><button :disabled="loading" type="submit">保存设置</button><button :disabled="loading" type="button" class="secondary-button" @click="cancelEditor">取消</button></div>
         </form>
         <form v-if="editor==='defaults'" class="settings-form" @submit.prevent="saveDefaults">
           <h2 id="settings-editor-title">用户初始密码</h2>
-          <label>默认初始密码<PasswordField id="settings-default-password" v-model="defaultPassword" autocomplete="new-password" :minlength="6" pattern="(?=.*[A-Za-z])(?=.*\d).{6,128}" /></label>
+          <label>默认初始密码<PasswordField id="settings-default-password" v-model="defaultPassword" autocomplete="new-password" :minlength="6" pattern="(?=.*[A-Za-z])(?=.*[0-9]).{6,128}" /></label>
           <p>新增用户时自动填入，可在创建时修改。密码需为6至128位，包含字母和数字；留空则不自动填入。首次登录仍需修改密码。</p>
-          <div class="settings-form-actions"><button :disabled="loading" type="submit">保存设置</button><button :disabled="loading" type="button" class="secondary-button" @click="cancelEditor">取消</button></div>
+          <div class="settings-form-actions ui-dialog-actions"><button :disabled="loading" type="submit">保存设置</button><button :disabled="loading" type="button" class="secondary-button" @click="cancelEditor">取消</button></div>
         </form>
       </dialog>
     </template>

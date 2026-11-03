@@ -14,8 +14,9 @@ class CandidateCollectionTarget implements CollectionTarget {
  private final JdbcClient jdbc;private final LaunchWorkspace work;
  CandidateCollectionTarget(JdbcClient jdbc,LaunchWorkspace work){this.jdbc=jdbc;this.work=work;}
  public String kind(){return "CANDIDATE";}
- public CollectionAdapter.Target prepare(String id){String asin=jdbc.sql("SELECT asin FROM selection_candidate WHERE id=:id").param("id",id).query(String.class).optional().orElseThrow(()->new ResponseStatusException(HttpStatus.BAD_REQUEST,"候选无可采集的ASIN"));return new CollectionAdapter.Target(kind(),id,asin,0);}
+ public CollectionAdapter.Target prepare(String id){String asin=jdbc.sql("SELECT asin FROM selection_candidate WHERE id=:id AND deleted_at IS NULL").param("id",id).query(String.class).optional().orElseThrow(()->new ResponseStatusException(HttpStatus.BAD_REQUEST,"候选无可采集的ASIN"));return new CollectionAdapter.Target(kind(),id,asin,0);}
  public String apply(CollectionAdapter.Target target,String provider,String jobId,CollectionAdapter.Observation o){
+   if(jdbc.sql("SELECT COUNT(*) FROM selection_candidate WHERE id=:id AND deleted_at IS NULL").param("id",target.id()).query(Long.class).single()==0)return "候选已删除，跳过采集结果";
    String d=work.encode(o.fields());
    if(jdbc.sql("SELECT COUNT(*) FROM launch_observation WHERE entity_id=:id").param("id",target.id()).query(Long.class).single()>0)jdbc.sql("UPDATE launch_observation SET observation_json=:d,observed_at=:t,provider=:p WHERE entity_id=:id").param("d",d).param("t",Timestamp.from(o.observedAt())).param("p",provider).param("id",target.id()).update();
    else jdbc.sql("INSERT INTO launch_observation(entity_id,observation_json,observed_at,provider) VALUES(:id,:d,:t,:p)").param("d",d).param("t",Timestamp.from(o.observedAt())).param("p",provider).param("id",target.id()).update();

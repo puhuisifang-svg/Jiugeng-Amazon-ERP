@@ -67,7 +67,7 @@ onMounted(async () => {
       <div v-if="runtimeConfig.authMode === 'mock'" class="notice login-notice">
         <strong>SYNTHETIC</strong><span>本地模拟模式，不使用真实账号或密码。</span>
       </div>
-      <p v-else>使用用户名或已绑定手机号登录。连续失败会锁定账号，首次登录必须修改初始密码。</p>
+      <p v-else>使用用户名或已绑定手机号登录。连续登录失败达到上限会停用账号，请联系管理员启用。</p>
       <form class="login-form" @submit.prevent="submit">
         <template v-if="runtimeConfig.authMode === 'mock'">
           <label for="role">选择模拟角色</label>

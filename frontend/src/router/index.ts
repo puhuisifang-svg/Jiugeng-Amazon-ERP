@@ -4,8 +4,6 @@ import AdminLayout from '@/layouts/AdminLayout.vue'
 import { session } from '@/state/session'
 import type { Capability } from '@/router/meta'
 
-const placeholder = () => import('@/views/PlaceholderView.vue')
-
 export async function refreshAccessIfStale(capabilities?: Capability[]) {
   if (session.canAccess(capabilities)) return true
   try {
@@ -21,7 +19,7 @@ export const appRoutes: RouteRecordRaw[] = [
   { path: '/login', name: 'login', component: () => import('@/views/LoginView.vue'), meta: { title: '登录', hidden: true } },
   { path: '/change-password', name: 'change-password', component: () => import('@/views/ChangePasswordView.vue'), meta: { title: '修改密码', hidden: true } },
   { path: '/forgot-password', name: 'forgot-password', component: () => import('@/views/ForgotPasswordView.vue'), meta: { title: '忘记密码', hidden: true } },
-  { path: '/forbidden', name: 'forbidden', component: placeholder, props: { description: '当前角色无权访问此页面（403）' }, meta: { title: '权限受限', hidden: true } },
+  { path: '/forbidden', name: 'forbidden', component: () => import('@/views/AccessDeniedView.vue'), meta: { title: '权限受限', hidden: true } },
   {
     path: '/',
     component: AdminLayout,
@@ -32,7 +30,7 @@ export const appRoutes: RouteRecordRaw[] = [
       { path: 'factory/reports', name: 'factory-reports', component: () => import('@/views/FactoryWorkbenchView.vue'), props: { kind: 'reports' }, meta: { title: '每日报工', group: '工厂管理', capabilities: ['factory.reports.read'], breadcrumbs: [{ title: '工厂' }, { title: '每日报工' }] } },
       { path: 'factory/payroll', name: 'factory-payroll', component: () => import('@/views/FactoryWorkbenchView.vue'), props: { kind: 'payroll' }, meta: { title: '月度工资', group: '工厂管理', capabilities: ['factory.payroll.read'], breadcrumbs: [{ title: '工厂' }, { title: '月度工资' }] } },
       { path: 'finance/bills', name: 'finance-bills', component: () => import('@/views/FinanceBillsView.vue'), meta: { title: '账单管理', group: '财务管理', capabilities: ['finance.read'], breadcrumbs: [{ title: '财务' }, { title: '账单管理' }] } },
-      { path: 'compliance/customs', name: 'customs-management', component: () => import('@/views/CustomsManagementView.vue'), meta: { title: '报关管理', group: '报关管理', capabilities: ['products.read'], breadcrumbs: [{ title: '合规' }, { title: '报关管理' }] } },
+      { path: 'compliance/customs', name: 'customs-management', component: () => import('@/views/CustomsDocumentsView.vue'), meta: { title: '报关管理', group: '报关管理', capabilities: ['products.read'], breadcrumbs: [{ title: '合规' }, { title: '报关管理' }] } },
       { path: 'customers/info', name: 'customer-info', component: () => import('@/views/CustomerManagementView.vue'), props: { kind: 'info' }, meta: { title: '客户信息', group: '客户管理', capabilities: ['customers.read'], breadcrumbs: [{ title: '客户' }, { title: '客户管理' }, { title: '客户信息' }] } },
       { path: 'customers/products', name: 'customer-products', component: () => import('@/views/CustomerManagementView.vue'), props: { kind: 'products' }, meta: { title: '客户商品', group: '客户管理', capabilities: ['customers.read'], breadcrumbs: [{ title: '客户' }, { title: '客户管理' }, { title: '客户商品' }] } },
       { path: 'customers/invoices', name: 'customer-invoices', component: () => import('@/views/OrderInvoicesView.vue'), meta: { title: '发票管理', group: '客户管理', capabilities: ['invoices.read'], breadcrumbs: [{ title: '客户' }, { title: '客户管理' }, { title: '发票管理' }] } },

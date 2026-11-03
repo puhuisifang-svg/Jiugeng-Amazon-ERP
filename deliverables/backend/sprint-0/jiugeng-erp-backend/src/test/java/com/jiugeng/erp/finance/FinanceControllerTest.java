@@ -16,7 +16,7 @@ import org.springframework.mock.web.MockMultipartFile;
 @SpringBootTest @AutoConfigureMockMvc @ActiveProfiles("test")
 class FinanceControllerTest {
  @Autowired MockMvc mvc;@Autowired JdbcTemplate jdbc;@Autowired ObjectMapper json;
- @AfterEach void clean(){jdbc.update("DELETE FROM finance_attachment");jdbc.update("DELETE FROM finance_bill");jdbc.update("DELETE FROM finance_shop");}
+ @AfterEach void clean(){jdbc.update("DELETE FROM finance_attachment");jdbc.update("DELETE FROM finance_bill");jdbc.update("DELETE FROM finance_account");jdbc.update("DELETE FROM finance_shop");}
  @Test void isolatesStoresAndCalculatesExactFilteredTotalsAndMonthlyAccounts()throws Exception{
   String token=user("ADMIN"),a=shop(token),b=shop(token);
   create(token,a,"INCOME","0.10","2026-01-01");create(token,a,"INCOME","0.20","2026-01-31");create(token,a,"EXPENSE","0.15","2026-02-01");create(token,b,"INCOME","999.00","2026-01-01");
@@ -55,8 +55,34 @@ class FinanceControllerTest {
   String csv=mvc.perform(get("/api/v1/finance/export").param("shopId",s).param("from","2026-01-01").param("to","2026-12-31").header("Authorization",token)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
   assertThat(csv).contains("金额(CNY)").contains("合成明细");assertThat(csv.lines().count()).isEqualTo(13);
  }
+ @Test void managesAccountsAndPreservesHistoricalBills()throws Exception{
+  String token=user("ADMIN"),s=shop(token),other=shop(token),denied=user("PRODUCT_MATERIAL"),id=create(token,s,"INCOME","10","2026-01-01");
+  String accountId=jdbc.queryForObject("SELECT id FROM finance_account WHERE shop_id=?",String.class,s);
+  String path="/api/v1/finance/shops/"+s+"/accounts";
+  mvc.perform(post(path).header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"合成账户\",\"active\":true}")).andExpect(status().isConflict());
+  mvc.perform(get(path).header("Authorization",denied)).andExpect(status().isForbidden());
+  var update=Map.of("name","更名账户","active",false,"version",0);
+  mvc.perform(put(path+"/"+accountId).header("Authorization",denied).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(update))).andExpect(status().isForbidden());
+  mvc.perform(put("/api/v1/finance/shops/"+other+"/accounts/"+accountId).header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(update))).andExpect(status().isNotFound());
+  mvc.perform(put(path+"/"+accountId).header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(update))).andExpect(status().isOk());
+  mvc.perform(put(path+"/"+accountId).header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(update))).andExpect(status().isConflict());
+  var in=input(s,"INCOME","20","2026-01-01");in.remove("category");in.put("version",0);
+  mvc.perform(put("/api/v1/finance/bills/"+id).header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(in))).andExpect(status().isOk()).andExpect(jsonPath("$.account").value("合成账户"));
+  in.put("account","更名账户");mvc.perform(post("/api/v1/finance/bills").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(in))).andExpect(status().isBadRequest());
+  in.put("shopId",other);in.put("account","合成账户");mvc.perform(post("/api/v1/finance/bills").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(in))).andExpect(status().isOk()).andExpect(jsonPath("$.category").value(""));
+ }
+ @Test void createsShopAndAccountsAtomically()throws Exception{
+  String token=user("ADMIN"),name="合成批量店铺"+UUID.randomUUID();
+  var in=Map.of("name",name,"active",true,"accounts",List.of("合成甲","合成乙"));
+  String id=json.readTree(mvc.perform(post("/api/v1/finance/shops").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(in))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("id").asText();
+  mvc.perform(get("/api/v1/finance/shops/"+id+"/accounts").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(2));
+  String duplicate="合成重复店铺"+UUID.randomUUID();
+  mvc.perform(post("/api/v1/finance/shops").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("name",duplicate,"active",true,"accounts",List.of("合成甲"," 合成甲 "))))).andExpect(status().isBadRequest());
+  assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM finance_shop WHERE name=?",Integer.class,duplicate)).isZero();
+  assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM finance_account",Integer.class)).isEqualTo(2);
+ }
  private Map<String,Object> input(String s,String d,String a,String date){return new HashMap<>(Map.of("shopId",s,"date",date,"direction",d,"category","测试分类","detail","合成明细","account","合成账户","amount",a,"remark",""));}
  private String create(String token,String s,String d,String a,String date)throws Exception{return json.readTree(mvc.perform(post("/api/v1/finance/bills").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(input(s,d,a,date)))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("id").asText();}
- private String shop(String token)throws Exception{return json.readTree(mvc.perform(post("/api/v1/finance/shops").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("name","合成店铺"+UUID.randomUUID(),"active",true)))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("id").asText();}
+ private String shop(String token)throws Exception{String id=json.readTree(mvc.perform(post("/api/v1/finance/shops").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("name","合成店铺"+UUID.randomUUID(),"active",true)))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("id").asText();mvc.perform(post("/api/v1/finance/shops/"+id+"/accounts").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("name","合成账户","active",true)))).andExpect(status().isOk());return id;}
  private String user(String role)throws Exception{String id=UUID.randomUUID().toString(),password="Synthetic-Finance-42!";jdbc.update("INSERT INTO iam_user(id,login_name,display_name,password_hash,role,status,must_change_password) VALUES(?,?,?,?,?,'ENABLED',FALSE)",id,id,"Synthetic finance QA",new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder().encode(password),role);jdbc.update("INSERT INTO iam_user_role(user_id,role_id) SELECT id,role FROM iam_user WHERE id=?",id);return "Bearer "+json.readTree(mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("loginName",id,"password",password)))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("token").asText();}
 }

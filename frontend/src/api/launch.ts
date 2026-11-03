@@ -10,7 +10,7 @@ export const launchApi = (development: boolean) => {
   const base = development ? '/v1/development/workbench' : '/v1/selection/workbench'
   return {
     list: (q: string, state: string, page: number, size: number) => apiRequest<{items: LaunchItem[]; total: number}>(base + '?' + new URLSearchParams({q,state,page:String(page-1),size:String(size)})),
-    get: (id: string) => apiRequest<{workspace: Workspace | Record<string, never>; legacy: Record<string, unknown>}>(`${base}/${id}`),
+    get: (id: string) => apiRequest<{workspace: Workspace | Record<string, never>; hasDevelopment?:boolean; legacy: Record<string, unknown>}>(`${base}/${id}`),
     initialize: (id: string) => apiRequest<Workspace>(`${base}/${id}/initialize`,{method:'POST'}),
     create: (input: Record<string,string>) => apiRequest<{id:string}>(base,{method:'POST',body:JSON.stringify(input)}),
     save: (id: string, version: number, document: Document) => apiRequest<Workspace>(`${base}/${id}`,{method:'PUT',body:JSON.stringify({version,document})}),

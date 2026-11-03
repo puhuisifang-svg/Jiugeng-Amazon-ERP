@@ -82,7 +82,7 @@ async function save() { if (busy.value) return; busy.value = true; error.value =
           {{ error }}
         </p>
       </div>
-      <footer class="cost-sheet__footer">
+      <footer class="ui-dialog-actions cost-sheet__footer">
         <button
           class="cost-button"
           type="button"

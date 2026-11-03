@@ -34,7 +34,7 @@ onBeforeUnmount(() => { dialog.value?.close(); previousFocus?.focus() })
     <p :id="`${id}-message`">
       {{ message }}
     </p>
-    <footer>
+    <footer class="ui-dialog-actions">
       <button
         type="button"
         class="unsaved-discard"

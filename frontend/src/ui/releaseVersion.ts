@@ -12,3 +12,9 @@ export async function hasNewRelease(current: string, fetcher: typeof fetch = fet
   const next = moduleEntry(await response.text(), window.location.origin)
   return next !== null && next !== current
 }
+
+export function freshPageUrl(href: string): string {
+  const url = new URL(href)
+  url.searchParams.set('_release', String(Date.now()))
+  return url.href
+}

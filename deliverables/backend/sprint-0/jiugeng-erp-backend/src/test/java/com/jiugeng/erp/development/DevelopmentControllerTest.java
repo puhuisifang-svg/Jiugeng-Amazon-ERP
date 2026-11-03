@@ -20,7 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest @AutoConfigureMockMvc @ActiveProfiles("test")
 class DevelopmentControllerTest {
-    @Autowired MockMvc mvc; @Autowired ObjectMapper json; @Autowired JdbcTemplate jdbc;
+    @Autowired DevelopmentWorklist worklist; @Autowired MockMvc mvc; @Autowired ObjectMapper json; @Autowired JdbcTemplate jdbc;
     String admin, selector, productUser;
     @BeforeEach void setup() throws Exception {
         jdbc.update("DELETE FROM product_development");
@@ -28,6 +28,27 @@ class DevelopmentControllerTest {
         jdbc.update("DELETE FROM selection_candidate_evidence"); jdbc.update("DELETE FROM selection_candidate_note");
         jdbc.update("DELETE FROM selection_candidate_tag"); jdbc.update("DELETE FROM selection_candidate");
         admin=user("ADMIN"); selector=user("SELECTION"); productUser=user("PRODUCT_MATERIAL");
+    }
+
+    @Test void deleteHidesProjectAndProductionWorklistButKeepsCandidateAndHistory() throws Exception {
+        String id=candidate();approve(id);String base="/api/v1/development/workbench/"+id;
+        mvc.perform(post(base+"/initialize").header("Authorization",admin)).andExpect(status().isOk());
+        assertThat(worklist.pending().items()).extracting(DevelopmentWorklist.Item::id).contains(id);
+        mvc.perform(delete(base).param("version","0")).andExpect(status().isUnauthorized());
+        mvc.perform(delete(base).param("version","0").header("Authorization",selector)).andExpect(status().isForbidden());
+        mvc.perform(delete(base).param("version","1").header("Authorization",admin)).andExpect(status().isConflict());
+        mvc.perform(delete(base).param("version","0").header("Authorization",admin)).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/development/workbench").header("Authorization",admin)).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
+        mvc.perform(get("/api/v1/product-development").header("Authorization",admin)).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
+        mvc.perform(get(base).header("Authorization",admin)).andExpect(status().isNotFound());
+        mvc.perform(post(base+"/initialize").header("Authorization",admin)).andExpect(status().isNotFound());
+        mvc.perform(put(base).header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content("{\"version\":0,\"document\":{}}")).andExpect(status().isNotFound());
+        mvc.perform(delete(base).param("version","0").header("Authorization",admin)).andExpect(status().isNotFound());
+        assertThat(worklist.pending().items()).extracting(DevelopmentWorklist.Item::id).doesNotContain(id);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product_development WHERE id=? AND deleted_at IS NOT NULL",Long.class,id)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM launch_workspace WHERE kind='DEVELOPMENT' AND entity_id=?",Long.class,id)).isEqualTo(1);
+        mvc.perform(get("/api/v1/selection/workbench/"+id).header("Authorization",admin)).andExpect(status().isOk()).andExpect(jsonPath("$.hasDevelopment").value(false));
+        assertThat(jdbc.queryForObject("SELECT status FROM selection_candidate WHERE id=?",String.class,id)).isEqualTo("APPROVED");
     }
 
     @Test void approvalCreatesOneDraftSnapshotAndDoesNotGrantSelectionWrite() throws Exception {

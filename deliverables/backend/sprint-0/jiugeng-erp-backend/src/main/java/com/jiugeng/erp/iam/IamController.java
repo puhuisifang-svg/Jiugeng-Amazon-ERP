@@ -115,18 +115,6 @@ class IamController {
         return service.setRole(userId, request.role(), principal);
     }
 
-    @PostMapping("/users/{userId}/unlock")
-    @PreAuthorize("hasAuthority('system.users.manage')")
-    UserView unlock(@PathVariable String userId, @AuthenticationPrincipal SessionPrincipal principal) {
-        return service.unlock(userId, principal);
-    }
-
-    @PostMapping("/users/{userId}/lock")
-    @PreAuthorize("hasAuthority('system.users.manage')")
-    UserView lock(@PathVariable String userId, @AuthenticationPrincipal SessionPrincipal principal) {
-        return service.lock(userId, principal);
-    }
-
     @GetMapping("/settings/security")
     @PreAuthorize("hasAuthority('system.users.manage')")
     LoginSettingsResponse securitySettings() {

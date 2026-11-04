@@ -47,11 +47,24 @@ class ProductCustomsService {
         int from=Math.min(page*size,filtered.size());
         return new Page(filtered.subList(from,Math.min(from+size,filtered.size())),filtered.size(),page,size);
     }
+    private CustomsProfile structured(CustomsProfile value){
+        if(value.elements()==null)return value;
+        var schema=value.elementFields()==null?com.jiugeng.erp.hs.DeclarationSchema.LEGACY:com.jiugeng.erp.hs.DeclarationSchema.validate(value.elementFields());
+        if(value.elementFields()!=null&&!Objects.equals(value.chinaCode(),value.schemaCode()))throw new ProductException(400,"CUSTOMS_SCHEMA_MISMATCH","HS编码已变化，请等待申报要素查询成功后再保存");
+        Set<String> allowed=new HashSet<>();for(var f:schema)allowed.add(f.key());
+        if(!allowed.containsAll(value.elements().keySet()))throw new ProductException(400,"CUSTOMS_ELEMENTS_INVALID","申报要素字段无效");
+        var fields=new LinkedHashMap<String,String>();
+        for(var f:schema){String v=Objects.toString(value.elements().get(f.key()),"").trim();if(v.length()>(f.key().equals("other")?8000:1000)||v.chars().anyMatch(c->Character.isISOControl(c)&&c!='\n'&&c!='\r'&&c!='\t'))throw new ProductException(400,"CUSTOMS_ELEMENTS_INVALID","申报要素内容过长或格式无效");fields.put(f.key(),v);}
+        String text=com.jiugeng.erp.hs.DeclarationSchema.serialize(schema,fields);if(text.length()>16000)throw new ProductException(400,"CUSTOMS_ELEMENTS_INVALID","申报要素总长度不能超过16000字");
+        try{var node=JSON.valueToTree(value);((com.fasterxml.jackson.databind.node.ObjectNode)node).set("elements",JSON.valueToTree(fields));((com.fasterxml.jackson.databind.node.ObjectNode)node).put("declarationElements",text);return JSON.treeToValue(node,CustomsProfile.class);}catch(JsonProcessingException e){throw new IllegalStateException(e);}
+    }
     @Transactional
     CustomsProfile save(String variantId,CustomsProfile value,AuthenticatedActor actor) {
+        value=structured(value);
         if(value.netWeightKg()!=null && value.grossWeightKg()!=null && value.netWeightKg().compareTo(value.grossWeightKg())>0)
             throw new ProductException(400,"CUSTOMS_WEIGHT_INVALID","毛重不能小于净重");
-        if(value.state()==CustomsProfile.State.REVIEWED && java.util.stream.Stream.of(value.nameZh(),value.nameEn(),value.composition(),value.usage(),value.originCountry(),value.unit(),value.chinaCode(),value.declarationElements()).anyMatch(v->v==null||v.isBlank()))
+        if(value.elements()!=null&&value.state()==CustomsProfile.State.REVIEWED&&java.util.stream.Stream.of(value.nameZh(),value.chinaCode()).anyMatch(v->v==null||v.isBlank()))throw new ProductException(400,"CUSTOMS_REVIEW_INCOMPLETE","标记资料已核对前，请填写HS和品名");
+        if(value.elements()==null && value.state()==CustomsProfile.State.REVIEWED && java.util.stream.Stream.of(value.nameZh(),value.nameEn(),value.composition(),value.usage(),value.originCountry(),value.unit(),value.chinaCode(),value.declarationElements()).anyMatch(v->v==null||v.isBlank()))
             throw new ProductException(400,"CUSTOMS_REVIEW_INCOMPLETE","标记资料已核对前，请填写中英文品名、材质、用途、原产国、申报单位、中国商品编码及申报要素");
         var old=jdbc.sql("SELECT customs_data,customs_version FROM product_variant WHERE id=:id AND deleted_at IS NULL FOR UPDATE").param("id",variantId)
             .query((r,n)->new Stored(r.getString(1),r.getLong(2))).optional().orElseThrow(()->new ProductException(404,"CUSTOMS_SKU_NOT_FOUND","SKU不存在"));

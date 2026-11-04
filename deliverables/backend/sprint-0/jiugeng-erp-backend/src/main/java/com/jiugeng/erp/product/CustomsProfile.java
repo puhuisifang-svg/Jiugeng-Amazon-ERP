@@ -15,9 +15,13 @@ record CustomsProfile(
     @Pattern(regexp="^$|[0-9]{10}") String usCode,
     @Pattern(regexp="^$|[0-9]{8}|[0-9]{10}") String euCode,
     @Pattern(regexp="^$|[0-9]{10}") String ukCode,
-    @Size(max=4000) String declarationElements,
+    @Size(max=16000) String declarationElements,
     @Size(max=2000) String complianceNotes,
     @Size(max=1000) String remark,
+    @Size(max=40) java.util.Map<@Size(max=40) String,@Size(max=8000) String> elements,
+    @Size(max=40) java.util.List<com.jiugeng.erp.hs.DeclarationSchema.Field> elementFields,
+    @Pattern(regexp="^$|[0-9]{10}") String schemaCode,
+    @Size(max=100) String measurementUnit,
     @NotNull State state, @NotNull @Min(0) Long version) {
     enum State { DRAFT, REVIEWED }
 }

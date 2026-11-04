@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import ProductForm from './ProductForm.vue'
+import { blankCustoms } from '@/api/customs'
 import { catalogApi } from '@/api/catalog'
 
 describe('ProductForm', () => {
@@ -57,14 +58,28 @@ describe('ProductForm', () => {
   })
 
   it('submits customs with the SKU aggregate and preserves edits across tabs', async () => {
-    const wrapper = mount(ProductForm, { props: { submitLabel: '创建产品', initial: { productCode: 'SYN-P', productName: '合成父体', status: 'DRAFT', variants: [{ skuCode: 'SYN-S', variantName: '合成子体', status: 'DRAFT', suppliers: [], materials: [] }] } } })
+    const wrapper = mount(ProductForm, { props: { submitLabel: '创建产品', initial: { productCode: 'SYN-P', productName: '合成父体', status: 'DRAFT', variants: [{ skuCode: 'SYN-S', variantName: '合成子体', status: 'DRAFT', suppliers: [], materials: [], customs:{...blankCustoms(),elements:{other:'旧资料'}} }] } } })
     await wrapper.findAll('.product-editor-tabs button').find(button => button.text() === '报关资料')!.trigger('click')
     const fields = wrapper.findAll('.customs-fields label')
-    await fields.find(label => label.text().startsWith('英文申报品名'))!.get('input').setValue('Synthetic pouch')
-    await fields.find(label => label.text().startsWith('申报要素'))!.get('textarea').setValue('合成材质：示例')
+    await fields.find(label => label.text().startsWith('品名'))!.get('input').setValue('Synthetic pouch')
+    await fields.find(label => label.text().startsWith('其他'))!.get('textarea').setValue('合成材质：示例')
     await wrapper.findAll('.product-editor-tabs button').find(button => button.text() === '基础信息')!.trigger('click')
     await wrapper.get('form').trigger('submit')
-    expect(wrapper.emitted('submit')?.[0]?.[0]).toMatchObject({ variants: [{ customs: { nameEn: 'Synthetic pouch', declarationElements: '合成材质：示例', state: 'DRAFT', version: 0 } }] })
+    expect(wrapper.emitted('submit')?.[0]?.[0]).toMatchObject({ variants: [{ customs: { nameZh: 'Synthetic pouch', elements: {other:'合成材质：示例'}, state: 'DRAFT', version: 0 } }] })
+    wrapper.unmount()
+  })
+
+  it('saves a focused SKU after editing dynamic customs fields without cloning reactive proxies', async () => {
+    const customs={...blankCustoms(),chinaCode:'6307909000',schemaCode:'6307909000',nameZh:'合成品名',measurementUnit:'千克/个',elementFields:[{key:'brandType',label:'品牌类型'},{key:'articleNumber',label:'货号'}],elements:{brandType:'',articleNumber:''}}
+    const wrapper=mount(ProductForm,{props:{submitLabel:'保存',focusVariantId:'v1',initial:{productCode:'SYN',productName:'合成父体',status:'ACTIVE',variants:[{id:'v1',skuCode:'SYN-1',variantName:'合成子体',status:'ACTIVE',suppliers:[],materials:[],customs},{id:'v2',skuCode:'SYN-2',variantName:'其他子体',status:'ACTIVE',suppliers:[],materials:[]}]}}})
+    await wrapper.findAll('.product-editor-tabs button').find(b=>b.text()==='报关资料')!.trigger('click')
+    await wrapper.findAll('.customs-fields label').find(l=>l.text()==='品牌类型')!.get('input').setValue('无品牌')
+    await wrapper.findAll('.customs-fields label').find(l=>l.text()==='货号')!.get('input').setValue('SYN-ARTICLE')
+    await wrapper.findAll('.customs-fields label').find(l=>l.text().startsWith('资料状态'))!.get('select').setValue('REVIEWED')
+    await wrapper.get('form').trigger('submit');await flushPromises()
+    const saved=wrapper.emitted('submit')?.[0]?.[0]
+    expect(saved).toMatchObject({variants:[{id:'v1',customs:{schemaCode:'6307909000',state:'REVIEWED',elements:{brandType:'无品牌',articleNumber:'SYN-ARTICLE'},elementFields:customs.elementFields}},{id:'v2',skuCode:'SYN-2'}]})
+    expect(()=>structuredClone(saved)).not.toThrow()
     wrapper.unmount()
   })
 

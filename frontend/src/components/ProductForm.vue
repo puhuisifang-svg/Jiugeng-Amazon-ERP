@@ -2,7 +2,7 @@
 import SingleFileUpload from '@/components/SingleFileUpload.vue'
 import { vSingleSelect } from '@/directives/singleSelect'
 import ProductNameEditor from './ProductNameEditor.vue'
-import { computed, nextTick, onMounted, reactive, ref, toRaw } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { catalogApi } from '@/api/catalog'
 import { domainApi, type InventoryBalanceViewDto, type MaterialDetailDto, type ProductInput, type ProductVariantInput, type SupplierDto } from '@/api/domain'
@@ -68,6 +68,13 @@ async function loadReferences() {
     if (failed.length) referenceError.value = `${failed.join('、')}资料加载失败，请重试；已有关联资料保留。`
   } finally { loadingReferences.value = false }
 }
+// Child v-model updates can nest reactive arrays inside otherwise plain form objects.
+// Copy the JSON-shaped API data recursively, preserving optional undefined properties.
+function copyFormValue<T>(value: T): T {
+  if (Array.isArray(value)) return value.map(item => copyFormValue(item)) as T
+  if (value !== null && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, copyFormValue(item)])) as T
+  return value
+}
 async function submit(event: Event) {
   if (props.busy || uploading.value !== null) return
   const form = event.target as HTMLFormElement
@@ -81,7 +88,7 @@ async function submit(event: Event) {
     }
     await nextTick(); invalid.reportValidity(); invalid.focus(); return
   }
-  const input = structuredClone(toRaw(model))
+  const input = copyFormValue(model)
   for (const variant of input.variants) {
     if (variant.customs) variant.customs = customsInput(variant.customs)
     for (const key of ['itemLengthCm', 'itemWidthCm', 'itemHeightCm', 'packageLengthCm', 'packageWidthCm', 'packageHeightCm', 'packageWeightGrams'] as const) {

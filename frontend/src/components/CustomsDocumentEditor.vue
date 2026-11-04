@@ -1,43 +1,66 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import AccessDialog from './AccessDialog.vue'
 import DatePicker from './DatePicker.vue'
 import TableViewport from './TableViewport.vue'
 import ListPagination from './ListPagination.vue'
+import { vSingleSelect } from '@/directives/singleSelect'
+import { customsShippersApi, type CustomsShipper } from '@/api/customsDocuments'
 import { customsDocumentsApi, type CustomsDocument, type CustomsInput } from '@/api/customsDocuments'
-import { customsApi, type CustomsRow } from '@/api/customs'
-import { headerGroups, transportGroups, itemFields, blankItem, missingFields } from '@/ui/customsDocumentFields'
+import { documentElementFields, profileFields, profileElements, serializeElements, customsApi, type CustomsRow } from '@/api/customs'
+import { brokerFields, shipmentDefaults, type DocumentField, customsSheetFields, fixedReceiver, contractNumber, cartonTotal, itemFields, blankItem, missingFields } from '@/ui/customsDocumentFields'
 import { confirmAction } from '@/state/uiConfirmation'
 const props=defineProps<{document?:CustomsDocument|undefined;copy?:boolean;writable:boolean;exportable:boolean}>()
 const emit=defineEmits<{close:[];saved:[CustomsDocument]}>()
 const source=props.document,localDate=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
 const form=ref<CustomsInput>({documentNo:props.copy?'':source?.documentNo??'',status:props.copy?'DRAFT':source?.status==='READY'?'READY':'DRAFT',fields:source?{...source.fields}:{date:localDate()},items:source?source.items.map(r=>({...r})):[],version:props.copy?undefined:source?.version})
-const savedId=ref(props.copy?undefined:source?.id),initial=ref(JSON.stringify(form.value)),tab=ref('basic'),busy=ref(false),error=ref(''),notice=ref(''),dialog=ref<InstanceType<typeof AccessDialog>>()
+const savedId=ref(props.copy?undefined:source?.id),initial=ref(JSON.stringify(form.value)),tab=ref('declaration'),busy=ref(false),error=ref(''),notice=ref(''),dialog=ref<InstanceType<typeof AccessDialog>>()
 const readOnly=computed(()=>!props.writable||(!props.copy&&source?.status==='VOID')),dirty=computed(()=>JSON.stringify(form.value)!==initial.value),missing=computed(()=>missingFields(form.value.fields,form.value.items))
-const tabs=[['basic','单证与收发货人'],['transport','运输与申报'],['items','商品与装箱'],['review','导出检查']]
-const activeGroups=computed(()=>tab.value==='basic'?headerGroups:transportGroups)
+const tabs=[['declaration','报关单'],['elements','申报要素'],['contract','合同'],['invoice','发票'],['packing','装箱单']]
+const sheetFields=computed(()=>customsSheetFields[tab.value]??[])
+const totals=computed(()=>cartonTotal(form.value.items))
+const sheetTitle=computed(()=>({declaration:'中华人民共和国海关出口货物报关单',elements:'申报要素',contract:'合同 / CONTRACT',invoice:'发票 / INVOICE',packing:'装箱单 / PACKING LIST'} as Record<string,string>)[tab.value])
+const shippers=ref<CustomsShipper[]>([]),shipperId=ref(source?.fields.shipperId??''),shipperOpen=ref(false),shipperBusy=ref(false),shipperError=ref(''),shipperLoadError=ref('')
+const shipperDraft=ref({name:'',prefix:'',address:'',phone:'',fax:''})
+const shipperEditing=ref(''),shipperInitial=ref('')
+const showChecks=ref(false)
+async function loadShippers(){shipperLoadError.value='';try{shippers.value=await customsShippersApi.list();if(!shipperId.value&&form.value.fields.seller)shipperId.value=shippers.value.find(s=>s.name===form.value.fields.seller)?.id??''}catch(e){shipperLoadError.value=message(e)}}
+function chooseShipper(){const s=shippers.value.find(s=>s.id===shipperId.value);if(!s)return;Object.assign(form.value.fields,{shipperId:s.id,seller:s.name,sellerPrefix:s.prefix,sellerAddress:s.address,sellerPhone:s.phone,sellerFax:s.fax});}
+function editShipper(){const s=shippers.value.find(s=>s.id===shipperId.value);if(!s)return;const {id,...draft}=s;shipperEditing.value=id;shipperDraft.value={...draft};shipperInitial.value=JSON.stringify(shipperDraft.value);shipperError.value='';shipperOpen.value=true}
+function newShipper(){shipperEditing.value='';shipperDraft.value={name:'',prefix:'',address:'',phone:'',fax:''};shipperInitial.value=JSON.stringify(shipperDraft.value);shipperError.value='';shipperOpen.value=true}
+async function addShipper(){shipperBusy.value=true;shipperError.value='';try{const s=shipperEditing.value?await customsShippersApi.update(shipperEditing.value,shipperDraft.value):await customsShippersApi.add(shipperDraft.value);shippers.value=shipperEditing.value?shippers.value.map(row=>row.id===s.id?s:row):[...shippers.value,s];shipperId.value=s.id;chooseShipper();shipperOpen.value=false}catch(e){shipperError.value=message(e)}finally{shipperBusy.value=false}}
+const automatic=(key:string)=>['seller','buyer','producer','contractNo','orderNo','cartonsTotal','invoiceNo','currency'].includes(key)
+if(!source||props.copy){for(const [key,value] of Object.entries(shipmentDefaults))if(!form.value.fields[key]?.trim())form.value.fields[key]=value;form.value.fields.currency='USD';form.value.fields.invoiceNo=form.value.documentNo;form.value.fields.ruleVersion='2';form.value.fields.buyer=fixedReceiver;form.value.fields.date=localDate();if(props.copy){form.value.fields.fbaNo='';form.value.fields.contractNo='';form.value.fields.orderNo=''}}
+// Existing documents keep their stored values until edited; new rules apply on the next save.
+watch(()=>[form.value.fields.seller,form.value.fields.sellerPrefix,form.value.fields.date,form.value.fields.fbaNo],()=>{if(readOnly.value)return;form.value.fields.producer=form.value.fields.seller??'';form.value.fields.buyer=fixedReceiver;form.value.fields.ruleVersion='2';const no=contractNumber(form.value.fields);form.value.fields.contractNo=no;form.value.fields.orderNo=no;if(!savedId.value)form.value.documentNo=no;},{flush:'sync'})
+initial.value=JSON.stringify(form.value)
+watch(()=>form.value.documentNo,no=>{if(readOnly.value)return;form.value.fields.invoiceNo=no;form.value.fields.currency='USD'},{immediate:true,flush:'sync'})
+const lineFields=computed<DocumentField[]>(()=>['1','2'].includes(item.value?.elementsVersion??'')?[...itemFields.filter(f=>f.key!=='declarationElements'),...documentElementFields(item.value!).map(([key,label])=>({key,label,type:key==='other'?'textarea' as const:undefined,required:false}))]:itemFields)
+const itemColumns=computed(()=>({declaration:['sku','hsCode','name','quantity','unit','price','amount','origin','destination','sourcePlace','exemption'],elements:['sku','hsCode','name','declarationElements'],contract:['name','sku','quantity','unit','price','amount'],invoice:['name','sku','quantity','unit','price','amount'],packing:['cartonNo','name','sku','cartons','quantity','unit','grossWeight','netWeight']} as Record<string,string[]>)[tab.value]??[])
+const columnLabel=(key:string)=>key==='amount'?'总金额':itemFields.find(f=>f.key===key)?.label??key
 const money=(n:number)=>Number.isFinite(n)?n.toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'
 const total=computed(()=>form.value.items.reduce((sum,r)=>sum+Math.round(Number(r.quantity||0)*Number(r.price||0)*100)/100,0))
 const item=ref<Record<string,string>>(),itemIndex=ref(-1),itemInitial=ref(''),itemError=ref(''),itemDialog=ref<InstanceType<typeof AccessDialog>>()
 const itemDirty=computed(()=>!!item.value && !readOnly.value && JSON.stringify(item.value)!==itemInitial.value)
 function editItem(index:number){itemIndex.value=index;item.value=index<0?blankItem():{...form.value.items[index]};itemInitial.value=JSON.stringify(item.value);itemError.value=''}
-function keepItem(){if(!item.value)return;if(!item.value.sku?.trim()||!item.value.name?.trim()){itemError.value='请至少填写 SKU 和中文申报品名，其余资料可先存草稿。';return}if(itemIndex.value<0)form.value.items.push({...item.value});else form.value.items[itemIndex.value]={...item.value};item.value=undefined}
+function keepItem(){if(!item.value)return;if(!item.value.sku?.trim()||!item.value.name?.trim()){itemError.value='请至少填写 SKU 和中文申报品名，其余资料可先存草稿。';return}if(['1','2'].includes(item.value.elementsVersion??''))item.value.declarationElements=serializeElements(item.value,documentElementFields(item.value));if(itemIndex.value<0)form.value.items.push({...item.value});else form.value.items[itemIndex.value]={...item.value};item.value=undefined}
 async function removeItem(index:number){if(await confirmAction('从本票单据移除这项商品？产品资料不会删除。'))form.value.items.splice(index,1)}
 const picker=ref(false),query=ref(''),pickerPage=ref(1),pickerSize=ref(10),pickerRows=ref<CustomsRow[]>([]),pickerTotal=ref(0),pickerLoading=ref(false),pickerError=ref(''),selected=ref<CustomsRow[]>([])
 let request=0
 async function loadPicker(){const seq=++request;pickerLoading.value=true;pickerError.value='';try{const r=await customsApi.list(query.value,'',pickerPage.value-1,pickerSize.value);if(seq===request){pickerRows.value=r.items;pickerTotal.value=r.totalCount}}catch(e){if(seq===request)pickerError.value=message(e)}finally{if(seq===request)pickerLoading.value=false}}
 function openPicker(){picker.value=true;selected.value=[];query.value='';pickerPage.value=1;void loadPicker()}
 function select(row:CustomsRow){selected.value=selected.value.some(r=>r.variantId===row.variantId)?selected.value.filter(r=>r.variantId!==row.variantId):[...selected.value,row]}
-function addSelected(){for(const row of selected.value){const c=row.customs;form.value.items.push({...blankItem(),variantId:row.variantId,sku:row.skuCode,name:c?.nameZh??'',nameEn:c?.nameEn??'',hsCode:c?.chinaCode??'',unit:c?.unit??'',origin:c?.originCountry??'',declarationElements:c?.declarationElements??''})}picker.value=false;tab.value='items'}
+function addSelected(){for(const row of selected.value){const c=row.customs;form.value.items.push({...blankItem(),variantId:row.variantId,sku:row.skuCode,name:c?.nameZh??'',nameEn:c?.nameEn??'',hsCode:c?.chinaCode??'',unit:c?.unit??'',origin:c?.originCountry??'',...(c?{...profileElements(c),elementsVersion:c.elementFields?'2':'1',elementFields:JSON.stringify(c.elementFields??[]),schemaCode:c.schemaCode??'',measurementUnit:c.measurementUnit??'',declarationElements:serializeElements(profileElements(c),profileFields(c))}:{} )})}picker.value=false}
 function message(e:unknown){return e instanceof Error?e.message:'操作失败，请重试'}
-async function save(){if(busy.value||readOnly.value)return;busy.value=true;error.value='';try{const d=await customsDocumentsApi.save(form.value,savedId.value);savedId.value=d.id;form.value.version=d.version;initial.value=JSON.stringify(form.value);notice.value='单据已保存';emit('saved',d)}catch(e){error.value=message(e)}finally{busy.value=false}}
-async function exportFile(){if(!savedId.value||busy.value||dirty.value)return;busy.value=true;error.value='';try{await customsDocumentsApi.export(savedId.value,form.value.documentNo);notice.value='五张报关单证已导出'}catch(e){error.value=message(e);tab.value='review'}finally{busy.value=false}}
+async function save(){if(busy.value||readOnly.value)return;busy.value=true;error.value='';try{const d=await customsDocumentsApi.save(form.value,savedId.value);savedId.value=d.id;form.value={documentNo:d.documentNo,status:d.status==='READY'?'READY':'DRAFT',fields:{...d.fields},items:d.items.map(r=>({...r})),version:d.version};initial.value=JSON.stringify(form.value);notice.value='单据已保存';emit('saved',d)}catch(e){error.value=message(e)}finally{busy.value=false}}
+async function exportFile(){if(!savedId.value||busy.value||dirty.value)return;busy.value=true;error.value='';try{await customsDocumentsApi.export(savedId.value,form.value.documentNo);notice.value='五张报关单证已导出'}catch(e){error.value=message(e);showChecks.value=true}finally{busy.value=false}}
 function beforeUnload(e:BeforeUnloadEvent){if(dirty.value||itemDirty.value){e.preventDefault();e.returnValue=''}}
-onMounted(()=>window.addEventListener('beforeunload',beforeUnload));onBeforeUnmount(()=>{++request;window.removeEventListener('beforeunload',beforeUnload)})
+onMounted(()=>{window.addEventListener('beforeunload',beforeUnload);void loadShippers()});onBeforeUnmount(()=>{++request;window.removeEventListener('beforeunload',beforeUnload)})
 onBeforeRouteLeave(()=>{if(busy.value)return false;if(itemDirty.value){itemDialog.value?.requestClose();return false}if(dirty.value){dialog.value?.requestClose();return false}return true})
 </script>
 <template>
+  <!-- eslint-disable vue/max-attributes-per-line, vue/singleline-html-element-content-newline -->
   <AccessDialog
     ref="dialog"
     :title="readOnly?'报关单据详情':savedId?'编辑报关单据':'新建报关单据'"
@@ -59,7 +82,7 @@ onBeforeRouteLeave(()=>{if(busy.value)return false;if(itemDirty.value){itemDialo
         :aria-pressed="tab===key"
         @click="tab=key!"
       >
-        {{ label }}<span v-if="key==='review' && missing.length">（{{ missing.length }}）</span>
+        {{ label }}
       </button>
     </div>
     <p
@@ -75,140 +98,37 @@ onBeforeRouteLeave(()=>{if(busy.value)return false;if(itemDirty.value){itemDialo
     >
       {{ notice }}
     </p>
-    <fieldset
-      v-if="tab==='basic' || tab==='transport'"
-      :disabled="busy || readOnly"
-      class="customs-fields"
-    >
-      <label
-        v-if="tab==='basic'"
-        class="document-number"
-      >单据编号 <span class="required">*</span><input
-        v-model="form.documentNo"
-        maxlength="128"
-        placeholder="用于查找本票资料，不替代合同号或发票号"
-      ></label>
-      <section
-        v-for="group in activeGroups"
-        :key="group.name"
-        class="customs-form-section"
-      >
-        <h3>{{ group.name }}</h3><div class="customs-form-grid">
-          <label
-            v-for="f in group.fields"
-            :key="f.key"
-            :class="{wide:f.type==='textarea'}"
-          >{{ f.label }}<span
-            v-if="f.required"
-            class="required"
-          > *</span><DatePicker
-            v-if="f.type==='date'"
-            v-model="form.fields[f.key]"
-            type="date"
-            :disabled="busy || readOnly"
-          /><textarea
-            v-else-if="f.type==='textarea'"
-            v-model="form.fields[f.key]"
-            maxlength="4000"
-            rows="2"
-          /><input
-            v-else
-            v-model="form.fields[f.key]"
-            maxlength="4000"
-          ></label>
+    <div class="customs-paper">
+      <header class="customs-paper-heading"><h2>{{ sheetTitle }}</h2><span>五张单证共享资料，修改后同步更新</span></header>
+      <fieldset class="customs-fields" :disabled="busy || readOnly">
+        <div v-if="tab==='declaration'" class="customs-paper-meta"><label>单证日期<DatePicker v-model="form.fields.date" type="date" :disabled="busy || readOnly" /></label><label>公司简称<input v-model="form.fields.sellerPrefix" maxlength="20" placeholder="例如 XMH" aria-label="公司简称"></label><label class="document-number">单据编号<input v-model="form.documentNo" maxlength="128" placeholder="按合同号生成，可先存草稿"></label></div>
+        <div class="customs-sheet-grid" :class="{'declaration-grid':tab==='declaration'}">
+          <label v-for="f in sheetFields" :key="f.key" :class="{['field-'+f.key]:true,wide:f.type==='textarea', 'party-cell':['seller','buyer','producer'].includes(f.key)}">
+            <span>{{ f.label }}<span v-if="['grossWeight','netWeight'].includes(f.key)" class="customs-required" aria-label="必填"> *</span><em v-if="brokerFields.has(f.key)" class="broker-hint">免填写 · 报关行填写</em><em v-else-if="automatic(f.key)"> {{ ['buyer','currency'].includes(f.key)?'固定':f.key==='seller'?'档案选择':'自动' }}</em></span>
+            <div v-if="f.key==='seller'" class="customs-shipper-control"><select v-model="shipperId" v-single-select aria-label="境内发货人" @change="chooseShipper"><option value="">{{ form.fields.seller || '请选择发货人' }}</option><option v-for="s in shippers" :key="s.id" :value="s.id">{{ s.name }}</option></select><button v-if="!readOnly" type="button" @click="newShipper">＋ 新增</button><button v-if="!readOnly && shipperId" type="button" class="text-action" @click="editShipper">编辑</button></div>
+            <input v-else-if="brokerFields.has(f.key)" :value="form.fields[f.key]" disabled placeholder="免填写" :aria-label="f.label">
+            <select v-else-if="f.key==='transport'" v-model="form.fields.transport" v-single-select aria-label="运输方式"><option v-if="form.fields.transport && !['水路运输','空运'].includes(form.fields.transport)" :value="form.fields.transport">{{ form.fields.transport }}（原记录）</option><option value="水路运输">水路运输</option><option value="空运">空运</option></select>
+            <DatePicker v-else-if="f.type==='date'" v-model="form.fields[f.key]" type="date" :disabled="busy || readOnly" />
+            <textarea v-else-if="f.type==='textarea'" v-model="form.fields[f.key]" :class="{'customs-documents-red':f.key==='documents'}" :rows="f.key==='documents'?3:2" maxlength="4000" />
+            <input v-else :value="f.key==='cartonsTotal'?totals:form.fields[f.key]" :readonly="automatic(f.key)" :aria-required="['grossWeight','netWeight'].includes(f.key)||undefined" :type="f.type==='number'?'number':'text'" :min="f.type==='number'?0:undefined" step="0.0001" maxlength="4000" :placeholder="f.key==='contractNo'||f.key==='orderNo'?'填写简称、日期和 FBA 编号后生成':''" @input="form.fields[f.key]=($event.target as HTMLInputElement).value">
+          </label>
         </div>
-      </section>
-    </fieldset>
-    <template v-else-if="tab==='items'">
-      <div class="customs-item-toolbar">
-        <button
-          v-if="!readOnly"
-          type="button"
-          class="primary-button"
-          :disabled="busy || form.items.length>=100"
-          @click="openPicker"
-        >
-          选择产品 SKU
-        </button><button
-          v-if="!readOnly"
-          type="button"
-          :disabled="busy || form.items.length>=100"
-          @click="editItem(-1)"
-        >
-          手动添加商品
-        </button><span>箱数与重量填写本行合计；混装箱请拆分归属，避免重复累计。</span>
-      </div>
-      <TableViewport>
+      </fieldset>
+      <p v-if="shipperLoadError" class="data-state--error">{{ shipperLoadError }} <button type="button" @click="loadShippers">重试加载发货人</button></p>
+      <div class="customs-item-toolbar"><button v-if="!readOnly" type="button" class="primary-button" :disabled="busy || form.items.length>=100" @click="openPicker">选择产品 SKU</button><button v-if="!readOnly" type="button" :disabled="busy || form.items.length>=100" @click="editItem(-1)">手动添加商品</button><span>共 {{ form.items.length }} 项 · 件数 {{ totals }}；同一商品在五张单证中同步。</span></div>
+      <div v-if="tab==='elements' && form.items.length" class="customs-element-sheets"><section v-for="(r,i) in form.items" :key="i"><header><strong>{{ i+1 }}. {{ r.sku }} · {{ r.name }}</strong><button type="button" class="text-action" :disabled="busy" @click="editItem(i)">{{ readOnly?'查看':'编辑本票要素' }}</button></header><table class="customs-element-table"><tbody><tr><th>HS</th><td>{{ r.hsCode || '—' }}</td></tr><tr><th>品名</th><td>{{ r.name || '—' }}</td></tr><template v-if="['1','2'].includes(r.elementsVersion??'')"><tr v-for="[key,label] in documentElementFields(r)" :key="key"><th>{{ label }}</th><td>{{ r[key] || '—' }}</td></tr></template><tr v-else><th>申报要素</th><td>{{ r.declarationElements || '—' }}</td></tr><tr><th>计量单位</th><td>{{ r.measurementUnit || '—' }}</td></tr></tbody></table></section></div>
+      <TableViewport v-else>
         <table class="data-table customs-items-table">
-          <thead><tr><th>SKU / 品名</th><th>商品编号</th><th>数量 / 单位</th><th>单价 / 金额</th><th>箱数</th><th>毛重 / 净重 kg</th><th>资料</th><th>操作</th></tr></thead><tbody>
-            <tr
-              v-for="(r,i) in form.items"
-              :key="i"
-            >
-              <td><strong>{{ r.sku || '待填写 SKU' }}</strong><small>{{ r.name || '待填写品名' }}</small></td><td>{{ r.hsCode || '—' }}</td><td>{{ r.quantity || '—' }} {{ r.unit }}</td><td>{{ r.price || '—' }}<small>{{ r.quantity && r.price?money(Number(r.quantity)*Number(r.price)):'—' }}</small></td><td>{{ r.cartons || '—' }}</td><td>{{ r.grossWeight || '—' }} / {{ r.netWeight || '—' }}</td><td>{{ missingFields(form.fields,[r]).some(x=>x.startsWith('商品'))?'待补充':'已填写' }}</td><td>
-                <button
-                  type="button"
-                  class="text-action"
-                  :disabled="busy"
-                  @click="editItem(i)"
-                >
-                  {{ readOnly?'查看':'编辑' }}
-                </button><button
-                  v-if="!readOnly"
-                  type="button"
-                  class="text-action danger"
-                  :disabled="busy"
-                  @click="removeItem(i)"
-                >
-                  移除
-                </button>
-              </td>
-            </tr><tr v-if="!form.items.length">
-              <td
-                colspan="8"
-                class="data-state"
-              >
-                请选择产品 SKU 或手动添加商品，再填写本票数量、申报价格和装箱信息。
-              </td>
-            </tr>
+          <thead><tr><th>项号</th><th v-for="key in itemColumns" :key="key">{{ columnLabel(key) }}</th><th>操作</th></tr></thead><tbody>
+            <tr v-for="(r,i) in form.items" :key="i"><td>{{ i+1 }}</td><td v-for="key in itemColumns" :key="key" :class="{'customs-element-content':key==='declarationElements'}">{{ key==='amount'?money(Number(r.quantity||0)*Number(r.price||0)):r[key]||'—' }}</td><td><button type="button" class="text-action" :disabled="busy" @click="editItem(i)">{{ readOnly?'查看':'编辑' }}</button><button v-if="!readOnly" type="button" class="text-action danger" :disabled="busy" @click="removeItem(i)">移除</button></td></tr>
+            <tr v-if="!form.items.length"><td :colspan="itemColumns.length+2" class="data-state">选择产品 SKU 或手动添加商品，五张单证共用同一份明细。</td></tr>
           </tbody>
         </table>
       </TableViewport>
-    </template>
-    <template v-else>
-      <section class="customs-export-summary">
-        <h3>导出完整报关资料</h3><p>报关单 · 申报要素 · 合同 · 发票 · 装箱单</p><p>五张表使用同一票数据，明细和合计自动生成。标记已核对表示内部核对，不代表已向海关申报。</p>
-      </section>
-      <h3>{{ missing.length?`尚有 ${missing.length} 项必填资料`:'基本资料已齐全' }}</h3><ul
-        v-if="missing.length"
-        class="customs-missing"
-      >
-        <li
-          v-for="m in missing"
-          :key="m"
-        >
-          {{ m }}
-        </li>
-      </ul><p
-        v-else
-        class="customs-save-notice"
-      >
-        可保存后导出，导出时会再次检查数量、价格和重量。
-      </p>
-      <label class="customs-reviewed"><input
-        v-model="form.status"
-        type="checkbox"
-        true-value="READY"
-        false-value="DRAFT"
-        :disabled="busy || readOnly"
-      >已人工核对本票资料</label>
-      <p
-        v-if="dirty || !savedId"
-        class="muted"
-      >
-        请先保存单据，再导出已保存的版本。
-      </p>
-    </template>
+      <div class="customs-paper-total"><span>件数：{{ totals }}</span><span>毛重：{{ form.fields.grossWeight || '待填写' }} kg</span><span>净重：{{ form.fields.netWeight || '待填写' }} kg</span><strong>合计：{{ form.fields.currency }} {{ money(total) }}</strong></div>
+    </div>
+    <div class="customs-checkbar"><button type="button" @click="showChecks=!showChecks">{{ showChecks?'收起':'查看' }}导出检查（{{ missing.length }}）</button><label class="customs-reviewed"><input v-model="form.status" type="checkbox" true-value="READY" false-value="DRAFT" :disabled="busy || readOnly">已人工核对本票资料</label></div>
+    <ul v-if="showChecks && missing.length" class="customs-missing"><li v-for="m in missing" :key="m">{{ m }}</li></ul>
     <template #footer>
       <span class="customs-footer-note">{{ dirty?'有未保存修改':savedId?'已保存':'可先存草稿，随后补齐资料' }}</span><button
         type="button"
@@ -234,6 +154,9 @@ onBeforeRouteLeave(()=>{if(busy.value)return false;if(itemDirty.value){itemDialo
       </button>
     </template>
   </AccessDialog>
+  <AccessDialog v-if="shipperOpen" :title="shipperEditing?'编辑境内发货人':'新增境内发货人'" :busy="shipperBusy" :dirty="JSON.stringify(shipperDraft)!==shipperInitial" @close="shipperOpen=false">
+    <form id="customs-shipper-form" class="access-form" @submit.prevent="addShipper"><p v-if="shipperError" role="alert" class="access-danger">{{ shipperError }}</p><label>公司名称<input v-model.trim="shipperDraft.name" required maxlength="300"></label><label>公司简称<input v-model.trim="shipperDraft.prefix" required pattern="[A-Za-z]{1,20}" maxlength="20" placeholder="例如 XMH，用于生成合同协议号"></label><label>公司地址<input v-model.trim="shipperDraft.address" maxlength="1000"></label><label>联系电话<input v-model.trim="shipperDraft.phone" maxlength="100"></label><label>传真（选填）<input v-model.trim="shipperDraft.fax" maxlength="100"></label></form><template #footer><button form="customs-shipper-form" type="submit" class="ui-button-primary" :disabled="shipperBusy">{{ shipperBusy?'保存中…':shipperEditing?'保存修改':'保存并选择' }}</button></template>
+  </AccessDialog>
   <AccessDialog
     v-if="item"
     ref="itemDialog"
@@ -255,16 +178,16 @@ onBeforeRouteLeave(()=>{if(busy.value)return false;if(itemDirty.value){itemDialo
     >
       <div class="customs-form-grid">
         <label
-          v-for="f in itemFields"
+          v-for="f in lineFields"
           :key="f.key"
           :class="{wide:f.type==='textarea'}"
         >{{ f.label }}<span
-          v-if="f.required"
+          v-if="f.required && !(form.fields.ruleVersion==='2' && ['grossWeight','netWeight'].includes(f.key))"
           class="required"
         > *</span><textarea
           v-if="f.type==='textarea'"
           :value="item[f.key]"
-          maxlength="4000"
+          :maxlength="f.key==='other'?8000:16000"
           rows="5"
           @input="item[f.key]=($event.target as HTMLInputElement).value"
         /><input
@@ -374,5 +297,13 @@ onBeforeRouteLeave(()=>{if(busy.value)return false;if(itemDirty.value){itemDialo
   </AccessDialog>
 </template>
 <style>
+.customs-sheet-grid .customs-required{color:#c62828;font-weight:600}
 #app .customs-document-editor{width:min(1180px,calc(100vw - 24px));height:min(880px,calc(100dvh - 24px))}.customs-document-editor .access-dialog-body{flex:1;min-height:0}.customs-document-summary{display:flex;gap:18px;align-items:center;margin-bottom:14px;font-size:13px}.customs-document-summary strong{font-size:16px}.customs-document-summary span{color:var(--muted)}.customs-fields{border:0;padding:0;margin:0;min-width:0}.customs-form-section{padding:14px 0;border-bottom:1px solid var(--line)}.customs-form-section h3{font-size:14px;margin:0 0 12px}.customs-form-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.customs-form-grid label,.document-number{display:block;font-size:13px}.customs-form-grid .wide{grid-column:1/-1}#app .customs-form-grid input,#app .customs-form-grid textarea,#app .document-number input{display:block;margin-top:6px;width:100%;height:36px;padding:7px 10px;border:1px solid var(--line);border-radius:5px;font-size:13px;box-sizing:border-box}#app .customs-form-grid textarea{height:auto;resize:vertical}.customs-form-grid .date-picker{margin-top:6px}.customs-fields .required{color:#b42318}.document-number{max-width:420px;padding-top:12px}.customs-footer-note{margin-right:auto;font-size:12px;color:var(--muted)}.customs-item-toolbar{display:flex;gap:8px;align-items:center;margin:12px 0;flex-wrap:wrap}.customs-item-toolbar span{font-size:12px;color:var(--muted)}.customs-items-table{min-width:960px}.customs-items-table small,.customs-sku-picker small{display:block;color:var(--muted);margin-top:4px}.customs-items-table td{font-size:13px;padding:10px}.customs-export-summary{padding:14px;border:1px solid var(--line);background:#f7f9fc;border-radius:6px;margin:14px 0;font-size:13px}.customs-export-summary h3{margin-top:0}.customs-missing{columns:2;font-size:13px;color:#b54708;line-height:1.9}.customs-reviewed{display:flex;gap:8px;align-items:center;font-size:13px}.customs-save-notice{font-size:13px;color:#21834a}.customs-picker-filter{display:flex;gap:10px;align-items:center;margin-bottom:12px}.customs-picker-filter input{flex:1;min-width:0;height:34px;padding:6px 10px}.customs-sku-picker .table-viewport{max-height:50vh}.customs-line-editor .access-dialog-body{max-height:70vh}.customs-sku-picker td{padding:10px}.customs-document-editor .text-action{border:0;background:none;color:#2864c5}.customs-document-editor .danger{color:#b42318}@media(max-width:760px){.customs-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.customs-document-summary{flex-wrap:wrap;gap:8px}.customs-footer-note{flex-basis:100%}}@media(max-width:480px){.customs-form-grid{grid-template-columns:1fr}.customs-missing{columns:1}}
+.customs-paper{border:1px solid #cbd2dc;background:white;margin-top:12px;padding:16px}.customs-paper-heading{text-align:center;padding:4px 0 16px}.customs-paper-heading h2{font-size:20px;letter-spacing:2px;margin:0 0 8px}.customs-paper-heading span{font-size:12px;color:var(--muted)}.customs-paper-meta{display:flex;gap:12px;align-items:end;margin-bottom:12px;flex-wrap:wrap}.customs-paper-meta label{font-size:12px;flex:1;min-width:150px}.customs-paper-meta .document-number{padding:0}.customs-paper-meta input{width:100%;height:32px;border:1px solid var(--line);padding:4px 8px}.customs-sheet-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));border-top:1px solid #cbd2dc;border-left:1px solid #cbd2dc}.customs-sheet-grid>label{min-width:0;grid-column:span 2;border-right:1px solid #cbd2dc;border-bottom:1px solid #cbd2dc;padding:8px;display:flex;flex-direction:column;gap:6px;font-size:12px}.customs-sheet-grid .wide{grid-column:1/-1}.customs-sheet-grid input,.customs-sheet-grid textarea{width:100%;min-width:0;border:1px solid transparent;border-radius:3px;background:#f7f9fc;padding:6px 8px;font-size:13px;box-sizing:border-box;min-height:34px}.customs-sheet-grid input:focus,.customs-sheet-grid textarea:focus{border-color:#2864c5;outline:0}.customs-sheet-grid input[readonly]{background:transparent;color:#344054}.customs-sheet-grid em{font-size:10px;font-style:normal;color:#667085;margin-left:6px}.customs-shipper-control{display:flex;gap:6px;align-items:center}.customs-shipper-control .single-select-trigger{flex:1;min-width:0}.customs-shipper-control button{white-space:nowrap}.customs-paper-total{display:flex;gap:20px;justify-content:flex-end;padding:14px 0 0;flex-wrap:wrap;font-size:13px}.customs-element-content{white-space:pre-wrap;min-width:320px;max-width:540px}.customs-checkbar{display:flex;gap:18px;align-items:center;margin-top:14px}.customs-checkbar>button{border:0;background:none;color:#2864c5}@media(max-width:760px){.customs-sheet-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.customs-sheet-grid>label{grid-column:span 1}.customs-paper{padding:8px}.customs-paper-heading h2{font-size:16px}.customs-paper-total{justify-content:flex-start;gap:10px}}
+.customs-document-editor .ui-section-tabs{position:sticky;top:0;background:#fff;z-index:4}.customs-document-summary{margin-bottom:6px}.customs-paper-heading{padding:0 0 10px}.customs-paper-heading h2{font-size:18px;margin-bottom:4px}.customs-paper-heading span{display:none}.customs-sheet-grid>label{padding:6px;gap:3px}.declaration-grid{grid-template-columns:repeat(12,minmax(0,1fr))}.declaration-grid>label{grid-column:span 2}.declaration-grid .field-seller,.declaration-grid .field-buyer,.declaration-grid .field-producer,.declaration-grid .field-contractNo,.declaration-grid .field-orderNo,.declaration-grid .field-fbaNo,.declaration-grid .field-warehouse{grid-column:span 4}.declaration-grid .field-voyage,.declaration-grid .field-billNo,.declaration-grid .field-taxNature,.declaration-grid .field-license{grid-column:span 3}.declaration-grid .wide{grid-column:1/-1}.declaration-grid .field-packaging{grid-column:span 3}.declaration-grid .field-cartonsTotal{grid-column:span 1}.declaration-grid .field-grossWeight,.declaration-grid .field-netWeight{grid-column:span 2}.declaration-grid .field-declarant,.declaration-grid .field-declarationCompany{grid-column:span 6}.customs-sheet-grid .single-select-trigger{max-width:100%}.customs-sheet-grid .date-picker{min-width:0;width:100%}@media(max-width:900px){.declaration-grid{grid-template-columns:repeat(6,minmax(0,1fr))}.declaration-grid>label{grid-column:span 2}.declaration-grid .field-seller,.declaration-grid .field-buyer,.declaration-grid .field-producer,.declaration-grid .field-contractNo,.declaration-grid .field-orderNo,.declaration-grid .field-fbaNo,.declaration-grid .field-warehouse{grid-column:span 3}.declaration-grid .wide{grid-column:1/-1}}@media(max-width:560px){.declaration-grid{display:flex;flex-direction:column}.customs-checkbar{flex-wrap:wrap}}
+.customs-element-sheets{display:grid;gap:16px}.customs-element-sheets header{display:flex;align-items:center;justify-content:space-between;padding:10px 0;font-size:13px}.customs-element-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px}.customs-element-table th,.customs-element-table td{border:1px solid var(--line);padding:8px 12px;text-align:left;white-space:pre-wrap;overflow-wrap:anywhere}.customs-element-table th{width:170px;background:#f7f9fc;font-weight:500}
+</style>
+
+<style scoped>
+.customs-sheet-grid .customs-documents-red{color:#c62828;line-height:1.7}.customs-sheet-grid .broker-hint{color:#42805a}.customs-sheet-grid input:disabled{background:#f0f2f5;color:#667085;cursor:not-allowed}
 </style>

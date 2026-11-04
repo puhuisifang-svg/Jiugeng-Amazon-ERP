@@ -28,7 +28,7 @@ describe('报关资料联动', () => {
   })
   it('saves drafts, preserves unsaved input and surfaces conflicts without closing', async () => {
     const wrapper = render(); await flushPromises(); await wrapper.get('tbody button').trigger('click'); await flushPromises()
-    const input = wrapper.findAll('dialog label').find(label => label.text().startsWith('英文申报品名'))!.get('input')
+    const input = wrapper.findAll('dialog label').find(label => label.text().startsWith('品名'))!.get('input')
     await input.setValue('Synthetic pouch'); await wrapper.get('dialog').trigger('click')
     expect((input.element as HTMLInputElement).value).toBe('Synthetic pouch')
     expect(mocks.leave.mock.calls[0]![0]()).toBe(false); await flushPromises()
@@ -37,7 +37,7 @@ describe('报关资料联动', () => {
     await wrapper.get('dialog form').trigger('submit'); await flushPromises()
     expect(wrapper.get('[role="alert"]').text()).toContain('其他页面修改')
     await wrapper.get('dialog form').trigger('submit'); await flushPromises()
-    expect(mocks.save).toHaveBeenLastCalledWith('v', expect.objectContaining({ nameEn: 'Synthetic pouch', state: 'DRAFT', version: 0 }))
+    expect(mocks.save).toHaveBeenLastCalledWith('v', expect.objectContaining({ nameZh: 'Synthetic pouch', state: 'DRAFT', version: 0 }))
     expect(wrapper.find('dialog').exists()).toBe(false); expect(wrapper.text()).toContain('产品管理同步生效'); wrapper.unmount()
   })
   it('keeps reviewed profiles versioned and disables all edits for read-only users', async () => {

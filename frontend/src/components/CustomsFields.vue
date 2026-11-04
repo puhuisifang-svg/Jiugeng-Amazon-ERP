@@ -1,99 +1,107 @@
 <script setup lang="ts">
+import { computed,ref,watch,watchEffect,onBeforeUnmount } from 'vue'
 import { vSingleSelect } from '@/directives/singleSelect'
-import type { CustomsProfile } from '@/api/customs'
-const model = defineModel<CustomsProfile>({ required: true })
-defineProps<{ disabled?: boolean }>()
-const basic = [['nameZh', '中文申报品名', 200], ['nameEn', '英文申报品名', 200], ['composition', '材质 / 成分及含量', 1000], ['usage', '用途 / 功能', 1000], ['brand', '品牌（无品牌请明确填写）', 100], ['model', '规格型号', 200], ['unit', '申报单位', 32]] as const
-const codes = [['chinaCode', '中国商品编码（10位）', '[0-9]{10}', 10], ['usCode', '美国 HTS 编码（10位）', '[0-9]{10}', 10], ['euCode', '欧盟 CN / TARIC（8或10位）', '[0-9]{8}|[0-9]{10}', 10], ['ukCode', '英国商品编码（10位）', '[0-9]{10}', 10]] as const
+import { profileFields, hsSchemaApi, applyHsSchema, profileElements, type CustomsProfile } from '@/api/customs'
+const model=defineModel<CustomsProfile>({required:true})
+const props=defineProps<{disabled?:boolean}>()
+const fields=computed(()=>model.value.elementFields||Object.values(profileElements(model.value)).some(Boolean)?profileFields(model.value):[])
+const hsInput=ref<HTMLInputElement>()
+const loading=ref(false),lookupError=ref(''),source=ref(''),stale=ref(false)
+let seq=0,timer:ReturnType<typeof setTimeout>|undefined
+async function lookup(){
+ const code=model.value.chinaCode??'',current=++seq
+ if(!/^[0-9]{10}$/.test(code)||props.disabled)return
+ loading.value=true;lookupError.value=''
+ try{const schema=await hsSchemaApi.get(code);if(current!==seq||model.value.chinaCode!==code)return;model.value=applyHsSchema(model.value,schema);source.value=schema.sourceUrl;stale.value=schema.stale}
+ catch(e){if(current===seq)lookupError.value=e instanceof Error?e.message:'查询失败，请重试'}finally{if(current===seq)loading.value=false}
+}
+watch(()=>model.value.chinaCode,(code)=>{
+ ++seq;clearTimeout(timer);loading.value=false;lookupError.value='';source.value='';stale.value=false
+ if(props.disabled||model.value.schemaCode===code&&model.value.elementFields?.length)return
+ if(/^[0-9]{10}$/.test(code??'')){loading.value=true;timer=setTimeout(()=>void lookup(),350)}
+},{immediate:true})
+onBeforeUnmount(()=>{++seq;clearTimeout(timer)})
+const mismatch=computed(()=>!!model.value.elementFields&&model.value.schemaCode!==model.value.chinaCode)
+watchEffect(()=>{hsInput.value?.setCustomValidity(loading.value?'正在查询HS申报要素，请稍候':lookupError.value|| (mismatch.value?'请先完成HS申报要素查询':''))})
+const elements=computed(()=>profileElements(model.value))
+function update(key:string,value:string){model.value={...model.value,elements:{...elements.value,[key]:value}}}
+function enableStructured(){if(!model.value.elements)model.value={...model.value,elements:elements.value}}
 </script>
 <template>
   <fieldset
     class="customs-fields operation-form form-wide"
     :disabled="disabled"
   >
-    <legend>产品报关资料（SKU级）</legend>
+    <legend>出口美国 · 申报要素</legend>
     <p class="form-wide customs-help">
-      两处入口维护同一份资料。可先保存草稿，编码、原产国和申报要素应按实际商品及目的地核对，不自动推断。
+      选择此 SKU 制作报关单时，自动带入以下资料；本票修改不覆盖 SKU 档案。
     </p>
-    <label
-      v-for="[key, label, max] in basic"
-      :key="key"
-    >{{ label }}<input
-      v-model="model[key]"
-      :maxlength="max"
-      :required="model.state === 'REVIEWED' && ['nameZh', 'nameEn', 'composition', 'usage', 'unit'].includes(key)"
-    ></label>
-    <label>原产国（两位国家代码）<input
-      v-model="model.originCountry"
-      maxlength="2"
-      pattern="[A-Z]{2}"
-      placeholder="如 CN；请确认实际原产国"
-      :required="model.state === 'REVIEWED'"
-      @input="model.originCountry = model.originCountry.toUpperCase()"
-    ></label>
-    <label>单件净重（kg）<input
-      v-model="model.netWeightKg"
-      type="number"
-      min="0.000001"
-      max="999999.999999"
-      step="0.000001"
-    ></label>
-    <label>单件毛重（kg）<input
-      v-model="model.grossWeightKg"
-      type="number"
-      min="0.000001"
-      max="999999.999999"
-      step="0.000001"
-    ></label>
-    <label
-      v-for="[key, label, pattern, max] in codes"
-      :key="key"
-    >{{ label }}<input
-      v-model="model[key]"
+    <label>HS<input
+      ref="hsInput"
+      v-model="model.chinaCode"
       inputmode="numeric"
-      :pattern="pattern"
-      :maxlength="max"
-      :required="model.state === 'REVIEWED' && key === 'chinaCode'"
-      placeholder="仅填数字；不确定时留空"
+      pattern="[0-9]{10}"
+      maxlength="10"
+      placeholder="填写已确认的10位HS编码"
+      :required="model.state==='REVIEWED'"
+      :aria-invalid="mismatch||undefined"
+      @input="enableStructured"
     ></label>
-    <label class="form-wide">申报要素（按商品编码对应要求逐项填写）<textarea
-      v-model="model.declarationElements"
-      rows="4"
-      maxlength="4000"
-      :required="model.state === 'REVIEWED'"
-      placeholder="建议逐行填写：要素名称：具体内容。不同商品编码要求不同，请以现行要求和报关行核对结果为准。"
-    /></label>
-    <label class="form-wide">目的地合规要求 / 证明资料说明<input
-      v-model="model.complianceNotes"
-      maxlength="2000"
-      placeholder="美国、欧盟、英国分别记录适用要求、证明文件编号或待核对事项"
+    <label>品名<input
+      v-model="model.nameZh"
+      maxlength="200"
+      :required="model.state==='REVIEWED'"
+      @input="enableStructured"
     ></label>
-    <label class="form-wide">备注<input
-      v-model="model.remark"
+    <div
+      class="form-wide customs-help"
+      role="status"
+    >
+      <span v-if="loading">正在查询 HS 申报要素…</span>
+      <span
+        v-else-if="lookupError"
+        class="error"
+      >{{ lookupError }} <button
+        type="button"
+        class="text-action"
+        @click="lookup"
+      >重试</button></span>
+      <span v-else-if="source"><a
+        :href="source"
+        target="_blank"
+        rel="noopener noreferrer"
+      >HS 字段来源</a>{{ stale?' · 当前使用已缓存资料，来源暂时无法刷新':'' }}</span>
+      <span v-else-if="!model.chinaCode">输入 10 位 HS 编码，自动带出对应字段和计量单位。</span>
+      <span v-if="mismatch && !loading"> HS 已变化，查询成功后才能保存新字段。</span>
+    </div>
+    <label
+      v-for="[key,label] in fields"
+      :key="key"
+      :class="{'form-wide':key==='other'}"
+    >{{ label }}<textarea
+      v-if="key==='other'"
+      :value="elements[key]??''"
+      maxlength="8000"
+      rows="3"
+      @input="update(key,($event.target as HTMLTextAreaElement).value)"
+    /><input
+      v-else
+      :value="elements[key]??''"
       maxlength="1000"
+      @input="update(key,($event.target as HTMLInputElement).value)"
+    ></label>
+    <label>计量单位<input
+      v-model="model.measurementUnit"
+      maxlength="100"
+      placeholder="随 HS 带出，可核对修改"
     ></label>
     <label>资料状态<select
       v-model="model.state"
       v-single-select
+      @change="enableStructured"
     ><option value="DRAFT">草稿 / 待核对</option><option value="REVIEWED">资料已核对</option></select></label>
-    <p class="form-wide customs-help">
-      “资料已核对”是人工维护标记，不代表已申报、海关审核通过或目的地合规认证。目的地编码仅做格式校验，不校验归类正确性；该页不代替逐票申报、商业发票或装箱单。
-    </p>
-    <p class="form-wide customs-help">
-      官方参考：<a
-        href="https://www.help.cbp.gov/s/article/Article-1894?language=en_US"
-        target="_blank"
-        rel="noopener noreferrer"
-      >美国 CBP</a> · <a
-        href="https://trade.ec.europa.eu/access-to-markets/en/my-trade-assistant"
-        target="_blank"
-        rel="noopener noreferrer"
-      >欧盟 Access2Markets</a>
-    </p>
   </fieldset>
 </template>
 <style scoped>
-.customs-fields { min-width: 0; border: 1px solid #dbe1ea; border-radius: 8px; padding: 16px; }
-.customs-help { color: #68758c; font-size: 13px; margin: 0; line-height: 1.6; }
-.customs-fields textarea { min-height: 96px; }
+.customs-fields{min-width:0;border:1px solid var(--line);border-radius:6px;padding:12px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 16px}.customs-help{color:var(--muted);font-size:12px;margin:0;line-height:1.6}.customs-fields legend{font-size:13px;font-weight:600}.customs-fields label{font-size:13px;min-width:0}.customs-fields textarea{min-height:72px}.customs-fields .form-wide{grid-column:1/-1}@media(max-width:600px){.customs-fields{grid-template-columns:1fr}}
 </style>

@@ -111,6 +111,26 @@ class ProductControllerTest {
         mvc.perform(get("/api/v1/product-customs").param("page","-1").header("Authorization",bearer(token))).andExpect(status().isBadRequest());
         mvc.perform(put("/api/v1/product-customs/missing").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(customsProfile()))).andExpect(status().isNotFound());
     }
+    @Test void structuredUsElementsPersistThroughSkuAndCustomsPicker() throws Exception {
+        String token=createUserAndLogin("customs-elements","ADMIN");
+        var input=product("ELEMENT-P","合成父体","ELEMENT-S","合成SKU");
+        @SuppressWarnings("unchecked") var variant=(Map<String,Object>)((List<?>)input.get("variants")).getFirst();
+        var profile=customsProfile();profile.putAll(Map.of("nameZh","合成垫","chinaCode","1234567890","state","REVIEWED","elements",Map.of("brandType","无品牌","floorCovering","是","fiberComposition","合成纤维","dimensions","30×40cm","other","测试\n第二行")));variant.put("customs",profile);
+        var created=objectMapper.readTree(mvc.perform(post("/api/v1/products").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input))).andExpect(status().isOk()).andExpect(jsonPath("$.variants[0].customs.elements.dimensions").value("30×40cm")).andReturn().getResponse().getContentAsString());
+        String sku=created.at("/variants/0/id").asText();
+        mvc.perform(get("/api/v1/product-customs").param("q","ELEMENT-S").header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.items[0].customs.elements.fiberComposition").value("合成纤维")).andExpect(jsonPath("$.items[0].customs.declarationElements").value(org.hamcrest.Matchers.containsString("GTIN：")));
+        profile.put("version",0);mvc.perform(put("/api/v1/product-customs/"+sku).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(profile))).andExpect(status().isConflict());
+        profile.put("version",1);profile.put("elements",Map.of("unknown","bad"));mvc.perform(put("/api/v1/product-customs/"+sku).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(profile))).andExpect(status().isBadRequest());
+    }
+    @Test void dynamicHsSchemaAndUnitPersistAndRejectCodeMismatch()throws Exception{
+        String token=createUserAndLogin("dynamic-hs","ADMIN");var input=product("DYN-P","合成父体","DYN-S","合成SKU");
+        @SuppressWarnings("unchecked") var variant=(Map<String,Object>)((List<?>)input.get("variants")).getFirst();
+        var profile=customsProfile();profile.putAll(Map.of("chinaCode","6307909000","schemaCode","6307909000","measurementUnit","千克/个","elementFields",List.of(Map.of("key","articleNumber","label","货号")),"elements",Map.of("articleNumber","TEST-02")));variant.put("customs",profile);
+        var created=objectMapper.readTree(mvc.perform(post("/api/v1/products").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input))).andExpect(status().isOk()).andExpect(jsonPath("$.variants[0].customs.measurementUnit").value("千克/个")).andReturn().getResponse().getContentAsString());
+        profile.put("version",1);profile.put("chinaCode","5705002000");mvc.perform(put("/api/v1/product-customs/"+created.at("/variants/0/id").asText()).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(profile))).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/hs-declaration-schemas/not-a-code").header("Authorization",bearer(token))).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/hs-declaration-schemas/6307909000")).andExpect(status().isUnauthorized());
+    }
     private Map<String,Object> customsProfile() { return new java.util.HashMap<>(Map.of("nameEn","Synthetic textile pouch","state","DRAFT","version",0)); }
 
     @Test

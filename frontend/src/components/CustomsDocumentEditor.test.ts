@@ -21,6 +21,20 @@ async function saveReady(w:ReturnType<typeof render>){
  await w.findAll('button').find(b=>b.text()==='保存草稿')!.trigger('click')
 }
 describe('报关单据编辑',()=>{
+ it('locks linked sheet fields and items while keeping contract-only terms editable',async()=>{
+  const w=render({document:{...source,fields:{...source.fields,sellerAddress:'Test address',buyerAddress:'Warehouse address',date:'2026-11-05'},items:[{...source.items[0],quantity:'2',unit:'件',price:'3',grossWeight:'5',netWeight:'4'}]}});await flushPromises()
+  for(const tab of ['合同','发票','装箱单']){
+   await w.findAll('.ui-section-tabs button').find(b=>b.text()===tab)!.trigger('click')
+   for(const key of ['seller','sellerAddress','buyer','buyerAddress','date']){const field=w.get('.field-'+key);expect(field.text()).toContain('自动');expect(field.get('input,textarea').attributes('readonly')).toBeDefined()}
+   expect(w.find('select[aria-label="境内发货人"]').exists()).toBe(false)
+   expect(w.find('.customs-items-table input,.customs-items-table select,.customs-items-table button').exists()).toBe(false)
+   expect(w.get('.customs-items-table thead').text()).toContain('自动')
+   if(tab==='合同'){expect(w.get('.field-payment input').attributes('readonly')).toBeUndefined();await w.get('.field-payment input').setValue('Custom payment');expect(w.get('.field-tolerance input').attributes('readonly')).toBeUndefined()}
+   if(tab==='装箱单'){expect(w.get('.field-payment input').attributes('readonly')).toBeDefined();expect((w.get('.field-payment input').element as HTMLInputElement).value).toBe('Custom payment');for(const key of ['fbaNo','warehouse','grossWeight','netWeight'])expect(w.get('.field-'+key+' input').attributes('readonly')).toBeDefined()}
+  }
+  await w.findAll('.ui-section-tabs button').find(b=>b.text()==='报关单')!.trigger('click');await w.get('input[aria-label="商品 1 成交数量"]').setValue('7')
+  await w.findAll('.ui-section-tabs button').find(b=>b.text()==='发票')!.trigger('click');expect(w.get('.customs-items-table tbody tr').text()).toContain('7');w.unmount()
+ })
  it('shows five percent for new and legacy blank contracts and preserves zero',async()=>{
   for(const props of [{},{document:{...source,fields:{...source.fields,tolerance:''}}},{document:{...source,fields:{...source.fields,tolerance:'0'}}}]){
    const w=render(props);await w.findAll('.ui-section-tabs button').find(b=>b.text()==='合同')!.trigger('click');
@@ -31,7 +45,7 @@ describe('报关单据编辑',()=>{
  it('shares default payment between contract and packing and preserves explicit terms',async()=>{
   for(const payment of ['', '30 days after invoice']){
    const w=render({document:{...source,fields:{...source.fields,payment}}});
-   for(const tab of ['合同','装箱单']){await w.findAll('.ui-section-tabs button').find(b=>b.text()===tab)!.trigger('click');const label=w.findAll('label').find(l=>l.text()==='付款条件')!;expect((label.get('input').element as HTMLInputElement).value).toBe(payment||'T/T')}
+   for(const tab of ['合同','装箱单']){await w.findAll('.ui-section-tabs button').find(b=>b.text()===tab)!.trigger('click');const label=w.findAll('label').find(l=>l.text().startsWith('付款条件'))!;expect((label.get('input').element as HTMLInputElement).value).toBe(payment||'T/T')}
    w.unmount()
   }
  })
@@ -122,7 +136,9 @@ describe('报关单据编辑',()=>{
   await w.get('input[aria-label="商品 1 箱数"]').setValue('3')
   expect(w.get('.customs-paper-total').text()).toContain('15.00');expect(w.get('.customs-paper-total').text()).toContain('件数：3')
   await w.findAll('.ui-section-tabs button').find(b=>b.text()==='装箱单')!.trigger('click')
-  expect((w.get('input[aria-label="商品 1 箱数"]').element as HTMLInputElement).value).toBe('3')
+  expect(w.find('input[aria-label="商品 1 箱数"]').exists()).toBe(false)
+  expect(w.get('.customs-paper-total').text()).toContain('件数：3')
+  await w.findAll('.ui-section-tabs button').find(b=>b.text()==='报关单')!.trigger('click')
   await w.get('input[aria-label="商品 1 总毛重（kg）"]').setValue('12.5')
   api.save.mockRejectedValueOnce(new Error('保存失败'))
   await saveReady(w);await flushPromises()

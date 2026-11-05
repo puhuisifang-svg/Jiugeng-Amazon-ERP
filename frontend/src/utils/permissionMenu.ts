@@ -12,6 +12,7 @@ const prefixes: Record<string, string[]> = {
   'product-development':['development.'], samples:['samples.'], products:['products.','imports.'], materials:['materials.','inventory.','imports.'],
   'product-costs':['costs.'], suppliers:['suppliers.'], 'purchases/orders':['purchases.'],
   'customers/info':['customers.read','customers.write'], 'customers/products':['customers.'], 'customers/invoices':['invoices.'],
+  'fba/forwarders':['forwarders.'], 'fba/warehouses':['products.read','products.write'],
   'orders/customers':['orders.'], 'compliance/customs':['products.read'], 'finance/bills':['finance.'],
   'product-monitoring':['monitoring.'], 'selection/candidates':['selection.'], 'watch/stores':['watch.'],
   'system/users':['system.users.manage'], 'system/roles':['system.users.manage'], 'system/audit':['audit.'], settings:['system.users.manage'],

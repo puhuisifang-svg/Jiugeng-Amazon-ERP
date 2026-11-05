@@ -3,6 +3,10 @@ import java.util.*;
 final class PermissionCatalog {
     record Permission(String code, String module, String label, List<String> dependencies, boolean sensitive, boolean assignable) {}
     static final List<Permission> ALL = List.of(
+        new Permission("forwarders.read", "货代管理", "查看货代单据", List.of("products.read"), false, true),
+        new Permission("forwarders.write", "货代管理", "维护货代单据", List.of("forwarders.read"), false, true),
+        new Permission("forwarders.export", "货代管理", "导出货代模板", List.of("forwarders.read"), false, true),
+        new Permission("forwarders.delete", "货代管理", "删除货代单据", List.of("forwarders.read"), false, true),
         new Permission("factory.employees.read", "员工管理", "查看员工", List.of(), true, true),
         new Permission("factory.employees.write", "员工管理", "维护员工", List.of("factory.employees.read"), true, true),
         new Permission("factory.rates.read", "工价管理", "查看工价", List.of(), true, true),

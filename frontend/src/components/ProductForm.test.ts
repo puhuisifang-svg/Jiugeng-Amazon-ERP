@@ -22,6 +22,8 @@ describe('ProductForm', () => {
   it('separates parent and SKU panels while retaining add/remove actions', async () => {
     const wrapper = mount(ProductForm, { props: { submitLabel: '创建产品', showCancel: true } })
     expect(wrapper.get('.product-form__parent').text()).toContain('产品基础信息')
+    expect(wrapper.get('.sku-image-editor').isVisible()).toBe(true)
+    expect(wrapper.findAll('.product-editor-tabs button').map(b => b.text())).not.toContain('图片管理')
     expect(wrapper.get('.product-form__variants').findAll('.variant-editor')).toHaveLength(1)
     await wrapper.findAll('button').find(b => b.text() === '新增 SKU')!.trigger('click')
     expect(wrapper.get('.product-form__variants').findAll('.variant-editor')).toHaveLength(2)
@@ -75,17 +77,17 @@ describe('ProductForm', () => {
     await wrapper.findAll('.product-editor-tabs button').find(b=>b.text()==='报关资料')!.trigger('click')
     await wrapper.findAll('.customs-fields label').find(l=>l.text()==='品牌类型')!.get('input').setValue('无品牌')
     await wrapper.findAll('.customs-fields label').find(l=>l.text()==='货号')!.get('input').setValue('SYN-ARTICLE')
-    await wrapper.findAll('.customs-fields label').find(l=>l.text().startsWith('资料状态'))!.get('select').setValue('REVIEWED')
+    expect(wrapper.get('.customs-fields').text()).not.toContain('资料状态')
     await wrapper.get('form').trigger('submit');await flushPromises()
     const saved=wrapper.emitted('submit')?.[0]?.[0]
-    expect(saved).toMatchObject({variants:[{id:'v1',customs:{schemaCode:'6307909000',state:'REVIEWED',elements:{brandType:'无品牌',articleNumber:'SYN-ARTICLE'},elementFields:customs.elementFields}},{id:'v2',skuCode:'SYN-2'}]})
+    expect(saved).toMatchObject({variants:[{id:'v1',customs:{schemaCode:'6307909000',state:'DRAFT',elements:{brandType:'无品牌',articleNumber:'SYN-ARTICLE'},elementFields:customs.elementFields}},{id:'v2',skuCode:'SYN-2'}]})
     expect(()=>structuredClone(saved)).not.toThrow()
     wrapper.unmount()
   })
 
   it('submits the unified product name with active product and SKU defaults', async () => {
     const wrapper = mount(ProductForm, { props: { submitLabel: '创建产品' } })
-    const productInputs = wrapper.find('.product-form').findAll('input')
+    const productInputs = wrapper.find('.product-form').findAll('input[required]')
     await productInputs[0]!.setValue('PROD-001'); await productInputs[1]!.setValue('旅行收纳袋')
     const skuInputs = wrapper.find('.variant-editor').findAll('input[required], textarea[required]')
     await skuInputs[0]!.setValue('SKU-001-BLK'); await skuInputs[1]!.setValue('黑色款')
@@ -116,7 +118,7 @@ describe('ProductForm', () => {
     const skuInputs = wrapper.find('.variant-editor').findAll('input[required], textarea[required]')
     await skuInputs[0]!.setValue('SKU-URL')
     await skuInputs[1]!.setValue('URL 图片款')
-    const productInputs = wrapper.find('.product-form').findAll('input')
+    const productInputs = wrapper.find('.product-form').findAll('input[required]')
     await productInputs[0]!.setValue('PROD-URL')
     await productInputs[1]!.setValue('URL 图片产品')
     await wrapper.get('form').trigger('submit')

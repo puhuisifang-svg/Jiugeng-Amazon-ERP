@@ -34,12 +34,9 @@ export function profileElements(profile:CustomsProfile){
 }
 
 export function applyHsSchema(profile:CustomsProfile,schema:HsSchema):CustomsProfile {
- const previous=profileElements(profile), fields=schema.fields.map(f=>({...f})), values:Record<string,string>={}, leftover:string[]=[]
- const labels=new Map(profileFields(profile))
- for(const [key,value] of Object.entries(previous))if(value&&!fields.some(f=>f.key===key))leftover.push(`${labels.get(key)??key}：${value}`)
+ const previous=profileElements(profile), fields=schema.fields.map(f=>({...f})), values:Record<string,string>={}
+ // Only carry answers belonging to the new schema; never append removed fields to Other.
  for(const field of fields)values[field.key]=previous[field.key]??''
- // Preserve removed answers under Other; changing HS must not silently discard entered data.
- if(leftover.length){if(fields.some(f=>f.key==='other'))values.other=[values.other,...leftover].filter(Boolean).join('\n');else {fields.push({key:'other',label:'其他'});values.other=leftover.join('\n')}}
  return {...profile,chinaCode:schema.code,schemaCode:schema.code,elementFields:fields.map(f=>({...f})),elements:values,measurementUnit:schema.measurementUnit,state:'DRAFT'}
 }
 export function documentElementFields(row:Record<string,string>):ReadonlyArray<readonly [string,string]>{

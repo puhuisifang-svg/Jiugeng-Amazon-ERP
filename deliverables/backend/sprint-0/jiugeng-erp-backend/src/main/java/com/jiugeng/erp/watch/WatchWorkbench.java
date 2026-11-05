@@ -13,8 +13,8 @@ import org.springframework.web.bind.annotation.*;
 @RestController @Profile("!mock") @RequestMapping("/api/v1/watch")
 @Transactional
 class WatchWorkbench {
-    private final JdbcClient jdbc;private final WatchRepository repository;private final AuditTrail audit;
-    WatchWorkbench(JdbcClient jdbc,WatchRepository repository,AuditTrail audit){this.jdbc=jdbc;this.repository=repository;this.audit=audit;}
+    private final com.jiugeng.erp.selection.SelectionCandidateGateway candidates;private final JdbcClient jdbc;private final WatchRepository repository;private final AuditTrail audit;
+    WatchWorkbench(JdbcClient jdbc,WatchRepository repository,AuditTrail audit,com.jiugeng.erp.selection.SelectionCandidateGateway candidates){this.candidates=candidates;this.jdbc=jdbc;this.repository=repository;this.audit=audit;}
     record StoreEdit(Long version,String name,String owner,String remark,boolean enabled){}
     record EventEdit(Long version,boolean ignored,String reason){}
     record Product(String asin,String firstDetectedAt,boolean online,String source){}
@@ -28,6 +28,14 @@ class WatchWorkbench {
             .param("id",id).query((r,n)->new Product(r.getString("asin"),r.getTimestamp("first_at").toInstant().toString(),active.contains(r.getString("asin")),"MANUAL")).list();
         var automatic=jdbc.sql("SELECT provider,asin,title,image_url AS imageUrl,price,price_type AS priceType,rating,first_at AS firstAt,last_at AS lastAt,missing_count AS missingCount,missing_at AS missingAt FROM watch_presence WHERE store_id=:id ORDER BY first_at DESC,asin").param("id",id).query().listOfRows();
         return new Detail(store,runIds.stream().map(repository::run).toList(),products,automatic);
+    }
+    record CandidateRequest(String asin){}
+    @PostMapping("/stores/{id}/candidates") @PreAuthorize("hasAuthority('watch.read') and hasAuthority('selection.write')")
+    com.jiugeng.erp.selection.SelectionCandidateGateway.Confirmation addCandidate(@PathVariable String id,@RequestBody CandidateRequest input,@AuthenticationPrincipal AuthenticatedActor actor){
+        var store=repository.store(id).orElseThrow(()->error(404,"店铺不存在"));
+        if(jdbc.sql("SELECT removed FROM watch_store WHERE id=:id").param("id",id).query(Boolean.class).single())throw error(409,"店铺已移除");
+        String asin=input.asin()==null?"":input.asin().trim().toUpperCase(Locale.ROOT);
+        return jdbc.sql("SELECT asin,title,image_url,first_at FROM watch_presence WHERE store_id=:id AND asin=:asin ORDER BY last_at DESC LIMIT 1").param("id",id).param("asin",asin).query((r,n)->candidates.confirmStoreProduct(r.getString(1),r.getString(2),r.getString(3),id,store.storeName(),r.getTimestamp(4).toInstant(),actor)).optional().orElseThrow(()->error(404,"该店铺没有此商品，请刷新列表后重试"));
     }
     @GetMapping("/stores/{id}/events") @PreAuthorize("hasAuthority('watch.read')")
     List<WatchTypes.EventView> events(@PathVariable String id){

@@ -17,6 +17,21 @@
 		Referrer-Policy same-origin
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
 	}
+	# This SSH fallback terminates HTTPS remotely without dependable forwarded headers.
+	# Match only the explicitly configured public host; retain backend Origin checks.
+	@fallback_api {
+		host {$ERP_FALLBACK_HOST:localhost.invalid}
+		path /api/*
+	}
+	handle @fallback_api {
+		header Cache-Control "no-store"
+		reverse_proxy 127.0.0.1:8080 {
+			header_up -Forwarded
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-Host {host}
+			header_up X-Forwarded-Port 443
+		}
+	}
 	handle /api/* {
 		header Cache-Control "no-store"
 		reverse_proxy 127.0.0.1:8080

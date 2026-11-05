@@ -18,9 +18,9 @@ const emit = defineEmits<{ submit: [value: ProductInput]; cancel: [] }>()
 const suppliers = ref<SupplierDto[]>([]); const materials = ref<MaterialDetailDto[]>([])
 const balances = ref<InventoryBalanceViewDto[]>([]); const inventoryFailed = ref(false)
 const referenceError = ref(''); const loadingReferences = ref(false); const imageError = ref(''); const uploading = ref<number | null>(null)
-const activeTabs = ref<Record<number, 'basic' | 'purchase' | 'specs' | 'materials' | 'image' | 'customs'>>({})
+const activeTabs = ref<Record<number, 'basic' | 'purchase' | 'specs' | 'materials' | 'customs'>>({})
 function activeTab(index: number) { return activeTabs.value[index] ?? 'basic' }
-function setTab(index: number, value: 'basic' | 'purchase' | 'specs' | 'materials' | 'image' | 'customs') { if (value === 'customs' && !model.variants[index]!.customs) model.variants[index]!.customs = blankCustoms(); activeTabs.value[index] = value }
+function setTab(index: number, value: 'basic' | 'purchase' | 'specs' | 'materials' | 'customs') { if (value === 'customs' && !model.variants[index]!.customs) model.variants[index]!.customs = blankCustoms(); activeTabs.value[index] = value }
 const supplierAccess = computed(() => session.canAccess(['suppliers.read']))
 function blankVariant(): ProductVariantInput { return { skuCode: '', variantName: '', nameHighlighted: false, status: 'ACTIVE', suppliers: [], materials: [] } }
 const model = reactive<ProductInput>(JSON.parse(JSON.stringify(props.initial ?? { productCode: '', productName: '', status: 'ACTIVE', variants: [blankVariant()] })))
@@ -84,7 +84,7 @@ async function submit(event: Event) {
     if (editor) {
       const index = Number(editor.dataset.variantIndex)
       const panel = invalid.closest<HTMLElement>('[data-editor-tab]')
-      setTab(index, panel?.dataset.editorTab as 'basic' | 'purchase' | 'specs' | 'materials' | 'image' | 'customs' ?? 'basic')
+      setTab(index, panel?.dataset.editorTab as 'basic' | 'purchase' | 'specs' | 'materials' | 'customs' ?? 'basic')
     }
     await nextTick(); invalid.reportValidity(); invalid.focus(); return
   }
@@ -124,25 +124,6 @@ onMounted(loadReferences)
         aria-label="父体基础信息"
       >
         <h2>产品基础信息</h2>
-        <label>产品编码<input
-          v-model="model.productCode"
-          required
-          maxlength="64"
-          :readonly="Boolean(model.version != null)"
-        ></label>
-        <label>产品名称<input
-          v-model="model.productName"
-          required
-          maxlength="128"
-        ></label>
-        <label>产品类型<input
-          v-model="model.productType"
-          maxlength="100"
-        ></label>
-        <label>状态<select
-          v-model="model.status"
-          v-single-select
-        ><option value="ACTIVE">启用</option><option value="DRAFT">待定</option><option value="DISABLED">停用</option></select></label>
         <fieldset
           class="form-wide catalog-image-editor parent-image-editor"
           :disabled="busy || uploading !== null"
@@ -179,6 +160,25 @@ onMounted(loadReferences)
             支持 JPG、PNG、WebP，最大 5 MB。保存产品后生效；父体与 SKU 图片独立维护。
           </p>
         </fieldset>
+        <label>产品编码<input
+          v-model="model.productCode"
+          required
+          maxlength="64"
+          :readonly="Boolean(model.version != null)"
+        ></label>
+        <label>产品名称<input
+          v-model="model.productName"
+          required
+          maxlength="128"
+        ></label>
+        <label>产品类型<input
+          v-model="model.productType"
+          maxlength="100"
+        ></label>
+        <label>状态<select
+          v-model="model.status"
+          v-single-select
+        ><option value="ACTIVE">启用</option><option value="DRAFT">待定</option><option value="DISABLED">停用</option></select></label>
         <label class="form-wide">描述<textarea
           v-model="model.description"
           maxlength="1000"
@@ -252,13 +252,6 @@ onMounted(loadReferences)
             </button>
             <button
               type="button"
-              :class="{ active: activeTab(variantIndex) === 'image' }"
-              @click="setTab(variantIndex, 'image')"
-            >
-              图片管理
-            </button>
-            <button
-              type="button"
               :class="{ active: activeTab(variantIndex) === 'customs' }"
               @click="setTab(variantIndex, 'customs')"
             >
@@ -278,8 +271,8 @@ onMounted(loadReferences)
           </div>
           <div class="sku-editor-grid">
             <div
-              v-show="activeTab(variantIndex) === 'image'"
-              data-editor-tab="image"
+              v-show="activeTab(variantIndex) === 'basic'"
+              data-editor-tab="basic"
               class="catalog-image-editor sku-image-editor product-tab-panel product-tab-panel--wide"
             >
               <AuthenticatedCatalogImage

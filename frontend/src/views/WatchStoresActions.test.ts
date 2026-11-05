@@ -102,7 +102,7 @@ describe('watch list actions',()=>{
   vi.mocked(apiRequest).mockImplementation(async(path)=>path==='/v1/watch/stores'?stores:path==='/v1/watch/events'?records:store)
   const w=await setup()
   const first=()=>w.find('tbody tr a').text()
-  expect(first()).toBe('Store 0')
+  expect(first()).toBe('Store 24');expect(w.get('[aria-label="按开始监控时间排序"]').element.closest('th')?.getAttribute('aria-sort')).toBe('descending')
   await w.get('[aria-label="按今日上架排序"]').trigger('click')
   expect(first()).toBe('Store 24');expect(w.find('th[aria-sort="descending"]').text()).toContain('今日上架')
   await w.get('[aria-label="按今日上架排序"]').trigger('click');expect(first()).not.toBe('Store 24')

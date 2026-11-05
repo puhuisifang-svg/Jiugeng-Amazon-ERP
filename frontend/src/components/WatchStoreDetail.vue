@@ -7,6 +7,7 @@ import { onBeforeRouteLeave } from 'vue-router'
 import { useCollectionStatus } from '@/composables/useCollectionStatus'
 import { isNovel, noveltyStatus, noveltyLabel } from '@/composables/watchNovelty'
 import { confirmAction } from '@/state/uiConfirmation'
+import { session } from '@/state/session'
 import { monitoringApi } from '@/api/monitoring'
 import { apiRequest } from '@/api/client'
 import type { WatchStoreDto, WatchEventDto } from '@/api/resources'
@@ -17,6 +18,7 @@ import UnsavedChangesDialog from './UnsavedChangesDialog.vue'
 import StoreTimingForm from './StoreTimingForm.vue'
 import '@/styles/monitoringWorkbench.css'
 const props=defineProps<{store:WatchStoreDto|undefined;writable:boolean;newProducts?:WatchEventDto[]|undefined;initialTab?:string}>()
+const candidateWritable=computed(()=>session.canAccess(['watch.read','selection.write']))
 const emit=defineEmits<{close:[];changed:[]}>()
 interface Product {provider:string;asin:string;title:string;firstAt:string;lastAt:string;missingCount:number;missingAt:string|null;imageUrl?:string;price?:number;priceType?:string;rating?:string;event?:WatchEventDto}
 interface Detail {automaticProducts:Product[]}
@@ -62,6 +64,12 @@ function close(){if(locked.value)return;if(dirty.value)unsaved.value=true;else d
 function discard(){request++;unsaved.value=false;dialog.value?.close();emit('close')}
 async function save(){if(!props.store||!props.writable||locked.value)return;busy.value=true;error.value='';try{const result=await apiRequest<WatchStoreDto>(`/v1/watch/stores/${props.store.id}`,{method:'PUT',body:JSON.stringify({...draft.value,version:version.value})});version.value=result.version??version.value;baseline.value=JSON.stringify(draft.value);notice.value='店铺信息已保存';emit('changed')}catch(e){error.value=e instanceof Error?e.message:'保存失败'}finally{busy.value=false}}
 async function monitor(asins:string[]){if(!props.writable||locked.value)return;busy.value=true;error.value='';try{const result=await monitoringApi.create({requestId:crypto.randomUUID(),asins,tags:[],remark:''});notice.value=`已添加 ${result.filter(r=>r.status==='CREATED').length} 个，已存在 ${result.filter(r=>r.status==='EXISTS').length} 个`;const failed=result.filter(r=>!['CREATED','EXISTS'].includes(r.status));if(failed.length)error.value=failed.map(r=>r.message).join('；');chosen.value=[]}catch(e){error.value=e instanceof Error?e.message:'添加监控失败'}finally{busy.value=false}}
+async function addCandidates(asins:string[]){
+ if(!props.store||!candidateWritable.value||locked.value||!asins.length)return
+ busy.value=true;error.value='';let created=0,reused=0;const failed:string[]=[]
+ for(const asin of asins)try{const result=await apiRequest<{candidateId:string;reused:boolean}>(`/v1/watch/stores/${props.store.id}/candidates`,{method:'POST',body:JSON.stringify({asin})});if(result.reused)reused++;else created++}catch(e){failed.push(`${asin}：${e instanceof Error?e.message:'加入失败'}`)}
+ notice.value=`候选池：新增 ${created} 个，已存在 ${reused} 个`;error.value=failed.join('；');chosen.value=[];busy.value=false
+}
 async function retryNovelty(event:WatchEventDto){if(!props.writable||locked.value)return;if(await novelty.collect(event.id))notice.value='日期补采已排队，上架记录不受影响';else error.value=novelty.error.value}
 async function markNovelty(event:WatchEventDto,action:string){
  if(!props.writable||locked.value||!await confirmAction(action==='RESET'?'撤销人工标记，恢复自动判定？':action==='EXCLUDED'?'将此商品排除出新品统计？上架记录会保留。':'确认此商品为新品？该人工判断会计入首次发现当天的新品统计。'))return
@@ -164,7 +172,14 @@ async function markNovelty(event:WatchEventDto,action:string){
             @click="monitor(chosen)"
           >
             批量添加产品监控
-          </button><span>{{ chosen.length?`已选 ${chosen.length} 个商品`:'勾选商品可添加至产品监控' }}</span>
+          </button><button
+            v-if="candidateWritable"
+            class="mw-primary"
+            :disabled="!chosen.length||locked||loading"
+            @click="addCandidates(chosen)"
+          >
+            批量加入候选池
+          </button><span>{{ chosen.length?`已选 ${chosen.length} 个商品`:'勾选商品后选择添加产品监控或加入候选池' }}</span>
         </div>
         <p
           v-if="invalidRange"
@@ -254,6 +269,13 @@ async function markNovelty(event:WatchEventDto,action:string){
                     @click="monitor([p.asin])"
                   >
                     添加产品监控
+                  </button><button
+                    v-if="candidateWritable"
+                    class="mw-link"
+                    :disabled="locked||loading"
+                    @click="addCandidates([p.asin])"
+                  >
+                    加入候选池
                   </button><template v-if="tab==='novelty'&&p.event">
                     <button
                       class="mw-link"

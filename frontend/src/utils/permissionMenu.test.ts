@@ -17,6 +17,7 @@ describe('permission menu follows application navigation',()=>{
   expect(children.find(c=>c.key==='products')!.codes).toContain('imports.read')
   expect(children.find(c=>c.key==='materials')!.codes).toEqual(['imports.read','inventory.read'])
   expect(children.find(c=>c.key==='compliance/customs')!.codes).toContain('products.read')
+  expect(children.find(c=>c.key==='fba/warehouses')!.codes).toEqual(['products.read'])
   expect(groups.at(-1)!.codes).toEqual(['synthetic.new'])
   expect(new Set(groups.flatMap(g=>g.codes)).size).toBe(5)
  })

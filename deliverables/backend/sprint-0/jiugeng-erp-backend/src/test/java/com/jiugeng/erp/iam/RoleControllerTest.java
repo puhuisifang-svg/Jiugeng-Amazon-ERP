@@ -132,7 +132,7 @@ class RoleControllerTest {
             if(expected.contains("costs.write")) expected.add("costs.delete");
             if(expected.contains("finance.write")) expected.addAll(List.of("finance.void","finance.attachment.remove"));
             if(expected.contains("finance.read")) expected.add("finance.export");
-            if(role==IamTypes.Role.ADMIN) expected.addAll(List.of("selection.review","development.review","factory.employees.read","factory.employees.write","factory.rates.read","factory.rates.write","factory.reports.read","factory.reports.write","factory.reports.review","factory.payroll.read","factory.payroll.write","factory.payroll.lock","factory.payroll.correct","factory.payroll.pay","factory.payroll.export"));
+            if(role==IamTypes.Role.ADMIN) expected.addAll(List.of("forwarders.read","forwarders.write","forwarders.export","forwarders.delete","selection.review","development.review","factory.employees.read","factory.employees.write","factory.rates.read","factory.rates.write","factory.reports.read","factory.reports.write","factory.reports.review","factory.payroll.read","factory.payroll.write","factory.payroll.lock","factory.payroll.correct","factory.payroll.pay","factory.payroll.export"));
             assertThat(actual).as(role.name()).isEqualTo(expected);
         }
     }

@@ -34,9 +34,13 @@ public class CustomsWorkbook {
    for(var m:merges)s.addMergedRegion(new CellRangeAddress(m.getFirstRow()+i*block,m.getLastRow()+i*block,m.getFirstColumn(),m.getLastColumn()));}
  }
  public byte[] export(CustomsDocuments.Document d){
-  var in=new CustomsDocuments.Input(d.documentNo(),d.status(),d.fields(),d.items(),d.version());CustomsDocuments.complete(in);
+  var effectiveFields=new LinkedHashMap<>(d.fields());
+  if(CustomsDocuments.text(effectiveFields.get("payment")).isBlank())effectiveFields.put("payment","T/T");
+  if(CustomsDocuments.text(effectiveFields.get("tolerance")).isBlank())effectiveFields.put("tolerance","5");
+  var effectiveItems=d.items().stream().map(row->{var copy=new LinkedHashMap<>(row);if(automaticWeight(row)){copy.put("quantity2",row.get("netWeight"));copy.put("unit2","千克");}return (Map<String,String>)copy;}).toList();
+  var in=new CustomsDocuments.Input(d.documentNo(),d.status(),effectiveFields,effectiveItems,d.version());CustomsDocuments.complete(in);
   try(InputStream resource=getClass().getResourceAsStream("/templates/customs-document.xlsx");XSSFWorkbook w=new XSSFWorkbook(Objects.requireNonNull(resource))){
-   var f=d.fields();var items=d.items();int n=items.size();XSSFSheet c=w.getSheet("报关单"),e=w.getSheet("申报要素"),t=w.getSheet("合同"),v=w.getSheet("发票"),p=w.getSheet("装箱单");
+   var f=effectiveFields;var items=effectiveItems;int n=items.size();XSSFSheet c=w.getSheet("报关单"),e=w.getSheet("申报要素"),t=w.getSheet("合同"),v=w.getSheet("发票"),p=w.getSheet("装箱单");
    if(n!=2){normalizeItems(c,17,3);normalizeItems(t,19,1);normalizeItems(v,14,1);normalizeItems(p,16,1);
    expand(c,17,3,n,c.getLastRowNum());expand(t,19,1,n,t.getLastRowNum());expand(v,14,1,n,v.getLastRowNum());expand(p,16,1,n,p.getLastRowNum());}
    String[][] fields={{"A4","seller"},{"E4","customsPort"},{"G4","exportDate"},{"L4","declarationDate"},{"O4","recordNo"},{"A6","buyer"},{"E6","transport"},{"G6","voyage"},{"M5","billNo"},{"A8","producer"},{"E8","supervision"},{"G8","taxNature"},{"M7","license"},{"A10","contractNo"},{"E10","tradeCountry"},{"G10","destination"},{"L10","destinationPort"},{"O10","exitPort"},{"A12","packaging"},{"J12","terms"},{"L12","freight"},{"N12","insurance"},{"Q12","otherCharges"},{"A14","documents"},{"D15","marks"}};
@@ -46,7 +50,7 @@ public class CustomsWorkbook {
    int foot=21+(n-1)*3;put(c,"D"+foot,"特殊关系确认："+f.get("relatedParty"));put(c,"G"+foot,"价格影响确认："+f.get("priceInfluence"));put(c,"K"+foot,"支付特许权使用费确认："+f.get("royalty"));put(c,"P"+foot,"自报自缴："+f.get("selfTax"));if(!f.get("declarant").isBlank())put(c,"A"+(foot+1),"申报人员        申报人员证号            电话："+f.get("declarant"));put(c,"C"+(foot+3),f.get("declarationCompany"));
    field(t,"B4",f,"seller");field(t,"C5",f,"sellerAddress");identifier(t,"C7",f.get("sellerPhone"));field(t,"E7",f,"sellerFax");field(t,"L3",f,"contractNo");put(t,"L5",LocalDate.parse(f.get("date")));field(t,"L7",f,"signPlace");field(t,"B9",f,"buyer");field(t,"C11",f,"buyerAddress");field(t,"C13",f,"buyerPhone");field(t,"I13",f,"buyerFax");
    int offset=n-1;decimal(t,"C"+(22+offset),f,"tolerance");formula(t,"A"+(23+offset),"IF(C"+(22+offset)+"=\"\",\"\",C"+(22+offset)+")");put(t,"C"+(24+offset),"合计美元:");formula(t,"K"+(23+offset),"ROUND(SUM(K20:K"+(19+n)+"),2)");formula(t,"D"+(24+offset),"K"+(23+offset));field(t,"D"+(26+offset),f,"packingMarks");field(t,"D"+(28+offset),f,"tradeTerms");field(t,"D"+(30+offset),f,"destination");put(t,"A"+(32+offset),"（9）付款条件："+f.get("payment"));field(t,"D"+(34+offset),f,"shippingMarks");field(t,"B"+(39+offset),f,"buyer");field(t,"I"+(39+offset),f,"seller");
-   field(v,"B6",f,"seller");field(v,"B7",f,"sellerAddress");put(v,"A8","收件人/SHIP TO："+f.get("buyer"));field(v,"B9",f,"buyerAddress");field(v,"G6",f,"invoiceNo");put(v,"G9",LocalDate.parse(f.get("date")));format(w,v,"G9","yyyy/m/d");
+   field(v,"B6",f,"seller");field(v,"B7",f,"sellerAddress");put(v,"A8","收件人/SHIP TO："+f.get("buyer"));field(v,"B9",f,"buyerAddress");field(v,"G6",f,"invoiceNo");put(v,"G9",LocalDate.parse(f.get("date")));
    field(p,"B5",f,"seller");field(p,"B6",f,"sellerAddress");field(p,"B7",f,"buyer");field(p,"B8",f,"buyerAddress");put(p,"I6",LocalDate.parse(f.get("date")));field(p,"I7",f,"invoiceNo");field(p,"I9",f,"contractNo");field(p,"I11",f,"payment");field(p,"B11",f,"voyage");
    // Each row is a single SKU/packing line; do not sum quantities with unlike units.
    boolean sameUnit=items.stream().map(r->r.get("unit")).distinct().count()==1;
@@ -60,12 +64,76 @@ public class CustomsWorkbook {
    for(String col:List.of("E","H","I"))formula(p,col+pt,"SUM("+col+"17:"+col+(16+n)+")");
    if("2".equals(f.get("ruleVersion"))){decimal(p,"H"+pt,f,"grossWeight");decimal(p,"I"+pt,f,"netWeight");}
    // Keep template money formats, with USD rather than the template's erroneous RMB format.
-   format(w,t,"D"+(24+offset),"[DBNum2]General;[Red][DBNum2]General");
+   formula(t,"D"+(24+offset),"TEXT(K"+(23+offset)+",\"[DBNum2]General\")&IF(MOD(K"+(23+offset)+",1)=0,\"元整\",\"元\")");
+   format(w,t,"D"+(24+offset),"General");
+   linkSheets(c,t,v,p,f,items);
+   for(int i=0;i<n;i++)if(automaticWeight(d.items().get(i)))formula(c,"G"+(19+3*i),"装箱单!I"+(17+i));
+   format(w,t,"L5","yyyy/m/d");
+   format(w,v,"G9","yyyy/m/d");
+   format(w,p,"I6","yyyy/m/d");
    elements(w,e,items);
    if(n!=2){for(int i:new int[]{0,2,3,4}){XSSFSheet sheet=w.getSheetAt(i);int end=switch(i){case 0->23+3*offset;case 2->42+offset;case 3->21+offset;default->28+offset;};w.setPrintArea(i,0,new int[]{17,1,11,6,8}[i],0,end);if(n>2){sheet.getPrintSetup().setFitWidth((short)1);sheet.getPrintSetup().setFitHeight((short)0);sheet.setFitToPage(true);}}}
    if(n>2){c.setRepeatingRows(new CellRangeAddress(0,16,-1,-1));v.setRepeatingRows(new CellRangeAddress(0,13,-1,-1));p.setRepeatingRows(new CellRangeAddress(0,15,-1,-1));}
-   w.getCreationHelper().createFormulaEvaluator().evaluateAll();w.setForceFormulaRecalculation(true);ByteArrayOutputStream out=new ByteArrayOutputStream();w.write(out);return out.toByteArray();
+   w.getCreationHelper().createFormulaEvaluator().evaluateAll();
+   // POI does not render DBNum2 inside TEXT; cache the same Chinese text for preview clients.
+   var words=(XSSFCell)cell(t,23+offset,3);var amount=BigDecimal.valueOf(cell(t,22+offset,10).getNumericCellValue()).stripTrailingZeros();
+   words.getCTCell().setT(org.openxmlformats.schemas.spreadsheetml.x2006.main.STCellType.STR);words.getCTCell().setV(amountWords(amount));
+   w.setForceFormulaRecalculation(true);ByteArrayOutputStream out=new ByteArrayOutputStream();w.write(out);return out.toByteArray();
   }catch(IOException e){throw new IllegalStateException("导出失败",e);}
+ }
+ // Derive only a completely omitted secondary quantity; preserve explicit values and reject partial pairs.
+ private static boolean automaticWeight(Map<String,String> row){
+  return CustomsDocuments.text(row.get("quantity2")).isBlank()&&CustomsDocuments.text(row.get("unit2")).isBlank()
+   &&!CustomsDocuments.text(row.get("netWeight")).isBlank()
+   &&!Set.of("千克","公斤","kg","kgs","kilogram","kilograms").contains(CustomsDocuments.text(row.get("unit")).toLowerCase(Locale.ROOT));
+ }
+ // Retain cross-sheet dependencies so edits in the exported workbook recalculate all copies.
+ private static void linkSheets(XSSFSheet c,XSSFSheet t,XSSFSheet v,XSSFSheet p,Map<String,String> f,List<Map<String,String>> items){
+  int n=items.size(),pt=17+n;
+  String[][] contract={{"L3","报关单!A10"},{"B4","报关单!A8"},{"B9","报关单!A6"},{"D"+(29+n),"报关单!G10"},{"B"+(38+n),"B9"},{"I"+(38+n),"B4"}};
+  for(var x:contract)formula(t,x[0],x[1]);
+  String place=value(items.getFirst(),f,"sourcePlace");
+  if(place==null||place.isBlank()){put(c,"O18","厦门市");}
+  formula(t,"L7","报关单!O18");
+  put(t,"C11",shippingAddress(f));
+  String[][] invoice={{"B6","合同!B4"},{"B7","合同!C5"},{"B9","合同!C11"},{"G9","合同!L5"}};
+  for(var x:invoice)formula(v,x[0],x[1]);
+  if(Objects.equals(f.get("invoiceNo"),f.get("contractNo")))formula(v,"G6","合同!L3");
+  String[][] packing={{"B5","发票!B6"},{"B6","发票!B7"},{"I6","合同!L5"},{"B7","合同!B9"},{"I7","发票!G6"},{"B8","合同!C11"},{"I9","合同!L3"},{"I11","MID(合同!A"+(31+n)+",9,32767)"}};
+  for(var x:packing)formula(p,x[0],x[1]);
+  for(int i=0;i<n;i++){
+   int cr=18+3*i,tr=20+i,vr=15+i,pr=17+i;
+   if(items.get(i).get("nameEn").isBlank())formula(t,"A"+tr,"报关单!D"+cr);
+   formula(t,"F"+tr,"报关单!G"+cr);formula(t,"H"+tr,"报关单!H"+cr);formula(t,"I"+tr,"报关单!I"+cr);
+   for(var pair:new String[][]{{"B","A"},{"C","E"},{"D","F"},{"E","H"},{"F","I"}})formula(v,pair[0]+vr,"合同!"+pair[1]+tr);
+   for(var pair:new String[][]{{"B","B"},{"D","C"},{"F","D"},{"G","E"}})formula(p,pair[0]+pr,"发票!"+pair[1]+vr);
+   put(p,"A"+pr,i+1);
+  }
+  boolean sameUnit=items.stream().map(r->r.get("unit")).distinct().count()==1;
+  if(sameUnit){formula(v,"E"+(15+n),"E15");formula(p,"G"+pt,"发票!E"+(15+n));}
+  if(items.stream().allMatch(r->!r.get("grossWeight").isBlank()&&!r.get("netWeight").isBlank())){
+   formula(p,"H"+pt,"SUM(H17:H"+(16+n)+")");formula(p,"I"+pt,"SUM(I17:I"+(16+n)+")");
+   formula(c,"F12","装箱单!H"+pt);formula(c,"G12","装箱单!I"+pt);
+  }
+  formula(c,"E12","装箱单!E"+pt);
+ }
+ static String shippingAddress(Map<String,String> f){
+  String address=Objects.toString(f.get("buyerAddress"),"").trim(),warehouse=Objects.toString(f.get("warehouse"),"").trim();
+  if(address.isBlank()||warehouse.isBlank()||address.matches("^地址\\d+[：:].*"))return address;
+  return "地址1："+warehouse+" - "+address;
+ }
+ static String amountWords(BigDecimal value){
+  String[] parts=value.stripTrailingZeros().toPlainString().split("\\.");String result=integerWords(Long.parseLong(parts[0]));
+  if(parts.length==1)return result+"元整";
+  StringBuilder fraction=new StringBuilder();for(char ch:parts[1].toCharArray())fraction.append("零壹贰叁肆伍陆柒捌玖".charAt(ch-'0'));
+  return result+"点"+fraction+"元";
+ }
+ private static String integerWords(long value){
+  if(value==0)return "零";
+  for(long unit:new long[]{100000000,10000})if(value>=unit){long rest=value%unit;return integerWords(value/unit)+(unit==10000?"万":"亿")+(rest==0?"":(rest<unit/10?"零":"")+integerWords(rest));}
+  StringBuilder out=new StringBuilder();boolean zero=false;int place=3;
+  for(int divisor:new int[]{1000,100,10,1}){int digit=(int)(value/divisor)%10;if(digit==0){if(!out.isEmpty())zero=true;}else{if(zero)out.append("零");out.append("零壹贰叁肆伍陆柒捌玖".charAt(digit)).append(new String[]{"","拾","佰","仟"}[place]);zero=false;}place--;}
+  return out.toString();
  }
  private static void format(XSSFWorkbook w,Sheet s,String address,String pattern){CellReference a=new CellReference(address);Cell c=cell(s,a.getRow(),a.getCol());CellStyle style=w.createCellStyle();style.cloneStyleFrom(c.getCellStyle());style.setDataFormat(w.createDataFormat().getFormat(pattern));c.setCellStyle(style);}
  private static String description(Map<String,String> r){return r.get("name")+(r.get("nameEn").isBlank()?"":"\n"+r.get("nameEn"));}

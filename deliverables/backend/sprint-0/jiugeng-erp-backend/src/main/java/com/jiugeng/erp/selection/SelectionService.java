@@ -130,6 +130,17 @@ class SelectionService implements SelectionCandidateGateway {
         repository.linkSource(id,eventId,runId); return new Confirmation(id,false);
     }
 
+    @Override @Transactional
+    public Confirmation confirmStoreProduct(String asin,String title,String imageUrl,String storeId,String storeName,java.time.Instant discoveredAt,AuthenticatedActor actor){
+        String normalized=extractAsin(asin);var existing=repository.findByAsin(normalized);if(existing.isPresent())return new Confirmation(existing.get().id(),true);
+        String id=UUID.randomUUID().toString();
+        try{repository.insertWatch(id,normalized,required(title,"标题",300),canonical(normalized),required(storeName,"店铺名称",200),discoveredAt,null,null,actor.userId());}
+        catch(DataIntegrityViolationException e){return new Confirmation(repository.findByAsin(normalized).orElseThrow(()->e).id(),true);}
+        repository.assignStoreCandidate(id,actor.displayName(),"来自上新监控店铺："+storeName);
+        var c=candidate(id);var d=(com.fasterxml.jackson.databind.node.ObjectNode)work.blank();d.put("name",c.title());d.put("asin",normalized);d.put("market","US");d.put("sourceUrl",c.sourceUrl());d.put("sourceStoreId",storeId);d.put("sourceStoreName",storeName);d.put("owner",actor.displayName());d.put("reason","来自上新监控店铺："+storeName);d.put("specVersion","1");if(imageUrl!=null&&imageUrl.startsWith("https://"))d.put("imageUrl",imageUrl);
+        work.create("CANDIDATE",id,"NEW",d,null);audit.record(operation(actor,"CANDIDATE_CREATE_FROM_WATCH",id,null,Map.of("asin",normalized,"storeId",storeId),"店铺商品加入候选池"));return new Confirmation(id,false);
+    }
+
     private void seedWorkspace(CandidateView c){
         var d=(com.fasterxml.jackson.databind.node.ObjectNode)work.blank();d.put("name",c.title());d.put("asin",c.asin());d.put("market","US");d.put("sourceUrl",c.sourceUrl());d.put("owner",c.owner());d.put("reason",c.selectionReason());d.put("specVersion","1");
         work.create("CANDIDATE",c.id(),"NEW",d,null);

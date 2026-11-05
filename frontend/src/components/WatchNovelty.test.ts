@@ -1,3 +1,4 @@
+vi.mock('@/state/session',()=>({session:{canAccess:vi.fn(()=>true)}}))
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import WatchStoreDetail from './WatchStoreDetail.vue'

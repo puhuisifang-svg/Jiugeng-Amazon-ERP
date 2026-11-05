@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed,ref,watch,watchEffect,onBeforeUnmount } from 'vue'
-import { vSingleSelect } from '@/directives/singleSelect'
 import { profileFields, hsSchemaApi, applyHsSchema, profileElements, type CustomsProfile } from '@/api/customs'
 const model=defineModel<CustomsProfile>({required:true})
 const props=defineProps<{disabled?:boolean}>()
@@ -95,11 +94,6 @@ function enableStructured(){if(!model.value.elements)model.value={...model.value
       maxlength="100"
       placeholder="随 HS 带出，可核对修改"
     ></label>
-    <label>资料状态<select
-      v-model="model.state"
-      v-single-select
-      @change="enableStructured"
-    ><option value="DRAFT">草稿 / 待核对</option><option value="REVIEWED">资料已核对</option></select></label>
   </fieldset>
 </template>
 <style scoped>

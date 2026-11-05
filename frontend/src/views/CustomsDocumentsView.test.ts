@@ -22,7 +22,7 @@ describe('报关单据删除',()=>{
  it('returns to the previous page after deleting its last row',async()=>{
   api.list.mockResolvedValue({items:[row],totalCount:21});const w=mount(View);await flushPromises();await w.get('[aria-label="下一页"]').trigger('click');await flushPromises()
   api.list.mockResolvedValueOnce({items:[],totalCount:20}).mockResolvedValueOnce({items:[{...row,id:'other',documentNo:'SYN-OTHER'}],totalCount:20})
-  await removeButton(w).trigger('click');await flushPromises();expect(api.list).toHaveBeenLastCalledWith('','',0,20);expect(w.get('tbody').text()).toContain('SYN-OTHER');w.unmount()
+  await removeButton(w).trigger('click');await flushPromises();expect(api.list).toHaveBeenLastCalledWith('','',0,20,'');expect(w.get('tbody').text()).toContain('SYN-OTHER');w.unmount()
  })
  it('hides deletion for read-only users',async()=>{api.canAccess.mockReturnValue(false);const w=mount(View);await flushPromises();expect(removeButton(w)).toBeUndefined();w.unmount()})
 })

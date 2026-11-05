@@ -17,8 +17,8 @@ import static com.jiugeng.erp.launch.LaunchRules.*;
 
 @RestController @Profile("!mock") @RequestMapping("/api/v1/selection/workbench") @Transactional
 class CandidateWorkbench {
-    private final com.jiugeng.erp.iam.AuditTrail audit;private final com.jiugeng.erp.collection.CollectionService collection;private final LaunchWorkspace work;private final SelectionService service;private final JdbcClient jdbc;private final ObjectMapper json;private final ApplicationEventPublisher events;
-    CandidateWorkbench(LaunchWorkspace work,SelectionService service,JdbcClient jdbc,ObjectMapper json,ApplicationEventPublisher events,com.jiugeng.erp.collection.CollectionService collection,com.jiugeng.erp.iam.AuditTrail audit){this.audit=audit;this.collection=collection;this.work=work;this.service=service;this.jdbc=jdbc;this.json=json;this.events=events;}
+    private final com.jiugeng.erp.monitoring.MonitoringReferenceImages images;private final com.jiugeng.erp.iam.AuditTrail audit;private final com.jiugeng.erp.collection.CollectionService collection;private final LaunchWorkspace work;private final SelectionService service;private final JdbcClient jdbc;private final ObjectMapper json;private final ApplicationEventPublisher events;
+    CandidateWorkbench(LaunchWorkspace work,SelectionService service,JdbcClient jdbc,ObjectMapper json,ApplicationEventPublisher events,com.jiugeng.erp.collection.CollectionService collection,com.jiugeng.erp.iam.AuditTrail audit,com.jiugeng.erp.monitoring.MonitoringReferenceImages images){this.images=images;this.audit=audit;this.collection=collection;this.work=work;this.service=service;this.jdbc=jdbc;this.json=json;this.events=events;}
     @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
     org.springframework.http.ResponseEntity<Map<String,String>> error(org.springframework.web.server.ResponseStatusException e){return org.springframework.http.ResponseEntity.status(e.getStatusCode()).body(Map.of("message",e.getReason()));}
     @ExceptionHandler(SelectionException.class)
@@ -36,6 +36,8 @@ class CandidateWorkbench {
         var items=jdbc.sql("SELECT EXISTS (SELECT 1 FROM product_development d WHERE d.candidate_id=c.id AND d.deleted_at IS NULL) AS has_development,c.id,c.title,c.asin,c.source,c.owner,c.status AS legacy_state,"+effectiveState+" AS state,COALESCE(w.version,c.version) AS version,w.document_json,o.observation_json,c.updated_at"+filtered+" ORDER BY c.updated_at DESC,c.id LIMIT :size OFFSET :offset").params(parameters).query((r,n)->{
             Map<String,Object> m=new LinkedHashMap<>();for(String f:List.of("id","title","asin","source","owner","state","legacy_state"))m.put(f,r.getString(f));
             m.put("hasDevelopment",r.getBoolean("has_development"));m.put("version",r.getLong("version"));m.put("document",work.decode(r.getString("document_json")));m.put("observation",work.decode(r.getString("observation_json")));m.put("updatedAt",r.getTimestamp("updated_at").toInstant());return m;}).list();
+        var asins=new HashSet<String>();for(var item:items)if(item.get("asin") instanceof String asin)asins.add(asin);
+        var references=images.images(asins);for(var item:items){var observation=(ObjectNode)item.get("observation");if(observation.path("imageUrl").asText("").isBlank()&&item.get("asin")!=null&&references.containsKey(item.get("asin")))observation.put("imageUrl",references.get(item.get("asin")));}
         long count=jdbc.sql("SELECT COUNT(*)"+filtered).params(parameters).query(Long.class).single();
         Map<String,Long> counts=new LinkedHashMap<>();jdbc.sql("SELECT "+effectiveState+" AS state,COUNT(*) AS amount"+from+" GROUP BY "+effectiveState).params(parameters).query((r,n)->Map.entry(r.getString("state"),r.getLong("amount"))).list().forEach(e->counts.put(e.getKey(),e.getValue()));
         var owners=jdbc.sql("SELECT DISTINCT owner FROM selection_candidate WHERE deleted_at IS NULL AND owner IS NOT NULL AND owner<>'' ORDER BY owner").query(String.class).list();
@@ -94,8 +96,9 @@ class CandidateWorkbench {
     @PostMapping("/{id}/collect") @PreAuthorize("hasAuthority('selection.write')")
     Map<String,String> collect(@PathVariable String id){lockCandidate(id);service.detail(id);collection.enqueue("CANDIDATE",id);return Map.of("status","QUEUED");}
     @GetMapping("/{id}/observation") @PreAuthorize("hasAuthority('selection.read')")
-    Map<String,Object> observation(@PathVariable String id){service.detail(id);Map<String,Object> result=new LinkedHashMap<>();
+    Map<String,Object> observation(@PathVariable String id){var candidate=service.detail(id).candidate();Map<String,Object> result=new LinkedHashMap<>();
       result.put("observation",jdbc.sql("SELECT observation_json FROM launch_observation WHERE entity_id=:id").param("id",id).query(String.class).optional().map(work::decode).orElse(work.blank()));
+      var observation=(ObjectNode)result.get("observation");if(observation.path("imageUrl").asText("").isBlank()&&candidate.asin()!=null){String reference=images.images(Set.of(candidate.asin())).get(candidate.asin());if(reference!=null)observation.put("imageUrl",reference);}
       result.put("job",jdbc.sql("SELECT j.status,j.reason,j.created_at FROM collection_job j JOIN collection_schedule s ON s.id=j.schedule_id WHERE s.kind='CANDIDATE' AND s.target_id=:id ORDER BY j.created_at DESC LIMIT 1").param("id",id).query().listOfRows());return result;}
     private void lockCandidate(String id){
         jdbc.sql("SELECT id FROM selection_candidate WHERE id=:id AND deleted_at IS NULL FOR UPDATE").param("id",id).query(String.class).optional()

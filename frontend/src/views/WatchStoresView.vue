@@ -28,7 +28,7 @@ const page = ref(1), pageSize = ref(20), query = ref(''), status = ref(''), owne
 const owners = computed(() => [...new Set([session.user.value?.displayName, ...items.value.map(s=>s.owner)].filter(Boolean))] as string[])
 const filtered = computed(() => items.value.filter(s=>(!status.value||s.status===status.value)&&(!owner.value||s.owner===owner.value)&&[s.storeName,s.storeKey,s.owner,s.remark].join(' ').toLowerCase().includes(query.value.toLowerCase())))
 type StoreSort = 'today' | 'createdAt'
-const sortKey = ref<StoreSort>(), sortDirection = ref<'ascending' | 'descending'>('descending')
+const sortKey = ref<StoreSort>('createdAt'), sortDirection = ref<'ascending' | 'descending'>('descending')
 const sorted = computed(() => {
  if (!sortKey.value) return filtered.value
  return [...filtered.value].sort((a,b) => {

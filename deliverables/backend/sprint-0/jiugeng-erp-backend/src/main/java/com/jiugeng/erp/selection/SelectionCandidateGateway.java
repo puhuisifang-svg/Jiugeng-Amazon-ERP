@@ -7,5 +7,6 @@ import java.time.Instant;
 public interface SelectionCandidateGateway {
     Confirmation confirmWatchCandidate(String asin, String title, String storeName, Instant discoveredAt,
             String runId, String eventId, AuthenticatedActor actor);
+    Confirmation confirmStoreProduct(String asin,String title,String imageUrl,String storeId,String storeName,Instant discoveredAt,AuthenticatedActor actor);
     record Confirmation(String candidateId, boolean reused) {}
 }

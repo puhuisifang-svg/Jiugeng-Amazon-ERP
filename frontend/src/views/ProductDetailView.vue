@@ -98,18 +98,6 @@ watch([section, () => product.value?.id, () => product.value?.updatedAt, () => p
     <template v-else-if="product">
       <article class="panel compact-panel">
         <div class="detail-summary">
-          <button
-            v-if="product.imageAssetId"
-            type="button"
-            class="detail-image"
-            aria-label="查看父体图片"
-            @click="preview = { id: product.imageAssetId, name: product.productName }"
-          >
-            <AuthenticatedCatalogImage
-              :image-id="product.imageAssetId"
-              :alt="product.productName"
-            />
-          </button>
           <div><h2>{{ product.productName }}</h2><p>{{ product.productCode }} · {{ product.productType || '未填写类型' }} · {{ product.variants.length }} 个 SKU</p></div>
           <span :class="['status-badge', `status-badge--${product.status.toLowerCase()}`]">{{ statusLabel(product.status) }}</span>
           <div
@@ -156,6 +144,19 @@ watch([section, () => product.value?.id, () => product.value?.updatedAt, () => p
         class="panel compact-panel"
       >
         <h2>基础信息</h2>
+        <button
+          v-if="product.imageAssetId"
+          type="button"
+          class="detail-image"
+          aria-label="查看父体图片"
+          @click="preview = { id: product.imageAssetId, name: product.productName }"
+        >
+          <AuthenticatedCatalogImage
+            :image-id="product.imageAssetId"
+            :alt="product.productName"
+          />
+        </button>
+
         <dl class="detail-fields">
           <div><dt>产品编码</dt><dd>{{ product.productCode }}</dd></div><div><dt>产品名称</dt><dd>{{ product.productName }}</dd></div>
           <div><dt>产品类型</dt><dd>{{ product.productType || '—' }}</dd></div><div><dt>SKU数量</dt><dd>{{ product.variants.length }}</dd></div>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ProductName from './ProductName.vue'
+import { profileFields, profileElements } from '@/api/customs'
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { domainApi, type SkuListItemDto, type ProductHistoryDto, type ProductVariantDto } from '@/api/domain'
@@ -10,6 +11,8 @@ import { productActionLabel } from '@/utils/productHistory'
 const props = defineProps<{ detailRow: SkuListItemDto; writable: boolean; error?: string; hideParentLink?: boolean }>()
 const emit = defineEmits<{ close: []; edit: [row: SkuListItemDto] }>()
 const detailVariant = computed(() => props.detailRow.variant)
+const customs = computed(() => detailVariant.value.customs)
+const customsElements = computed(() => customs.value ? profileElements(customs.value) : {})
 const detailTab = ref('basic'), detailHistory = ref<ProductHistoryDto[]>([]), historyError = ref('')
 function labelStatus(status: string) { return status === 'ACTIVE' ? '启用' : status === 'DRAFT' ? '待定' : '停用' }
 function dimensionLabel(variant: ProductVariantDto) {
@@ -74,7 +77,7 @@ watch(() => props.detailRow, async row => {
         </div>
       </header><nav class="product-editor-tabs">
         <button
-          v-for="tab in ([['basic','基础信息'],['purchase','采购信息'],['specs','规格信息'],['materials','关联辅料'],['image','图片管理'],['manual','说明书管理'],['label','商品标签管理'],['history','操作日志']] as const)"
+          v-for="tab in ([['basic','基础信息'],['purchase','采购信息'],['specs','规格信息'],['materials','关联辅料'],['customs','报关资料'],['manual','说明书管理'],['label','商品标签管理'],['history','操作日志']] as const)"
           :key="tab[0]"
           type="button"
           :class="{ active: detailTab === tab[0] }"
@@ -83,18 +86,62 @@ watch(() => props.detailRow, async row => {
           {{ tab[1] }}
         </button>
       </nav>
-      <dl
+      <section
         v-if="detailTab === 'basic'"
-        class="sku-detail-grid"
+        class="sku-basic-panel"
       >
-        <dt>SKU</dt><dd>{{ detailVariant?.skuCode }}</dd><dt>品名</dt><dd>
-          <ProductName
-            :text="detailVariant?.variantName ?? ''"
-            :styles="detailVariant?.nameStyles"
-            :highlighted="detailVariant?.nameHighlighted"
-          />
-        </dd><dt>SKU 状态</dt><dd>{{ labelStatus(detailVariant?.status ?? '') }}</dd><dt>产品状态</dt><dd>{{ labelStatus(detailRow.productStatus) }}</dd>
-      </dl>
+        <div class="sku-detail-image sku-basic-image">
+          <AuthenticatedCatalogImage
+            v-if="detailVariant?.imageAssetId"
+            :image-id="detailVariant.imageAssetId"
+            :alt="`${detailVariant.variantName}主图`"
+          /><img
+            v-else-if="detailVariant?.imageUrl"
+            :src="detailVariant.imageUrl"
+            alt="SKU主图"
+          ><p v-else>
+            暂无图片。
+          </p>
+        </div>
+        <dl
+          class="sku-detail-grid"
+        >
+          <dt>SKU</dt><dd>{{ detailVariant?.skuCode }}</dd><dt>品名</dt><dd>
+            <ProductName
+              :text="detailVariant?.variantName ?? ''"
+              :styles="detailVariant?.nameStyles"
+              :highlighted="detailVariant?.nameHighlighted"
+            />
+          </dd><dt>SKU 状态</dt><dd>{{ labelStatus(detailVariant?.status ?? '') }}</dd><dt>产品状态</dt><dd>{{ labelStatus(detailRow.productStatus) }}</dd>
+        </dl>
+      </section>
+      <section
+        v-else-if="detailTab === 'customs'"
+        class="sku-customs-panel"
+      >
+        <template v-if="customs">
+          <p class="customs-summary">
+            出口美国 · 申报要素
+          </p>
+          <dl class="sku-detail-grid">
+            <dt>HS</dt><dd>{{ customs.chinaCode || '—' }}</dd>
+            <dt>品名</dt><dd>{{ customs.nameZh || '—' }}</dd>
+            <template
+              v-for="[key, label] in profileFields(customs)"
+              :key="key"
+            >
+              <dt>{{ label }}</dt><dd>{{ customsElements[key] || '—' }}</dd>
+            </template>
+            <dt>计量单位</dt><dd>{{ customs.measurementUnit || customs.unit || '—' }}</dd>
+          </dl>
+        </template>
+        <p
+          v-else
+          class="data-state"
+        >
+          暂无报关资料{{ writable ? '，请点击“编辑 SKU”补充。' : '。' }}
+        </p>
+      </section>
       <div
         v-else-if="detailTab === 'purchase'"
         class="detail-list"
@@ -130,22 +177,6 @@ watch(() => props.detailRow, async row => {
           :key="material.materialId"
         >
           {{ material.materialId }} · {{ material.standardQuantity }} {{ material.unit }} · 损耗率 {{ material.lossRate }}
-        </p>
-      </div>
-      <div
-        v-else-if="detailTab === 'image'"
-        class="sku-detail-image"
-      >
-        <AuthenticatedCatalogImage
-          v-if="detailVariant?.imageAssetId"
-          :image-id="detailVariant.imageAssetId"
-          :alt="`${detailVariant.variantName}主图`"
-        /><img
-          v-else-if="detailVariant?.imageUrl"
-          :src="detailVariant.imageUrl"
-          alt="SKU主图"
-        ><p v-else>
-          暂无图片。
         </p>
       </div>
       <SkuDocumentsPanel
@@ -200,3 +231,7 @@ watch(() => props.detailRow, async row => {
     </section>
   </div>
 </template>
+
+<style scoped>
+.sku-basic-image{min-height:0;padding:12px;border:1px solid var(--line);border-radius:6px;margin-top:12px;background:#f8fafc}.sku-basic-image :deep(.catalog-image),.sku-basic-image img{max-height:180px;max-width:100%;object-fit:contain}.sku-detail-grid{grid-template-columns:120px minmax(0,1fr) 120px minmax(0,1fr);margin:12px 0}.sku-detail-grid dd{white-space:pre-wrap;overflow-wrap:anywhere;min-width:0}.customs-summary{margin:12px 0;color:var(--muted);font-size:13px}@media(max-width:640px){.sku-detail-grid{grid-template-columns:100px minmax(0,1fr)}}
+</style>

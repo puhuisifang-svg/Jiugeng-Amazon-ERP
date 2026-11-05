@@ -65,6 +65,10 @@ class SelectionRepository {
                 .param("url", url).param("actor", actorId).update();
     }
 
+    void assignStoreCandidate(String id,String owner,String reason){
+        jdbc.sql("UPDATE selection_candidate SET owner=:owner,selection_reason=:reason,score=0 WHERE id=:id").param("owner",owner).param("reason",reason).param("id",id).update();
+    }
+
     void insertWatch(String id,String asin,String title,String url,String storeName,Instant discoveredAt,
             String runId,String eventId,String actorId){
         jdbc.sql("""

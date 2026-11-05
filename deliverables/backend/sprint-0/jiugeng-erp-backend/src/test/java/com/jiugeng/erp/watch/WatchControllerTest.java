@@ -60,6 +60,22 @@ import static org.assertj.core.api.Assertions.assertThat;import static org.sprin
   assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM watch_new_product_event WHERE store_id=?",Integer.class,store)).isEqualTo(1);
   assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE action='WATCH_NOVELTY_MARK'",Integer.class)).isEqualTo(2);
  }
+ @Test void storeProductEntersCandidatePoolWithImageAndDeduplicates()throws Exception{
+  String token=user("candidate-writer","SELECTION"),reader=user("candidate-reader","PRODUCT_MATERIAL"),store=createStore(token,"CANDIDATE-SYNTHETIC");
+  jdbc.update("INSERT INTO watch_presence(store_id,provider,asin,title,first_at,last_at,last_run_id,image_url) VALUES(?, 'test','B0TEST1234','Synthetic candidate',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'synthetic-run','https://example.com/product.jpg')",store);
+  String endpoint="/api/v1/watch/stores/"+store+"/candidates",body="{\"asin\":\"B0TEST1234\"}";
+  mvc.perform(post(endpoint).header("Authorization",bearer(reader)).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
+  mvc.perform(post(endpoint).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content("{\"asin\":\"B0MISSING1\"}")).andExpect(status().isNotFound());
+  mvc.perform(post(endpoint).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isOk()).andExpect(jsonPath("$.reused").value(false));
+  mvc.perform(post(endpoint).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isOk()).andExpect(jsonPath("$.reused").value(true));
+  mvc.perform(get("/api/v1/selection/workbench?q=B0TEST1234&source=WATCH").header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1)).andExpect(jsonPath("$.items[0].document.imageUrl").value("https://example.com/product.jpg")).andExpect(jsonPath("$.items[0].owner").value("candidate-writer"));
+  String monitor=UUID.randomUUID().toString();
+  try{
+   jdbc.update("INSERT INTO monitor_target(id,marketplace,asin,tags_json,remark,baseline_json) VALUES(?,'US','B0TEST1234','[]','',?)",monitor,"{\"imageUrl\":\"https://example.com/observed.jpg\"}");
+   mvc.perform(get("/api/v1/selection/workbench?q=B0TEST1234").header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.items[0].observation.imageUrl").value("https://example.com/observed.jpg")).andExpect(jsonPath("$.items[0].document.imageUrl").value("https://example.com/product.jpg"));
+  }finally{jdbc.update("DELETE FROM monitor_target WHERE id=?",monitor);}
+
+ }
  private String createStore(String token,String key)throws Exception{String body=mvc.perform(post("/api/v1/watch/stores").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("storeKey",key,"storeName","监控店铺","sourceUrl","https://example.com/store")))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();return json.readTree(body).get("id").asText();}
  private org.springframework.test.web.servlet.ResultActions run(String token,String store,String request,String status,int count,int pages,boolean complete,List<String> asins)throws Exception{return mvc.perform(post("/api/v1/watch/stores/{id}/runs",store).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("requestId",request,"status",status,"itemCount",count,"pageCount",pages,"pagesComplete",complete,"asins",asins))));}
  private String user(String name,String role)throws Exception{String id=UUID.randomUUID().toString();var encoder=new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder();jdbc.update("INSERT INTO iam_user (id,login_name,display_name,password_hash,role,status,must_change_password) VALUES (?,?,?,?,?,'ENABLED',FALSE)",id,name,name,encoder.encode(PASSWORD),role);jdbc.update("INSERT INTO iam_user_role(user_id,role_id) SELECT id,role FROM iam_user WHERE id=?",id);String body=mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("loginName",name,"password",PASSWORD)))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();return json.readTree(body).get("token").asText();}private String bearer(String token){return "Bearer "+token;}

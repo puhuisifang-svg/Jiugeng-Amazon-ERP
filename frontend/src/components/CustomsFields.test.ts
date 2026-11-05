@@ -5,13 +5,17 @@ import { blankCustoms,profileElements,serializeElements,applyHsSchema,hsSchemaAp
 const schema=(code:string):HsSchema=>({code,productName:'合成分类名',measurementUnit:code==='6307909000'?'千克/个':'千克/平方米',sourceUrl:'https://www.hsbianma.com/Code/'+code+'.html',sourceUpdatedAt:'2026/8/23',fetchedAt:'2026-11-04',stale:false,fields:(code==='6307909000'?[['brandType','品牌类型'],['exportBenefit','出口享惠情况'],['compositionContent','成分含量'],['brand','品牌(中文或外文名称)'],['articleNumber','货号'],['gtin','GTIN'],['cas','CAS'],['other','其他']]:[['brandType','品牌类型'],['exportBenefit','出口享惠情况'],['floorCovering','是否为铺地制品'],['fiberComposition','纤维成分'],['dimensions','规格尺寸'],['weavingMethod','织造方法(无纺、粘绒、植绒、针织等)'],['fixingMethod','固定方式(施胶、涂层粘合等)'],['gtin','GTIN'],['cas','CAS'],['other','其他']]).map(([key,label])=>({key:key!,label:label!}))})
 afterEach(()=>{vi.restoreAllMocks();vi.useRealTimers()})
 describe('SKU申报要素',()=>{
- it('loads fields and measurement unit for each HS and preserves removed answers',async()=>{
+ it('loads new HS fields without moving removed answers to Other',async()=>{
   vi.useFakeTimers();vi.spyOn(hsSchemaApi,'get').mockImplementation(async code=>schema(code))
   const w=mount(CustomsFields,{props:{modelValue:{...blankCustoms(),chinaCode:'6307909000'}}});await vi.advanceTimersByTimeAsync(400);await flushPromises()
   let value=w.emitted('update:modelValue')!.at(-1)![0] as ReturnType<typeof blankCustoms>;await w.setProps({modelValue:value})
   expect(w.text()).toContain('成分含量');expect(w.text()).not.toContain('是否为铺地制品');expect(value.measurementUnit).toBe('千克/个')
-  value={...value,elements:{...value.elements,articleNumber:'SKU-OLD'},chinaCode:'5705002000'};await w.setProps({modelValue:value});await vi.advanceTimersByTimeAsync(400);await flushPromises()
-  value=w.emitted('update:modelValue')!.at(-1)![0] as typeof value;await w.setProps({modelValue:value});expect(w.text()).toContain('织造方法(无纺、粘绒、植绒、针织等)');expect(w.text()).not.toContain('成分含量');expect(value.elements?.other).toContain('货号：SKU-OLD');expect(value.measurementUnit).toBe('千克/平方米');w.unmount()
+  value={...value,elements:{...value.elements,articleNumber:'SKU-OLD',other:'手工备注',brandType:'无品牌'},chinaCode:'5705002000'};await w.setProps({modelValue:value});await vi.advanceTimersByTimeAsync(400);await flushPromises()
+  value=w.emitted('update:modelValue')!.at(-1)![0] as typeof value;await w.setProps({modelValue:value});expect(w.text()).toContain('织造方法(无纺、粘绒、植绒、针织等)');expect(w.text()).not.toContain('成分含量');expect(value.elements?.other).toBe('手工备注');expect(value.elements?.articleNumber).toBeUndefined();expect(value.elements?.brandType).toBe('无品牌');expect(w.text()).not.toContain('资料状态');expect(value.measurementUnit).toBe('千克/平方米');w.unmount()
+ })
+ it('does not add Other or retain obsolete fields when the new HS does not define them',()=>{
+  const value=applyHsSchema({...blankCustoms(),elements:{articleNumber:'OLD',other:'旧备注'}},{...schema('5705002000'),fields:[{key:'brandType',label:'品牌类型'}]})
+  expect(value.elements).toEqual({brandType:''});expect(value.elementFields).toEqual([{key:'brandType',label:'品牌类型'}])
  })
  it('keeps answers and exposes a retry when lookup fails',async()=>{
   vi.useFakeTimers();const get=vi.spyOn(hsSchemaApi,'get').mockRejectedValue(new Error('查询失败'))

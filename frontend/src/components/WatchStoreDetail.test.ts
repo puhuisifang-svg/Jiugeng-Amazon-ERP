@@ -1,3 +1,4 @@
+vi.mock('@/state/session',()=>({session:{canAccess:vi.fn(()=>true)}}))
 import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apiRequest } from '@/api/client'
@@ -16,6 +17,13 @@ async function open(writable: boolean) {
 }
 afterEach(()=>vi.useRealTimers())
 describe('store product monitoring', () => {
+  it('adds candidates through a separate action and reports duplicates',async()=>{
+    const w=await open(true)
+    vi.mocked(apiRequest).mockResolvedValueOnce({id:'candidate',reused:true})
+    await w.findAll('button').find(b=>b.text()==='加入候选池')!.trigger('click');await flushPromises()
+    expect(apiRequest).toHaveBeenCalledWith('/v1/watch/stores/test-store/candidates',expect.objectContaining({method:'POST',body:JSON.stringify({asin:'B000000001'})}))
+    expect(w.text()).toContain('已存在 1 个');w.unmount()
+  })
   it('paginates beyond twenty products and labels offer prices and unobserved ratings', async () => {
     vi.mocked(apiRequest).mockResolvedValueOnce({products:[],runs:[],automaticProducts:Array.from({length:32},(_,i)=>({provider:'test',asin:`B0TEST${String(i).padStart(4,'0')}`,title:`Synthetic ${i}`,firstAt:'2026-10-26T12:00:00Z',lastAt:'2026-10-26T12:00:00Z',missingCount:0,price:12.99,priceType:'OFFER_FROM'}))})
     const wrapper=await open(true)

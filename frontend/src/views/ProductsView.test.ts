@@ -157,7 +157,7 @@ describe('ProductsView', () => {
     expect(dialog.text()).toContain('产品基础信息')
     expect(wrapper.text()).toContain('P-1')
 
-    const productInputs = dialog.find('.product-form').findAll('input')
+    const productInputs = dialog.find('.product-form').findAll('input[required]')
     await productInputs[0]!.setValue('P-2')
     await productInputs[1]!.setValue('新产品')
     const skuInputs = dialog.find('.variant-editor').findAll('input[required], textarea[required]')

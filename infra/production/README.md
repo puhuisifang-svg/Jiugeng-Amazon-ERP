@@ -6,8 +6,9 @@ not on the application server. No paid runner, registry or cloud backup is requi
 
 ## Release gates
 
-`Production` runs only for `main`, after the `production` environment approval,
-and only with repository variable `PRODUCTION_DEPLOY_ENABLED=true`.
+`Production` runs only for `main` and only with repository variable
+`PRODUCTION_DEPLOY_ENABLED=true`. The project manager merging the reviewed PR
+into main is the release approval; there is no additional environment approval.
 The server additionally requires `/etc/jiugeng/deploy-enabled`.
 Keep both gates disabled until final data migration and public access acceptance.
 The project manager reviews and merges changes to main; this setup does not merge.
@@ -16,8 +17,8 @@ The workflow reruns secret scanning, backend verify, frontend quality, import
 contracts and deployment tooling tests before packaging the exact commit.
 Environment secrets: `PRODUCTION_SSH_HOST`, `PRODUCTION_SSH_KEY`, and
 `PRODUCTION_KNOWN_HOSTS`. Pin the independently verified SSH host key.
-The environment must restrict deployment branches to main and require a reviewer.
-The reviewer may be the repository owner when only one GitHub account is available.
+The environment must restrict deployment branches to main, with no required
+reviewers or wait timer. Keep the main branch PR and required-check protections.
 
 ## Host setup
 

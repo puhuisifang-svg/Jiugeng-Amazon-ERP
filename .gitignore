@@ -4,6 +4,7 @@
 .env.*
 !.env.example
 !frontend/.env.test
+!frontend/.env.production
 *.key
 *.pem
 *.p12
@@ -28,3 +29,7 @@ build/
 logs/
 tmp/
 coverage/
+
+# Browser smoke test output
+frontend/test-results/
+frontend/playwright-report/

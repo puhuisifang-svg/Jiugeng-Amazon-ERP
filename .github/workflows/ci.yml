@@ -61,6 +61,11 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           pnpm quality
+      - name: Verify built frontend starts in browser
+        working-directory: frontend
+        run: |
+          pnpm exec playwright install --with-deps chromium
+          pnpm exec playwright test
       - name: Record deferred frontend scaffold
         if: ${{ hashFiles('frontend/pnpm-lock.yaml') == '' }}
         run: echo "Frontend scaffold is not present yet; pnpm test/build activate when its lockfile is committed."

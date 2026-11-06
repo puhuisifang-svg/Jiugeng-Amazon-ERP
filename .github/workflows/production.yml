@@ -43,6 +43,11 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           pnpm quality
+      - name: Verify built frontend starts in browser
+        working-directory: frontend
+        run: |
+          pnpm exec playwright install --with-deps chromium
+          pnpm exec playwright test
       - name: Import contract gate
         working-directory: deliverables/backend/sprint-0/import-contract/tests
         run: |

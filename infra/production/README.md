@@ -31,7 +31,11 @@ Only `/srv/jiugeng/data` is writable by the application.
 Configure MySQL on loopback, an application database and a database-specific user.
 Use a 384 MiB buffer pool, max 40 connections, and application pool size 5.
 Store secrets in `/etc/jiugeng`; never put them in Git or command output.
-`backend.env.example` documents the required paths. Copy existing OSS credentials
+`backend.env.example` documents the required paths. Copy the original `user_defaults_key` (32-byte Base64 AES key) into the
+configtree secret directory as well; encrypted default passwords require the same
+key as the source database. Preserve it across deployments, with mode 0600 and
+application ownership. Never regenerate it when restoring existing encrypted data.
+Copy existing OSS credentials
 securely and keep the existing bucket; do not create a paid storage service.
 Copy catalog/dashboard image directories and the private forwarder templates.
 Import a consistent database snapshot and invalidate imported login sessions.

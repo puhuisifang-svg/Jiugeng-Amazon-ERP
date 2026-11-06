@@ -1,0 +1,11 @@
+[Unit]
+Description=Jiugeng daily database backup
+After=mysql.service
+Requires=mysql.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/jiugeng/backup.sh
+Nice=10
+IOSchedulingClass=idle
+UMask=0077

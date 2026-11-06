@@ -1,0 +1,72 @@
+name: Production
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: production
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main' && vars.PRODUCTION_DEPLOY_ENABLED == 'true'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 12.4.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Verify application and deployment tools
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s scripts/production -p 'test_*.py'
+          for script in scripts/production/*.sh; do bash -n "$script"; done
+          cd deliverables/backend/sprint-0/jiugeng-erp-backend
+          ./mvnw --batch-mode --no-transfer-progress clean verify
+      - name: Frontend quality gates
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm quality
+      - name: Import contract gate
+        working-directory: deliverables/backend/sprint-0/import-contract/tests
+        run: |
+          npm ci --ignore-scripts
+          npm test
+          python3 validate_contract.py
+      - name: Package tested revision
+        run: python3 scripts/production/release.py build . release.tar.gz "$GITHUB_SHA"
+      - name: Deploy through restricted SSH command
+        env:
+          DEPLOY_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
+          DEPLOY_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.PRODUCTION_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/erp-ssh"
+          trap 'rm -f "$RUNNER_TEMP/erp-ssh/key"' EXIT
+          printf '%s\n' "$DEPLOY_KEY" > "$RUNNER_TEMP/erp-ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$RUNNER_TEMP/erp-ssh/known_hosts"
+          digest=$(sha256sum release.tar.gz | cut -d' ' -f1)
+          ssh -T -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 -o ServerAliveInterval=20 \
+            -o UserKnownHostsFile="$RUNNER_TEMP/erp-ssh/known_hosts" \
+            -i "$RUNNER_TEMP/erp-ssh/key" "erp-deploy@$DEPLOY_HOST" \
+            "deploy $GITHUB_SHA $digest" < release.tar.gz
+          echo "Published revision: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"

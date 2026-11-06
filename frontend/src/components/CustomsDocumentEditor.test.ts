@@ -49,6 +49,15 @@ describe('报关单据编辑',()=>{
    w.unmount()
   }
  })
+ it('automatically derives new and copied document freight from net weight without changing saved documents',async()=>{
+  const rows=[{...source.items[0],quantity:'2',unit:'件',price:'3',cartons:'1',grossWeight:'3',netWeight:'2.1'},{...source.items[0],quantity:'1',unit:'件',price:'2',cartons:'1',grossWeight:'4',netWeight:'3.2'}]
+  const w=render({document:{...source,fields:{...source.fields,freight:'USD/99'},items:rows},copy:true});await flushPromises()
+  const freight=()=>w.get('input[aria-label="运费金额"]')
+  expect(w.get('.field-freight').text()).toContain('自动');expect(freight().attributes('readonly')).toBeDefined();expect((freight().element as HTMLInputElement).value).toBe('5.3')
+  await w.get('input[aria-label="商品 2 总净重（kg）"]').setValue('3.4');expect((freight().element as HTMLInputElement).value).toBe('5.5')
+  await saveReady(w);expect(api.save).toHaveBeenCalledWith(expect.objectContaining({fields:expect.objectContaining({freight:'USD/5.5',netWeight:'5.5'})}),undefined);w.unmount()
+  const old=render({document:{...source,fields:{...source.fields,freight:'USD/99'},items:rows}});await flushPromises();expect((old.get('input[aria-label="运费金额"]').element as HTMLInputElement).value).toBe('99');old.unmount()
+ })
  it('includes missing and invalid freight in export checks',()=>{
   expect(missingFields({},[])).toContain('运费（含币制）');expect(missingFields({freight:'USD/'},[])).toContain('运费金额须为非负数字（USD）');expect(missingFields({freight:'USD/0'},[]).some(x=>x.includes('运费'))).toBe(false)
  })
@@ -86,7 +95,7 @@ describe('报关单据编辑',()=>{
  it('requires shipper, USD freight and six line fields before saving',async()=>{
   const w=render();await flushPromises();const save=()=>w.findAll('button').find(b=>b.text()==='保存草稿')!.trigger('click')
   await save();expect(w.text()).toContain('请选择境内发货人');expect(api.save).not.toHaveBeenCalled()
-  await w.get('select[aria-label="境内发货人"]').setValue('default');await save();expect(w.text()).toContain('请填写运费金额');expect(api.save).not.toHaveBeenCalled();w.unmount()
+  await w.get('select[aria-label="境内发货人"]').setValue('default');expect((w.get('input[aria-label="运费金额"]').element as HTMLInputElement).value).toBe('0');expect(w.get('input[aria-label="运费金额"]').attributes('readonly')).toBeDefined();w.unmount()
   const v=render({document:source});await flushPromises();await v.get('input[aria-label="运费金额"]').setValue('25.50');await v.findAll('button').find(b=>b.text()==='保存草稿')!.trigger('click');expect(v.text()).toContain('商品 1：请填写成交数量');expect(api.save).not.toHaveBeenCalled();v.unmount()
  })
  it('sums multiple SKU weights, moves common fields, and preserves hidden export data',async()=>{

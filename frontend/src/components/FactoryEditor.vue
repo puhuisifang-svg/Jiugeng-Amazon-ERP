@@ -11,7 +11,7 @@ const props=defineProps<{kind:FactoryKind;mode:string;record?:FactoryRecord|unde
 const emit=defineEmits<{close:[];saved:[]}>()
 const dialog=ref<InstanceType<typeof AccessDialog>>()
 const source=props.record
-const form=reactive({name:source?.name??'',team:source?.team??'',phone:source?.phone??'',operations:source?.operations??'',date:props.kind==='payroll'?(props.month||source?.date||localDay().slice(0,7)):(props.kind==='rates'?localDay():source?.date||localDay()),endDate:source?.endDate??'',remark:source?.remark??'',project:source?.project??'',operation:source?.operation??'',unit:source?.unit??'件',price:String(source?.price??''),employeeId:source?.employeeId??'',employeeName:source?.employeeName??'',productId:source?.productId??'',variantId:source?.variantId??'',skuCode:source?.skuCode??'',decimalQuantity:source?.decimalQuantity??false,reason:'',status:source?.status==='PENDING'?'PENDING':'DRAFT',duplicateConfirmed:false,historical:false,historicalAmount:'',amount:'',paymentDate:localDay(),method:'现金',advance:props.mode==='pay'&&source?.status==='DRAFT'})
+const form=reactive({name:source?.name??'',team:source ? (source.team??'') : (props.kind==='employees'?'缝制组':''),phone:source?.phone??'',operations:source?.operations??'',date:props.kind==='payroll'?(props.month||source?.date||localDay().slice(0,7)):(props.kind==='rates'?localDay():source?.date||localDay()),endDate:source?.endDate??'',remark:source?.remark??'',project:source?.project??'',operation:source?.operation??'',unit:source?.unit??'件',price:String(source?.price??''),employeeId:source?.employeeId??'',employeeName:source?.employeeName??'',productId:source?.productId??'',variantId:source?.variantId??'',skuCode:source?.skuCode??'',decimalQuantity:source?.decimalQuantity??false,reason:'',status:source?.status==='PENDING'?'PENDING':'DRAFT',duplicateConfirmed:false,historical:false,historicalAmount:'',amount:'',paymentDate:localDay(),method:'现金',advance:props.mode==='pay'&&source?.status==='DRAFT'})
 interface EditLine { key:string;rateId:string;project:string;operation:string;unit:string;quantity:string;price:string;error:string;employeeId:string;employeeName:string;remark:string }
 function emptyLine():EditLine{return {key:crypto.randomUUID(),rateId:'',project:'',operation:'',unit:'',quantity:'',price:'',error:'',employeeId:'',employeeName:'',remark:''}}
 const lines=ref<EditLine[]>(source?.lines?.map(l=>({...emptyLine(),...l,quantity:String(l.quantity),price:String(l.price??'')}))??[emptyLine()])
@@ -180,17 +180,16 @@ onMounted(async()=>{if(props.kind==='rates')try{operations.value=(await factoryA
             v-model="form.name"
             required
             maxlength="100"
-          ></label><label>班组<input
+          ></label><label>班组<select
             v-model="form.team"
-            maxlength="100"
-            placeholder="如缝制组、包装组"
-          ></label><label>手机号<input
+            v-single-select
+          ><option
+            v-if="source && !['缝制组','包装组','铁艺组'].includes(form.team)"
+            :value="form.team"
+          >{{ form.team || '未设置' }}（原班组）</option><option>缝制组</option><option>包装组</option><option>铁艺组</option></select></label><label>手机号<input
             v-model="form.phone"
             maxlength="100"
             inputmode="tel"
-          ></label><label>常做工序<input
-            v-model="form.operations"
-            maxlength="100"
           ></label><label>入职日期<DatePicker
             v-model="form.date"
             required

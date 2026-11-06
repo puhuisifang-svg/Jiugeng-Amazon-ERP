@@ -518,7 +518,7 @@ onMounted(loadReferences)
         </section>
       </div>
     </div>
-    <div class="form-footer">
+    <div class="form-footer ui-dialog-actions">
       <button
         v-if="!focusVariantId"
         type="button"
@@ -526,7 +526,7 @@ onMounted(loadReferences)
         @click="addVariant"
       >
         新增 SKU
-      </button><div class="form-footer__actions">
+      </button><div class="form-footer__actions ui-dialog-actions">
         <button
           v-if="showCancel"
           type="button"

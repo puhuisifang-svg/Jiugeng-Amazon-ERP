@@ -86,133 +86,135 @@ watch(() => props.detailRow, async row => {
           {{ tab[1] }}
         </button>
       </nav>
-      <section
-        v-if="detailTab === 'basic'"
-        class="sku-basic-panel"
-      >
-        <div class="sku-detail-image sku-basic-image">
-          <AuthenticatedCatalogImage
-            v-if="detailVariant?.imageAssetId"
-            :image-id="detailVariant.imageAssetId"
-            :alt="`${detailVariant.variantName}主图`"
-          /><img
-            v-else-if="detailVariant?.imageUrl"
-            :src="detailVariant.imageUrl"
-            alt="SKU主图"
-          ><p v-else>
-            暂无图片。
+      <div class="sku-detail-body">
+        <section
+          v-if="detailTab === 'basic'"
+          class="sku-basic-panel"
+        >
+          <div class="sku-detail-image sku-basic-image">
+            <AuthenticatedCatalogImage
+              v-if="detailVariant?.imageAssetId"
+              :image-id="detailVariant.imageAssetId"
+              :alt="`${detailVariant.variantName}主图`"
+            /><img
+              v-else-if="detailVariant?.imageUrl"
+              :src="detailVariant.imageUrl"
+              alt="SKU主图"
+            ><p v-else>
+              暂无图片。
+            </p>
+          </div>
+          <dl
+            class="sku-detail-grid"
+          >
+            <dt>SKU</dt><dd>{{ detailVariant?.skuCode }}</dd><dt>品名</dt><dd>
+              <ProductName
+                :text="detailVariant?.variantName ?? ''"
+                :styles="detailVariant?.nameStyles"
+                :highlighted="detailVariant?.nameHighlighted"
+              />
+            </dd><dt>SKU 状态</dt><dd>{{ labelStatus(detailVariant?.status ?? '') }}</dd><dt>产品状态</dt><dd>{{ labelStatus(detailRow.productStatus) }}</dd>
+          </dl>
+        </section>
+        <section
+          v-else-if="detailTab === 'customs'"
+          class="sku-customs-panel"
+        >
+          <template v-if="customs">
+            <p class="customs-summary">
+              出口美国 · 申报要素
+            </p>
+            <dl class="sku-detail-grid">
+              <dt>HS</dt><dd>{{ customs.chinaCode || '—' }}</dd>
+              <dt>品名</dt><dd>{{ customs.nameZh || '—' }}</dd>
+              <template
+                v-for="[key, label] in profileFields(customs)"
+                :key="key"
+              >
+                <dt>{{ label }}</dt><dd>{{ customsElements[key] || '—' }}</dd>
+              </template>
+              <dt>计量单位</dt><dd>{{ customs.measurementUnit || customs.unit || '—' }}</dd>
+            </dl>
+          </template>
+          <p
+            v-else
+            class="data-state"
+          >
+            暂无报关资料{{ writable ? '，请点击“编辑 SKU”补充。' : '。' }}
+          </p>
+        </section>
+        <div
+          v-else-if="detailTab === 'purchase'"
+          class="detail-list"
+        >
+          <p v-if="!detailVariant?.suppliers.length">
+            未关联供应商。
+          </p><p
+            v-for="supplier in detailVariant?.suppliers"
+            :key="supplier.supplierId"
+          >
+            {{ supplier.primary ? '主供应商' : '供应商' }}：{{ supplier.supplierId }} <a
+              v-if="supplier.purchaseUrl"
+              :href="supplier.purchaseUrl"
+              target="_blank"
+              rel="noopener"
+            >采购链接</a>
           </p>
         </div>
         <dl
+          v-else-if="detailTab === 'specs'"
           class="sku-detail-grid"
         >
-          <dt>SKU</dt><dd>{{ detailVariant?.skuCode }}</dd><dt>品名</dt><dd>
-            <ProductName
-              :text="detailVariant?.variantName ?? ''"
-              :styles="detailVariant?.nameStyles"
-              :highlighted="detailVariant?.nameHighlighted"
-            />
-          </dd><dt>SKU 状态</dt><dd>{{ labelStatus(detailVariant?.status ?? '') }}</dd><dt>产品状态</dt><dd>{{ labelStatus(detailRow.productStatus) }}</dd>
+          <dt>产品规格</dt><dd>{{ detailVariant ? dimensionLabel(detailVariant) : '—' }}</dd><dt>包装规格</dt><dd>{{ [detailVariant?.packageLengthCm, detailVariant?.packageWidthCm, detailVariant?.packageHeightCm].every(value => value != null) ? `${detailVariant?.packageLengthCm}×${detailVariant?.packageWidthCm}×${detailVariant?.packageHeightCm} cm` : detailVariant?.packageDimensions || '—' }}</dd><dt>包装重量</dt><dd>{{ detailVariant?.packageWeightGrams != null ? `${detailVariant.packageWeightGrams} g` : '—' }}</dd>
         </dl>
-      </section>
-      <section
-        v-else-if="detailTab === 'customs'"
-        class="sku-customs-panel"
-      >
-        <template v-if="customs">
-          <p class="customs-summary">
-            出口美国 · 申报要素
+        <div
+          v-else-if="detailTab === 'materials'"
+          class="detail-list"
+        >
+          <p v-if="!detailVariant?.materials.length">
+            未关联辅料。
+          </p><p
+            v-for="material in detailVariant?.materials"
+            :key="material.materialId"
+          >
+            {{ material.materialId }} · {{ material.standardQuantity }} {{ material.unit }} · 损耗率 {{ material.lossRate }}
           </p>
-          <dl class="sku-detail-grid">
-            <dt>HS</dt><dd>{{ customs.chinaCode || '—' }}</dd>
-            <dt>品名</dt><dd>{{ customs.nameZh || '—' }}</dd>
-            <template
-              v-for="[key, label] in profileFields(customs)"
-              :key="key"
-            >
-              <dt>{{ label }}</dt><dd>{{ customsElements[key] || '—' }}</dd>
-            </template>
-            <dt>计量单位</dt><dd>{{ customs.measurementUnit || customs.unit || '—' }}</dd>
-          </dl>
-        </template>
-        <p
+        </div>
+        <SkuDocumentsPanel
+          v-else-if="(detailTab === 'manual' || detailTab === 'label') && detailVariant?.id"
+          :key="`${detailVariant.id}-${detailTab}`"
+          :product-id="detailRow.productId"
+          :variant-id="detailVariant.id"
+          :kind="detailTab === 'manual' ? 'MANUAL' : 'LABEL'"
+        />
+        <div
           v-else
-          class="data-state"
+          class="detail-list operation-history"
         >
-          暂无报关资料{{ writable ? '，请点击“编辑 SKU”补充。' : '。' }}
-        </p>
-      </section>
-      <div
-        v-else-if="detailTab === 'purchase'"
-        class="detail-list"
-      >
-        <p v-if="!detailVariant?.suppliers.length">
-          未关联供应商。
-        </p><p
-          v-for="supplier in detailVariant?.suppliers"
-          :key="supplier.supplierId"
-        >
-          {{ supplier.primary ? '主供应商' : '供应商' }}：{{ supplier.supplierId }} <a
-            v-if="supplier.purchaseUrl"
-            :href="supplier.purchaseUrl"
-            target="_blank"
-            rel="noopener"
-          >采购链接</a>
-        </p>
-      </div>
-      <dl
-        v-else-if="detailTab === 'specs'"
-        class="sku-detail-grid"
-      >
-        <dt>产品规格</dt><dd>{{ detailVariant ? dimensionLabel(detailVariant) : '—' }}</dd><dt>包装规格</dt><dd>{{ [detailVariant?.packageLengthCm, detailVariant?.packageWidthCm, detailVariant?.packageHeightCm].every(value => value != null) ? `${detailVariant?.packageLengthCm}×${detailVariant?.packageWidthCm}×${detailVariant?.packageHeightCm} cm` : detailVariant?.packageDimensions || '—' }}</dd><dt>包装重量</dt><dd>{{ detailVariant?.packageWeightGrams != null ? `${detailVariant.packageWeightGrams} g` : '—' }}</dd>
-      </dl>
-      <div
-        v-else-if="detailTab === 'materials'"
-        class="detail-list"
-      >
-        <p v-if="!detailVariant?.materials.length">
-          未关联辅料。
-        </p><p
-          v-for="material in detailVariant?.materials"
-          :key="material.materialId"
-        >
-          {{ material.materialId }} · {{ material.standardQuantity }} {{ material.unit }} · 损耗率 {{ material.lossRate }}
-        </p>
-      </div>
-      <SkuDocumentsPanel
-        v-else-if="(detailTab === 'manual' || detailTab === 'label') && detailVariant?.id"
-        :key="`${detailVariant.id}-${detailTab}`"
-        :product-id="detailRow.productId"
-        :variant-id="detailVariant.id"
-        :kind="detailTab === 'manual' ? 'MANUAL' : 'LABEL'"
-      />
-      <div
-        v-else
-        class="detail-list operation-history"
-      >
-        <p
-          v-if="historyError"
-          class="data-state data-state--error"
-          role="alert"
-        >
-          {{ historyError }}
-        </p><p v-else-if="!detailHistory.length">
-          暂无可见操作日志。
-        </p>
-        <TableViewport v-else>
-          <table class="data-table">
-            <thead><tr><th>操作时间</th><th>操作人</th><th>操作类型</th><th>操作内容</th></tr></thead><tbody>
-              <tr
-                v-for="event in detailHistory"
-                :key="event.id"
-              >
-                <td>{{ event.occurredAt }}</td><td>{{ event.actorDisplayName || event.actorLoginName }}</td><td :title="event.action">
-                  {{ productActionLabel(event.action) }}
-                </td><td>{{ event.detail || '—' }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </TableViewport>
+          <p
+            v-if="historyError"
+            class="data-state data-state--error"
+            role="alert"
+          >
+            {{ historyError }}
+          </p><p v-else-if="!detailHistory.length">
+            暂无可见操作日志。
+          </p>
+          <TableViewport v-else>
+            <table class="data-table">
+              <thead><tr><th>操作时间</th><th>操作人</th><th>操作类型</th><th>操作内容</th></tr></thead><tbody>
+                <tr
+                  v-for="event in detailHistory"
+                  :key="event.id"
+                >
+                  <td>{{ event.occurredAt }}</td><td>{{ event.actorDisplayName || event.actorLoginName }}</td><td :title="event.action">
+                    {{ productActionLabel(event.action) }}
+                  </td><td>{{ event.detail || '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </TableViewport>
+        </div>
       </div>
       <footer class="ui-dialog-actions dialog-footer">
         <RouterLink
@@ -222,6 +224,7 @@ watch(() => props.detailRow, async row => {
           查看产品完整资料
         </RouterLink><button
           v-if="writable"
+          class="ui-button-primary"
           type="button"
           @click="emit('edit', detailRow)"
         >

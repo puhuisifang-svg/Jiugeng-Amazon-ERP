@@ -9,6 +9,8 @@ import './styles/dialogActions.css'
 import './styles/uiConsistency.css'
 import './styles/workspaceDensity.css'
 import './styles/workbenchTheme.css'
+import './styles/productOrderTheme.css'
+import './styles/controlStandards.css'
 
 async function bootstrap() {
   await session.initialize()

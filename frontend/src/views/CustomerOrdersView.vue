@@ -161,7 +161,9 @@ watch(() => route.params.id, load); onMounted(load)
                   :styles="o.lines[0].namePresentation?.styles"
                   :highlighted="o.lines[0].namePresentation?.highlighted"
                 /><small>共 {{ o.lines.length }} 项</small>
-              </td><td>{{ o.details.orderDate }}</td><td>{{ o.details.deliveryDate }}</td><td>{{ o.totalAmount }}</td><td>{{ labels[o.status] }}<small>发完 {{ o.lines.filter(l => Number(l.shippedQuantity) >= Number(l.details.quantity)).length }}/{{ o.lines.length }} 项</small><small v-if="o.lines.some(l=>Number(l.shippedQuantity)>0) && o.lines.some(l=>Number(l.shippedQuantity)<Number(l.details.quantity))">部分发货</small></td><td>{{ !o.details.invoiceRequired ? '无需开票' : o.invoiced ? '已开票' : o.invoiceId ? '待开票' : '待生成' }}</td><td>{{ o.details.remark || '—' }}</td><td class="table-actions">
+              </td><td>{{ o.details.orderDate }}</td><td>{{ o.details.deliveryDate }}</td><td class="order-money">
+                {{ o.totalAmount }}
+              </td><td><span :class="['order-status', `order-status--${o.status.toLowerCase()}`]">{{ labels[o.status] }}</span><small>发完 {{ o.lines.filter(l => Number(l.shippedQuantity) >= Number(l.details.quantity)).length }}/{{ o.lines.length }} 项</small><small v-if="o.lines.some(l=>Number(l.shippedQuantity)>0) && o.lines.some(l=>Number(l.shippedQuantity)<Number(l.details.quantity))">部分发货</small></td><td>{{ !o.details.invoiceRequired ? '无需开票' : o.invoiced ? '已开票' : o.invoiceId ? '待开票' : '待生成' }}</td><td>{{ o.details.remark || '—' }}</td><td class="table-actions">
                 <RouterLink :to="`/orders/customers/${o.id}`">
                   详情
                 </RouterLink><button
@@ -191,7 +193,7 @@ watch(() => route.params.id, load); onMounted(load)
       />
     </template>
     <template v-else-if="detail">
-      <div class="material-toolbar">
+      <div class="material-toolbar order-detail-toolbar">
         <strong>{{ detail.orderNumber }} · {{ labels[detail.status] }}</strong><button
           v-if="writable && ['DRAFT','CONFIRMED'].includes(detail.status)"
           :disabled="saving"
@@ -238,7 +240,21 @@ watch(() => route.params.id, load); onMounted(load)
         </button>
       </div>
       <article class="panel order-information">
-        <h2>订单信息</h2><p>客户：{{ detail.customerName }} · 来源：{{ detail.details.source === '1688' ? '1688' : '线下' }}</p><p>客户订单号 / 合同号：{{ detail.details.externalNumber || detail.details.contractNumber || '—' }}<span v-if="detail.details.externalNumber && detail.details.contractNumber && detail.details.externalNumber !== detail.details.contractNumber"> · 历史合同号：{{ detail.details.contractNumber }}</span></p><p>下单日期：{{ detail.details.orderDate }} · 交期：{{ detail.details.deliveryDate }}</p><p>收货：{{ detail.details.recipient }} · {{ detail.details.phone }} · {{ detail.details.address }}</p><p>开票抬头：{{ detail.details.invoiceRequired ? detail.invoiceTitle.invoiceTitle || '尚未选择' : '无需开票' }}</p><p>备注：{{ detail.details.remark || '—' }}</p>
+        <h2>订单信息</h2>
+        <dl class="order-facts">
+          <div><dt>客户</dt><dd>{{ detail.customerName }}</dd></div>
+          <div><dt>来源</dt><dd>{{ detail.details.source === '1688' ? '1688' : '线下' }}</dd></div>
+          <div><dt>客户订单号 / 合同号</dt><dd>{{ detail.details.externalNumber || detail.details.contractNumber || '—' }}<small v-if="detail.details.externalNumber && detail.details.contractNumber && detail.details.externalNumber !== detail.details.contractNumber">历史合同号：{{ detail.details.contractNumber }}</small></dd></div>
+          <div><dt>下单日期</dt><dd>{{ detail.details.orderDate }}</dd></div>
+          <div><dt>交期</dt><dd>{{ detail.details.deliveryDate }}</dd></div>
+          <div><dt>发票抬头</dt><dd>{{ detail.details.invoiceRequired ? detail.invoiceTitle.invoiceTitle || '尚未选择' : '无需开票' }}</dd></div>
+          <div><dt>收货人</dt><dd>{{ detail.details.recipient || '—' }}</dd></div>
+          <div><dt>联系电话</dt><dd>{{ detail.details.phone || '—' }}</dd></div>
+          <div><dt>发货地址</dt><dd>{{ detail.details.address || '—' }}</dd></div>
+          <div class="order-facts-wide">
+            <dt>备注</dt><dd>{{ detail.details.remark || '—' }}</dd>
+          </div>
+        </dl>
       </article>
       <TableViewport>
         <table class="data-table">
@@ -258,7 +274,9 @@ watch(() => route.params.id, load); onMounted(load)
           </tbody>
         </table>
       </TableViewport>
-      <p>不含税金额 ¥{{ detail.netAmount }} · 税额 ¥{{ detail.taxAmount }} · 含税总价 ¥{{ detail.totalAmount }}</p>
+      <div class="order-amount-summary">
+        <span>不含税金额 <b>¥{{ detail.netAmount }}</b></span><span>税额 <b>¥{{ detail.taxAmount }}</b></span><span>含税总价 <strong>¥{{ detail.totalAmount }}</strong></span>
+      </div>
       <article class="panel order-information">
         <h2>发货批次</h2><p v-if="!allocations.length">
           尚未安排发货

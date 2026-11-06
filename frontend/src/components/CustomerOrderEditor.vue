@@ -68,7 +68,18 @@ onMounted(async () => {
       class="panel operation-dialog__card order-editor"
       @submit.prevent="submit"
     >
-      <h2>{{ props.initial ? '编辑客户订单' : '新增客户订单' }}</h2>
+      <header class="order-editor-heading">
+        <div><h2>{{ props.initial ? '编辑客户订单' : '新增客户订单' }}</h2><p>订单信息、发货信息与商品明细集中维护</p></div>
+        <button
+          type="button"
+          class="order-editor-close"
+          aria-label="关闭订单编辑"
+          :disabled="props.busy"
+          @click="close"
+        >
+          ×
+        </button>
+      </header>
       <UnsavedChangesDialog
         v-if="discard"
         @keep="discard = false"
@@ -265,6 +276,7 @@ onMounted(async () => {
         {{ props.error || localError }}
       </p>
       <footer class="ui-dialog-actions form-footer">
+        <span class="order-footer-note">已添加 {{ form.lines.length }} 项商品</span>
         <button
           type="button"
           class="secondary-action"
@@ -274,6 +286,7 @@ onMounted(async () => {
           取消
         </button><button
           type="submit"
+          class="ui-button-primary"
           :disabled="props.busy || selecting"
         >
           {{ props.busy ? '保存中…' : props.initial ? '保存修改' : '保存' }}

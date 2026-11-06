@@ -656,6 +656,6 @@ class DashboardControllerTest {
             .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();return json.readTree(response).get("token").asText();}
     private String bearer(String token){return "Bearer "+token;}
     private void clean(){for(String table:new String[]{"launch_revision","launch_workspace","product_development","dashboard_shipment_dispatch","dashboard_shipment_document","dashboard_command","dashboard_today_shipment","dashboard_pending_shipment",
-            "dashboard_pending_product","dashboard_image_asset","product_auxiliary_material","variant_attribute","customer_product","product_variant","product",
+            "dashboard_pending_product","dashboard_image_asset","product_auxiliary_material","variant_attribute","customer_product","product_variant_supplier","product_variant","product",
             "iam_password_reset_challenge","audit_event","iam_session","iam_user"}){jdbc.update("DELETE FROM "+table);}}
 }

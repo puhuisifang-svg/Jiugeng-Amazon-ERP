@@ -17,6 +17,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.ss.usermodel.CellType;
 @SpringBootTest @AutoConfigureMockMvc @ActiveProfiles("test")
 class CustomsDocumentTest {
+ @org.junit.jupiter.api.io.TempDir java.nio.file.Path exportDirectory;
  @Autowired MockMvc mvc;@Autowired JdbcTemplate jdbc;@Autowired ObjectMapper json;@Autowired CustomsWorkbook exporter;
  @AfterEach void clean(){jdbc.update("DELETE FROM customs_document");}
  static Map<String,String> fields(){var f=new HashMap<String,String>();for(String k:CustomsDocuments.HEADERS)f.put(k,"");f.putAll(Map.of("contractNo","SYN-CONTRACT","invoiceNo","SYN-INVOICE","date","2026-11-03","seller","Synthetic Seller","sellerAddress","Synthetic seller address","buyer","Synthetic Buyer","buyerAddress","Synthetic buyer address","producer","Synthetic producer","destination","United States","currency","USD"));f.put("terms","FOB");f.put("packaging","Cartons");f.put("signPlace","Synthetic City");return f;}
@@ -199,7 +200,7 @@ class CustomsDocumentTest {
   var f=fields();f.put("seller","合成测试贸易有限公司");f.put("documents","随附单证1：跨境B2B出口单证\n随附单证2：代理报关委托协议（电子）\n随附单证3：合同；发票；装箱单");
   String id=create(token,new CustomsDocuments.Input("SYN-TEMPLATE","DRAFT",f,List.of(first,second),null));
   byte[] bytes=mvc.perform(get("/api/v1/customs-documents/"+id+"/export").header("Authorization",token)).andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
-  java.nio.file.Files.write(java.nio.file.Path.of("/tmp/customs-redesign/export-template-two.xlsx"),bytes);
+  java.nio.file.Files.write(exportDirectory.resolve("export-template-two.xlsx"),bytes);
   try(var w=new XSSFWorkbook(new ByteArrayInputStream(bytes));var template=new XSSFWorkbook(getClass().getResourceAsStream("/templates/customs-document.xlsx"))){var c=w.getSheet("报关单");var e=w.getSheet("申报要素");
    assertThat(c.getDrawingPatriarch().getShapes()).hasSize(1);assertThat(c.getDrawingPatriarch().getShapes().getFirst()).isInstanceOf(org.apache.poi.xssf.usermodel.XSSFPicture.class);
    assertThat(((org.apache.poi.xssf.usermodel.XSSFPicture)c.getDrawingPatriarch().getShapes().getFirst()).getPictureData().getData()).isEqualTo(((org.apache.poi.xssf.usermodel.XSSFPicture)template.getSheet("报关单").getDrawingPatriarch().getShapes().getFirst()).getPictureData().getData());
@@ -219,7 +220,7 @@ class CustomsDocumentTest {
  @Test void exportsFiveSheetsWithGrowingRowsExactTotalsAndCorrectInvoiceDate()throws Exception{
   String token=user("ADMIN");for(int count:new int[]{1,2,3,12}){var in=input(count);String id=create(token,in);byte[] bytes=mvc.perform(get("/api/v1/customs-documents/"+id+"/export").header("Authorization",token)).andExpect(status().isOk()).andExpect(header().string("Content-Type","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")).andReturn().getResponse().getContentAsByteArray();
    try(var w=new XSSFWorkbook(new ByteArrayInputStream(bytes))){assertThat(w.getNumberOfSheets()).isEqualTo(5);var c=w.getSheet("报关单");var v=w.getSheet("发票");var p=w.getSheet("装箱单");var t=w.getSheet("合同");assertThat(v.getRow(8).getCell(6).getLocalDateTimeCellValue().toLocalDate()).isEqualTo(java.time.LocalDate.of(2026,11,3));assertThat(v.getRow(8).getCell(6).getCellStyle().getDataFormatString()).isEqualTo("yyyy/m/d");assertThat(v.getRow(5).getCell(6).getStringCellValue()).isEqualTo(in.documentNo());assertThat(t.getRow(2).getCell(11).getStringCellValue()).isEqualTo("SYN-CONTRACT");assertThat(c.getRow(11).getCell(4).getNumericCellValue()).isEqualTo(count*2);assertThat(v.getRow(14+count).getCell(6).getNumericCellValue()).isCloseTo(count*3.71,within(.00001));assertThat(t.getRow(21+count).getCell(10).getNumericCellValue()).isCloseTo(count*3.71,within(.00001));assertThat(p.getRow(16+count).getCell(7).getNumericCellValue()).isEqualTo(count*5);assertThat(v.getRow(13+count).getCell(2).getStringCellValue()).isEqualTo("SYN-"+(count-1));for(var sheet:w){sheet.validateMergedRegions();for(var row:sheet)for(var cell:row)assertThat(cell.getCellType()==CellType.ERROR || cell.getCellType()==CellType.FORMULA&&cell.getCachedFormulaResultType()==CellType.ERROR).isFalse();}}
-   if(count==3)java.nio.file.Files.write(java.nio.file.Path.of("/tmp/customs-redesign/export-test.xlsx"),bytes);
+   if(count==3)java.nio.file.Files.write(exportDirectory.resolve("export-test.xlsx"),bytes);
   }
  }
  @Test void savesDraftsChecksExportAndRejectsInvalidTotals()throws Exception{

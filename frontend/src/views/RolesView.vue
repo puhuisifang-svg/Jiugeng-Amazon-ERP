@@ -23,7 +23,7 @@ const filtered = computed(() => list.value.filter(r => r.name.includes(applied.v
 const visible = computed(() => filtered.value.slice((page.value - 1) * size.value, page.value * size.value))
 const current = computed(() => list.value.find(r => r.id === route.params.id))
 const tabs = ref('permissions'), memberList = ref<AppUser[]>([]), history = ref<RoleHistory[]>([]), assignment = ref<AppUser>()
-const draft = ref<RoleEdit>({ name: '', description: '', status: 'DRAFT', permissions: [], version: 0, reason: '' }), initial = ref('')
+const draft = ref<RoleEdit>({ name: '', description: '', status: 'ENABLED', permissions: [], version: 0, reason: '' }), initial = ref('')
 const dirty = computed(() => !!current.value && JSON.stringify(draft.value) !== initial.value)
 const preview = ref<PermissionPreview>()
 const createOpen = ref(false), newName = ref(''), newDescription = ref(''), copyFrom = ref<string>(), createError = ref('')
@@ -37,7 +37,7 @@ const eligibleMembers = computed(() => allUsers.value.filter(u => {
 }))
 const readonly = computed(() => current.value?.id === 'ADMIN')
 const changed = computed(() => ({ added: draft.value.permissions.filter(p => !current.value?.permissions.includes(p)).length, removed: current.value?.permissions.filter(p => !draft.value.permissions.includes(p)).length ?? 0 }))
-const statusLabel = (s: string) => ({ ENABLED: '启用', DISABLED: '停用', DRAFT: '草稿' }[s] ?? s)
+const statusLabel = (s: string) => ({ ENABLED: '启用', DISABLED: '停用' }[s] ?? s)
 const label = (code: string) => catalog.value.find(p => p.code === code)?.label || code
 const fail = (e: unknown) => e instanceof Error ? e.message : '操作失败，请重试'
 function setDraft() { if (current.value) { draft.value = { name: current.value.name, description: current.value.description, status: current.value.status, permissions: [...current.value.permissions], version: current.value.version, reason: '' }; initial.value = JSON.stringify(draft.value) } }
@@ -45,7 +45,7 @@ async function load() { busy.value = true; error.value = ''; try { [list.value, 
 function filter() { applied.value = { q: query.value.trim(), statuses: [...statuses.value], kinds: [...kinds.value] }; page.value = 1 }
 function reset() { query.value = ''; statuses.value = []; kinds.value = []; filter() }
 function create(role?: Role) { createError.value = ''; newName.value = role ? `${role.name} 副本` : ''; newDescription.value = role?.description ?? ''; copyFrom.value = role?.id; createOpen.value = true }
-async function createRole() { busy.value = true; createError.value = ''; try { const r = await rolesApi.create({ name: newName.value, description: newDescription.value, copyFrom: copyFrom.value }); createOpen.value = false; await router.push(`/system/roles/${r.id}`); await load(); tabs.value = 'basics'; success.value = '角色草稿已创建，请配置权限后启用。' } catch (e) { createError.value = fail(e) } finally { busy.value = false } }
+async function createRole() { busy.value = true; createError.value = ''; try { const r = await rolesApi.create({ name: newName.value, description: newDescription.value, copyFrom: copyFrom.value }); createOpen.value = false; await router.push(`/system/roles/${r.id}`); await load(); tabs.value = 'basics'; success.value = '角色已创建并启用，请配置所需权限。' } catch (e) { createError.value = fail(e) } finally { busy.value = false } }
 function addDependencies(values: string[]) { const next = new Set(values); let change = true; while (change) { change = false; for (const p of catalog.value) if (next.has(p.code)) for (const dependency of p.dependencies) if (!next.has(dependency)) { next.add(dependency); change = true } } return [...next] }
 async function toggle(code: string) {
   if (readonly.value || busy.value) return
@@ -82,7 +82,7 @@ onMounted(() => { tabs.value = route.query.tab === 'members' ? 'members' : 'perm
   <section class="page-stack access-page roles-page">
     <p v-if="error" role="alert" class="data-state data-state--error">{{ error }} <button :disabled="busy" @click="reload">重新加载</button></p><SuccessToast :message="success" />
     <template v-if="!route.params.id">
-      <form class="panel filter-panel" @submit.prevent="filter"><label>角色名称<input v-model="query" placeholder="搜索角色名称"></label><label>类型<FilterMultiSelect v-model="kinds" label="类型" :options="[{ value: 'BUILTIN', label: '系统预置' }, { value: 'CUSTOM', label: '自定义' }]" /></label><label>状态<FilterMultiSelect v-model="statuses" label="状态" :options="['DRAFT','ENABLED','DISABLED'].map(s => ({ value:s, label:statusLabel(s) }))" /></label><button type="submit">查询</button><button type="button" class="filter-reset-button" @click="reset">清空</button></form>
+      <form class="panel filter-panel" @submit.prevent="filter"><label>角色名称<input v-model="query" placeholder="搜索角色名称"></label><label>类型<FilterMultiSelect v-model="kinds" label="类型" :options="[{ value: 'BUILTIN', label: '系统预置' }, { value: 'CUSTOM', label: '自定义' }]" /></label><label>状态<FilterMultiSelect v-model="statuses" label="状态" :options="['ENABLED','DISABLED'].map(s => ({ value:s, label:statusLabel(s) }))" /></label><button type="submit">查询</button><button type="button" class="filter-reset-button" @click="reset">清空</button></form>
       <div class="material-toolbar"><button :disabled="busy" @click="create()">新增角色</button><span class="access-muted">配置岗位职责，再为用户分配角色</span></div>
       <div class="panel table-panel"><TableViewport><table class="data-table ui-action-table"><thead><tr><th>角色名称</th><th>类型</th><th>状态</th><th>成员数</th><th>权限数</th><th>说明</th><th>更新时间</th><th>操作</th></tr></thead><tbody><tr v-for="role in visible" :key="role.id"><td><RouterLink :to="`/system/roles/${role.id}`">{{ role.name }}</RouterLink></td><td>{{ role.kind === 'BUILTIN' ? '系统预置' : '自定义' }}</td><td>{{ statusLabel(role.status) }}</td><td><RouterLink :to="`/system/roles/${role.id}?tab=members`">{{ role.memberCount }}</RouterLink></td><td>{{ role.permissions.length }}</td><td>{{ role.description || '—' }}</td><td>{{ new Date(role.updatedAt).toLocaleString() }}</td><td class="table-actions"><RouterLink :to="`/system/roles/${role.id}`">详情</RouterLink><button v-if="role.id !== 'ADMIN'" :disabled="busy" @click="create(role)">复制</button><button v-if="role.id !== 'ADMIN'" :disabled="busy || !!role.memberCount" :title="role.memberCount ? '请先解除成员绑定' : '删除角色'" @click="remove(role)">删除</button></td></tr><tr v-if="!visible.length"><td colspan="8" class="data-state">{{ busy ? '正在加载…' : '暂无角色' }}</td></tr></tbody></table></TableViewport></div>
       <ListPagination v-model:page="page" v-model:page-size="size" :total="filtered.length" :disabled="busy" />
@@ -96,7 +96,7 @@ onMounted(() => { tabs.value = route.query.tab === 'members' ? 'members' : 'perm
         <div :id="`role-panel-${tabs}`" role="tabpanel" :aria-labelledby="`role-tab-${tabs}`" tabindex="0">
           <section v-if="tabs==='basics'" class="role-profile" aria-label="角色基本信息">
             <div class="role-section-intro"><h3>基本信息</h3><p>设置岗位名称与使用状态；具体功能权限请在“权限配置”中维护。</p></div>
-            <div class="role-profile-fields"><label>角色名称 <span>必填</span><input v-model="draft.name" maxlength="50" placeholder="例如：采购专员" :disabled="readonly || busy"></label><label>角色状态<select v-model="draft.status" v-single-select :disabled="readonly || busy"><option v-if="current.status==='DRAFT'" value="DRAFT">草稿</option><option value="ENABLED">启用</option><option value="DISABLED">停用</option></select></label><label class="role-profile-description">角色说明 <span>选填</span><textarea v-model="draft.description" maxlength="200" rows="3" placeholder="说明该角色适用的岗位与职责" :disabled="readonly || busy" /><small>{{ draft.description.length }} / 200</small></label></div>
+            <div class="role-profile-fields"><label>角色名称 <span>必填</span><input v-model="draft.name" maxlength="50" placeholder="例如：采购专员" :disabled="readonly || busy"></label><label>角色状态<select v-model="draft.status" v-single-select :disabled="readonly || busy"><option value="ENABLED">启用</option><option value="DISABLED">停用</option></select></label><label class="role-profile-description">角色说明 <span>选填</span><textarea v-model="draft.description" maxlength="200" rows="3" placeholder="说明该角色适用的岗位与职责" :disabled="readonly || busy" /><small>{{ draft.description.length }} / 200</small></label></div>
             <p class="role-state-note">启用后可分配给成员；停用会影响成员通过该角色获得的权限。保存前可预览变更。</p>
           </section>
           <template v-if="tabs==='permissions'">
@@ -115,7 +115,7 @@ onMounted(() => { tabs.value = route.query.tab === 'members' ? 'members' : 'perm
     </template><p v-else class="data-state">{{ busy?'正在加载…':'角色不存在或已删除' }}</p>
     <AccessDialog v-if="createOpen" ref="createDialog" dialog-class="role-create-dialog" :title="copyFrom?'复制角色':'新增角色'" :dirty="!!newName || !!newDescription" :busy="busy" @close="createOpen=false">
       <div class="role-create-intro"><span class="role-create-icon" aria-hidden="true">＋</span><div><strong>{{ copyFrom?'基于现有角色创建副本':'创建一个岗位角色' }}</strong><p>填写基本信息后，继续配置权限并分配成员。</p></div></div>
-      <form id="create-role" class="access-form role-create-form" @submit.prevent="createRole"><p v-if="createError" role="alert" class="data-state--error">{{ createError }}</p><label>角色名称 <input v-model="newName" minlength="2" maxlength="50" placeholder="例如：采购专员、财务专员" :disabled="busy" required><small>2–50 个字，使用清晰的岗位名称</small></label><label>角色说明（选填）<textarea v-model="newDescription" maxlength="200" rows="3" placeholder="描述岗位职责与适用范围" :disabled="busy" /><small>{{ newDescription.length }} / 200</small></label><p class="role-state-note">初始状态为草稿，配置权限并启用后才可分配成员。</p></form>
+      <form id="create-role" class="access-form role-create-form" @submit.prevent="createRole"><p v-if="createError" role="alert" class="data-state--error">{{ createError }}</p><label>角色名称 <input v-model="newName" minlength="2" maxlength="50" placeholder="例如：采购专员、财务专员" :disabled="busy" required><small>2–50 个字，使用清晰的岗位名称</small></label><label>角色说明（选填）<textarea v-model="newDescription" maxlength="200" rows="3" placeholder="描述岗位职责与适用范围" :disabled="busy" /><small>{{ newDescription.length }} / 200</small></label><p class="role-state-note">初始状态为启用；请按岗位需要配置权限，未配置权限时不授予业务访问能力。</p></form>
       <template #footer><button :disabled="busy" @click="createDialog?.requestClose()">取消</button><button type="submit" form="create-role" :disabled="busy" class="primary-button">{{ busy?'创建中…':'创建' }}</button></template>
     </AccessDialog>
     <AccessDialog v-if="preview && current" dialog-class="role-review-dialog" title="确认角色变更" :busy="busy" @close="preview=undefined">

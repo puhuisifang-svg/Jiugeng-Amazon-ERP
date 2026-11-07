@@ -157,7 +157,7 @@ onMounted(loadReferences)
             移除父体图片
           </button>
           <p class="form-wide">
-            支持 JPG、PNG、WebP，最大 5 MB。保存产品后生效；父体与 SKU 图片独立维护。
+            父体与 SKU 图片独立维护，随产品保存。
           </p>
         </fieldset>
         <label>产品编码<input
@@ -170,10 +170,6 @@ onMounted(loadReferences)
           v-model="model.productName"
           required
           maxlength="128"
-        ></label>
-        <label>产品类型<input
-          v-model="model.productType"
-          maxlength="100"
         ></label>
         <label>状态<select
           v-model="model.status"
@@ -320,29 +316,29 @@ onMounted(loadReferences)
             <div
               v-show="activeTab(variantIndex) === 'basic'"
               data-editor-tab="basic"
-              class="operation-form nested-form product-tab-panel--wide"
+              class="operation-form nested-form product-basic-fields product-tab-panel--wide"
             >
               <label>SKU 编码<input
                 v-model="variant.skuCode"
                 required
                 maxlength="64"
               ></label>
+              <label>状态<select
+                v-model="variant.status"
+                v-single-select
+              ><option value="ACTIVE">启用</option><option value="DRAFT">待定</option><option value="DISABLED">停用</option></select></label>
               <ProductNameEditor
                 v-model="variant.variantName"
                 v-model:styles="variant.nameStyles"
                 :highlighted="variant.nameHighlighted"
               />
-              <label>状态<select
-                v-model="variant.status"
-                v-single-select
-              ><option value="ACTIVE">启用</option><option value="DRAFT">待定</option><option value="DISABLED">停用</option></select></label>
             </div>
             <section
               v-show="activeTab(variantIndex) === 'specs'"
               data-editor-tab="specs"
               class="operation-form nested-form structured-dimensions product-tab-panel--wide"
             >
-              <h3>产品规格（cm）</h3><span />
+              <h3>产品规格（cm）</h3>
               <label>长<input
                 v-model.number="variant.itemLengthCm"
                 type="number"
@@ -363,8 +359,8 @@ onMounted(loadReferences)
                 min="0.001"
                 max="999999.999"
                 step="0.001"
-              ></label><span />
-              <h3>包装规格（cm）</h3><span />
+              ></label>
+              <h3>包装规格（cm）</h3>
               <label>包装长<input
                 v-model.number="variant.packageLengthCm"
                 type="number"

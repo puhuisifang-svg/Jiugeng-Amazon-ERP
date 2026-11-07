@@ -7,6 +7,8 @@ import { onBeforeRouteLeave, onBeforeRouteUpdate, RouterLink, useRoute } from 'v
 import { customersApi, type Customer, type CustomerInput, type CustomerProduct, type CustomerProductInput, type CustomerStatus, type InvoiceTitle } from '@/api/customers'
 import { domainApi, type SkuListItemDto } from '@/api/domain'
 import { session } from '@/state/session'
+import AccessDialog from '@/components/AccessDialog.vue'
+import SkuDocumentsPanel from '@/components/SkuDocumentsPanel.vue'
 import CustomerLabelTemplates from '@/components/CustomerLabelTemplates.vue'
 import CatalogDeleteDialog from '@/components/CatalogDeleteDialog.vue'
 import SuccessToast from '@/components/SuccessToast.vue'
@@ -21,6 +23,8 @@ const writable = computed(() => session.canAccess(['customers.write']))
 const customerRows = ref<Customer[]>([]), productRows = ref<CustomerProduct[]>([])
 const query = ref(''), status = ref<CustomerStatus | ''>(''), page = ref(0), total = ref(0)
 const loading = ref(false), saving = ref(false), success = ref(''), error = ref(''), formError = ref('')
+const labelProduct = ref<CustomerProduct>()
+const labelBusy = ref(false), showLegacyLabels = ref(false)
 const templateCustomer = ref<Customer>()
 const deleteTarget = ref<CustomerProduct>(), deleting = ref(false), deleteError = ref('')
 function requestDelete(item: CustomerProduct) { deleteTarget.value = item; deleteError.value = '' }
@@ -230,7 +234,7 @@ watch(() => [props.kind, customerFilter.value], () => {
               </tr>
               <tr v-else>
                 <th>客户</th><th>产品图片</th><th>产品名称 / SKU</th><th>供货价（人民币）</th><th>客户产品编码</th><th>产品特殊需求</th><th>状态</th><th
-                  v-if="writable || session.canAccess(['customers.delete'])"
+                  v-if="isProduct || writable || session.canAccess(['customers.delete'])"
                   class="customer-actions"
                 >
                   操作
@@ -307,14 +311,21 @@ watch(() => [props.kind, customerFilter.value], () => {
                 </td><td>{{ item.customerProductCode || '—' }}</td><td class="customer-long-text">
                   {{ item.requirements || '—' }}
                 </td><td>{{ item.status === 'ACTIVE' ? '启用' : '停用' }}</td><td
-                  v-if="writable || session.canAccess(['customers.delete'])"
+                  v-if="isProduct || writable || session.canAccess(['customers.delete'])"
                   class="customer-actions"
                 >
                   <button
+                    v-if="writable"
                     type="button"
                     @click="open(item)"
                   >
                     编辑
+                  </button>
+                  <button
+                    type="button"
+                    @click="showLegacyLabels = false; labelProduct = item"
+                  >
+                    商品标签
                   </button>
                   <button
                     v-if="session.canAccess(['customers.delete'])"
@@ -345,6 +356,50 @@ watch(() => [props.kind, customerFilter.value], () => {
         @update:page="turnPage($event - 1 - page)"
       />
     </article>
+    <AccessDialog
+      v-if="labelProduct"
+      :key="labelProduct.id"
+      title="商品标签管理"
+      dialog-class="customer-product-label-dialog"
+      :busy="labelBusy"
+      wide
+      @close="labelProduct = undefined"
+    >
+      <p class="customer-label-context">
+        {{ labelProduct.customerName }} · {{ labelProduct.productName }} · SKU：{{ labelProduct.skuCode }}
+      </p>
+      <p class="document-hint">
+        标签仅属于当前客户商品，同一 SKU 的其他客户不会共用。
+      </p>
+      <SkuDocumentsPanel
+        :customer-product-id="labelProduct.id"
+        :product-id="labelProduct.productId"
+        :variant-id="labelProduct.variantId"
+        kind="LABEL"
+        @busy="labelBusy = $event"
+      />
+      <template v-if="session.canAccess(['products.read'])">
+        <button
+          type="button"
+          class="secondary-button"
+          :disabled="labelBusy"
+          @click="showLegacyLabels = !showLegacyLabels"
+        >
+          {{ showLegacyLabels ? '收起历史 SKU 标签' : '查看历史 SKU 标签（未分配客户）' }}
+        </button>
+        <section v-if="showLegacyLabels">
+          <p class="document-hint">
+            历史文件只读保留。确认属于当前客户后，可下载并上传到上方客户商品标签中。
+          </p>
+          <SkuDocumentsPanel
+            :product-id="labelProduct.productId"
+            :variant-id="labelProduct.variantId"
+            kind="LABEL"
+            readonly
+          />
+        </section>
+      </template>
+    </AccessDialog>
     <dialog
       v-if="opened"
       ref="dialog"

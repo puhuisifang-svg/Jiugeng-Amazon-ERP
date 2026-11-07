@@ -36,10 +36,10 @@ class RoleService {
             permissions=roles.require(copyFrom).permissions();
         }
         String id=UUID.randomUUID().toString();
-        jdbc.sql("INSERT INTO iam_role(id,name,description,kind,status) VALUES (:id,:name,:description,'CUSTOM','DRAFT')")
+        jdbc.sql("INSERT INTO iam_role(id,name,description,kind,status) VALUES (:id,:name,:description,'CUSTOM','ENABLED')")
             .param("id",id).param("name",name.trim()).param("description",description.trim()).update();
         replacePermissions(id,permissions);
-        var result=roles.require(id); log(actor,copyFrom==null?"ROLE_CREATE":"ROLE_COPY",id,null,result,"创建角色草稿"); return result;
+        var result=roles.require(id); log(actor,copyFrom==null?"ROLE_CREATE":"ROLE_COPY",id,null,result,"创建启用角色"); return result;
     }
     RoleView editable(String id,long version) {
         var r=roles.require(id);
@@ -52,8 +52,7 @@ class RoleService {
             throw new IamException(400,"REASON_TOO_LONG","变更原因不能超过200字");
         if(edit.permissions()==null || edit.permissions().size()>200 || edit.permissions().stream().anyMatch(Objects::isNull)) throw new IamException(400,"PERMISSION_INVALID","权限集合无效");
         var codes=PermissionCatalog.normalize(edit.permissions());
-        if(!List.of("DRAFT","ENABLED","DISABLED").contains(edit.status())) throw new IamException(400,"ROLE_STATUS_INVALID","角色状态无效");
-        if(edit.status().equals("ENABLED") && codes.isEmpty()) throw new IamException(400,"ROLE_PERMISSION_REQUIRED","启用角色至少需要一项权限");
+        if(!List.of("ENABLED","DISABLED").contains(edit.status())) throw new IamException(400,"ROLE_STATUS_INVALID","角色状态无效");
         return codes;
     }
     Preview preview(String id, Edit edit) {
@@ -62,7 +61,6 @@ class RoleService {
     }
     RoleView save(String id, Edit edit, SessionPrincipal actor) {
         roles.lock(); roles.requireAdministrator(actor.userId()); var before=editable(id,edit.version()); name(edit.name(),edit.description(),id); var next=validate(edit);
-        if(!before.status().equals("DRAFT") && edit.status().equals("DRAFT")) throw new IamException(400,"ROLE_STATE_INVALID","已发布角色不能退回草稿，请停用");
         jdbc.sql("UPDATE iam_role SET name=:name,description=:description,status=:status,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=:id")
             .param("name",edit.name().trim()).param("description",edit.description().trim()).param("status",edit.status()).param("id",id).update();
         replacePermissions(id,next); roles.guardAvailableAdministrator();
@@ -86,7 +84,7 @@ class RoleService {
         if(a.roleIds()==null || a.roleIds().size()>20 || a.roleIds().stream().anyMatch(Objects::isNull)) throw new IamException(400,"USER_ROLES_INVALID","最多选择20个启用角色");
         var ids=new TreeSet<>(a.roleIds());
         if(ids.contains("ADMIN") && ids.size()>1) throw new IamException(400,"ADMIN_ROLE_EXCLUSIVE","系统管理员不能混绑其他角色");
-        for(var id:ids) if(!roles.require(id).status().equals("ENABLED")) throw new IamException(400,"ROLE_NOT_ENABLED","不能分配草稿或停用角色");
+        for(var id:ids) if(!roles.require(id).status().equals("ENABLED")) throw new IamException(400,"ROLE_NOT_ENABLED","不能分配停用角色");
         return ids;
     }
     Preview previewAssignment(String id, Assignment a) {

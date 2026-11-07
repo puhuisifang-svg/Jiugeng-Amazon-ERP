@@ -30,6 +30,15 @@ class RoleControllerTest {
     Map<String,Object> edit(JsonNode role,List<String> permissions,String status) { return Map.of("name",role.path("name").asText(),"description","Synthetic role","status",status,"permissions",permissions,"version",role.path("version").asLong(),"reason","Synthetic verification"); }
     JsonNode save(JsonNode role,List<String> permissions) throws Exception { ((com.fasterxml.jackson.databind.node.ObjectNode)role).put("version",jdbc.queryForObject("SELECT version FROM iam_role WHERE id=?",Long.class,role.path("id").asText())); return json.readTree(mvc.perform(put("/api/v1/roles/"+role.path("id").asText()).header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(edit(role,permissions,"ENABLED")))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()); }
     void assign(String... ids) throws Exception { long v=jdbc.queryForObject("SELECT authorization_version FROM iam_user WHERE id=?",Long.class,userId);mvc.perform(put("/api/v1/users/"+userId+"/roles").header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("roleIds",List.of(ids),"version",v,"reason","")))).andExpect(status().isOk()); }
+    @Test void newRoleIsEnabledWithoutImplicitPermissionsAndDraftIsRejected() throws Exception {
+        var role=create("默认启用角色");
+        assertThat(role.path("status").asText()).isEqualTo("ENABLED");
+        assertThat(role.path("permissions").size()).isZero();
+        role=save(role,List.of());
+        mvc.perform(put("/api/v1/roles/"+role.path("id").asText()).header("Authorization",admin)
+            .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(edit(role,List.of(),"DRAFT"))))
+            .andExpect(status().isBadRequest());
+    }
     @Test void removingLastRolePreservesStatusRevokesSessionAndAllowsRoleDeletion() throws Exception {
         var role=save(create("待移除角色"),List.of("products.read")); String id=role.path("id").asText(); assign(id);
         String old=login("rbac-user");
@@ -110,8 +119,8 @@ class RoleControllerTest {
         mvc.perform(put("/api/v1/roles/"+role.path("id").asText()).header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(edit(draft,List.of("products.write"),"ENABLED")))).andExpect(status().isConflict());
         save(role,List.of("products.read"));mvc.perform(get("/api/v1/auth/me").header("Authorization",token)).andExpect(status().isOk());
     }
-    @Test void creationWithDraftRoleIsAtomicAndAdminCannotMixRoles() throws Exception {
-        var draft=create("未发布角色");int before=jdbc.queryForObject("SELECT COUNT(*) FROM iam_user",Integer.class);
+    @Test void creationWithDisabledRoleIsAtomicAndAdminCannotMixRoles() throws Exception {
+        var draft=create("停用角色");jdbc.update("UPDATE iam_role SET status='DISABLED' WHERE id=?",draft.path("id").asText());int before=jdbc.queryForObject("SELECT COUNT(*) FROM iam_user",Integer.class);
         mvc.perform(post("/api/v1/users/with-roles").header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("loginName","synthetic-new","displayName","Synthetic new","initialPassword",PASSWORD,"roleIds",List.of(draft.path("id").asText()))))).andExpect(status().isBadRequest());
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM iam_user",Integer.class)).isEqualTo(before);
         mvc.perform(put("/api/v1/users/"+userId+"/roles").header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content("{\"roleIds\":[\"ADMIN\",\"SELECTION\"],\"version\":1,\"reason\":\"Synthetic mix\"}")).andExpect(status().isBadRequest());

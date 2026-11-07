@@ -139,6 +139,26 @@ class CustomerControllerTest {
         assertThat(audit).doesNotContain("SYN-BANK","合成甲","合成乙");
     }
 
+    @Test void labelsAreIsolatedByCustomerProductAndValidateFilesAndPermissions() throws Exception {
+        String token=login("ADMIN");String[] sku=sku();
+        String a=body(write(token,"/products",null,quote(createCustomer(token),sku,"1")).andExpect(status().isOk())).path("id").asText();
+        String b=body(write(token,"/products",null,quote(createCustomer(token),sku,"1")).andExpect(status().isOk())).path("id").asText();
+        String base="/api/v1/customers/products/";
+        var file=new org.springframework.mock.web.MockMultipartFile("file","synthetic-label.pdf","application/pdf","%PDF-synthetic".getBytes());
+        String id=body(mvc.perform(multipart(base+a+"/labels").file(file).header("Authorization",token)).andExpect(status().isOk())).path("id").asText();
+        mvc.perform(get(base+a+"/labels").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1));
+        mvc.perform(get(base+b+"/labels").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(0));
+        mvc.perform(get(base+b+"/labels/"+id+"/download").header("Authorization",token)).andExpect(status().isNotFound());
+        mvc.perform(get(base+a+"/labels/"+id+"/download").header("Authorization",token)).andExpect(status().isOk()).andExpect(content().bytes("%PDF-synthetic".getBytes()));
+        mvc.perform(multipart(base+a+"/labels").file(new org.springframework.mock.web.MockMultipartFile("file","invalid.pdf","application/pdf","bad".getBytes())).header("Authorization",token)).andExpect(status().isBadRequest());
+        mvc.perform(get(base+a+"/labels")).andExpect(status().isUnauthorized());
+        String denied=login("SELECTION");
+        mvc.perform(get(base+a+"/labels").header("Authorization",denied)).andExpect(status().isForbidden());
+        mvc.perform(multipart(base+a+"/labels").file(file).header("Authorization",denied)).andExpect(status().isForbidden());
+        jdbc.update("UPDATE customer_product SET deleted_at=CURRENT_TIMESTAMP WHERE id=?",a);
+        mvc.perform(multipart(base+a+"/labels").file(file).header("Authorization",token)).andExpect(status().isNotFound());
+    }
+
     private String createCustomer(String token) throws Exception { return body(write(token,"",null,customer("合成客户"+UUID.randomUUID())).andExpect(status().isOk())).path("id").asText(); }
     private Map<String,Object> customer(String name) { return new HashMap<>(Map.of("name",name,"status","ACTIVE")); }
     private Map<String,Object> quote(String customer,String[] sku,String price) {

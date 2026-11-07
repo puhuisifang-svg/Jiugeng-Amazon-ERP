@@ -2,7 +2,7 @@ import { apiRequest } from './client'
 import type { AppUser } from './auth'
 export interface RoleRef { id: string; name: string; status: string }
 export interface Permission { code: string; module: string; label: string; dependencies: string[]; sensitive: boolean; assignable: boolean }
-export interface Role { id: string; name: string; description: string; kind: 'BUILTIN' | 'CUSTOM'; status: 'DRAFT' | 'ENABLED' | 'DISABLED'; version: number; permissions: string[]; memberCount: number; updatedAt: string }
+export interface Role { id: string; name: string; description: string; kind: 'BUILTIN' | 'CUSTOM'; status: 'ENABLED' | 'DISABLED'; version: number; permissions: string[]; memberCount: number; updatedAt: string }
 export interface RoleEdit { name: string; description: string; status: string; permissions: string[]; version: number; reason: string }
 export interface Assignment { roleIds: string[]; version: number; reason: string }
 export interface PermissionPreview { added: string[]; removed: string[]; members: AppUser[] }

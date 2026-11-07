@@ -143,7 +143,7 @@ describe('ProductsView', () => {
     await wrapper.get('.parent-toggle').trigger('click')
     const row = wrapper.get('.product-child-row')
     expect(row.get('.hierarchy-cell').text()).toContain('SKU-1')
-    expect(row.text()).toContain('家居')
+    expect(wrapper.text()).not.toContain('产品类型')
     expect(row.text()).toContain('详情')
     expect(row.get('img').attributes('src')).toBe('https://images.example.com/sku-1.png')
   })
@@ -282,7 +282,7 @@ describe('ProductsView', () => {
     expect(wrapper.findAll('.product-child-row')).toHaveLength(2)
   })
 
-  it('filters keywords across names and specifications, types and product status', async () => {
+  it('filters keywords across names and specifications and product status', async () => {
     vi.mocked(domainApi.products).mockResolvedValueOnce({ items: [
       { ...product, variants: [{ ...product.variants[0], specification: '蓝色大号' }] },
       { ...product, id: 'p2', productCode: 'P-2', productType: '电子', status: 'DRAFT', variants: [{ ...product.variants[0], id: 'v2', skuCode: 'SKU-2' }] },
@@ -296,12 +296,10 @@ describe('ProductsView', () => {
     expect(wrapper.findAll('.product-parent-row')).toHaveLength(2)
     await input.setValue('')
     const selects = wrapper.findAll('.product-management-filters select')
-    await selects[0]!.setValue('电子')
+    await selects[0]!.setValue('ACTIVE')
     expect(wrapper.findAll('.product-parent-row')).toHaveLength(1)
-    await selects[1]!.setValue('ACTIVE')
-    expect(wrapper.findAll('.product-parent-row')).toHaveLength(0)
-    await selects[1]!.setValue('DRAFT')
-    await selects[2]!.setValue('UNINITIALIZED')
+    await selects[0]!.setValue('DRAFT')
+    await selects[1]!.setValue('UNINITIALIZED')
     expect(wrapper.get('.product-parent-row').text()).toContain('P-2')
     await wrapper.get('.product-management-filters .filter-reset-button').trigger('click')
     await flushPromises()
@@ -309,13 +307,16 @@ describe('ProductsView', () => {
     expect((selects[0]!.element as HTMLSelectElement).value).toBe('')
   })
 
-  it('opens the separate manual and label tabs for the selected child', async () => {
+  it('keeps manuals on SKU detail and removes customer-owned label and parent status', async () => {
     const wrapper = mount(ProductsView, { global: { stubs: { RouterLink } } })
     await flushPromises()
     await wrapper.get('.parent-toggle').trigger('click')
     await wrapper.get('.product-child-row .sku-code-button').trigger('click')
     await flushPromises()
-    for (const title of ['说明书管理', '商品标签管理']) {
+    expect(wrapper.get('.sku-detail-dialog').text()).not.toContain('商品标签管理')
+    expect(wrapper.get('.sku-detail-dialog').text()).not.toContain('产品状态')
+    expect(wrapper.get('.sku-detail-dialog').text()).toContain('父体编码')
+    for (const title of ['说明书管理']) {
       await wrapper.findAll('button').find(button => button.text() === title)!.trigger('click')
       await flushPromises()
       expect(wrapper.get('.sku-documents h3').text()).toBe(title)

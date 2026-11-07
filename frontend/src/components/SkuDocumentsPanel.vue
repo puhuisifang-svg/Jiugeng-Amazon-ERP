@@ -2,16 +2,18 @@
 import SingleFileUpload from '@/components/SingleFileUpload.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { catalogApi, type SkuDocument } from '@/api/catalog'
 import { session } from '@/state/session'
-const props = defineProps<{ productId: string; variantId: string; kind: SkuDocument['kind'] }>()
+const props = defineProps<{ productId: string; variantId: string; kind: SkuDocument['kind']; customerProductId?: string; readonly?: boolean }>()
+const emit = defineEmits<{ busy: [value: boolean] }>()
 const files = ref<SkuDocument[]>([])
 const loading = ref(false); const uploading = ref(false); const downloading = ref('')
+watch(uploading, value => emit('busy', value))
 const error = ref(''); const success = ref('')
 async function load() {
   loading.value = true; error.value = ''
-  try { files.value = await catalogApi.documents(props.productId, props.variantId, props.kind) }
+  try { files.value = props.customerProductId ? await catalogApi.customerLabels(props.customerProductId) : await catalogApi.documents(props.productId, props.variantId, props.kind) }
   catch (exception) { error.value = exception instanceof Error ? exception.message : '文件列表加载失败。' }
   finally { loading.value = false }
 }
@@ -21,14 +23,14 @@ async function upload(file: File) {
   if (!file.size || file.size > 10 * 1024 * 1024) { error.value = '文件不能为空，且不能超过 10 MB。';  return false }
   uploading.value = true
   try {
-    const uploaded = await catalogApi.uploadDocument(props.productId, props.variantId, props.kind, file)
+    const uploaded = props.customerProductId ? await catalogApi.uploadCustomerLabel(props.customerProductId, file) : await catalogApi.uploadDocument(props.productId, props.variantId, props.kind, file)
     files.value.unshift(uploaded); success.value = '上传成功。'
   } catch (exception) { error.value = exception instanceof Error ? exception.message : '上传失败，请重试。' ; return false }
   finally { uploading.value = false }
 }
 async function download(file: SkuDocument) {
   downloading.value = file.id; error.value = ''
-  try { await catalogApi.downloadDocument(props.productId, props.variantId, file) }
+  try { if (props.customerProductId) await catalogApi.downloadCustomerLabel(props.customerProductId, file); else await catalogApi.downloadDocument(props.productId, props.variantId, file) }
   catch (exception) { error.value = exception instanceof Error ? exception.message : '下载失败，请重试。' }
   finally { downloading.value = '' }
 }
@@ -38,10 +40,12 @@ onMounted(load)
 <template>
   <section class="sku-documents">
     <div class="material-toolbar">
-      <div><h3>{{ kind === 'MANUAL' ? '说明书管理' : '商品标签管理' }}</h3></div>
+      <div v-if="!customerProductId">
+        <h3>{{ kind === 'MANUAL' ? '说明书管理' : '商品标签管理' }}</h3>
+      </div>
       <SingleFileUpload
-        v-if="session.canAccess(['products.write'])"
-        title="说明书 / 标签附件"
+        v-if="!readonly && session.canAccess([customerProductId ? 'customers.write' : 'products.write'])"
+        :title="kind === 'MANUAL' ? '说明书附件' : '商品标签附件'"
         accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.txt,.zpl"
         :max-mb="10"
         :disabled="uploading || loading"

@@ -31,13 +31,13 @@ async function downloadPreviewImage() {
 }
 const imagePreview = ref<{ imageAssetId?: string | undefined; imageUrl?: string | undefined; variantName: string } | null>(null)
 watch(imagePreview, () => { imageDownloadError.value = '' })
-type ColumnKey = 'image' | 'sku' | 'product' | 'status' | 'dimensions' | 'weight' | 'supplier' | 'material' | 'updated' | 'stock'
+type ColumnKey = 'image' | 'sku' | 'status' | 'dimensions' | 'weight' | 'supplier' | 'material' | 'updated' | 'stock'
 const columns: Array<{ key: ColumnKey; label: string }> = [
   { key: 'image', label: '图片' }, { key: 'sku', label: '品名 / SKU编码' },
-  { key: 'product', label: '产品类型' }, { key: 'status', label: '状态' }, { key: 'dimensions', label: '规格' },
+  { key: 'status', label: '状态' }, { key: 'dimensions', label: '规格' },
   { key: 'weight', label: '包装重量' }, { key: 'supplier', label: '供应商' }, { key: 'material', label: '辅料' }, { key: 'updated', label: '更新时间' }, { key: 'stock', label: '库存状态' },
 ]
-const defaultColumns: ColumnKey[] = ['sku', 'image', 'product', 'status', 'stock', 'dimensions', 'weight']
+const defaultColumns: ColumnKey[] = ['sku', 'image', 'status', 'stock', 'dimensions', 'weight']
 const storageKey = computed(() => `jiugeng.product-management.columns.v2.${session.user.value?.id ?? 'current'}`)
 function restoredColumns(): ColumnKey[] {
   try {
@@ -104,7 +104,6 @@ function toInput(product: ProductDetailDto): ProductInput {
 function apiMessage(exception: unknown, fallback: string) { return exception instanceof ApiError || exception instanceof Error ? exception.message : fallback }
 let loadSequence = 0
 const displayedColumns = computed(() => (['sku', ...visibleColumns.value.filter(key => key !== 'sku')] as ColumnKey[]).filter(key => hasColumn(key)))
-const productTypes = computed(() => [...new Set(products.value.map(product => product.productType).filter((value): value is string => Boolean(value)))].sort())
 const groups = computed(() => {
   const f = appliedFilters.value
   const needles = f.q.trim().toLocaleUpperCase().split(/\r?\n/).filter(Boolean)
@@ -251,14 +250,6 @@ onMounted(load)
         placeholder="SKU、品名或规格模糊搜索"
         @input="filters.field = 'KEYWORD'; filters.exact = false"
       ></label>
-      <label>产品类型<select
-        v-model="filters.productType"
-        v-single-select
-      ><option value="">全部类型</option><option
-        v-for="type in productTypes"
-        :key="type"
-        :value="type"
-      >{{ type }}</option></select></label>
       <label>产品状态<select
         v-model="filters.productStatus"
         v-single-select
@@ -451,7 +442,6 @@ onMounted(load)
                         class="product-thumbnail"
                       >父</span>
                     </template>
-                    <span v-else-if="key === 'product'">{{ group.product.productType || '—' }}</span>
                     <span
                       v-else-if="key === 'status'"
                       :class="['status-badge', `status-badge--${group.product.status.toLowerCase()}`]"
@@ -567,9 +557,7 @@ onMounted(load)
                         v-else-if="key === 'stock'"
                         class="stock-uninitialized"
                       >未建账</span>
-                      <template v-else-if="key === 'product'">
-                        {{ row.productType || '—' }}
-                      </template>
+
                       <template v-else-if="key === 'status'">
                         <span :class="['status-badge', `status-badge--${row.variant.status.toLowerCase()}`]">{{ labelStatus(row.variant.status) }}</span><small v-if="!row.businessAvailable">业务不可用</small>
                       </template>

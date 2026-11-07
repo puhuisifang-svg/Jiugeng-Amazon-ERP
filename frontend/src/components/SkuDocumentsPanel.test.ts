@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-const mocks = vi.hoisted(() => ({ documents: vi.fn(), uploadDocument: vi.fn(), downloadDocument: vi.fn(), canAccess: vi.fn() }))
+const mocks = vi.hoisted(() => ({ customerLabels: vi.fn(), uploadCustomerLabel: vi.fn(), downloadCustomerLabel: vi.fn(), documents: vi.fn(), uploadDocument: vi.fn(), downloadDocument: vi.fn(), canAccess: vi.fn() }))
 vi.mock('@/api/catalog', () => ({ catalogApi: mocks }))
 vi.mock('@/state/session', () => ({ session: { canAccess: mocks.canAccess } }))
 import SkuDocumentsPanel from './SkuDocumentsPanel.vue'
@@ -31,6 +31,22 @@ describe('SKU documents', () => {
     await flushPromises()
     expect(mocks.downloadDocument).toHaveBeenCalledWith('p1', 'v1', document)
   })
+  it('uses customer-product identity and permissions for labels instead of the shared SKU', async () => {
+    mocks.customerLabels.mockResolvedValue([])
+    mocks.uploadCustomerLabel.mockResolvedValue(document)
+    const wrapper = mount(SkuDocumentsPanel, { props: { productId: 'p1', variantId: 'v1', kind: 'LABEL', customerProductId: 'cp1' } })
+    await flushPromises()
+    expect(mocks.customerLabels).toHaveBeenCalledWith('cp1')
+    expect(mocks.documents).not.toHaveBeenCalled()
+    expect(mocks.canAccess).toHaveBeenCalledWith(['customers.write'])
+    const file = new File(['%PDF-test'], 'label.pdf', { type: 'application/pdf' })
+    await upload(wrapper, file)
+    expect(mocks.uploadCustomerLabel).toHaveBeenCalledWith('cp1', file)
+    expect(mocks.uploadDocument).not.toHaveBeenCalled()
+    await wrapper.findAll('button').find(b => b.text() === '下载')!.trigger('click')
+    await flushPromises()
+    expect(mocks.downloadCustomerLabel).toHaveBeenCalledWith('cp1', document)
+  })
   it('loads labels separately and hides upload for read-only users', async () => {
     mocks.canAccess.mockReturnValue(false)
     mocks.documents.mockResolvedValue([document])
@@ -39,6 +55,12 @@ describe('SKU documents', () => {
     expect(mocks.documents).toHaveBeenCalledWith('p1', 'v1', 'LABEL')
     expect(wrapper.find('input[type="file"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('下载')
+  })
+  it('keeps historical SKU labels read-only even for product editors', async () => {
+    const wrapper = mount(SkuDocumentsPanel, { props: { productId: 'p1', variantId: 'v1', kind: 'LABEL', readonly: true } })
+    await flushPromises()
+    expect(wrapper.find('input[type="file"]').exists()).toBe(false)
+    expect(mocks.documents).toHaveBeenCalledWith('p1', 'v1', 'LABEL')
   })
   it('rejects empty and oversized files before requesting upload', async () => {
     const wrapper = render()

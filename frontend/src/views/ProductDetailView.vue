@@ -159,7 +159,7 @@ watch([section, () => product.value?.id, () => product.value?.updatedAt, () => p
 
         <dl class="detail-fields">
           <div><dt>产品编码</dt><dd>{{ product.productCode }}</dd></div><div><dt>产品名称</dt><dd>{{ product.productName }}</dd></div>
-          <div><dt>产品类型</dt><dd>{{ product.productType || '—' }}</dd></div><div><dt>SKU数量</dt><dd>{{ product.variants.length }}</dd></div>
+          <div><dt>SKU数量</dt><dd>{{ product.variants.length }}</dd></div>
           <div><dt>创建时间</dt><dd>{{ product.createdAt || '—' }}</dd></div><div><dt>更新时间</dt><dd>{{ product.updatedAt || '—' }}</dd></div>
           <div class="detail-wide">
             <dt>产品描述</dt><dd>{{ product.description || '—' }}</dd>

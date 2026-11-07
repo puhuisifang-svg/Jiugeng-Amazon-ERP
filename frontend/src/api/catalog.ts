@@ -27,6 +27,17 @@ export function imageFileName(label: string, mediaType: string) {
 }
 
 export const catalogApi = {
+  customerLabels: async (id: string) => (await request(`/v1/customers/products/${encodeURIComponent(id)}/labels`, { method: 'GET' })).json() as Promise<SkuDocument[]>,
+  uploadCustomerLabel: async (id: string, file: File) => {
+    const body = new FormData(); body.set('file', file)
+    return (await request(`/v1/customers/products/${encodeURIComponent(id)}/labels`, { method: 'POST', body })).json() as Promise<SkuDocument>
+  },
+  downloadCustomerLabel: async (id: string, file: SkuDocument) => {
+    const response = await request(`/v1/customers/products/${encodeURIComponent(id)}/labels/${encodeURIComponent(file.id)}/download`, { method: 'GET' })
+    const url = URL.createObjectURL(await response.blob()); const link = document.createElement('a')
+    link.href = url; link.download = file.fileName; document.body.append(link); link.click(); link.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  },
   documents: async (productId: string, variantId: string, kind: SkuDocument['kind']) =>
     (await request(`${documentPath(productId, variantId)}?kind=${kind}`, { method: 'GET' })).json() as Promise<SkuDocument[]>,
   uploadDocument: async (productId: string, variantId: string, kind: SkuDocument['kind'], file: File) => {

@@ -73,11 +73,13 @@ watch(() => props.detailRow, async row => {
             role="alert"
           >
             {{ error }}
-          </p><p>{{ detailVariant?.skuCode }} · {{ detailRow.productName }}（{{ detailRow.productCode }}）</p>
+          </p><div class="sku-identity">
+            <p><span>SKU 编码</span> {{ detailVariant?.skuCode }}</p><p><span>所属父体</span> {{ detailRow.productName }}</p><p><span>父体编码</span> {{ detailRow.productCode }}</p>
+          </div>
         </div>
       </header><nav class="product-editor-tabs">
         <button
-          v-for="tab in ([['basic','基础信息'],['purchase','采购信息'],['specs','规格信息'],['materials','关联辅料'],['customs','报关资料'],['manual','说明书管理'],['label','商品标签管理'],['history','操作日志']] as const)"
+          v-for="tab in ([['basic','基础信息'],['purchase','采购信息'],['specs','规格信息'],['materials','关联辅料'],['customs','报关资料'],['manual','说明书管理'],['history','操作日志']] as const)"
           :key="tab[0]"
           type="button"
           :class="{ active: detailTab === tab[0] }"
@@ -113,8 +115,14 @@ watch(() => props.detailRow, async row => {
                 :styles="detailVariant?.nameStyles"
                 :highlighted="detailVariant?.nameHighlighted"
               />
-            </dd><dt>SKU 状态</dt><dd>{{ labelStatus(detailVariant?.status ?? '') }}</dd><dt>产品状态</dt><dd>{{ labelStatus(detailRow.productStatus) }}</dd>
+            </dd><dt>SKU 状态</dt><dd>{{ labelStatus(detailVariant?.status ?? '') }}</dd>
           </dl>
+          <p
+            v-if="detailRow.productStatus !== 'ACTIVE'"
+            class="sku-parent-notice"
+          >
+            所属父体{{ labelStatus(detailRow.productStatus) }}，当前 SKU 暂不可用于业务；请到父体资料中调整。
+          </p>
         </section>
         <section
           v-else-if="detailTab === 'customs'"
@@ -181,11 +189,11 @@ watch(() => props.detailRow, async row => {
           </p>
         </div>
         <SkuDocumentsPanel
-          v-else-if="(detailTab === 'manual' || detailTab === 'label') && detailVariant?.id"
+          v-else-if="detailTab === 'manual' && detailVariant?.id"
           :key="`${detailVariant.id}-${detailTab}`"
           :product-id="detailRow.productId"
           :variant-id="detailVariant.id"
-          :kind="detailTab === 'manual' ? 'MANUAL' : 'LABEL'"
+          kind="MANUAL"
         />
         <div
           v-else

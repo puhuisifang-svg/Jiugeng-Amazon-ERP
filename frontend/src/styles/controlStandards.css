@@ -72,3 +72,12 @@
     #app :is(.factory-form,.warehouse-form,.bill-form-grid,.development-fields) > .wide { grid-column: 1 / -1; }
   }
 }
+
+/* Shared supplier chooser; native select still owns validation and value. */
+#app select.ui-supplier-select + .single-select-trigger{width:100%;max-width:360px;min-width:0;min-height:40px;height:40px;border:1px solid #9bbbee;border-radius:4px;color:#2864c5;background:#f1f6ff;font-size:13px;font-weight:400}
+#app select.ui-supplier-select + .single-select-trigger:hover:not(:disabled){border-color:#2864c5;background:#e8f1ff}
+#app select.ui-supplier-select + .single-select-trigger:focus-visible{outline:2px solid #2675d833;outline-offset:2px}
+#app select.ui-supplier-select + .single-select-trigger:disabled{opacity:.55;cursor:not-allowed;background:#f5f7fa;color:#667085}
+#app .ui-image-remove{justify-self:start;align-self:start;display:inline-flex;align-items:center;justify-content:center;min-height:32px;padding:5px 12px;border:1px solid #f1c5c1;background:#fff7f6;color:#b42318;border-radius:5px;font-size:13px;font-weight:400;cursor:pointer;flex:none}
+#app .ui-image-remove:hover:not(:disabled){background:#feecea}
+#app .ui-image-remove:disabled{opacity:.5;cursor:not-allowed}

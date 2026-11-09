@@ -13,6 +13,7 @@ import { RouterLink } from 'vue-router'
 import { ApiError } from '@/api/client'
 import { domainApi, type BatchVariantPatchInput, type ProductDetailDto, type ProductInput, type ProductVariantDto, type SkuListItemDto, type VariantStatus } from '@/api/domain'
 import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vue'
+import ParentProductDetailDialog from '@/components/ParentProductDetailDialog.vue'
 import SkuDetailDialog from '@/components/SkuDetailDialog.vue'
 import ProductForm from '@/components/ProductForm.vue'
 import ProductEditDialog from '@/components/ProductEditDialog.vue'
@@ -20,6 +21,7 @@ import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
 
+const parentDetailId = ref<string>()
 const imageDownloading = ref(false)
 const imageDownloadError = ref('')
 async function downloadPreviewImage() {
@@ -457,12 +459,13 @@ onMounted(load)
                     @click.stop
                   >
                     <div class="table-actions">
-                      <RouterLink
-                        :to="`/products/${group.product.id}`"
+                      <button
+                        type="button"
                         class="row-detail-link"
+                        @click="parentDetailId = group.product.id"
                       >
                         详情
-                      </RouterLink>
+                      </button>
                       <RowMoreActions
                         v-if="writable || session.canAccess(['products.delete'])"
                         :label="`父体 ${group.product.productCode} 更多操作`"
@@ -782,6 +785,14 @@ onMounted(load)
       :error="error"
       @close="showEdit = false"
       @submit="update"
+    />
+    <ParentProductDetailDialog
+      v-if="parentDetailId"
+      :product-id="parentDetailId"
+      :writable="writable"
+      @close="parentDetailId = undefined"
+      @edit="parentDetailId = undefined; editParent($event)"
+      @sku="parentDetailId = undefined; openDetail($event)"
     />
     <SkuDetailDialog
       v-if="showDetail && detailRow"

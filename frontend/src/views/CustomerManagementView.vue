@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { vSingleSelect } from '@/directives/singleSelect'
+import CustomerSkuPicker from '@/components/CustomerSkuPicker.vue'
 import ListPagination from '@/components/ListPagination.vue'
 const listSize = ref(20)
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, RouterLink, useRoute } from 'vue-router'
 import { customersApi, type Customer, type CustomerInput, type CustomerProduct, type CustomerProductInput, type CustomerStatus, type InvoiceTitle } from '@/api/customers'
-import { domainApi, type SkuListItemDto } from '@/api/domain'
+import { type SkuListItemDto } from '@/api/domain'
 import { session } from '@/state/session'
 import AccessDialog from '@/components/AccessDialog.vue'
 import SkuDocumentsPanel from '@/components/SkuDocumentsPanel.vue'
@@ -46,15 +47,34 @@ const blankCustomer = (): CustomerInput => ({ invoiceTitles: [blankTitle()], nam
 const blankProduct = (): CustomerProductInput => ({ customerId: '', productId: '', variantId: '', supplyPrice: '', priceUnit: '件', customerProductCode: '', requirements: '', status: 'ACTIVE', version: undefined })
 const customerForm = reactive(blankCustomer()), productForm = reactive(blankProduct())
 const snapshot = () => JSON.stringify(isProduct.value ? productForm : customerForm)
-const customerFilter = computed(() => typeof route.query.customerId === 'string' ? route.query.customerId : '')
-const customerQuery = ref(''), skuQuery = ref(''), customerPage = ref(0), skuPage = ref(0)
-const customerOptions = ref<Customer[]>([]), skuOptions = ref<SkuListItemDto[]>([])
-const customerCount = ref(0), skuCount = ref(0), picking = ref(false)
-const selectedCustomer = ref<Customer>(), selectedSku = ref<SkuListItemDto>()
-let loadSequence = 0, pickerSequence = 0
+const routeCustomerId = computed(() => typeof route.query.customerId === 'string' ? route.query.customerId : '')
+const customerFilter = ref(''), customerOptions = ref<Customer[]>([]), customersLoading = ref(false), customersError = ref('')
+const selectedSku = ref<SkuListItemDto>(), skuPickerOpen = ref(false)
+const activeCustomers = computed(() => customerOptions.value.filter(item => item.status === 'ACTIVE'))
+const currentCustomer = computed(() => customerOptions.value.find(item => item.id === customerFilter.value))
+let loadSequence = 0, directorySequence = 0
+async function loadCustomers() {
+  const sequence = ++directorySequence; customersLoading.value = true; customersError.value = ''
+  try {
+    const all: Customer[] = []
+    for (let index = 0; ; index++) {
+      const result = await customersApi.list({ page: index, size: 100 })
+      if (sequence !== directorySequence) return
+      all.push(...result.items)
+      if (!result.items.length || all.length >= result.totalCount) break
+    }
+    customerOptions.value = all
+    customerFilter.value = all.some(item => item.id === routeCustomerId.value) ? routeCustomerId.value : (all.find(item => item.defaultCustomer && item.status === 'ACTIVE')?.id ?? '')
+    await load()
+  } catch (e) { if (sequence === directorySequence) customersError.value = message(e) }
+  finally { if (sequence === directorySequence) customersLoading.value = false }
+}
+function changeCustomer() { productRows.value = []; total.value = 0; page.value = 0; query.value = ''; status.value = ''; void load() }
+function pickSku(row: SkuListItemDto) { selectedSku.value = row; productForm.productId = row.productId; productForm.variantId = row.variant.id ?? ''; skuPickerOpen.value = false }
 function message(exception: unknown) { return exception instanceof Error ? exception.message : '请求失败，请重试。' }
 async function load() {
   const sequence = ++loadSequence; loading.value = true; error.value = ''
+  if (isProduct.value && !customerFilter.value) { productRows.value = []; total.value = 0; loading.value = false; return }
   try {
     const filters = { q: query.value.trim(), status: status.value, page: page.value, size: listSize.value }
     const result = isProduct.value ? await customersApi.products({ ...filters, customerId: customerFilter.value }) : await customersApi.list(filters)
@@ -69,37 +89,11 @@ async function load() {
 }
 function search() { page.value = 0; void load() }
 function turnPage(delta: number) { page.value += delta; void load() }
-async function findOptions(kind: 'customer' | 'sku', reset = false) {
-  const sequence = ++pickerSequence; picking.value = true; formError.value = ''
-  try {
-    if (kind === 'customer') {
-      if (reset) customerPage.value = 0
-      const result = await customersApi.list({ q: customerQuery.value.trim(), status: 'ACTIVE', page: customerPage.value, size: 20 })
-      if (sequence !== pickerSequence) return
-      customerOptions.value = result.items; customerCount.value = result.totalCount
-    } else {
-      if (reset) skuPage.value = 0
-      const result = await domainApi.skus({ q: skuQuery.value.trim(), exact: false, status: 'ACTIVE', productStatus: 'ACTIVE', page: skuPage.value, size: 20 })
-      if (sequence !== pickerSequence) return
-      skuOptions.value = result.items; skuCount.value = result.totalCount
-    }
-  } catch (exception) { if (sequence === pickerSequence) formError.value = message(exception) }
-  finally { if (sequence === pickerSequence) picking.value = false }
-}
-function pickCustomer(event: Event) {
-  selectedCustomer.value = customerOptions.value.find(item => item.id === (event.target as HTMLSelectElement).value)
-  productForm.customerId = selectedCustomer.value?.id ?? ''
-}
-function pickSku(event: Event) {
-  selectedSku.value = skuOptions.value.find(item => item.variant.id === (event.target as HTMLSelectElement).value)
-  productForm.productId = selectedSku.value?.productId ?? ''; productForm.variantId = selectedSku.value?.variant.id ?? ''
-}
 async function open(item?: Customer | CustomerProduct) {
   editingId.value = item?.id; discard.value = false; formError.value = ''; success.value = ''
   Object.assign(customerForm, blankCustomer()); Object.assign(productForm, blankProduct())
-  customerOptions.value = []; skuOptions.value = []; customerCount.value = 0; skuCount.value = 0
-  customerPage.value = 0; skuPage.value = 0; customerQuery.value = ''; skuQuery.value = ''
-  selectedCustomer.value = undefined; selectedSku.value = undefined; selectionSummary.value = ''
+  selectedSku.value = undefined; selectionSummary.value = ''; skuPickerOpen.value = false
+  if (isProduct.value && !item) productForm.customerId = activeCustomers.value.find(customer => customer.defaultCustomer)?.id ?? ''
   if (item && 'customerId' in item) {
     Object.assign(productForm, { customerId: item.customerId, productId: item.productId, variantId: item.variantId,
       supplyPrice: item.supplyPrice == null ? '' : String(item.supplyPrice), priceUnit: item.priceUnit, customerProductCode: item.customerProductCode,
@@ -111,10 +105,9 @@ async function open(item?: Customer | CustomerProduct) {
   }
   initial.value = snapshot(); opened.value = true
   await nextTick(); dialog.value?.showModal(); dialog.value?.querySelector<HTMLInputElement>('input')?.focus()
-  if (isProduct.value && !item) { await findOptions('customer'); if (opened.value) await findOptions('sku') }
 }
 async function chooseDefault(item: Customer) { await open(item); customerForm.defaultCustomer = true }
-function close() { pickerSequence++; picking.value = false; dialog.value?.close(); opened.value = false; discard.value = false }
+function close() { skuPickerOpen.value = false; dialog.value?.close(); opened.value = false; discard.value = false }
 async function requestClose() {
   if (saving.value) return
   if (snapshot() === initial.value) { close(); return }
@@ -142,13 +135,14 @@ async function save() {
       if (invoiceTitles.some(t => !t.invoiceTitle.trim())) { formError.value = '请填写每组开票信息的抬头，或移除不用的信息。'; return }
       await customersApi.save(editingId.value, { ...customerForm, ...(invoiceTitles[0] ?? blankTitle()), invoiceTitles, name: customerForm.name.trim() })
     }
+    if (isProduct.value) { customerFilter.value = productForm.customerId; page.value = 0 }
     close(); success.value = `${title.value}已保存。`; await load()
   } catch (exception) { formError.value = message(exception) }
   finally { saving.value = false }
 }
-watch(() => [props.kind, customerFilter.value], () => {
+watch(() => [props.kind, routeCustomerId.value], () => {
   query.value = ''; status.value = ''; page.value = 0; customerRows.value = []; productRows.value = []; total.value = 0
-  success.value = ''; void load()
+  success.value = ''; loadSequence++; directorySequence++; customerFilter.value = ''; if (isProduct.value) void loadCustomers(); else void load()
 }, { immediate: true })
 </script>
 
@@ -175,10 +169,39 @@ watch(() => [props.kind, customerFilter.value], () => {
       :message="error"
       tone="error"
     />
+    <div
+      v-if="isProduct"
+      class="panel customer-workspace-selector"
+    >
+      <label>当前客户<select
+        v-model="customerFilter"
+        v-single-select
+        aria-label="当前客户"
+        :disabled="customersLoading"
+        @change="changeCustomer"
+      ><option value="">请选择客户</option><option
+        v-for="customer in customerOptions"
+        :key="customer.id"
+        :value="customer.id"
+      >{{ customer.name }}{{ customer.defaultCustomer ? '（默认）' : '' }}{{ customer.status === 'DISABLED' ? '（停用）' : '' }}</option></select></label>
+      <span>{{ currentCustomer ? '仅显示该客户的商品、报价和标签' : '请先选择客户，再管理其商品' }}</span>
+      <p
+        v-if="customersError"
+        role="alert"
+      >
+        {{ customersError }} <button
+          type="button"
+          @click="loadCustomers"
+        >
+          重新加载客户
+        </button>
+      </p>
+    </div>
     <div class="material-toolbar">
-      <strong>{{ title }} · 共 {{ total }} 条</strong><button
+      <strong>{{ isProduct && currentCustomer ? currentCustomer.name + '的商品' : title }} · 共 {{ total }} 条</strong><button
         v-if="writable"
         type="button"
+        :disabled="isProduct && (customersLoading || !!customersError || !activeCustomers.length)"
         @click="open()"
       >
         {{ isProduct ? '新增客户商品' : '新增客户' }}
@@ -191,7 +214,7 @@ watch(() => [props.kind, customerFilter.value], () => {
       <label>关键字<input
         v-model="query"
         maxlength="128"
-        :placeholder="isProduct ? '搜索客户、SKU、客户产品编码或特殊需求' : '搜索客户名称、1688账号、联系人或手机号'"
+        :placeholder="isProduct ? '搜索 SKU、客户产品编码或特殊需求' : '搜索客户名称、1688账号、联系人或手机号'"
       ></label>
       <label>状态<select
         v-model="status"
@@ -203,12 +226,6 @@ watch(() => [props.kind, customerFilter.value], () => {
       >
         {{ loading ? '查询中…' : '查询' }}
       </button>
-      <RouterLink
-        v-if="isProduct && customerFilter"
-        to="/customers/products"
-      >
-        查看全部客户商品
-      </RouterLink>
     </form>
     <article
       class="panel table-panel"
@@ -233,7 +250,7 @@ watch(() => [props.kind, customerFilter.value], () => {
                 </th>
               </tr>
               <tr v-else>
-                <th>客户</th><th>产品图片</th><th>产品名称 / SKU</th><th>供货价（人民币）</th><th>客户产品编码</th><th>产品特殊需求</th><th>状态</th><th
+                <th>产品图片</th><th>产品名称 / SKU</th><th>供货价（人民币）</th><th>客户产品编码</th><th>产品特殊需求</th><th>状态</th><th
                   v-if="isProduct || writable || session.canAccess(['customers.delete'])"
                   class="customer-actions"
                 >
@@ -294,12 +311,6 @@ watch(() => [props.kind, customerFilter.value], () => {
                 :key="item.id"
               >
                 <td>
-                  {{ item.customerName }}<small
-                    v-if="item.customerStatus === 'DISABLED'"
-                    class="data-state--error"
-                  >客户已停用</small>
-                </td>
-                <td>
                   <ShipmentProductImage
                     :product-id="item.productId"
                     :variant-id="item.variantId"
@@ -346,7 +357,7 @@ watch(() => [props.kind, customerFilter.value], () => {
         v-if="!loading && !(isProduct ? productRows.length : customerRows.length)"
         class="data-state"
       >
-        {{ error ? '加载失败，请点击查询重试。' : '暂无符合条件的记录。' }}
+        {{ isProduct && !customerFilter ? '请选择客户后查看商品。' : error ? '加载失败，请点击查询重试。' : '暂无符合条件的记录。' }}
       </p>
       <ListPagination
         v-model:page-size="listSize"
@@ -539,118 +550,32 @@ watch(() => [props.kind, customerFilter.value], () => {
             {{ selectionSummary }}<small>客户与 SKU 不可更换，其他客户或 SKU 请另行新增。</small>
           </p>
           <template v-else>
-            <fieldset
-              class="form-wide customer-picker"
-              :disabled="saving || picking"
-            >
-              <legend>选择客户 *</legend>
-              <div class="customer-picker-search">
-                <input
-                  v-model="customerQuery"
-                  aria-label="搜索客户"
-                  placeholder="客户名称、1688账号或手机号"
-                  maxlength="128"
-                  @keydown.enter.prevent="findOptions('customer', true)"
-                ><button
-                  type="button"
-                  @click="findOptions('customer', true)"
-                >
-                  搜索客户
-                </button>
-              </div>
-              <select
-                v-single-select
-                :value="productForm.customerId"
-                aria-label="选择客户"
-                @change="pickCustomer"
+            <label class="form-wide">客户 *<select
+              v-model="productForm.customerId"
+              v-single-select
+              aria-label="选择客户"
+              required
+              :disabled="saving || customersLoading"
+            ><option value="">请选择启用客户</option><option
+              v-for="customer in activeCustomers"
+              :key="customer.id"
+              :value="customer.id"
+            >{{ customer.name }}{{ customer.defaultCustomer ? '（默认）' : '' }}</option></select></label>
+            <div class="form-wide customer-sku-selection">
+              <label>产品 SKU *</label><div
+                v-if="selectedSku"
+                class="customer-selection"
               >
-                <option value="">
-                  请选择启用客户
-                </option><option
-                  v-if="selectedCustomer && !customerOptions.some(item => item.id === selectedCustomer?.id)"
-                  :value="selectedCustomer.id"
-                >
-                  {{ selectedCustomer.name }}
-                </option><option
-                  v-for="item in customerOptions"
-                  :key="item.id"
-                  :value="item.id"
-                >
-                  {{ item.name }}{{ item.account1688 ? ` · ${item.account1688}` : '' }}
-                </option>
-              </select>
-              <div class="customer-picker-pages">
-                <button
-                  type="button"
-                  :disabled="customerPage === 0"
-                  @click="customerPage--; findOptions('customer')"
-                >
-                  上一页客户
-                </button><span>{{ customerPage + 1 }} / {{ Math.max(1, Math.ceil(customerCount / 20)) }} 页 · {{ customerCount }} 条</span><button
-                  type="button"
-                  :disabled="(customerPage + 1) * 20 >= customerCount"
-                  @click="customerPage++; findOptions('customer')"
-                >
-                  下一页客户
-                </button>
-              </div>
-            </fieldset>
-            <fieldset
-              class="form-wide customer-picker"
-              :disabled="saving || picking"
-            >
-              <legend>选择产品 SKU *</legend>
-              <div class="customer-picker-search">
-                <input
-                  v-model="skuQuery"
-                  aria-label="搜索SKU"
-                  placeholder="搜索 SKU 或产品名称"
-                  maxlength="128"
-                  @keydown.enter.prevent="findOptions('sku', true)"
-                ><button
-                  type="button"
-                  @click="findOptions('sku', true)"
-                >
-                  搜索SKU
-                </button>
-              </div>
-              <select
-                v-single-select
-                :value="productForm.variantId"
-                aria-label="选择SKU"
-                @change="pickSku"
+                {{ selectedSku.variant.variantName }}<small>SKU：{{ selectedSku.variant.skuCode }}</small>
+              </div><button
+                type="button"
+                class="primary-button"
+                :disabled="saving"
+                @click="skuPickerOpen = true"
               >
-                <option value="">
-                  请选择启用 SKU
-                </option><option
-                  v-if="selectedSku && !skuOptions.some(item => item.variant.id === selectedSku?.variant.id)"
-                  :value="selectedSku.variant.id"
-                >
-                  {{ selectedSku.variant.variantName }} · {{ selectedSku.variant.skuCode }}
-                </option><option
-                  v-for="item in skuOptions"
-                  :key="item.variant.id"
-                  :value="item.variant.id"
-                >
-                  {{ item.variant.variantName }} · SKU：{{ item.variant.skuCode }}
-                </option>
-              </select>
-              <div class="customer-picker-pages">
-                <button
-                  type="button"
-                  :disabled="skuPage === 0"
-                  @click="skuPage--; findOptions('sku')"
-                >
-                  上一页SKU
-                </button><span>{{ skuPage + 1 }} / {{ Math.max(1, Math.ceil(skuCount / 20)) }} 页 · {{ skuCount }} 条</span><button
-                  type="button"
-                  :disabled="(skuPage + 1) * 20 >= skuCount"
-                  @click="skuPage++; findOptions('sku')"
-                >
-                  下一页SKU
-                </button>
-              </div>
-            </fieldset>
+                {{ selectedSku ? '更换 SKU' : '选择产品 SKU' }}
+              </button>
+            </div>
           </template>
           <label>供货价（人民币，可留空）<input
             v-model="productForm.supplyPrice"
@@ -706,17 +631,25 @@ watch(() => [props.kind, customerFilter.value], () => {
             取消
           </button><button
             type="submit"
-            :disabled="saving || picking"
+            :disabled="saving"
           >
             {{ saving ? '保存中…' : '保存' }}
           </button>
         </div>
       </form>
     </dialog>
+    <CustomerSkuPicker
+      v-if="skuPickerOpen"
+      :selected-id="productForm.variantId"
+      @close="skuPickerOpen = false"
+      @select="pickSku"
+    />
   </section>
 </template>
 
 <style scoped>
+.customer-workspace-selector{display:flex;align-items:center;flex-wrap:wrap;gap:12px;min-height:0;padding:12px 14px}.customer-workspace-selector label{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600}.customer-workspace-selector :deep(.single-select-trigger){width:260px;max-width:65vw}.customer-workspace-selector>span{font-size:12px;color:var(--muted)}.customer-workspace-selector>p{width:100%;margin:0;color:#b42318}.customer-sku-selection{display:grid;gap:8px;min-width:0}.customer-sku-selection>label{font-size:13px}.customer-sku-selection>button{justify-self:start;background:#2864c5;color:white;border:1px solid #2864c5;border-radius:5px;padding:8px 14px;font-size:13px}.customer-sku-selection small{margin-top:5px}
+
 .customer-title-card { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; min-width: 0; border: 1px solid #dbe1ea; border-radius: 8px; padding: 16px; }
 .customer-management { min-width: 0; grid-template-columns: minmax(0, 1fr); }
 .customer-management :is(.table-panel, .table-scroll) { min-width: 0; max-width: 100%; }

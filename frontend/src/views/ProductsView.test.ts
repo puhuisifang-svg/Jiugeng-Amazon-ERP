@@ -63,12 +63,22 @@ describe('ProductsView', () => {
     const wrapper = mount(ProductsView, { global: { stubs: { RouterLink, Teleport: true } } })
     await flushPromises()
     const cell = wrapper.get('.product-parent-row .sticky-action')
-    expect(cell.get('a').attributes('href')).toBe('/products/p1')
+    expect(cell.get('button.row-detail-link').text()).toBe('详情')
     expect(cell.text()).not.toContain('展开子体')
     expect(cell.get('.row-more-actions__menu').isVisible()).toBe(false)
     await cell.get('.row-more-actions__trigger').trigger('click'); await flushPromises()
     expect(cell.get('.row-more-actions__menu').isVisible()).toBe(true)
     expect(cell.get('.row-more-actions__menu').text()).toContain('删除父体')
+    wrapper.unmount()
+  })
+  it('opens parent details in a dialog and keeps the list when closing', async () => {
+    const wrapper = mount(ProductsView, { global: { stubs: { RouterLink, Teleport: true } } })
+    await flushPromises()
+    await wrapper.get('.product-parent-row .row-detail-link').trigger('click'); await flushPromises()
+    expect(wrapper.get('dialog[aria-label="产品详情"]').text()).toContain('SKU 概览')
+    await wrapper.get('dialog[aria-label="产品详情"] button[aria-label="关闭"]').trigger('click')
+    expect(wrapper.find('dialog[aria-label="产品详情"]').exists()).toBe(false)
+    expect(wrapper.find('.product-parent-row').exists()).toBe(true)
     wrapper.unmount()
   })
   it('opens imports in product management instead of materials', async () => {
@@ -102,6 +112,7 @@ describe('ProductsView', () => {
   beforeEach(() => {
     localStorage.clear()
     HTMLDialogElement.prototype.showModal = function () { this.open = true }
+    HTMLDialogElement.prototype.close = function () { this.open = false }
     vi.mocked(domainApi.deleteProduct).mockReset().mockResolvedValue(undefined)
     vi.mocked(domainApi.deleteSku).mockReset().mockResolvedValue(undefined)
     skus.mockReset().mockResolvedValue({ items: [{ productId: 'p1', productCode: 'P-1', productName: '测试产品', productType: '家居', productStatus: 'ACTIVE', businessAvailable: true, updatedAt: '2026-10-15', variant: product.variants[0] }], totalCount: 1, page: 0, size: 20 })

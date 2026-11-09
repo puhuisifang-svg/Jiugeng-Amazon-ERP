@@ -302,6 +302,7 @@ onMounted(load)
           <label>供应商<select
             v-model="form.supplierId"
             v-single-select
+            class="ui-supplier-select"
             required
             :disabled="supplierLoading"
             @change="loadReferences()"

@@ -393,12 +393,13 @@ onMounted(load)
             :upload="uploadImage"
           />
           <button
-            v-if="form.imageAssetId"
+            v-if="form.imageAssetId || form.imageUrl"
             type="button"
-            class="secondary-button"
-            @click="form.imageAssetId = ''"
+            class="ui-image-remove"
+            :disabled="saving || uploading"
+            @click="form.imageAssetId = ''; form.imageUrl = ''; imageError = ''"
           >
-            移除上传图片
+            移除图片
           </button>
         </section>
         <p
@@ -424,14 +425,16 @@ onMounted(load)
           </p>
           <select
             v-single-select
+            class="ui-supplier-select"
             aria-label="添加辅料供应商"
+            :disabled="saving"
             value=""
             @change="addSupplier($event)"
           >
             <option value="">
               选择供应商…
             </option><option
-              v-for="supplier in supplierOptions"
+              v-for="supplier in supplierOptions.filter(item => !supplierLinks.some(link => link.supplierId === item.id))"
               :key="supplier.id"
               :value="supplier.id"
             >
@@ -755,7 +758,8 @@ onMounted(load)
                     <button
                       v-if="formal && writable"
                       type="button"
-                      :class="item.status === 'ACTIVE' ? 'danger-button' : 'secondary-button'"
+                      class="material-status-action"
+                      :class="item.status === 'ACTIVE' ? 'material-status-action--disable' : 'material-status-action--enable'"
                       :disabled="saving"
                       @click="toggleStatus(item)"
                     >
@@ -944,3 +948,11 @@ onMounted(load)
     </div>
   </section>
 </template>
+
+<style scoped>
+#app .material-management .table-actions .material-status-action{display:inline-flex;align-items:center;justify-content:center;min-height:30px;padding:4px 10px;border:1px solid;border-radius:4px;font-size:13px;font-weight:400;cursor:pointer}
+#app .material-management .table-actions .material-status-action--disable{color:#b42318;background:#fff7f6;border-color:#f1c5c1}
+#app .material-management .table-actions .material-status-action--disable:hover:not(:disabled){background:#feecea}
+#app .material-management .table-actions .material-status-action--enable{color:#168252;background:#eff9f3;border-color:#b7dec7}
+#app .material-management .table-actions .material-status-action:disabled{opacity:.5;cursor:not-allowed}
+</style>

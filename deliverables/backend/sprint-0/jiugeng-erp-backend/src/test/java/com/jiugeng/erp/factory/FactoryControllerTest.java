@@ -24,6 +24,17 @@ class FactoryControllerTest {
  JsonNode report(String e,String r,String qty,String status)throws Exception{return command("reports","save",map("employeeId",e,"date","2026-01-10","status",status,"lines",List.of(map("rateId",r,"quantity",qty))),200);}
  Map<String,Object> identity(JsonNode r){return map("id",r.path("id").asText(),"version",r.path("version").asInt());}
  JsonNode getRecord(String k,String id)throws Exception{return json.readTree(mvc.perform(get("/api/v1/factory/"+k+"/"+id).header("Authorization",token)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString());}
+ @Test void payrollUsesCurrentEmployeeBankDetailsAndPreservesCardDigits()throws Exception{
+   var employee=command("employees","save",map("name","Synthetic Bank Worker","date","2025-01-01","bankName","Synthetic Bank","bankAccount","0012345678901234567"),200);
+   var payroll=command("payroll","generate",map("employeeId",employee.path("id").asText(),"date","2026-01"),200);
+   assertThat(payroll.path("bankAccount").asText()).isEqualTo("0012345678901234567");
+   var update=identity(employee);update.putAll(map("name","Synthetic Bank Worker","date","2025-01-01","bankName","Synthetic Branch","bankAccount","0099 887766554433221"));
+   command("employees","save",update,200);
+   var current=getRecord("payroll",payroll.path("id").asText());assertThat(current.path("bankName").asText()).isEqualTo("Synthetic Branch");assertThat(current.path("bankAccount").asText()).isEqualTo("0099887766554433221");
+   var export=mvc.perform(get("/api/v1/factory/payroll-export").param("month","2026-01").header("Authorization",token)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+   assertThat(export).contains("开户行,银行卡号").contains("\t0099887766554433221");
+   command("employees","save",map("name","Synthetic Invalid Worker","date","2025-01-01","bankAccount","invalid-card"),400);
+ }
  @Test void matchesHistoricalAndPersonalPricesPreservesSnapshotsAndIdempotency()throws Exception{
    String e=emp().path("id").asText();JsonNode old=rate("2026-01-01","0.4",""),later=rate("2026-01-15","0.7","");
    var input=map("employeeId",e,"date","2026-01-10","status","REVIEWED","lines",List.of(map("rateId",later.path("id").asText(),"quantity","120")));

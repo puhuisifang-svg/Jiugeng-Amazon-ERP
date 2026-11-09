@@ -18,7 +18,7 @@ const receiptUncertain = ref(false)
 const returnPath = computed(() => ({ path: '/purchases/orders', query: { type: detail.value?.order.orderType || 'PRODUCT' } }))
 const receivable = computed(() => session.canAccess(['purchases.receive']))
 const statusLabels: Record<PurchaseStatus,string> = { DRAFT: '草稿', SUBMITTED: '待收货', PARTIALLY_RECEIVED: '部分收货', COMPLETED: '已完成', CANCELLED: '已取消 / 余量关闭' }
-const actionLabels: Record<string,string> = { PURCHASE_ORDER_CREATE: '创建采购单', PURCHASE_ORDER_UPDATE: '编辑采购单', PURCHASE_ORDER_SUBMIT: '提交采购单', PURCHASE_ORDER_CANCEL: '取消采购单', PURCHASE_RECEIPT_CREATE: '采购收货' }
+const actionLabels: Record<string,string> = { PURCHASE_ORDER_CREATE: '创建采购单', PURCHASE_ORDER_UPDATE: '编辑采购单', PURCHASE_LOGISTICS_UPDATE: '更新物流资料', PURCHASE_ORDER_SUBMIT: '提交采购单', PURCHASE_ORDER_CANCEL: '取消采购单', PURCHASE_RECEIPT_CREATE: '采购收货' }
 function message(exception: unknown, fallback: string) { return exception instanceof ApiError ? exception.message : fallback }
 let loadSequence = 0
 async function load() {
@@ -117,7 +117,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
     <template v-else-if="detail">
       <section class="panel purchase-summary">
         <dl>
-          <div><dt>状态</dt><dd>{{ statusLabels[detail.order.status] }}</dd></div><div><dt>采购类型</dt><dd>{{ detail.order.orderType === 'PRODUCT' ? '产品采购' : '辅料采购' }}</dd></div><div><dt>供应商</dt><dd>{{ detail.order.supplierName }}</dd></div><div><dt>采购金额</dt><dd>{{ detail.order.currency }} {{ detail.order.lines.reduce((sum,line) => sum + line.orderedQuantity * line.unitPrice, 0).toFixed(2) }}</dd></div><div><dt>创建时间</dt><dd>{{ new Date(detail.order.createdAt).toLocaleString() }}</dd></div><div><dt>预计到货日期</dt><dd>{{ detail.order.expectedDeliveryDate || '未约定' }}</dd></div><div><dt>收货信息</dt><dd>{{ detail.order.deliveryAddress || '未填写' }}</dd></div><div><dt>备注</dt><dd>{{ detail.order.remark || '—' }}</dd></div><div v-if="detail.order.status === 'CANCELLED'">
+          <div><dt>状态</dt><dd>{{ statusLabels[detail.order.status] }}</dd></div><div><dt>采购类型</dt><dd>{{ detail.order.orderType === 'PRODUCT' ? '产品采购' : '辅料采购' }}</dd></div><div><dt>供应商</dt><dd>{{ detail.order.supplierName }}</dd></div><div><dt>采购金额</dt><dd>{{ detail.order.currency }} {{ detail.order.lines.reduce((sum,line) => sum + line.orderedQuantity * line.unitPrice, 0).toFixed(2) }}</dd></div><div><dt>创建时间</dt><dd>{{ new Date(detail.order.createdAt).toLocaleString() }}</dd></div><div><dt>预计到货日期</dt><dd>{{ detail.order.expectedDeliveryDate || '未约定' }}</dd></div><div><dt>物流公司</dt><dd>{{ detail.order.carrier || '未填写' }}</dd></div><div><dt>运单号</dt><dd>{{ detail.order.trackingNumber || '未填写' }}</dd></div><div><dt>收货信息</dt><dd>{{ detail.order.deliveryAddress || '未填写' }}</dd></div><div><dt>备注</dt><dd>{{ detail.order.remark || '—' }}</dd></div><div v-if="detail.order.status === 'CANCELLED'">
             <dt>取消 / 关闭原因</dt><dd>{{ detail.order.cancellationReason || '历史单据未记录' }}</dd>
           </div>
         </dl><div class="purchase-detail-actions">

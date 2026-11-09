@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import PurchaseItemImage from '@/components/PurchaseItemImage.vue'
+import PurchaseLogisticsDialog from '@/components/PurchaseLogisticsDialog.vue'
 import { vSingleSelect } from '@/directives/singleSelect'
 import DatePicker from '@/components/DatePicker.vue'
 import ListPagination from '@/components/ListPagination.vue'
@@ -20,6 +22,8 @@ const type = computed<PurchaseOrderType>(() => route.query.type === 'MATERIAL' ?
 const status = ref<PurchaseStatus | ''>(''); const keyword = ref(''); const delivery = ref(''); const page = ref(1); const size = ref(20)
 const editing = ref<PurchaseOrder>(); const showOrderForm = ref(false)
 const form = reactive<PurchaseOrderInput>({ orderType: 'PRODUCT', supplierId: '', currency: 'CNY', remark: '', lines: [] })
+const logisticsOrder = ref<PurchaseOrder>()
+function logisticsSaved(order: PurchaseOrder) { orders.value = orders.value.map(item => item.id === order.id ? order : item); logisticsOrder.value = undefined; success.value = '运单资料已保存。' }
 const writable = computed(() => session.canAccess(['purchases.write']))
 const statusLabels: Record<PurchaseStatus, string> = { DRAFT: '草稿', SUBMITTED: '待收货', PARTIALLY_RECEIVED: '部分收货', COMPLETED: '已完成', CANCELLED: '已取消 / 余量关闭' }
 const typeLabels = { PRODUCT: '产品采购', MATERIAL: '辅料采购' }
@@ -206,7 +210,7 @@ onMounted(load)
       >
         <TableViewport>
           <table class="data-table ui-action-table">
-            <thead><tr><th>采购单 / 供应商</th><th>明细</th><th>采购金额</th><th>收货进度</th><th>预计到货</th><th>状态</th><th>操作</th></tr></thead>
+            <thead><tr><th>采购单 / 供应商</th><th>商品图片</th><th>明细</th><th>物流</th><th>采购金额</th><th>收货进度</th><th>预计到货</th><th>状态</th><th>操作</th></tr></thead>
             <tbody>
               <tr
                 v-for="order in visibleOrders"
@@ -220,7 +224,27 @@ onMounted(load)
                     <strong>{{ order.orderNo }}</strong>
                   </RouterLink><small>{{ order.supplierName }}</small><small>{{ new Date(order.createdAt).toLocaleDateString() }} 创建</small>
                 </td>
-                <td>{{ order.lines.length }} 项<small>{{ order.lines[0]?.itemCode }}{{ order.lines.length > 1 ? ' 等' : '' }}</small></td>
+                <td>
+                  <div class="purchase-thumbnails">
+                    <PurchaseItemImage
+                      v-for="line in order.lines"
+                      :key="line.id"
+                      :image-asset-id="line.imageAssetId"
+                      :image-url="line.imageUrl"
+                      :alt="line.itemName"
+                    />
+                  </div>
+                </td><td>{{ order.lines.length }} 项<small>{{ order.lines[0]?.itemCode }}{{ order.lines.length > 1 ? ' 等' : '' }}</small></td>
+                <td>
+                  <span>{{ order.carrier || '未填写物流公司' }}</span><small>{{ order.trackingNumber || '未填写运单号' }}</small><button
+                    v-if="writable || order.trackingNumber"
+                    type="button"
+                    class="text-link"
+                    @click="logisticsOrder = order"
+                  >
+                    {{ order.trackingNumber ? '物流详情' : '填写运单' }}
+                  </button>
+                </td>
                 <td>{{ order.currency }} {{ total(order) }}</td>
                 <td>{{ order.lines.filter(line => line.remainingQuantity === 0).length }} / {{ order.lines.length }} 项已收齐<small>{{ order.status === 'CANCELLED' ? '未收余量已关闭' : '分项数量见详情' }}</small></td>
                 <td :class="{ 'error-message': overdue(order) }">
@@ -440,4 +464,15 @@ onMounted(load)
       </form>
     </div>
   </section>
+  <PurchaseLogisticsDialog
+    v-if="logisticsOrder"
+    :order="logisticsOrder"
+    :writable="writable && logisticsOrder.status !== 'CANCELLED'"
+    @close="logisticsOrder = undefined"
+    @saved="logisticsSaved"
+  />
 </template>
+
+<style scoped>
+.purchase-thumbnails{display:flex;gap:6px;max-width:240px;overflow-x:auto}.purchase-thumbnails>*{flex:none}
+</style>

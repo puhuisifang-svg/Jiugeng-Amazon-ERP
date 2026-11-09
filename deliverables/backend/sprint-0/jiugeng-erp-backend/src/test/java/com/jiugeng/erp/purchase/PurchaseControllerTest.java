@@ -178,6 +178,18 @@ class PurchaseControllerTest {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test void logisticsPreservesVersionAndExposesMaterialImage()throws Exception {
+        String token=login("logistics-buyer","PRODUCT_MATERIAL");
+        jdbc.update("UPDATE auxiliary_material SET image_url=? WHERE id=?","https://example.com/synthetic.png",materialId);
+        JsonNode order=createOrder(token,"MATERIAL",materialId,"2","3");String id=order.path("id").asText();
+        assertThat(order.at("/lines/0/imageUrl").asText()).isEqualTo("https://example.com/synthetic.png");
+        var payload=Map.of("version",0,"carrier","合成物流","trackingNumber","SYN000123");
+        mvc.perform(put("/api/v1/purchases/orders/{id}/logistics",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(payload))).andExpect(status().isOk()).andExpect(jsonPath("$.trackingNumber").value("SYN000123")).andExpect(jsonPath("$.version").value(1));
+        mvc.perform(put("/api/v1/purchases/orders/{id}/logistics",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(payload))).andExpect(status().isConflict());
+        mvc.perform(put("/api/v1/purchases/orders/{id}/logistics",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("version",1,"trackingNumber","invalid value")))).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/purchases/orders/{id}",id).header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.carrier").value("合成物流"));
+    }
+
     private JsonNode createOrder(String token,String type,String itemId,String quantity,String price)throws Exception{
         Map<String,Object> request=Map.of("orderType",type,"supplierId",supplierId,"currency","CNY","lines",List.of(Map.of("itemId",itemId,"quantity",quantity,"unitPrice",price)));
         String body=mvc.perform(post("/api/v1/purchases/orders").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(request)))

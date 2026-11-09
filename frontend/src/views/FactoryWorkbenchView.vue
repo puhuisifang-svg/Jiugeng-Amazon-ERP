@@ -175,7 +175,7 @@ function print(){window.print()}
               >
             </th>
             <template v-if="kind==='employees'">
-              <th>员工 / 工号</th><th>班组</th><th>手机号</th><th>常做工序</th><th>入职日期</th><th>状态</th>
+              <th>员工 / 工号</th><th>班组</th><th>手机号</th><th>开户行</th><th>银行卡号</th><th>常做工序</th><th>入职日期</th><th>状态</th>
             </template>
             <template v-else-if="kind==='rates'">
               <th>加工项目 / SKU</th><th>工序</th><th>单位</th><th>单价（元）</th><th>适用员工</th><th>生效 / 停止日期</th><th>状态</th>
@@ -184,7 +184,7 @@ function print(){window.print()}
               <th>工作日期</th><th>员工 / 工号</th><th>加工项目摘要</th><th>明细项数</th><th>金额（元）</th><th>状态</th><th>最近维护</th>
             </template>
             <template v-else>
-              <th>月份 / 员工</th><th>班组</th><th>计件工资</th><th>加项 / 减项</th><th>应发</th><th>已发</th><th>待发 / 超发</th><th>核算状态</th><th>发放进度</th>
+              <th>月份 / 员工</th><th>班组</th><th>开户行</th><th>银行卡号</th><th>计件工资</th><th>加项 / 减项</th><th>应发</th><th>已发</th><th>待发 / 超发</th><th>核算状态</th><th>发放进度</th>
             </template><th class="factory-actions">
               操作
             </th>
@@ -208,7 +208,9 @@ function print(){window.print()}
               >
             </td>
             <template v-if="kind==='employees'">
-              <td><strong>{{ r.name }}</strong><small>{{ r.number }}</small></td><td>{{ r.team||'—' }}</td><td>{{ r.phone||'—' }}</td><td>{{ r.operations||'—' }}</td><td>{{ r.date }}</td><td>
+              <td><strong>{{ r.name }}</strong><small>{{ r.number }}</small></td><td>{{ r.team||'—' }}</td><td>{{ r.phone||'—' }}</td><td>{{ r.bankName||'未填写' }}</td><td class="factory-bank-account">
+                {{ r.bankAccount||'未填写' }}
+              </td><td>{{ r.operations||'—' }}</td><td>{{ r.date }}</td><td>
                 <span
                   class="factory-badge"
                   :data-status="r.status"
@@ -238,7 +240,9 @@ function print(){window.print()}
               </td><td>{{ r.updatedBy }}<small>{{ r.updatedAt?new Date(r.updatedAt).toLocaleString():'' }}</small></td>
             </template>
             <template v-else>
-              <td><strong>{{ r.employeeName }}</strong><small>{{ r.date }} · {{ r.number }}</small></td><td>{{ r.team||'—' }}</td><td class="factory-number">
+              <td><strong>{{ r.employeeName }}</strong><small>{{ r.date }} · {{ r.number }}</small></td><td>{{ r.team||'—' }}</td><td>{{ r.bankName||'未填写' }}</td><td class="factory-bank-account">
+                {{ r.bankAccount||'未填写' }}
+              </td><td class="factory-number">
                 {{ factoryMoney(r.base) }}
               </td><td class="factory-number">
                 +{{ factoryMoney(r.plus) }}<small>−{{ factoryMoney(r.minus) }}</small>
@@ -291,7 +295,7 @@ function print(){window.print()}
             </td>
           </tr><tr v-if="!rows.length">
             <td
-              :colspan="kind==='payroll'?11:kind==='employees'?7:9"
+              :colspan="kind==='payroll'?13:kind==='employees'?9:9"
               class="data-state"
             >
               {{ loading?'正在加载…':`暂无${title}记录，可从上方按钮开始建立` }}
@@ -575,3 +579,7 @@ function print(){window.print()}
     />
   </section>
 </template>
+
+<style scoped>
+.factory-bank-account{white-space:nowrap;font-variant-numeric:tabular-nums;min-width:180px;user-select:text}
+</style>

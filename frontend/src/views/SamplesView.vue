@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { samplesApi, type SampleLocation } from '@/api/samples'
+import ShipmentProductImage from '@/components/ShipmentProductImage.vue'
 import CustomerSkuPicker from '@/components/CustomerSkuPicker.vue'
 import { type SkuListItemDto } from '@/api/domain'
 import { session } from '@/state/session'
@@ -78,12 +79,18 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
     </p>
     <TableViewport>
       <table class="data-table ui-action-table sample-table">
-        <thead><tr><th>品名 / SKU 编码</th><th>所属产品</th><th>库位编码</th><th>更新时间</th><th>操作</th></tr></thead><tbody>
+        <thead><tr><th>图片</th><th>品名 / SKU 编码</th><th>所属产品</th><th>库位编码</th><th>更新时间</th><th>操作</th></tr></thead><tbody>
           <tr
             v-for="row in rows"
             :key="row.id"
           >
-            <td><strong>{{ row.skuName }}</strong><small class="muted">{{ row.skuCode }}</small></td><td>{{ row.productName }}</td><td><strong>{{ row.locationCode }}</strong></td><td>{{ new Date(row.updatedAt).toLocaleString('zh-CN',{hour12:false}) }}</td><td>
+            <td>
+              <ShipmentProductImage
+                :product-id="row.productId"
+                :variant-id="row.variantId"
+                :alt="row.skuName"
+              />
+            </td><td><strong>{{ row.skuName }}</strong><small class="muted">{{ row.skuCode }}</small></td><td>{{ row.productName }}</td><td><strong>{{ row.locationCode }}</strong></td><td>{{ new Date(row.updatedAt).toLocaleString('zh-CN',{hour12:false}) }}</td><td>
               <template v-if="writable || session.canAccess(['samples.remove'])">
                 <button
                   v-if="session.canAccess(['samples.write'])"
@@ -110,7 +117,7 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
           </tr>
           <tr v-if="!rows.length">
             <td
-              colspan="5"
+              colspan="6"
               class="data-state"
             >
               {{ loading?'正在加载…':'暂无样品库位记录' }}

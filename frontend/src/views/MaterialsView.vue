@@ -384,23 +384,25 @@ onMounted(load)
             :image-id="form.imageAssetId"
             alt="辅料图片"
           />
-          <SingleFileUpload
-            hint="图片立即上传，保存表单后关联"
-            title="辅料图片"
-            accept=".png,.jpg,.jpeg,.webp"
-            :max-mb="5"
-            :disabled="saving || uploading"
-            :upload="uploadImage"
-          />
-          <button
-            v-if="form.imageAssetId || form.imageUrl"
-            type="button"
-            class="ui-image-remove"
-            :disabled="saving || uploading"
-            @click="form.imageAssetId = ''; form.imageUrl = ''; imageError = ''"
-          >
-            移除图片
-          </button>
+          <div class="material-image-controls">
+            <SingleFileUpload
+              hint="图片立即上传，保存表单后关联"
+              title="辅料图片"
+              accept=".png,.jpg,.jpeg,.webp"
+              :max-mb="5"
+              :disabled="saving || uploading"
+              :upload="uploadImage"
+            />
+            <button
+              v-if="form.imageAssetId || form.imageUrl"
+              type="button"
+              class="ui-image-remove"
+              :disabled="saving || uploading"
+              @click="form.imageAssetId = ''; form.imageUrl = ''; imageError = ''"
+            >
+              移除图片
+            </button>
+          </div>
         </section>
         <p
           v-if="imageError"
@@ -955,4 +957,10 @@ onMounted(load)
 #app .material-management .table-actions .material-status-action--disable:hover:not(:disabled){background:#feecea}
 #app .material-management .table-actions .material-status-action--enable{color:#168252;background:#eff9f3;border-color:#b7dec7}
 #app .material-management .table-actions .material-status-action:disabled{opacity:.5;cursor:not-allowed}
+</style>
+
+<style scoped>
+#app .material-image-editor{display:grid;grid-template-columns:72px minmax(0,1fr);align-items:start;gap:12px}
+#app .material-image-controls{display:grid;gap:8px;min-width:0}#app .material-image-controls .ui-image-remove{justify-self:start}
+@media(max-width:560px){#app .material-image-editor{grid-template-columns:minmax(0,1fr)}}
 </style>

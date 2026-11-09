@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { createRequestId } from '@/utils/requestId'
+
 import { vSingleSelect } from '@/directives/singleSelect'
 import ProductImagePreview from './ProductImagePreview.vue'
 import DatePicker from '@/components/DatePicker.vue'
@@ -63,7 +65,7 @@ onBeforeRouteLeave(()=>{if(props.store&&locked.value)return false;if(props.store
 function close(){if(locked.value)return;if(dirty.value)unsaved.value=true;else discard()}
 function discard(){request++;unsaved.value=false;dialog.value?.close();emit('close')}
 async function save(){if(!props.store||!props.writable||locked.value)return;busy.value=true;error.value='';try{const result=await apiRequest<WatchStoreDto>(`/v1/watch/stores/${props.store.id}`,{method:'PUT',body:JSON.stringify({...draft.value,version:version.value})});version.value=result.version??version.value;baseline.value=JSON.stringify(draft.value);notice.value='店铺信息已保存';emit('changed')}catch(e){error.value=e instanceof Error?e.message:'保存失败'}finally{busy.value=false}}
-async function monitor(asins:string[]){if(!props.writable||locked.value)return;busy.value=true;error.value='';try{const result=await monitoringApi.create({requestId:crypto.randomUUID(),asins,tags:[],remark:''});notice.value=`已添加 ${result.filter(r=>r.status==='CREATED').length} 个，已存在 ${result.filter(r=>r.status==='EXISTS').length} 个`;const failed=result.filter(r=>!['CREATED','EXISTS'].includes(r.status));if(failed.length)error.value=failed.map(r=>r.message).join('；');chosen.value=[]}catch(e){error.value=e instanceof Error?e.message:'添加监控失败'}finally{busy.value=false}}
+async function monitor(asins:string[]){if(!props.writable||locked.value)return;busy.value=true;error.value='';try{const result=await monitoringApi.create({requestId:createRequestId(),asins,tags:[],remark:''});notice.value=`已添加 ${result.filter(r=>r.status==='CREATED').length} 个，已存在 ${result.filter(r=>r.status==='EXISTS').length} 个`;const failed=result.filter(r=>!['CREATED','EXISTS'].includes(r.status));if(failed.length)error.value=failed.map(r=>r.message).join('；');chosen.value=[]}catch(e){error.value=e instanceof Error?e.message:'添加监控失败'}finally{busy.value=false}}
 async function addCandidates(asins:string[]){
  if(!props.store||!candidateWritable.value||locked.value||!asins.length)return
  busy.value=true;error.value='';let created=0,reused=0;const failed:string[]=[]

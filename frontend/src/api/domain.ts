@@ -1,3 +1,4 @@
+import { createRequestId } from '@/utils/requestId'
 import { ApiError, SESSION_EXPIRED_EVENT, SESSION_TOKEN_KEY, apiRequest, assertSyntheticEnvelope } from './client'
 import type { CandidateDetailDto, InventoryBalanceDto, MaterialDto, ProductDto, SelectionCandidateDto, SyntheticList, WatchEventDto, WatchStoreDto } from './resources'
 import { runtimeConfig } from '@/config/runtime'
@@ -456,7 +457,7 @@ export const domainApi = {
     if (runtimeConfig.authMode === 'mock') return assertSynthetic(await apiRequest<{ item: WatchStoreDto; events: WatchEventDto[]; baselineChanged: boolean; mockData: boolean; source: 'SYNTHETIC' }>(`/watch/stores/${id}/runs`, { method: 'POST', body: JSON.stringify({ mode }) }))
     const status = mode === 'FAILED' ? 'FAILED' : 'SUCCEEDED'
     return apiRequest<{ item: WatchStoreDto; events: WatchEventDto[]; baselineChanged: boolean; replayed: boolean }>(`/v1/watch/stores/${id}/runs`, {
-      method: 'POST', body: JSON.stringify({ requestId: crypto.randomUUID(), status, itemCount: asins.length,
+      method: 'POST', body: JSON.stringify({ requestId: createRequestId(), status, itemCount: asins.length,
         pageCount: mode === 'FAILED' ? 0 : 1, pagesComplete: mode === 'COMPLETE', asins }),
     })
   },

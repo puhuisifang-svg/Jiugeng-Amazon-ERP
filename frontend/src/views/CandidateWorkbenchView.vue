@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { createRequestId } from '@/utils/requestId'
+
 import {computed,onBeforeUnmount,ref,watch} from 'vue'
 import {useRoute,useRouter,onBeforeRouteLeave,onBeforeRouteUpdate} from 'vue-router'
 import {candidatesApi,type CandidateItem} from '@/api/candidates'
@@ -31,7 +33,7 @@ function search(){applied.value={q:query.value.trim(),owner:owner.value,source:s
 function reset(){query.value='';owner.value='';source.value='';state.value='';search()}
 function chooseState(value:string){state.value=value;page.value=1;void load()}
 function resize(value:number){size.value=value;page.value=1;void load()}
-function openCreate(){createDraft.value={type:'AMAZON',title:'',asinOrUrl:'',owner:session.user.value?.displayName??'',reason:'',sourceUrl:'',requestId:crypto.randomUUID()};initial.value=JSON.stringify(createDraft.value);createError.value='';createOpen.value=true}
+function openCreate(){createDraft.value={type:'AMAZON',title:'',asinOrUrl:'',owner:session.user.value?.displayName??'',reason:'',sourceUrl:'',requestId:createRequestId()};initial.value=JSON.stringify(createDraft.value);createError.value='';createOpen.value=true}
 async function create(){creating.value=true;createError.value='';try{const result=await api.create(createDraft.value);createOpen.value=false;creating.value=false;success.value='已打开候选评估；相同 ASIN 自动复用已有候选。';await router.push(`/selection/candidates/${result.id}`);void load()}catch(e){createError.value=e instanceof Error?e.message:'创建失败，请重试'}finally{creating.value=false}}
 function closeDetail(){void router.push('/selection/candidates')}
 async function guard(){return !creating.value&&(!createDirty.value||await confirmAction('放弃未保存的候选信息？'))}

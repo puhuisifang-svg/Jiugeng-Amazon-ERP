@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { createRequestId } from '@/utils/requestId'
+
 import {computed,onBeforeUnmount,ref,watch} from 'vue'
 import {useRoute,useRouter,onBeforeRouteLeave,onBeforeRouteUpdate} from 'vue-router'
 import {developmentWorkbenchApi,type DevelopmentItem} from '@/api/developmentWorkbench'
@@ -28,7 +30,7 @@ function search(){applied.value={q:query.value.trim(),owner:owner.value,stage:st
 function reset(){query.value='';owner.value='';stage.value=-1;state.value='';search()}
 function chooseState(value:string){state.value=value;page.value=1;void load()}
 function resize(value:number){size.value=value;page.value=1;void load()}
-function openCreate(){createDraft.value={title:'',owner:session.user.value?.displayName??'',reason:'',requestId:crypto.randomUUID()};initial.value=JSON.stringify(createDraft.value);createError.value='';createOpen.value=true}
+function openCreate(){createDraft.value={title:'',owner:session.user.value?.displayName??'',reason:'',requestId:createRequestId()};initial.value=JSON.stringify(createDraft.value);createError.value='';createOpen.value=true}
 async function create(){creating.value=true;createError.value='';try{const result=await api.create(createDraft.value);createOpen.value=false;creating.value=false;success.value='开发草稿已创建，完善立项资料后提交审核。';await router.push(`/product-development/${result.id}`);void load()}catch(e){createError.value=e instanceof Error?e.message:'创建失败'}finally{creating.value=false}}
 async function guard(){return !creating.value&&(!createDirty.value||await confirmAction('放弃未保存的项目资料？'))}
 async function closeCreate(){if(await guard()){createOpen.value=false;if(route.path.endsWith('/new'))void router.push('/product-development')}}

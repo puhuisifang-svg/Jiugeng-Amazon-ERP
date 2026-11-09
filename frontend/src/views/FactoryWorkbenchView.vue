@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { createRequestId } from '@/utils/requestId'
+
 import {computed,ref,watch} from 'vue'
 import {useRoute,useRouter} from 'vue-router'
 import {factoryApi,type FactoryKind,type FactoryRecord,type FactoryEvent} from '@/api/factory'
@@ -37,7 +39,7 @@ async function open(r:FactoryRecord){detailError.value='';tab.value='overview';h
 async function loadHistory(){if(!detail.value)return;historyBusy.value=true;detailError.value='';try{const r=await factoryApi.history(props.kind,detail.value.id,historyPage.value-1,historySize.value);history.value=r.items;historyTotal.value=r.totalCount}catch(e){detailError.value=message(e)}finally{historyBusy.value=false}}
 watch(tab,v=>{if(v==='history')void loadHistory()})
 function tabKey(e:KeyboardEvent){if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const list=tabs.value,i=list.findIndex(t=>t.key===tab.value);tab.value=list[e.key==='Home'?0:e.key==='End'?list.length-1:(i+(e.key==='ArrowRight'?1:-1)+list.length)%list.length]!.key;requestAnimationFrame(()=>document.getElementById(`factory-tab-${tab.value}`)?.focus())}
-async function command(action:string,record?:FactoryRecord,extra:Record<string,unknown>={}){if(busy.value)return;busy.value=true;error.value='';detailError.value='';try{await factoryApi.command(props.kind,action,{...(record?{id:record.id,version:record.version}:{}),...extra,requestId:crypto.randomUUID()});notice.value='操作已完成';if(action==='remove')detail.value=undefined;await load();if(detail.value){detail.value=await factoryApi.get(props.kind,detail.value.id);if(tab.value==='history')await loadHistory()}}catch(e){if(detail.value)detailError.value=message(e);else error.value=message(e)}finally{busy.value=false}}
+async function command(action:string,record?:FactoryRecord,extra:Record<string,unknown>={}){if(busy.value)return;busy.value=true;error.value='';detailError.value='';try{await factoryApi.command(props.kind,action,{...(record?{id:record.id,version:record.version}:{}),...extra,requestId:createRequestId()});notice.value='操作已完成';if(action==='remove')detail.value=undefined;await load();if(detail.value){detail.value=await factoryApi.get(props.kind,detail.value.id);if(tab.value==='history')await loadHistory()}}catch(e){if(detail.value)detailError.value=message(e);else error.value=message(e)}finally{busy.value=false}}
 async function reasonAction(action:string,r:FactoryRecord,label:string,extra:Record<string,unknown>={}){const reason=await promptReason(label);if(reason?.trim())await command(action,r,{...extra,reason})}
 async function lock(r:FactoryRecord){if(await confirmAction(`锁定 ${r.employeeName} ${r.date} 工资，应发 ¥${r.pricingIncomplete?'待定':factoryMoney(r.amount)}？锁定后更改须走更正流程。`))await command('lock',r)}
 async function batchAction(){if(!chosen.value.length)return;const action=props.kind==='reports'?'reviewBatch':'lockBatch';if(await confirmAction(`确认${props.kind==='reports'?'核对报工':'锁定工资'} ${chosen.value.length} 条？所有所选记录验证通过才会生效。`))await command(action,undefined,{items:chosen.value.map(r=>({id:r.id,version:r.version}))})}

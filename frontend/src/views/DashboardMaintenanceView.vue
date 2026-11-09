@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { createRequestId } from '@/utils/requestId'
+
 import SingleFileUpload from '@/components/SingleFileUpload.vue'
 import { vSingleSelect } from '@/directives/singleSelect'
 import DatePicker from '@/components/DatePicker.vue'
@@ -80,7 +82,7 @@ function openDispatch(item: TodayShipment) {
   if (!item.variantId || !item.customerProduct) { validationToastKey.value++; validationToast.value = '请先编辑补选客户商品后再发货。'; return }
   dispatchTarget.value = { ...item }; dispatchError.value = ''
   const identity = `${item.id}:${item.version}`
-  if (!dispatchKeys.has(identity)) dispatchKeys.set(identity, crypto.randomUUID())
+  if (!dispatchKeys.has(identity)) dispatchKeys.set(identity, createRequestId())
 }
 function closeDispatch() { if (!saving.value) dispatchTarget.value = undefined }
 async function confirmDispatch() {

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { createRequestId } from '@/utils/requestId'
+
 import { vSingleSelect } from '@/directives/singleSelect'
 import './cartonLabels.css'
 import UnsavedChangesDialog from './UnsavedChangesDialog.vue'
@@ -8,7 +10,7 @@ const props = defineProps<{ shipmentIds: string[] }>()
 const emit = defineEmits<{ close: [] }>()
 const dialog = ref<HTMLDialogElement>(), busy = ref(false), error = ref(''), purchaser = ref(''), discard = ref(false)
 const drafts = ref<LabelDraft[]>([]), entries = ref<LabelEntry[]>([]), histories = ref<Record<string, LabelExport[]>>({})
-const previewUrl = ref(''), saved = ref<LabelExport>(), initial = ref(''), requestKey = ref(crypto.randomUUID())
+const previewUrl = ref(''), saved = ref<LabelExport>(), initial = ref(''), requestKey = ref(createRequestId())
 function entryPages(index: number) {
   const draft = drafts.value[index], entry = entries.value[index]
   if (!draft || !entry) return 0
@@ -62,7 +64,7 @@ onMounted(async () => {
     for (const d of data) histories.value[d.shipmentId] = await cartonLabelsApi.history(d.shipmentId)
   } catch (e) { error.value = e instanceof Error ? e.message : '读取失败' } finally { busy.value = false }
 })
-watch(entries, () => { clearPreview(); saved.value = undefined; requestKey.value = crypto.randomUUID() }, { deep: true })
+watch(entries, () => { clearPreview(); saved.value = undefined; requestKey.value = createRequestId() }, { deep: true })
 onBeforeUnmount(clearPreview)
 </script>
 <template>

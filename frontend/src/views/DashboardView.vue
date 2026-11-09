@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { createRequestId } from '@/utils/requestId'
+
 import { stateNames } from '@/api/launch'
 import { shipmentUnit } from '@/ui/shipmentUnits'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -60,7 +62,7 @@ watch(active, () => { selectedIds.value = []; if (!dispatching.value) dispatchTa
 function openDispatch() {
   if (!selectedShipments.value.length || dispatching.value || !canDispatch.value) return
   dispatchTarget.value = selectedShipments.value.map(item => ({ ...item })); dispatchKeys.clear()
-  dispatchTarget.value.forEach(item => dispatchKeys.set(item.id, crypto.randomUUID())); dispatchError.value = ''
+  dispatchTarget.value.forEach(item => dispatchKeys.set(item.id, createRequestId())); dispatchError.value = ''
 }
 async function confirmDispatch() {
   if (!dispatchTarget.value || dispatching.value) return

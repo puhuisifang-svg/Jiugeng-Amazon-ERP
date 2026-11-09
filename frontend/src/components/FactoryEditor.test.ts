@@ -1,5 +1,5 @@
 import {mount,flushPromises} from '@vue/test-utils'
-import {describe,it,expect,vi,beforeEach} from 'vitest'
+import {describe,it,expect,vi,beforeEach,afterEach} from 'vitest'
 import {reactive} from 'vue'
 import FactoryEditor from './FactoryEditor.vue'
 const mocks=vi.hoisted(()=>({command:vi.fn(),preview:vi.fn(),list:vi.fn(),operations:vi.fn(),canAccess:vi.fn()}))
@@ -7,7 +7,13 @@ vi.mock('@/api/factory',()=>({factoryApi:mocks}))
 vi.mock('@/state/session',()=>({session:{canAccess:mocks.canAccess}}))
 const global={stubs:{AccessDialog:{template:'<div><slot/><slot name="footer"/></div>'},FactoryPicker:true,DatePicker:true},directives:{singleSelect:{}}}
 beforeEach(()=>{vi.clearAllMocks();mocks.canAccess.mockReturnValue(true);mocks.operations.mockResolvedValue([]);mocks.command.mockResolvedValue({id:'synthetic'})})
+afterEach(()=>vi.unstubAllGlobals())
 describe('factory editor',()=>{
+ it('opens every factory editor and submits on HTTP without native randomUUID',async()=>{
+  const getRandomValues=globalThis.crypto.getRandomValues.bind(globalThis.crypto);vi.stubGlobal('crypto',{getRandomValues});
+  for(const kind of ['employees','reports','rates','payroll'] as const){const w=mount(FactoryEditor,{props:{kind,mode:kind==='payroll'?'generate':'save'},global});await flushPromises();expect(w.find('form').exists()).toBe(true);await w.get('form').trigger('submit');await flushPromises();expect(mocks.command).toHaveBeenLastCalledWith(kind,kind==='payroll'?'generate':'save',expect.objectContaining({requestId:expect.stringMatching(/^[0-9a-f-]{36}$/)}));w.unmount()}
+ })
+
  it('defaults new employee team and preserves existing employee data while hiding operations',async()=>{
   const w=mount(FactoryEditor,{props:{kind:'employees',mode:'save'},global});
   expect(w.get('select').element.value).toBe('缝制组');expect(w.findAll('option').map(o=>o.text())).toEqual(['缝制组','包装组','铁艺组']);expect(w.text()).not.toContain('常做工序');

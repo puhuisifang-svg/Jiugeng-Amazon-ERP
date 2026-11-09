@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { createRequestId } from '@/utils/requestId'
+
 import { vSingleSelect } from '@/directives/singleSelect'
 import DatePicker from '@/components/DatePicker.vue'
 import { computed, nextTick, onMounted, onBeforeUnmount, ref } from 'vue'
@@ -21,7 +23,7 @@ async function load() { try { data.value = await researchApi.get(props.candidate
 async function open(kind: string) {
   mode.value = kind; error.value = ''
   if (kind === 'research') research.value = { ...initial(), ...JSON.parse(JSON.stringify(data.value?.research ?? {})), version: data.value?.version ?? 0 }
-  else estimate.value = { version: data.value?.version ?? 0, requestId: crypto.randomUUID(), name: '', price: null, currency: 'USD', costs: ['采购', '包装', '头程', '履约', '其他'].map(name => ({ name, amount: null, currency: 'USD', exchangeRate: 1, basis: '' })), commissionRate: null, advertisingRate: null, lossRate: null, rateDate: new Date().toISOString().slice(0, 10), basis: '' }
+  else estimate.value = { version: data.value?.version ?? 0, requestId: createRequestId(), name: '', price: null, currency: 'USD', costs: ['采购', '包装', '头程', '履约', '其他'].map(name => ({ name, amount: null, currency: 'USD', exchangeRate: 1, basis: '' })), commissionRate: null, advertisingRate: null, lossRate: null, rateDate: new Date().toISOString().slice(0, 10), basis: '' }
   savedDraft.value = JSON.stringify(kind === 'research' ? research.value : estimate.value)
   await nextTick(); dialog.value?.showModal()
 }

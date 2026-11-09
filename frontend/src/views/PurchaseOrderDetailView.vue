@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { createRequestId } from '@/utils/requestId'
+
 import DatePicker from '@/components/DatePicker.vue'
 import { confirmAction } from '@/state/uiConfirmation'
 import SuccessToast from "@/components/SuccessToast.vue"
@@ -62,7 +64,7 @@ async function receive() {
     if (!lines.length) { receiptError.value = '请至少填写一项本次实收数量。'; return }
     const date = new Date(receivedAt.value)
     if (!Number.isFinite(date.getTime()) || date.getTime() > Date.now() + 300000) { receiptError.value = '请填写有效且不在未来的实际收货时间。'; return }
-    pendingReceipt.value = { requestId: crypto.randomUUID(), receivedAt: date.toISOString(), ...(remark.value ? { remark: remark.value } : {}), lines }
+    pendingReceipt.value = { requestId: createRequestId(), receivedAt: date.toISOString(), ...(remark.value ? { remark: remark.value } : {}), lines }
   }
   saving.value = true
   try {

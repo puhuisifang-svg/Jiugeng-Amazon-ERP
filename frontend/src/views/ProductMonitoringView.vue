@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { createRequestId } from '@/utils/requestId'
+
 import { vSingleSelect } from '@/directives/singleSelect'
 import ProductImagePreview from '@/components/ProductImagePreview.vue'
 import DatePicker from '@/components/DatePicker.vue'
@@ -43,7 +45,7 @@ const statusLabels: Record<string, string> = { PENDING: '待首次观测', BASEL
 const display = (value: unknown) => value === undefined ? '未观测' : value === null ? '未知' : Array.isArray(value) ? (value.join('\n') || '明确为空') : value === 'AVAILABLE' ? '可售' : value === 'UNAVAILABLE' ? '不可售' : String(value)
 const split = (value: string) => [...new Set(value.split(/[\s,，]+/).map(v => v.trim()).filter(Boolean))]
 const fail = (e: unknown) => { error.value = e instanceof Error ? e.message : '请求失败，请重试。' }
-function requestKey(signature: string, previous?: { signature: string; id: string }) { return previous?.signature === signature ? previous : { signature, id: crypto.randomUUID() } }
+function requestKey(signature: string, previous?: { signature: string; id: string }) { return previous?.signature === signature ? previous : { signature, id: createRequestId() } }
 
 async function load() {
   const serial = ++loadSerial
@@ -68,7 +70,7 @@ async function load() {
 async function addSelectedCandidates(){
   if(!selectedRows.value.length)return
   busy.value=true;error.value='';const outcome:string[]=[]
-  for(const row of selectedRows.value){try{const added=await launchApi(false).create({type:'AMAZON',asinOrUrl:row.asin,title:row.fields.title||row.asin,owner:row.ownerName||session.user.value?.displayName||'选品负责人',reason:'来自产品监控，待评估客户需求与开发机会',requestId:crypto.randomUUID()});outcome.push(`${row.asin} 已关联候选 ${added.id.slice(0,8)}`)}catch(e){outcome.push(`${row.asin}：${e instanceof Error?e.message:'加入失败'}`)}}
+  for(const row of selectedRows.value){try{const added=await launchApi(false).create({type:'AMAZON',asinOrUrl:row.asin,title:row.fields.title||row.asin,owner:row.ownerName||session.user.value?.displayName||'选品负责人',reason:'来自产品监控，待评估客户需求与开发机会',requestId:createRequestId()});outcome.push(`${row.asin} 已关联候选 ${added.id.slice(0,8)}`)}catch(e){outcome.push(`${row.asin}：${e instanceof Error?e.message:'加入失败'}`)}}
   notice.value=outcome.join('；');busy.value=false
 }
 async function search() { filters.page = 0; await load() }

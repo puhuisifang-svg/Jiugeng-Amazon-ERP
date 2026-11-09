@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { createRequestId } from '@/utils/requestId'
+
 import { vSingleSelect } from '@/directives/singleSelect'
 import DatePicker from '@/components/DatePicker.vue'
 import { confirmAction } from '@/state/uiConfirmation'
@@ -53,7 +55,7 @@ async function load(force = false) {
   try {
     if (creating.value) {
       if (!writable.value) { error.value = '当前账号无权添加新品需求。'; return }
-      form.value = emptyFields(); requestId = crypto.randomUUID(); pendingCreate.value = null
+      form.value = emptyFields(); requestId = createRequestId(); pendingCreate.value = null
     } else if (id.value) {
       const data = await developmentApi.detail(id.value)
       if (request !== sequence) return

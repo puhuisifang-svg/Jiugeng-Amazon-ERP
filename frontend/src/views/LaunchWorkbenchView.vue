@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { createRequestId } from '@/utils/requestId'
+
 import SingleFileUpload from '@/components/SingleFileUpload.vue'
 import { vSingleSelect } from '@/directives/singleSelect'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
@@ -50,7 +52,7 @@ async function readFiles(){files.value=await attachmentList(development.value?'D
 async function upload(file:File){if(busy.value)return false;busy.value=true;try{const receipt=await uploadAttachment(development.value?'DEVELOPMENT':'CANDIDATE',id.value,file);await readFiles();success.value=`附件已保存：${receipt.name}；可在证据中引用附件编号。`}catch(e){error.value=message(e); return false }finally{busy.value=false}}
 async function download(file:LaunchAttachment){try{await downloadAttachment(development.value?'DEVELOPMENT':'CANDIDATE',id.value,file)}catch(e){error.value=message(e)}}
 async function findProducts(){try{products.value=(await domainApi.products()).items.filter(p=>`${p.productName} ${p.productCode}`.toLowerCase().includes(productQuery.value.toLowerCase()))}catch(e){error.value=message(e)}}
-function chooseProduct(product:ProductDetailDto){draft.value.productId=product.id;draft.value.skus=product.variants.map(v=>({id:crypto.randomUUID(),skuId:v.id??'',name:v.variantName,sampleId:''}));success.value='已带入商品及SKU，请移除本次未涉及的SKU后保存。'}
+function chooseProduct(product:ProductDetailDto){draft.value.productId=product.id;draft.value.skus=product.variants.map(v=>({id:createRequestId(),skuId:v.id??'',name:v.variantName,sampleId:''}));success.value='已带入商品及SKU，请移除本次未涉及的SKU后保存。'}
 async function readObservation(){try{const result=await apiRequest<{observation:Record<string,unknown>;job:Record<string,unknown>[]}>(`/v1/selection/workbench/${id.value}/observation`);observation.value=result.observation;const job=result.job[0];collectionStatus.value=job?`${({QUEUED:'排队中',RUNNING:'采集中',RETRY:'等待重试',SUCCEEDED:'采集完成',FAILED:'采集失败'} as Record<string,string>)[String(job.status??job.STATUS)]??String(job.status??job.STATUS)} ${job.reason??job.REASON??''}`:'尚无采集任务'}catch(e){error.value=message(e)}}
 async function collect(){try{await apiRequest(`/v1/selection/workbench/${id.value}/collect`,{method:'POST'});collectionStatus.value='已请求更新，点击查看采集进度获取结果';success.value='采集请求已提交，不覆盖人工评估。'}catch(e){error.value=message(e)}}
 function adoptObservation(){const o=observation.value;for(const [src,dst] of [['title','referenceTitle'],['imageUrl','imageUrl'],['price','referencePrice'],['rating','rating'],['ratingCount','ratingCount'],['listedAt','availableDate'],['brand','referenceBrand']]){if(src&&dst&&o[src]!=null)draft.value[dst]=String(o[src])}success.value='可得参考数据已带入草稿，请核对并保存。'}
@@ -63,9 +65,9 @@ async function initialize(){busy.value=true;try{accept(await api.value.initializ
 async function save(){busy.value=true;error.value='';try{accept(await api.value.save(id.value,workspace.value!.version,draft.value));success.value=Object.keys(workspace.value!.proposal).length?'变更已提交，执行方案待批准后更新。':'资料已保存。'}catch(e){error.value=message(e)}finally{busy.value=false}}
 async function action(){busy.value=true;error.value='';try{accept(await api.value.action(id.value,workspace.value!.version,confirm.value,reason.value,selfConfirmed.value));confirm.value='';success.value='操作已完成。'}catch(e){error.value=message(e)}finally{busy.value=false}}
 function ask(action:string){if(dirty.value){error.value='请先保存当前修改，再执行流程操作。';return}confirm.value=action;reason.value='';selfConfirmed.value=false}
-function add(section:Section){if(!section.rows)return;const list=rows(draft.value,section.rows);list.push({id:crypto.randomUUID()});draft.value[section.rows]=list}
+function add(section:Section){if(!section.rows)return;const list=rows(draft.value,section.rows);list.push({id:createRequestId()});draft.value[section.rows]=list}
 function setField(key:string,value:Value){draft.value[key]=value}
-function showCreate(){createDraft.value={type:'AMAZON',title:'',asinOrUrl:'',owner:'',reason:'',sourceUrl:'',requestId:crypto.randomUUID()};createOpen.value=true}
+function showCreate(){createDraft.value={type:'AMAZON',title:'',asinOrUrl:'',owner:'',reason:'',sourceUrl:'',requestId:createRequestId()};createOpen.value=true}
 async function create(){busy.value=true;error.value='';try{const result=await api.value.create(createDraft.value);createOpen.value=false;busy.value=false;await router.push(`${base.value}/${result.id}`)}catch(e){error.value=message(e)}finally{busy.value=false}}
 function search(){query.value=queryDraft.value;page.value=1;void load()}
 function reset(){queryDraft.value='';query.value='';state.value='';page.value=1;void load()}

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { createRequestId } from '@/utils/requestId'
+
 import { vSingleSelect } from '@/directives/singleSelect'
 import DatePicker from '@/components/DatePicker.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
@@ -42,7 +44,7 @@ async function load() {
   } catch (e) { if (seq === sequence) error.value = message(e) } finally { if (seq === sequence) loading.value = false }
 }
 function search() { page.value = 1; void load() }
-function edit(order?: CustomerOrder) { editTarget.value = order; formError.value = ''; saveKey.value = crypto.randomUUID(); editing.value = true }
+function edit(order?: CustomerOrder) { editTarget.value = order; formError.value = ''; saveKey.value = createRequestId(); editing.value = true }
 async function save(input: OrderInput) {
   if (saving.value) return; saving.value = true; formError.value = ''
   try { await ordersApi.save(editTarget.value?.id, input, saveKey.value); editing.value = false; success.value = '订单已保存。'; await load() }
@@ -57,7 +59,7 @@ async function confirm() {
 }
 async function arrange(order: CustomerOrder) {
   error.value = ''; try {
-    const fresh = await ordersApi.get(order.id); arranging.value = fresh; formError.value = ''; requestKey.value = crypto.randomUUID()
+    const fresh = await ordersApi.get(order.id); arranging.value = fresh; formError.value = ''; requestKey.value = createRequestId()
     recipient.value = fresh.details.recipient; phone.value = fresh.details.phone; address.value = fresh.details.address
     arrangeItems.value = fresh.lines.map(l => ({ lineId: l.id, selected: false, name: l.details.name, unit: l.details.unit, available: Math.max(0, Number(l.details.quantity) - Number(l.allocatedQuantity) - Number(l.shippedQuantity)), quantity: 0, boxCount: 1, plannedDate: l.details.deliveryDate, latestDate: l.details.deliveryDate, remark: l.details.remark }))
   } catch (e) { error.value = message(e) }

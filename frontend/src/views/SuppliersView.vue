@@ -270,7 +270,7 @@ onMounted(load)
                     rel="noopener noreferrer"
                   >打开</a><span v-else>—</span>
                 </td><td><span :class="['status-badge', `status-badge--${item.status.toLowerCase()}`]">{{ item.status === 'ACTIVE' ? '启用' : '停用' }}</span></td><td v-if="writable || session.canAccess(['suppliers.delete'])">
-                  <div class="table-actions">
+                  <div class="table-actions supplier-row-actions">
                     <button
                       v-if="session.canAccess(['suppliers.write'])"
                       type="button"
@@ -281,7 +281,7 @@ onMounted(load)
                     </button><button
                       v-if="session.canAccess(['suppliers.write'])"
                       type="button"
-                      class="danger-button"
+                      class="supplier-action supplier-action--disable"
                       :disabled="saving || item.status === 'DISABLED'"
                       @click="disable(item)"
                     >
@@ -289,7 +289,7 @@ onMounted(load)
                     </button><button
                       v-if="session.canAccess(['suppliers.delete'])"
                       type="button"
-                      class="danger-button"
+                      class="supplier-action supplier-action--delete"
                       :disabled="saving"
                       @click="remove(item)"
                     >
@@ -340,3 +340,12 @@ onMounted(load)
     </div>
   </section>
 </template>
+
+<style scoped>
+#app .supplier-row-actions{display:flex;flex-wrap:nowrap;align-items:center;gap:8px;min-width:158px}
+#app .supplier-row-actions button{display:inline-flex;align-items:center;justify-content:center;min-height:30px;padding:4px 10px;border:1px solid #c9d9f0;background:#f1f6ff;color:#2864c5;border-radius:4px;font-size:13px;font-weight:400;white-space:nowrap;cursor:pointer}
+#app .supplier-row-actions .supplier-action--disable{color:#98630b;background:#fff8eb;border-color:#ead5aa}
+#app .supplier-row-actions .supplier-action--delete{color:#b42318;background:#fff7f6;border-color:#f1c5c1}
+#app .supplier-row-actions button:disabled{opacity:.45;cursor:not-allowed}
+#app .supplier-row-actions button:hover:not(:disabled){filter:brightness(.97)}
+</style>

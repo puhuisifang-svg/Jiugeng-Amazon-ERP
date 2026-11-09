@@ -41,3 +41,15 @@ it('keeps input when switching cost tabs and places actions outside the scroll b
   expect(w.get('.cost-sheet__body').find('.cost-sheet__footer').exists()).toBe(false)
   expect(w.get('.cost-sheet__footer').text()).toContain('保存草稿'); w.unmount()
 })
+
+it('loads parent options across pages and sends the parent filter to the server', async () => {
+  vi.mocked(costsApi.list).mockImplementation(async (_q, _state, page, size) => size === 100 ? { items: [{ ...row, sku: { ...row.sku, productId: page ? 'p2' : 'p1', productName: page ? '第二父体' : '第一父体' } }], totalCount: 2 } : { items: [row], totalCount: 1 })
+  const w = setup(); await flushPromises()
+  expect(w.get('select[aria-label="筛选父体"]').text()).toContain('第二父体')
+  await w.get('select[aria-label="筛选父体"]').setValue('p2')
+  await w.get('.cost-filters').trigger('submit'); await flushPromises()
+  expect(costsApi.list).toHaveBeenLastCalledWith('', '', 0, 20, 'p2')
+  await w.get('.filter-reset-button').trigger('click'); await flushPromises()
+  expect(costsApi.list).toHaveBeenLastCalledWith('', '', 0, 20, '')
+  w.unmount()
+})

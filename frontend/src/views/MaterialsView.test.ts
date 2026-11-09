@@ -25,6 +25,7 @@ vi.mock('@/api/domain', () => ({
     materialSupplierLinks,
     supplier,
     createMaterial,
+    updateMaterial: vi.fn(),
     disableMaterial,
     enableMaterial,
     replaceMaterialSupplierLinks,
@@ -46,6 +47,24 @@ describe('MaterialsView merged material management', () => {
     createMaterial.mockReset(); disableMaterial.mockReset(); enableMaterial.mockReset(); materialSupplierLinks.mockReset().mockResolvedValue([]); replaceMaterialSupplierLinks.mockReset(); supplier.mockReset(); transact.mockReset(); updateSafetyStock.mockReset(); uploadImage.mockReset()
   })
 
+  it.each(['url', 'asset'])('removes a %s image on save and preserves it when cancelling', async kind => {
+    const material = { id: 'm-image', materialCode: 'IMG', name: '图片辅料', materialType: '包装', unit: '件', status: 'ACTIVE' as const, ...(kind === 'url' ? { imageUrl: 'https://images.example.com/box.jpg' } : { imageAssetId: 'asset-test' }) }
+    vi.mocked(domainApi.materials).mockResolvedValueOnce({ items: [material], mockData: false })
+    vi.mocked(domainApi.updateMaterial).mockResolvedValue({ id: material.id, materialCode: material.materialCode, name: material.name, materialType: material.materialType, unit: material.unit, status: material.status })
+    const wrapper = mount(MaterialsView, { global }); await flushPromises()
+    await wrapper.findAll('tbody button').find(b => b.text() === '编辑')!.trigger('click'); await flushPromises()
+    await wrapper.get('.ui-image-remove').trigger('click')
+    expect(wrapper.find('.ui-image-remove').exists()).toBe(false)
+    await wrapper.findAll('button').find(b => b.text() === '取消')!.trigger('click')
+    await wrapper.findAll('tbody button').find(b => b.text() === '编辑')!.trigger('click'); await flushPromises()
+    expect(wrapper.find('.ui-image-remove').exists()).toBe(true)
+    await wrapper.get('.ui-image-remove').trigger('click')
+    await wrapper.get('.material-image-editor').element.closest('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); await flushPromises()
+    expect(domainApi.updateMaterial).toHaveBeenLastCalledWith('m-image', expect.not.objectContaining({ imageUrl: expect.any(String) }))
+    const input = vi.mocked(domainApi.updateMaterial).mock.calls.at(-1)![1]
+    expect(input.imageAssetId).toBeUndefined(); expect(input.imageUrl).toBeUndefined()
+    wrapper.unmount()
+  })
   it('paginates materials and clears selection when changing pages', async () => {
     vi.mocked(domainApi.materials).mockResolvedValueOnce({ mockData: false, items: Array.from({ length: 21 }, (_, index) => ({
       id: `page-${index}`, materialCode: `PAGE-${index}`, name: `分页辅料${index}`, materialType: '包装', unit: '件', status: 'ACTIVE',

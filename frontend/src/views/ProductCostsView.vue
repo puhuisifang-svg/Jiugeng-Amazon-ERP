@@ -14,6 +14,22 @@ import CostVersionPanel from '@/components/CostVersionPanel.vue'
 import '@/styles/productCosts.css'
 import { downloadLabelBlob } from '@/api/cartonLabels'
 const rows = ref<CostRow[]>([]), total = ref(0), page = ref(1), size = ref(20), q = ref(''), state = ref('')
+const productId = ref(''), parents = ref<{ id: string; name: string }[]>([]), parentsLoading = ref(false), parentsError = ref('')
+async function loadParents() {
+  parentsLoading.value = true; parentsError.value = ''
+  try {
+    const options = new Map<string, string>()
+    let count = 0
+    for (let index = 0; ; index++) {
+      const result = await costsApi.list('', '', index, 100)
+      result.items.forEach(row => options.set(row.sku.productId, row.sku.productName))
+      count += result.items.length
+      if (!result.items.length || count >= result.totalCount) break
+    }
+    parents.value = [...options].map(([id, name]) => ({ id, name }))
+  } catch (e) { parentsError.value = message(e) }
+  finally { parentsLoading.value = false }
+}
 const history = ref<Awaited<ReturnType<typeof costsApi.history>>>([])
 const actions: Record<string, string> = { COST_DRAFT_CREATE: '创建成本草稿', COST_DRAFT_UPDATE: '更新成本草稿', COST_PUBLISH: '成本生效', COST_DRAFT_DELETE: '删除草稿', COST_EXPORT: '导出成本明细' }
 const busy = ref(false), error = ref(''), success = ref(''), target = ref<CostRow>(), versions = ref<CostVersion[]>([]), viewed = ref<CostVersion>(), compare = ref('')
@@ -31,7 +47,7 @@ const labels: Record<string, string> = { DRAFT: '草稿', EFFECTIVE: '生效', H
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value))
 const message = (e: unknown) => e instanceof Error ? e.message : '请求失败，请重试'
 async function run(action: () => Promise<void>) { if (busy.value) return; busy.value = true; error.value = ''; try { await action() } catch (e) { error.value = message(e) } finally { busy.value = false } }
-async function load() { const result = await costsApi.list(q.value, state.value, page.value - 1, size.value); rows.value = result.items; total.value = result.totalCount }
+async function load() { const result = await costsApi.list(q.value, state.value, page.value - 1, size.value, productId.value); rows.value = result.items; total.value = result.totalCount }
 function search() { page.value = 1; void run(load) }
 async function open(row: CostRow) { await run(async () => { [versions.value, history.value] = await Promise.all([costsApi.versions(row.sku.id), costsApi.history(row.sku.id)]); target.value = row; viewed.value = versions.value.find(v => v.status === 'EFFECTIVE') ?? versions.value[0]; form.value = undefined; compare.value = ''; detailTab.value = 'cost' }) }
 async function edit() { if (!target.value) return; await run(async () => {
@@ -64,7 +80,7 @@ async function exportCost(v: CostVersion) { await run(async () => { downloadLabe
 watch([page, size], () => { void run(load) })
 function beforeUnload(event: BeforeUnloadEvent) { if (form.value && JSON.stringify(form.value) !== original.value) { event.preventDefault(); event.returnValue = '' } }
 onBeforeRouteLeave(() => { if (busy.value) return false; if (form.value && JSON.stringify(form.value) !== original.value) { confirm.value = 'close'; return false } return true })
-onMounted(() => { void run(load); window.addEventListener('beforeunload', beforeUnload) })
+onMounted(() => { void run(load); void loadParents(); window.addEventListener('beforeunload', beforeUnload) })
 onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
 </script>
 <template>
@@ -82,6 +98,16 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
         placeholder="产品品名 / SKU编码"
         aria-label="搜索产品成本"
       ></label>
+      <label><span>父体</span><select
+        v-model="productId"
+        v-single-select
+        aria-label="筛选父体"
+        :disabled="parentsLoading"
+      ><option value="">{{ parentsLoading ? '正在加载父体…' : '全部父体' }}</option><option
+        v-for="parent in parents"
+        :key="parent.id"
+        :value="parent.id"
+      >{{ parent.name }}</option></select></label>
       <label><span>成本状态</span><select
         v-model="state"
         v-single-select
@@ -97,11 +123,23 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
         class="filter-reset-button"
         type="button"
         :disabled="busy"
-        @click="q = ''; state = ''; search()"
+        @click="q = ''; state = ''; productId = ''; search()"
       >
         重置
       </button>
     </form>
+    <p
+      v-if="parentsError"
+      role="alert"
+      class="cost-parent-error"
+    >
+      父体选项加载失败：{{ parentsError }} <button
+        type="button"
+        @click="loadParents"
+      >
+        重试
+      </button>
+    </p>
     <div class="cost-list-panel">
       <div class="cost-list-toolbar">
         <div><strong>SKU 标准成本</strong><span class="cost-meta">人民币 · 物料不含税 · 每件完整成品</span></div><button

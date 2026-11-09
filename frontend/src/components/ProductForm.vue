@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProductMaterialPicker from './ProductMaterialPicker.vue'
 import SingleFileUpload from '@/components/SingleFileUpload.vue'
 import { vSingleSelect } from '@/directives/singleSelect'
 import ProductNameEditor from './ProductNameEditor.vue'
@@ -13,6 +14,7 @@ import { session } from '@/state/session'
 import { blankCustoms, customsInput } from '@/api/customs'
 import CustomsFields from '@/components/CustomsFields.vue'
 
+defineOptions({ inheritAttrs: false })
 const props = defineProps<{ initial?: ProductInput; busy?: boolean; submitLabel: string; showCancel?: boolean; focusVariantId?: string | undefined }>()
 const emit = defineEmits<{ submit: [value: ProductInput]; cancel: [] }>()
 const suppliers = ref<SupplierDto[]>([]); const materials = ref<MaterialDetailDto[]>([])
@@ -30,7 +32,16 @@ function supplierName(id: string) { return suppliers.value.find(item => item.id 
 function materialName(id: string) { const item = materials.value.find(value => value.id === id); return item ? `${item.materialCode} · ${item.name}` : id }
 function stockLabel(material: MaterialDetailDto) { if (!session.canAccess(['inventory.read'])) return '无查看权限'; if (inventoryFailed.value) return '暂不可用'; const balance = balances.value.find(item => item.materialId === material.id); return balance ? `库存 ${balance.quantity} ${balance.unit}` : '库存未初始化' }
 function addSupplier(variant: ProductVariantInput, event: Event) { const element = event.target as HTMLSelectElement; const id = element.value; element.value = ''; if (id && !variant.suppliers.some(item => item.supplierId === id)) variant.suppliers.push({ supplierId: id, primary: variant.suppliers.length === 0 }) }
-function addMaterial(variant: ProductVariantInput, event: Event) { const element = event.target as HTMLSelectElement; const id = element.value; element.value = ''; const material = materials.value.find(item => item.id === id); if (material && !variant.materials.some(item => item.materialId === id)) variant.materials.push({ materialId: id, standardQuantity: 1, unit: material.unit, lossRate: 0, enabled: true }) }
+const materialTarget = ref<ProductVariantInput>()
+function addMaterials(ids: string[]) {
+  const variant = materialTarget.value
+  if (!variant || props.busy) return
+  ids.forEach(id => {
+    const material = materials.value.find(item => item.id === id && item.status === 'ACTIVE')
+    if (material && !variant.materials.some(item => item.materialId === id)) variant.materials.push({ materialId: id, standardQuantity: 1, unit: material.unit, lossRate: 0, enabled: true })
+  })
+  materialTarget.value = undefined
+}
 function makePrimary(variant: ProductVariantInput, id: string) { variant.suppliers.forEach(item => { item.primary = item.supplierId === id }) }
 function useImageUrl(variant: ProductVariantInput) { if (variant.imageUrl?.trim()) variant.imageAssetId = undefined }
 async function uploadImage(variant: ProductVariantInput, index: number, file: File) { if (props.busy || uploading.value !== null) return false; uploading.value = index; imageError.value = ''; try { variant.imageAssetId = (await catalogApi.uploadImage('SKU_MAIN', file)).id; variant.imageUrl = undefined } catch (error) { imageError.value = error instanceof Error ? error.message : '图片上传失败。' ; return false } finally { uploading.value = null } }
@@ -102,6 +113,7 @@ onMounted(loadReferences)
 
 <template>
   <form
+    v-bind="$attrs"
     class="page-stack product-editor-form"
     novalidate
     @submit.prevent="submit"
@@ -288,30 +300,33 @@ onMounted(loadReferences)
                 role="img"
                 aria-label="SKU 主图（无可用图片）"
               >图</span>
-              <label class="sku-image-url">图片 URL<input
-                v-model="variant.imageUrl"
-                :aria-label="`SKU ${variantIndex + 1} 图片 URL`"
-                type="url"
-                maxlength="500"
-                placeholder="https://..."
-                @input="useImageUrl(variant)"
-              ></label>
-              <SingleFileUpload
-                hint="图片立即上传，保存表单后关联"
-                title="SKU 主图"
-                accept=".png,.jpg,.jpeg,.webp"
-                :max-mb="5"
-                :disabled="busy || uploading !== null"
-                :upload="(file) => uploadImage(variant, variantIndex, file)"
-              />
-              <button
-                v-if="variant.imageAssetId || variant.imageUrl"
-                type="button"
-                class="secondary-button"
-                @click="variant.imageAssetId = undefined; variant.imageUrl = undefined"
-              >
-                移除图片
-              </button>
+              <div class="sku-image-controls">
+                <label class="sku-image-url">图片 URL<input
+                  v-model="variant.imageUrl"
+                  :aria-label="`SKU ${variantIndex + 1} 图片 URL`"
+                  type="url"
+                  maxlength="500"
+                  placeholder="https://..."
+                  @input="useImageUrl(variant)"
+                ></label>
+                <SingleFileUpload
+                  hint="图片立即上传，保存表单后关联"
+                  title="SKU 主图"
+                  accept=".png,.jpg,.jpeg,.webp"
+                  :max-mb="5"
+                  :disabled="busy || uploading !== null"
+                  :upload="(file) => uploadImage(variant, variantIndex, file)"
+                />
+                <button
+                  v-if="variant.imageAssetId || variant.imageUrl"
+                  type="button"
+                  class="ui-image-remove"
+                  :disabled="busy || uploading !== null"
+                  @click="variant.imageAssetId = undefined; variant.imageUrl = undefined"
+                >
+                  移除图片
+                </button>
+              </div>
             </div>
             <div
               v-show="activeTab(variantIndex) === 'basic'"
@@ -409,23 +424,26 @@ onMounted(loadReferences)
                 维护或新建供应商档案
               </RouterLink>；档案独立保存，关联随产品整体保存。
             </p>
-            <select
-              v-single-select
-              aria-label="添加供应商"
-              :disabled="loadingReferences"
-              value=""
-              @change="addSupplier(variant, $event)"
-            >
-              <option value="">
-                选择供应商…
-              </option><option
-                v-for="supplier in suppliers.filter(item => item.status === 'ACTIVE')"
-                :key="supplier.id"
-                :value="supplier.id"
+            <div class="product-supplier-picker">
+              <select
+                v-single-select
+                class="ui-supplier-select"
+                aria-label="添加供应商"
+                :disabled="loadingReferences"
+                value=""
+                @change="addSupplier(variant, $event)"
               >
-                {{ supplier.name }}
-              </option>
-            </select>
+                <option value="">
+                  选择供应商…
+                </option><option
+                  v-for="supplier in suppliers.filter(item => item.status === 'ACTIVE' && !variant.suppliers.some(link => link.supplierId === item.id))"
+                  :key="supplier.id"
+                  :value="supplier.id"
+                >
+                  {{ supplier.name }}
+                </option>
+              </select>
+            </div>
             <div
               v-for="link in variant.suppliers"
               :key="link.supplierId"
@@ -460,23 +478,15 @@ onMounted(loadReferences)
             class="relation-editor product-tab-panel"
           >
             <h3>关联辅料</h3>
-            <select
-              v-single-select
+            <button
+              type="button"
+              class="product-select-button"
               aria-label="添加辅料"
-              :disabled="loadingReferences"
-              value=""
-              @change="addMaterial(variant, $event)"
+              :disabled="loadingReferences || busy"
+              @click="materialTarget = variant"
             >
-              <option value="">
-                选择启用辅料…
-              </option><option
-                v-for="material in materials.filter(item => item.status === 'ACTIVE')"
-                :key="material.id"
-                :value="material.id"
-              >
-                {{ material.materialCode }} · {{ material.name }} · {{ material.specification || '无规格' }} · {{ stockLabel(material) }}
-              </option>
-            </select>
+              ＋ 选择辅料
+            </button>
             <div
               v-for="link in variant.materials"
               :key="link.materialId"
@@ -518,7 +528,8 @@ onMounted(loadReferences)
       <button
         v-if="!focusVariantId"
         type="button"
-        class="secondary-action"
+        class="product-select-button primary-button"
+        :disabled="busy"
         @click="addVariant"
       >
         新增 SKU
@@ -540,6 +551,14 @@ onMounted(loadReferences)
       </div>
     </div>
   </form>
+  <ProductMaterialPicker
+    v-if="materialTarget"
+    :materials="materials"
+    :selected-ids="materialTarget.materials.map(item => item.materialId)"
+    :stock-label="stockLabel"
+    @close="materialTarget = undefined"
+    @select="addMaterials"
+  />
 </template>
 
 <style scoped>

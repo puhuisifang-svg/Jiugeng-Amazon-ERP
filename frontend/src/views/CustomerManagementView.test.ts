@@ -8,7 +8,7 @@ vi.mock('@/state/session', () => ({ session: { canAccess: mocks.canAccess } }))
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }), onBeforeRouteLeave: mocks.leave, onBeforeRouteUpdate: vi.fn(), RouterLink: { template: '<a><slot /></a>' } }))
 import CustomerManagementView from './CustomerManagementView.vue'
 
-const customer = { id: 'c1', name: '合成客户', account1688: 'synthetic-buyer', contactPerson: '', phone: '', wechatId: '', address: '', remark: '', status: 'ACTIVE', version: 2 }
+const customer = { defaultCustomer: true, id: 'c1', name: '合成客户', account1688: 'synthetic-buyer', contactPerson: '', phone: '', wechatId: '', address: '', remark: '', status: 'ACTIVE', version: 2 }
 const sku = { productId: 'p1', variant: { id: 'v1', skuCode: 'SYN-BLUE', variantName: '蓝色SKU' } }
 const product = { id: 'cp1', customerId: 'c1', customerName: '合成客户', customerStatus: 'ACTIVE', productId: 'p1', variantId: 'v1', productName: '蓝色SKU', skuCode: 'SYN-BLUE', supplyPrice: 12.5, priceUnit: '套', customerProductCode: 'CLIENT-01', requirements: '合成贴标需求', status: 'ACTIVE', version: 3 }
 function render(kind: 'info' | 'products' = 'info') {
@@ -25,7 +25,28 @@ beforeEach(() => {
 })
 
 describe('客户管理', () => {
+  it('scopes every product query to the selected customer and defaults new records', async () => {
+    mocks.list.mockResolvedValue(page([customer, { ...customer, id: 'c2', name: '第二客户', defaultCustomer: false }]))
+    const wrapper = render('products'); await flushPromises()
+    expect(mocks.products).toHaveBeenLastCalledWith(expect.objectContaining({ customerId: 'c1' }))
+    await wrapper.get('select[aria-label="当前客户"]').setValue('c2'); await flushPromises()
+    expect(mocks.products).toHaveBeenLastCalledWith(expect.objectContaining({ customerId: 'c2', page: 0 }))
+    await wrapper.get('.material-toolbar button').trigger('click'); await flushPromises()
+    expect((wrapper.get('select[aria-label="选择客户"]').element as HTMLSelectElement).value).toBe('c1')
+    expect(wrapper.find('[aria-label="搜索客户"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+  it('does not fetch mixed products when no default customer exists', async () => {
+    mocks.list.mockResolvedValue(page([{ ...customer, defaultCustomer: false }]))
+    const wrapper = render('products'); await flushPromises()
+    expect(mocks.products).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('请选择客户后查看商品')
+    await wrapper.get('select[aria-label="当前客户"]').setValue('c1'); await flushPromises()
+    expect(mocks.products).toHaveBeenCalledWith(expect.objectContaining({ customerId: 'c1' }))
+    wrapper.unmount()
+  })
   it('edits invoice details and selects the default customer without exposing them in list rows', async () => {
+    mocks.list.mockResolvedValue(page([{ ...customer, defaultCustomer: false }]))
     const wrapper = render(); await flushPromises()
     await wrapper.findAll('tbody button').find(button => button.text() === '设为默认')!.trigger('click'); await flushPromises()
     expect((wrapper.get('dialog input[type="checkbox"]').element as HTMLInputElement).checked).toBe(true)
@@ -127,10 +148,11 @@ describe('客户管理', () => {
     expect(wrapper.text()).toContain('¥12.50 / 套'); expect(wrapper.text()).toContain('合成贴标需求')
     await wrapper.get('.material-toolbar button').trigger('click'); await flushPromises()
     await wrapper.get('select[aria-label="选择客户"]').setValue('c1')
-    await wrapper.get('select[aria-label="选择SKU"]').setValue('v1')
-    const nextSku = wrapper.findAll('dialog button').find(button => button.text() === '下一页SKU')!
-    await nextSku.trigger('click'); await flushPromises()
+    await wrapper.findAll('dialog button').find(b => b.text() === '选择产品 SKU')!.trigger('click'); await flushPromises()
+    await wrapper.get('dialog[aria-label="选择产品 SKU"] [aria-label="下一页"]').trigger('click'); await flushPromises()
     expect(mocks.skus).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, exact: false, status: 'ACTIVE', productStatus: 'ACTIVE' }))
+    await wrapper.get('input[aria-label="选择 SYN-BLUE"]').setValue(true)
+    await wrapper.findAll('button').find(b => b.text() === '确认选择')!.trigger('click')
     await wrapper.get('dialog input[type="number"]').setValue('9.80')
     await wrapper.get('input[placeholder="客户内部的产品编号"]').setValue('CLIENT-B')
     await wrapper.get('input[maxlength="2000"]').setValue('合成定制包装')
@@ -143,7 +165,8 @@ describe('客户管理', () => {
     await wrapper.get('.material-toolbar button').trigger('click'); await flushPromises()
     await wrapper.get('dialog form').trigger('submit'); await flushPromises()
     expect(wrapper.get('[role="alert"]').text()).toContain('请选择客户')
-    await wrapper.get('select[aria-label="选择客户"]').setValue('c1'); await wrapper.get('select[aria-label="选择SKU"]').setValue('v1')
+    await wrapper.get('select[aria-label="选择客户"]').setValue('c1'); await wrapper.findAll('dialog button').find(b => b.text() === '选择产品 SKU')!.trigger('click'); await flushPromises()
+    await wrapper.get('input[aria-label="选择 SYN-BLUE"]').setValue(true); await wrapper.findAll('button').find(b => b.text() === '确认选择')!.trigger('click')
     await wrapper.get('dialog input[type="number"]').setValue('1.001'); await wrapper.get('dialog form').trigger('submit')
     expect(wrapper.get('[role="alert"]').text()).toContain('最多两位小数'); expect(mocks.saveProduct).not.toHaveBeenCalled()
     let finish!: (value: unknown) => void

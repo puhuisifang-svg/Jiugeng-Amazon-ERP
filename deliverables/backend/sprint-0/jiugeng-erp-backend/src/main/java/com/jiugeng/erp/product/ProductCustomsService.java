@@ -16,11 +16,11 @@ class ProductCustomsService {
     private final AuditTrail audit;
     ProductCustomsService(JdbcClient jdbc,AuditTrail audit) { this.jdbc=jdbc;this.audit=audit; }
     record Row(String productId,String productCode,String productName,String variantId,String skuCode,String skuName,
-        String productStatus,String skuStatus,CustomsProfile customs) {}
+        String productStatus,String skuStatus,CustomsProfile customs,String imageAssetId,String imageUrl) {}
     record Page(List<Row> items,long totalCount,int page,int size) {}
     private static final String SELECT="""
         SELECT p.id product_id,p.product_code,COALESCE(p.product_name,p.name_zh) product_name,p.status product_status,
-            v.id,v.sku_code,v.variant_name,v.lifecycle_status,v.customs_data,v.customs_version
+            v.id,v.sku_code,v.variant_name,v.lifecycle_status,v.customs_data,v.customs_version,v.main_image_asset_id,v.main_image_url
         FROM product_variant v JOIN product p ON p.id=v.product_id
         """;
     static CustomsProfile decode(String text,long version) {
@@ -39,7 +39,7 @@ class ProductCustomsService {
         // State is kept in the profile, not duplicated in another master record.
         var values=jdbc.sql(SELECT+" WHERE p.deleted_at IS NULL AND v.deleted_at IS NULL ORDER BY v.sku_code_normalized").query((r,n)->new Row(r.getString("product_id"),r.getString("product_code"),
             r.getString("product_name"),r.getString("id"),r.getString("sku_code"),r.getString("variant_name"),r.getString("product_status"),
-            r.getString("lifecycle_status"),decode(r.getString("customs_data"),r.getLong("customs_version")))).list();
+            r.getString("lifecycle_status"),decode(r.getString("customs_data"),r.getLong("customs_version")),r.getString("main_image_asset_id"),r.getString("main_image_url"))).list();
         String term=q.trim().toLowerCase(Locale.ROOT);
         var filtered=values.stream().filter(v->state.isEmpty() || (v.customs()==null?"MISSING":v.customs().state().name()).equals(state))
             .filter(v->term.isEmpty() || (v.productCode()+" "+v.productName()+" "+v.skuCode()+" "+v.skuName()+" "+

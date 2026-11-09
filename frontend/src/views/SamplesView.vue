@@ -2,6 +2,9 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { samplesApi, type SampleLocation } from '@/api/samples'
+import SingleFileUpload from '@/components/SingleFileUpload.vue'
+import PurchaseItemImage from '@/components/PurchaseItemImage.vue'
+import { catalogApi } from '@/api/catalog'
 import ShipmentProductImage from '@/components/ShipmentProductImage.vue'
 import CustomerSkuPicker from '@/components/CustomerSkuPicker.vue'
 import { type SkuListItemDto } from '@/api/domain'
@@ -16,21 +19,34 @@ const writable=computed(()=>runtimeConfig.authMode==='password'&&session.canAcce
 const rows=ref<SampleLocation[]>([]),query=ref(''),applied=ref(''),page=ref(1),size=ref(20),total=ref(0),loading=ref(false),error=ref(''),success=ref('')
 const dialog=ref<HTMLDialogElement>(),locationInput=ref<HTMLInputElement>(),open=ref(false),busy=ref(false),editing=ref<SampleLocation>(),location=ref(''),selected=ref<SkuListItemDto>(),initial=ref(''),formError=ref(''),discard=ref(false)
 const skuPickerOpen=ref(false)
+const parents=ref<{id:string;name:string}[]>([]),parent=ref(''),appliedParent=ref(''),parentError=ref('')
+const manual=ref(false),sampleName=ref(''),sampleCode=ref(''),specification=ref(''),remark=ref(''),storageImageId=ref<string|null>(null),uploading=ref(false)
+const blocked=computed(()=>busy.value||uploading.value)
+async function loadParents(){try{parents.value=await samplesApi.parents();parentError.value=''}catch{parentError.value='父体选项加载失败，请重试'}}
+async function uploadStorage(file:File){uploading.value=true;formError.value='';try{storageImageId.value=(await catalogApi.uploadImage('SAMPLE_STORAGE',file)).id}catch(e){formError.value=message(e);throw e}finally{uploading.value=false}}
 let listSequence=0
-const snapshot=()=>JSON.stringify([selected.value?.variant.id??'',location.value])
+const snapshot=()=>JSON.stringify([selected.value?.variant.id??'',location.value,manual.value,sampleName.value,sampleCode.value,specification.value,remark.value,storageImageId.value])
 const dirty=computed(()=>open.value&&snapshot()!==initial.value)
-async function load(){if(runtimeConfig.authMode!=='password'){error.value='样品库位管理仅在正式登录模式使用';return}const sequence=++listSequence;loading.value=true;error.value='';try{const result=await samplesApi.list(applied.value,page.value-1,size.value);if(sequence===listSequence){rows.value=result.items;total.value=result.totalCount;if(page.value>1&&!rows.value.length){page.value--;await load()}}}catch(e){if(sequence===listSequence)error.value=message(e)}finally{if(sequence===listSequence)loading.value=false}}
-function search(){applied.value=query.value;page.value=1;void load()}
-function reset(){query.value='';search()}
-async function edit(row?:SampleLocation){editing.value=row;location.value=row?.locationCode??'';selected.value=undefined;formError.value='';skuPickerOpen.value=false;open.value=true;initial.value=snapshot();await nextTick();dialog.value?.showModal();if(row)locationInput.value?.focus();else{dialog.value?.querySelector<HTMLInputElement>('input')?.focus()}}
+async function load(){if(runtimeConfig.authMode!=='password'){error.value='样品库位管理仅在正式登录模式使用';return}const sequence=++listSequence;loading.value=true;error.value='';try{const result=await samplesApi.list(applied.value,page.value-1,size.value,appliedParent.value);if(sequence===listSequence){rows.value=result.items;total.value=result.totalCount;if(page.value>1&&!rows.value.length){page.value--;await load()}}}catch(e){if(sequence===listSequence)error.value=message(e)}finally{if(sequence===listSequence)loading.value=false}}
+function search(){applied.value=query.value;appliedParent.value=parent.value;page.value=1;void load()}
+function reset(){query.value='';parent.value='';search()}
+async function edit(row?:SampleLocation){editing.value=row;manual.value=!!row&&!row.variantId;sampleName.value=row?.skuName??'';sampleCode.value=row?.skuCode??'';specification.value=row?.specification??'';remark.value=row?.remark??'';storageImageId.value=row?.storageImageId??null;location.value=row?.locationCode??'';selected.value=undefined;formError.value='';skuPickerOpen.value=false;open.value=true;initial.value=snapshot();await nextTick();dialog.value?.showModal();if(row)locationInput.value?.focus();else{dialog.value?.querySelector<HTMLInputElement>('input')?.focus()}}
 function close(){skuPickerOpen.value=false;dialog.value?.close();open.value=false;discard.value=false}
-function requestClose(){if(busy.value)return;if(dirty.value){discard.value=true;return}close()}
-async function save(){if(busy.value)return;const productId=editing.value?.productId??selected.value?.productId,variantId=editing.value?.variantId??selected.value?.variant.id;if(!productId||!variantId){formError.value='请先选择 SKU';return}if(!location.value.trim()){formError.value='请输入库位编码';return}busy.value=true;formError.value='';try{const input={productId,variantId,locationCode:location.value,...(editing.value?{version:editing.value.version}:{})};if(editing.value)await samplesApi.update(editing.value.id,input);else await samplesApi.create(input);close();success.value='样品库位已保存';await load()}catch(e){formError.value=message(e)}finally{busy.value=false}}
-async function remove(row:SampleLocation){if(busy.value||!await confirmAction(`移除 ${row.skuCode} 在 ${row.locationCode} 的样品库位登记？不会删除产品或 SKU。`))return;busy.value=true;error.value='';try{await samplesApi.remove(row.id,row.version);success.value='样品库位登记已移除';await load()}catch(e){error.value=message(e)}finally{busy.value=false}}
+function requestClose(){if(blocked.value)return;if(dirty.value){discard.value=true;return}close()}
+async function save(){
+ if(blocked.value)return
+ const productId=manual.value?null:(editing.value?.productId??selected.value?.productId),variantId=manual.value?null:(editing.value?.variantId??selected.value?.variant.id)
+ if(!manual.value&&(!productId||!variantId)){formError.value='请先选择 SKU';return}
+ if(manual.value&&!sampleName.value.trim()){formError.value='请输入样品名称';return}
+ if(!location.value.trim()){formError.value='请输入库位编码';return}
+ busy.value=true;formError.value=''
+ try{const input={productId:productId??null,variantId:variantId??null,locationCode:location.value,sampleName:sampleName.value,sampleCode:sampleCode.value,specification:specification.value,remark:remark.value,storageImageId:storageImageId.value,...(editing.value?{version:editing.value.version}:{})};if(editing.value)await samplesApi.update(editing.value.id,input);else await samplesApi.create(input);close();success.value='样品库位已保存';await Promise.all([load(),loadParents()])}catch(e){formError.value=message(e)}finally{busy.value=false}
+}
+async function remove(row:SampleLocation){if(busy.value||!await confirmAction(`移除 ${row.skuCode || row.skuName} 在 ${row.locationCode} 的样品库位登记？不会删除产品或 SKU。`))return;busy.value=true;error.value='';try{await samplesApi.remove(row.id,row.version);success.value='样品库位登记已移除';await Promise.all([load(),loadParents()])}catch(e){error.value=message(e)}finally{busy.value=false}}
 function message(e:unknown){return e instanceof Error?e.message:'操作失败，请重试'}
-function beforeUnload(e:BeforeUnloadEvent){if(dirty.value||busy.value){e.preventDefault();e.returnValue=''}}
-onBeforeRouteLeave(async()=>busy.value?false:!dirty.value||await confirmAction('样品库位尚未保存，确定放弃并离开吗？'))
-onMounted(()=>{void load();window.addEventListener('beforeunload',beforeUnload)})
+function beforeUnload(e:BeforeUnloadEvent){if(dirty.value||blocked.value){e.preventDefault();e.returnValue=''}}
+onBeforeRouteLeave(async()=>blocked.value?false:!dirty.value||await confirmAction('样品库位尚未保存，确定放弃并离开吗？'))
+onMounted(()=>{void load();void loadParents();window.addEventListener('beforeunload',beforeUnload)})
 onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEventListener('beforeunload',beforeUnload);dialog.value?.close()})
 </script>
 <template>
@@ -45,6 +61,11 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
         maxlength="200"
         placeholder="品名、SKU 或库位编码"
       ></label>
+      <label>所属父体<select v-model="parent"><option value="">全部父体</option><option
+        v-for="p in parents"
+        :key="p.id"
+        :value="p.id"
+      >{{ p.name }}</option></select></label>
       <button
         type="submit"
         :disabled="loading || busy"
@@ -59,16 +80,28 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
         重置
       </button>
     </form>
+    <p
+      v-if="parentError"
+      role="alert"
+      class="access-danger"
+    >
+      {{ parentError }} <button
+        type="button"
+        @click="loadParents"
+      >
+        重试
+      </button>
+    </p>
     <div class="material-toolbar">
       <button
         v-if="writable"
         type="button"
         class="primary-action"
-        :disabled="busy"
+        :disabled="blocked"
         @click="edit()"
       >
         新增样品
-      </button><span class="muted">选择产品 SKU，登记样品存放库位</span>
+      </button><span class="muted">关联 SKU 或手动录入，登记库位与存放照片</span>
     </div>
     <p
       v-if="error"
@@ -79,24 +112,43 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
     </p>
     <TableViewport>
       <table class="data-table ui-action-table sample-table">
-        <thead><tr><th>图片</th><th>品名 / SKU 编码</th><th>所属产品</th><th>库位编码</th><th>更新时间</th><th>操作</th></tr></thead><tbody>
+        <thead><tr><th>图片</th><th>品名 / SKU 编码</th><th>所属产品</th><th>库位编码</th><th>存放照片</th><th>更新时间</th><th>操作</th></tr></thead><tbody>
           <tr
             v-for="row in rows"
             :key="row.id"
           >
             <td>
               <ShipmentProductImage
-                :product-id="row.productId"
+                v-if="row.productId && row.variantId"
+                :product-id="row.productId!"
                 :variant-id="row.variantId"
                 :alt="row.skuName"
               />
-            </td><td><strong>{{ row.skuName }}</strong><small class="muted">{{ row.skuCode }}</small></td><td>{{ row.productName }}</td><td><strong>{{ row.locationCode }}</strong></td><td>{{ new Date(row.updatedAt).toLocaleString('zh-CN',{hour12:false}) }}</td><td>
+              <span
+                v-else
+                class="muted"
+              >手动样品</span>
+            </td><td>
+              <strong>{{ row.skuName }}</strong><small class="muted">{{ row.skuCode || '无编码' }}</small><small
+                v-if="row.specification"
+                class="muted"
+              >{{ row.specification }}</small>
+            </td><td>{{ row.productName || '手动录入' }}</td><td><strong>{{ row.locationCode }}</strong></td><td>
+              <PurchaseItemImage
+                v-if="row.storageImageId"
+                :image-asset-id="row.storageImageId"
+                :alt="`${row.skuName} · ${row.locationCode} 存放照片`"
+              /><span
+                v-else
+                class="muted"
+              >未上传</span>
+            </td><td>{{ new Date(row.updatedAt).toLocaleString('zh-CN',{hour12:false}) }}</td><td>
               <template v-if="writable || session.canAccess(['samples.remove'])">
                 <button
                   v-if="session.canAccess(['samples.write'])"
                   type="button"
                   class="text-action"
-                  :disabled="busy"
+                  :disabled="blocked"
                   @click="edit(row)"
                 >
                   编辑
@@ -104,7 +156,7 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
                   v-if="session.canAccess(['samples.remove'])"
                   type="button"
                   class="text-action danger"
-                  :disabled="busy"
+                  :disabled="blocked"
                   @click="remove(row)"
                 >
                   移除
@@ -117,7 +169,7 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
           </tr>
           <tr v-if="!rows.length">
             <td
-              colspan="6"
+              colspan="7"
               class="data-state"
             >
               {{ loading?'正在加载…':'暂无样品库位记录' }}
@@ -150,7 +202,7 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
           </h2><button
             type="button"
             class="secondary-action"
-            :disabled="busy"
+            :disabled="blocked"
             aria-label="关闭样品编辑"
             @click="requestClose"
           >
@@ -166,16 +218,61 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
             {{ formError }}
           </p>
           <div
-            v-if="editing"
+            v-if="!editing"
+            class="sample-source ui-section-tabs"
+            role="tablist"
+            aria-label="样品来源"
+          >
+            <button
+              type="button"
+              role="tab"
+              :aria-selected="!manual"
+              :class="{active:!manual}"
+              :disabled="blocked"
+              @click="manual=false"
+            >
+              关联产品 SKU
+            </button>
+            <button
+              type="button"
+              role="tab"
+              :aria-selected="manual"
+              :class="{active:manual}"
+              :disabled="blocked"
+              @click="manual=true"
+            >
+              手动录入
+            </button>
+          </div>
+          <div
+            v-if="manual"
+            class="sample-manual-fields"
+          >
+            <label><span>样品名称 <span class="required">*</span></span><input
+              v-model="sampleName"
+              maxlength="200"
+              required
+              :disabled="blocked"
+              placeholder="输入未建立 SKU 的产品名称"
+            ></label>
+            <label>样品编码<input
+              v-model="sampleCode"
+              maxlength="64"
+              :disabled="blocked"
+              placeholder="选填，如供应商货号"
+            ></label>
+          </div>
+          <div
+            v-if="editing && !manual"
             class="selected-sku"
           >
             <strong>{{ editing.skuName }}</strong><span>{{ editing.skuCode }}</span>
           </div>
-          <template v-else>
+          <template v-else-if="!editing && !manual">
             <button
               type="button"
               class="sample-sku-picker-button"
-              :disabled="busy"
+              :disabled="blocked"
               @click="skuPickerOpen = true"
             >
               {{ selected ? '更换 SKU' : '选择产品 SKU' }}
@@ -189,10 +286,51 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
             v-model="location"
             maxlength="100"
             placeholder="例如 A-01-02"
-            :disabled="busy"
+            :disabled="blocked"
             required
           ></label>
-          <p class="muted">
+          <label class="location-field">规格说明<input
+            v-model="specification"
+            maxlength="500"
+            :disabled="blocked"
+            placeholder="选填，如颜色、尺寸"
+          ></label>
+          <label class="location-field">备注<input
+            v-model="remark"
+            maxlength="1000"
+            :disabled="blocked"
+            placeholder="选填"
+          ></label>
+          <section class="sample-storage-editor">
+            <div
+              v-if="storageImageId"
+              class="sample-storage-preview"
+            >
+              <PurchaseItemImage
+                :image-asset-id="storageImageId"
+                alt="样品存放照片"
+              /><button
+                type="button"
+                class="ui-image-remove"
+                :disabled="blocked"
+                @click="storageImageId=null"
+              >
+                移除照片
+              </button>
+            </div>
+            <SingleFileUpload
+              title="存放照片"
+              accept=".png,.jpg,.jpeg,.webp"
+              :max-mb="5"
+              :disabled="blocked"
+              :upload="uploadStorage"
+              hint="拍摄样品及周边库位，支持选择或粘贴图片；保存后关联到本条样品。"
+            />
+          </section>
+          <p
+            v-if="!manual"
+            class="muted"
+          >
             同一 SKU 可登记多个库位，同一库位不能重复登记该 SKU。
           </p>
         </div>
@@ -200,14 +338,14 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
           <button
             type="button"
             class="secondary-action"
-            :disabled="busy"
+            :disabled="blocked"
             @click="requestClose"
           >
             取消
           </button><button
             type="submit"
             class="primary-action"
-            :disabled="busy"
+            :disabled="blocked"
           >
             {{ busy?'保存中…':'保存' }}
           </button>
@@ -229,6 +367,7 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
   </section>
 </template>
 <style scoped>
+.sample-manual-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.sample-manual-fields label{display:grid;gap:6px}.sample-source{margin-bottom:12px}.sample-storage-editor{margin-top:16px;display:grid;gap:10px}.sample-storage-preview{display:flex;align-items:center;gap:12px}.required{color:#b42318}@media(max-width:600px){.sample-manual-fields{grid-template-columns:1fr}}
 #app .samples-ui .sample-sku-picker-button{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:6px 14px;background:#2864c5;color:white;border:1px solid #2864c5;border-radius:5px;font-size:13px;cursor:pointer}.sample-sku-picker-button:disabled{opacity:.5}
 
 .samples-ui .filter-panel label{flex:0 1 360px;min-width:220px}.sample-table{min-width:800px;width:100%}.sample-table small,.sku-options small{display:block}.sample-table .text-action{background:transparent;border:0;color:var(--accent);padding:0 8px;min-height:32px;height:32px;cursor:pointer}.sample-table .text-action.danger{color:#b42318}.sample-table th:last-child,.sample-table td:last-child{width:128px;min-width:128px}

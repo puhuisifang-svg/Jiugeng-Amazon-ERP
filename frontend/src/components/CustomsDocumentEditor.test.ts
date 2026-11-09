@@ -21,6 +21,8 @@ async function saveReady(w:ReturnType<typeof render>){
  await w.findAll('button').find(b=>b.text()==='保存草稿')!.trigger('click')
 }
 describe('报关单据编辑',()=>{
+ it('shows SKU thumbnails without profile status in picker',async()=>{api.list.mockResolvedValue({items:[{variantId:'v',skuCode:'SYN',skuName:'Synthetic',imageUrl:'https://example.com/synthetic.png',customs:null}],totalCount:1});const w=render();await w.findAll('button').find(b=>b.text()==='选择产品 SKU')!.trigger('click');await flushPromises();expect(w.find('img[src="https://example.com/synthetic.png"]').exists()).toBe(true);expect(w.text()).not.toContain('资料状态');w.unmount()})
+
  it('locks linked sheet fields and items while keeping contract-only terms editable',async()=>{
   const w=render({document:{...source,fields:{...source.fields,sellerAddress:'Test address',buyerAddress:'Warehouse address',date:'2026-11-05'},items:[{...source.items[0],quantity:'2',unit:'件',price:'3',grossWeight:'5',netWeight:'4'}]}});await flushPromises()
   for(const tab of ['合同','发票','装箱单']){

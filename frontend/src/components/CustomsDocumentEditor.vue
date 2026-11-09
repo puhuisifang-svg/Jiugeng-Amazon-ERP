@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PurchaseItemImage from './PurchaseItemImage.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import AccessDialog from './AccessDialog.vue'
@@ -335,7 +336,7 @@ onBeforeRouteLeave(()=>{if(busy.value)return false;if(itemDirty.value){itemDialo
       {{ pickerError }}
     </p><TableViewport>
       <table class="data-table">
-        <thead><tr><th>选择</th><th>SKU / 产品</th><th>申报品名</th><th>商品编号</th><th>资料状态</th></tr></thead><tbody>
+        <thead><tr><th>选择</th><th>图片</th><th>SKU / 产品</th><th>申报品名</th><th>商品编号</th></tr></thead><tbody>
           <tr
             v-for="r in pickerRows"
             :key="r.variantId"
@@ -347,7 +348,7 @@ onBeforeRouteLeave(()=>{if(busy.value)return false;if(itemDirty.value){itemDialo
                 :checked="selected.some(x=>x.variantId===r.variantId)"
                 @change="select(r)"
               >
-            </td><td>{{ r.skuCode }}<small>{{ r.skuName }}</small></td><td>{{ r.customs?.nameZh || '待维护' }}</td><td>{{ r.customs?.chinaCode || '—' }}</td><td>{{ r.customs?.state==='REVIEWED'?'已核对':'待核对' }}</td>
+            </td><td><PurchaseItemImage :image-asset-id="r.imageAssetId" :image-url="r.imageUrl" :alt="r.skuName" /></td><td>{{ r.skuCode }}<small>{{ r.skuName }}</small></td><td>{{ r.customs?.nameZh || '待维护' }}</td><td>{{ r.customs?.chinaCode || '—' }}</td>
           </tr><tr v-if="!pickerRows.length">
             <td colspan="5">
               {{ pickerLoading?'加载中…':'无匹配产品' }}

@@ -23,3 +23,11 @@ describe('factory editor',()=>{
  })
  it('does not offer self review without permission',()=>{mocks.canAccess.mockReturnValue(false);const w=mount(FactoryEditor,{props:{kind:'reports',mode:'save'},global});expect(w.find('option[value="REVIEWED"]').exists()).toBe(false);expect(w.find('option[value="DRAFT"]').exists()).toBe(true)})
 })
+
+it('preserves bank account text while saving employee details',async()=>{
+ const w=mount(FactoryEditor,{props:{kind:'employees',mode:'save'},global});
+ await w.get('input[placeholder="银行名称及支行（选填）"]').setValue('合成开户行');
+ await w.get('input[placeholder="银行卡号（选填）"]').setValue('0012345678901234567');
+ await w.get('form').trigger('submit');await flushPromises();
+ expect(mocks.command).toHaveBeenLastCalledWith('employees','save',expect.objectContaining({bankName:'合成开户行',bankAccount:'0012345678901234567'}));w.unmount();
+})

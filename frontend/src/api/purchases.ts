@@ -2,8 +2,8 @@ import { apiRequest } from './client'
 
 export type PurchaseOrderType = 'PRODUCT' | 'MATERIAL'
 export type PurchaseStatus = 'DRAFT' | 'SUBMITTED' | 'PARTIALLY_RECEIVED' | 'COMPLETED' | 'CANCELLED'
-export interface PurchaseLine { id: string; lineNo: number; itemId: string; itemCode: string; itemName: string; unit: string; orderedQuantity: number; receivedQuantity: number; remainingQuantity: number; unitPrice: number }
-export interface PurchaseOrder { id: string; orderNo: string; orderType: PurchaseOrderType; supplierId: string; supplierName: string; status: PurchaseStatus; currency: string; remark?: string; version: number; lines: PurchaseLine[]; createdAt: string; updatedAt: string; expectedDeliveryDate?: string | null; deliveryAddress?: string | null; cancellationReason?: string | null }
+export interface PurchaseLine { imageAssetId?: string | null; imageUrl?: string | null; id: string; lineNo: number; itemId: string; itemCode: string; itemName: string; unit: string; orderedQuantity: number; receivedQuantity: number; remainingQuantity: number; unitPrice: number }
+export interface PurchaseOrder { carrier?: string | null; trackingNumber?: string | null; id: string; orderNo: string; orderType: PurchaseOrderType; supplierId: string; supplierName: string; status: PurchaseStatus; currency: string; remark?: string; version: number; lines: PurchaseLine[]; createdAt: string; updatedAt: string; expectedDeliveryDate?: string | null; deliveryAddress?: string | null; cancellationReason?: string | null }
 export interface PurchaseReceiptLine { orderLineId: string; itemCode: string; itemName: string; quantity: number; inventoryTransactionId?: string }
 export interface PurchaseReceipt { id: string; orderId: string; orderNo: string; requestId: string; receivedAt: string; remark?: string; actorLoginName: string; lines: PurchaseReceiptLine[]; createdAt: string; replayed: boolean }
 export interface PurchaseDashboard { draft: number; pendingReceipt: number; partial: number; completed: number; recent: PurchaseOrder[] }
@@ -13,6 +13,7 @@ export interface PurchaseOrderDetail { order: PurchaseOrder; receipts: PurchaseR
 export interface PurchaseOrderInput { orderType: PurchaseOrderType; supplierId: string; currency: string; remark?: string; version?: number; expectedDeliveryDate?: string | null; deliveryAddress?: string; lines: Array<{ itemId: string; quantity: number; unitPrice: number }> }
 
 export const purchaseApi = {
+  logistics: (id: string, version: number, carrier: string, trackingNumber: string) => apiRequest<PurchaseOrder>(`/v1/purchases/orders/${id}/logistics`, { method: 'PUT', body: JSON.stringify({ version, carrier, trackingNumber }) }),
   dashboard: () => apiRequest<PurchaseDashboard>('/v1/purchases/dashboard'),
   orders: (status?: PurchaseStatus) => apiRequest<PurchaseOrder[]>(`/v1/purchases/orders${status ? `?status=${status}` : ''}`),
   order: (id: string) => apiRequest<PurchaseOrder>(`/v1/purchases/orders/${id}`),

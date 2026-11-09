@@ -6,7 +6,7 @@ export interface FactoryLine { rateId:string; project:string; operation:string; 
 export interface FactoryAdjustment { direction:'ADD'|'SUBTRACT';amount:Amount;remark:string }
 export interface FactoryPayment { id:string;date:string;amount:Amount;method:string;advance:boolean;actor:string;remark:string;voided:boolean;voidReason?:string }
 export interface FactoryRecord {
- id:string; version:number; status:string; date:string; name?:string; number?:string;team?:string;phone?:string;operations?:string;endDate?:string;remark?:string;
+ id:string; version:number; status:string; date:string; name?:string; number?:string;team?:string;phone?:string;bankName?:string;bankAccount?:string;operations?:string;endDate?:string;remark?:string;
  project?:string;operation?:string;unit?:string;price?:Amount;employeeId?:string;employeeName?:string;productId?:string;variantId?:string;skuCode?:string;decimalQuantity?:boolean;
  lines?:FactoryLine[];amount?:Amount;reports?:FactoryRecord[];adjustments?:FactoryAdjustment[];payments?:FactoryPayment[];base?:Amount;plus?:Amount;minus?:Amount;paid?:Amount;remaining?:Amount;
  pending?:number;days?:number;revision?:number;stale?:boolean;historical?:boolean;historicalAmount?:Amount;updatedAt?:string;updatedBy?:string;duplicateConfirmed?:boolean;pricingIncomplete?:boolean

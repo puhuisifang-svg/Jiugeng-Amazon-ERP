@@ -15,11 +15,11 @@ final class PurchaseTypes {
                       List<LineInput> lines, LocalDate expectedDeliveryDate, String deliveryAddress) {}
     record LineView(String id, int lineNo, String itemId, String itemCode, String itemName, String unit,
                     BigDecimal orderedQuantity, BigDecimal receivedQuantity, BigDecimal remainingQuantity,
-                    BigDecimal unitPrice) {}
+                    BigDecimal unitPrice, String imageAssetId, String imageUrl) {}
     record OrderView(String id, String orderNo, OrderType orderType, String supplierId, String supplierName,
                      Status status, String currency, String remark, long version, List<LineView> lines,
                      Instant createdAt, Instant updatedAt, LocalDate expectedDeliveryDate, String deliveryAddress,
-                     String cancellationReason) {}
+                     String cancellationReason, String carrier, String trackingNumber) {}
     record ReceiptLineInput(String orderLineId, BigDecimal quantity) {}
     record ReceiptInput(String requestId, Instant receivedAt, String remark, List<ReceiptLineInput> lines) {}
     record ReceiptLineView(String orderLineId, String itemCode, String itemName, BigDecimal quantity,

@@ -99,6 +99,11 @@ class PurchaseRepository {
                 .param("deliveryDate", input.expectedDeliveryDate()).param("address", input.deliveryAddress()).update();
     }
 
+    int updateLogistics(String id,long version,String carrier,String tracking,String actor) {
+        return jdbc.sql("UPDATE purchase_order SET carrier=:carrier,tracking_number=:tracking,version=version+1,updated_by=:actor,updated_at=CURRENT_TIMESTAMP WHERE id=:id AND version=:version AND status<>'CANCELLED'")
+            .param("id",id).param("version",version).param("carrier",carrier).param("tracking",tracking).param("actor",actor).update();
+    }
+
     void cancellationReason(String id, String reason) {
         jdbc.sql("UPDATE purchase_order SET cancellation_reason=:reason WHERE id=:id")
                 .param("reason", reason).param("id", id).update();
@@ -137,13 +142,18 @@ class PurchaseRepository {
 
     List<LineView> lines(String orderId) {
         return jdbc.sql("""
-                SELECT * FROM purchase_order_line WHERE order_id=:id ORDER BY line_no
+                SELECT l.*,CASE WHEN o.order_type='PRODUCT' THEN v.main_image_asset_id ELSE m.image_asset_id END AS image_asset_id,
+                  CASE WHEN o.order_type='PRODUCT' THEN v.main_image_url ELSE m.image_url END AS image_url
+                FROM purchase_order_line l JOIN purchase_order o ON o.id=l.order_id
+                LEFT JOIN product_variant v ON o.order_type='PRODUCT' AND v.id=l.item_id
+                LEFT JOIN auxiliary_material m ON o.order_type='MATERIAL' AND m.id=l.item_id
+                WHERE l.order_id=:id ORDER BY l.line_no
                 """).param("id", orderId).query((rs, row) -> {
                     BigDecimal ordered = rs.getBigDecimal("ordered_quantity");
                     BigDecimal received = rs.getBigDecimal("received_quantity");
                     return new LineView(rs.getString("id"), rs.getInt("line_no"), rs.getString("item_id"),
                             rs.getString("item_code"), rs.getString("item_name"), rs.getString("unit"), ordered,
-                            received, ordered.subtract(received), rs.getBigDecimal("unit_price"));
+                            received, ordered.subtract(received), rs.getBigDecimal("unit_price"),rs.getString("image_asset_id"),rs.getString("image_url"));
                 }).list();
     }
 
@@ -216,7 +226,7 @@ class PurchaseRepository {
     private OrderView withLines(OrderView value) {
         return new OrderView(value.id(), value.orderNo(), value.orderType(), value.supplierId(), value.supplierName(),
                 value.status(), value.currency(), value.remark(), value.version(), lines(value.id()), value.createdAt(),
-                value.updatedAt(), value.expectedDeliveryDate(), value.deliveryAddress(), value.cancellationReason());
+                value.updatedAt(), value.expectedDeliveryDate(), value.deliveryAddress(), value.cancellationReason(), value.carrier(), value.trackingNumber());
     }
 
     private OrderView mapOrder(ResultSet rs, int row) throws SQLException {
@@ -224,7 +234,7 @@ class PurchaseRepository {
                 rs.getString("supplier_id"), rs.getString("supplier_name"), Status.valueOf(rs.getString("status")),
                 rs.getString("currency"), rs.getString("remark"), rs.getLong("version"), List.of(),
                 instant(rs,"created_at"), instant(rs,"updated_at"), rs.getObject("expected_delivery_date", java.time.LocalDate.class),
-                rs.getString("delivery_address"), rs.getString("cancellation_reason"));
+                rs.getString("delivery_address"), rs.getString("cancellation_reason"),rs.getString("carrier"),rs.getString("tracking_number"));
     }
     private Instant instant(ResultSet rs, String column) throws SQLException { return rs.getTimestamp(column).toInstant(); }
 

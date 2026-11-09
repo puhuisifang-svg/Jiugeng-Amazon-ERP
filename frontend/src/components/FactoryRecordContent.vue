@@ -21,14 +21,14 @@ watch(()=>[props.record.id,props.section],()=>{page.value=1})
       </div>
       <dl class="factory-facts">
         <template v-if="kind==='employees'">
-          <dt>姓名 / 工号</dt><dd>{{ record.name }} / {{ record.number }}</dd><dt>班组</dt><dd>{{ record.team||'—' }}</dd><dt>手机号</dt><dd>{{ record.phone||'—' }}</dd><dt>常做工序</dt><dd>{{ record.operations||'—' }}</dd><dt>入职日期</dt><dd>{{ record.date }}</dd><dt>离职日期</dt><dd>{{ record.endDate||'在职' }}</dd>
+          <dt>姓名 / 工号</dt><dd>{{ record.name }} / {{ record.number }}</dd><dt>班组</dt><dd>{{ record.team||'—' }}</dd><dt>手机号</dt><dd>{{ record.phone||'—' }}</dd><dt>开户行</dt><dd>{{ record.bankName||'未填写' }}</dd><dt>银行卡号</dt><dd>{{ record.bankAccount||'未填写' }}</dd><dt>常做工序</dt><dd>{{ record.operations||'—' }}</dd><dt>入职日期</dt><dd>{{ record.date }}</dd><dt>离职日期</dt><dd>{{ record.endDate||'在职' }}</dd>
         </template>
         <template v-else-if="kind==='rates'">
           <dt>加工项目</dt><dd>{{ record.project }}</dd><dt>工序</dt><dd>{{ record.operation }}</dd><dt>计件单价</dt><dd>{{ record.price }} 元 / {{ record.unit }}</dd><dt>适用员工</dt><dd>{{ record.employeeName }}</dd><dt>生效日期</dt><dd>{{ record.date }}</dd><dt>停止日期</dt><dd>{{ record.endDate||'未设置' }}</dd><dt>关联 SKU</dt><dd>{{ record.skuCode||'未关联，自定义加工项目' }}</dd><dt>数量精度</dt><dd>{{ record.decimalQuantity?'最多3位小数':'整数' }}</dd>
         </template>
         <template v-else>
           <dt>员工 / 工号</dt><dd>{{ record.employeeName }} / {{ record.number }}</dd><dt>{{ kind==='reports'?'工作日期':'工资月份' }}</dt><dd>{{ record.date }}</dd><dt>班组</dt><dd>{{ record.team||'—' }}</dd><dt>状态</dt><dd>{{ factoryStates[record.status]||record.status }}</dd><template v-if="kind==='payroll'">
-            <dt>计件工资</dt><dd>¥ {{ factoryMoney(record.base) }}</dd><dt>加项 / 减项</dt><dd>+{{ factoryMoney(record.plus) }} / −{{ factoryMoney(record.minus) }}</dd><dt>报工天数</dt><dd>{{ record.days||0 }} 天（不是考勤天数）</dd><dt>核算版本</dt><dd>{{ record.revision||0 }}{{ record.historical?' · 历史期初':'' }}</dd>
+            <dt>开户行（员工当前资料）</dt><dd>{{ record.bankName||'未填写' }}</dd><dt>银行卡号（员工当前资料）</dt><dd>{{ record.bankAccount||'未填写' }}</dd><dt>计件工资</dt><dd>¥ {{ factoryMoney(record.base) }}</dd><dt>加项 / 减项</dt><dd>+{{ factoryMoney(record.plus) }} / −{{ factoryMoney(record.minus) }}</dd><dt>报工天数</dt><dd>{{ record.days||0 }} 天（不是考勤天数）</dd><dt>核算版本</dt><dd>{{ record.revision||0 }}{{ record.historical?' · 历史期初':'' }}</dd>
           </template>
         </template>
         <dt>备注</dt><dd>{{ record.remark||'—' }}</dd><dt>最近维护</dt><dd>{{ record.updatedBy||'—' }} <small>{{ record.updatedAt?new Date(record.updatedAt).toLocaleString():'—' }}</small></dd>

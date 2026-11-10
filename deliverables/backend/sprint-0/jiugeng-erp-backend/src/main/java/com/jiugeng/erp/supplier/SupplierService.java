@@ -4,6 +4,7 @@ import static com.jiugeng.erp.supplier.SupplierTypes.*;import com.jiugeng.erp.ca
 SupplierService(SupplierRepository repo,CatalogImageGateway images,AuditTrail audit){this.repo=repo;this.images=images;this.audit=audit;}
 @Transactional(readOnly=true)Page<View> list(String q,Status status,int page,int size){return new Page<>(repo.list(q,status,page,size),repo.count(q,status),page,size);}
 @Transactional(readOnly=true)View get(String id){return repo.find(id).orElseThrow(()->missing(id));}
+@Transactional(readOnly=true)List<Dependency> dependencies(String id){get(id);return repo.dependencies(id);}
 @Transactional View create(Input raw,AuthenticatedActor actor){Input i=valid(raw,false);String id=UUID.randomUUID().toString();repo.insert(id,i,actor.userId());images.attach(i.qrImageId(),CatalogImageGateway.Purpose.SUPPLIER_QR,"SUPPLIER",id,actor);View value=get(id);audit(actor,"SUPPLIER_CREATE",id,null,snapshot(value));return value;}
 @Transactional View update(String id,Input raw,AuthenticatedActor actor){View before=get(id);Input i=valid(raw,true);long version=raw.version()==null?-1:raw.version();if(repo.update(id,i,actor.userId(),version)!=1)throw conflict();images.attach(i.qrImageId(),CatalogImageGateway.Purpose.SUPPLIER_QR,"SUPPLIER",id,actor);images.releaseReplaced(before.qrImageId(),i.qrImageId(),"SUPPLIER",id);View after=get(id);audit(actor,"SUPPLIER_UPDATE",id,snapshot(before),snapshot(after));return after;}
 @Transactional View disable(String id,long version,AuthenticatedActor actor){View before=get(id);Input i=new Input(before.name(),before.contactPerson(),before.phone(),before.wechatId(),before.sourceUrl(),before.qrImageUrl(),before.qrImageId(),before.remark(),Status.DISABLED,version);return update(id,i,actor);}
@@ -15,6 +16,7 @@ SupplierService(SupplierRepository repo,CatalogImageGateway images,AuditTrail au
     images.releaseReplaced(before.qrImageId(),null,"SUPPLIER",id);
     audit(actor,"SUPPLIER_DELETE",id,snapshot(before),null);
 }
+@Transactional void unlinkArchivedVariant(String id,String variant,long version,AuthenticatedActor actor){View before=get(id);if(before.version()!=version)throw conflict();if(repo.unlinkArchivedVariant(id,variant)!=1)throw new SupplierException(409,"SUPPLIER_LINK_CHANGED","关联已变更，或产品尚未删除。请刷新清单；正常产品请从产品编辑页解除关联。");audit(actor,"SUPPLIER_ARCHIVED_LINK_REMOVE",id,Map.of("variantId",variant),Map.of("unlinked",true));}
 @Transactional(readOnly=true)List<LinkView> variantLinks(String id){return repo.links("product_variant_supplier","variant_id",id);}
 @Transactional(readOnly=true)List<LinkView> materialLinks(String id){return repo.links("auxiliary_material_supplier","auxiliary_material_id",id);}
 @Transactional void replaceMaterialLinks(String id,List<LinkInput> values,AuthenticatedActor actor){replace("auxiliary_material_supplier","auxiliary_material_id",id,values,actor);audit(actor,"MATERIAL_SUPPLIERS_REPLACE",id,null,Map.of("supplierIds",values.stream().map(LinkInput::supplierId).toList()));}

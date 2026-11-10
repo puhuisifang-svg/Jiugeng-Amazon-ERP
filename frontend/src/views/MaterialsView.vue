@@ -6,7 +6,7 @@ import SuccessToast from "@/components/SuccessToast.vue"
 import MaterialCostPriceDialog from '@/components/MaterialCostPriceDialog.vue'
 import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 
 import { ApiError } from '@/api/client'
 import { catalogApi } from '@/api/catalog'
@@ -234,7 +234,10 @@ async function toggleStatus(item: MaterialDetailDto) {
   } catch (exception) { error.value = exception instanceof ApiError ? exception.message : `辅料${enabling ? '启用' : '停用'}失败。` }
   finally { saving.value = false }
 }
-onMounted(load)
+const route=useRoute()
+async function openLinkedSupplier(){const id=route?.query.editMaterial;if(typeof id!=='string'||!session.canAccess(['materials.write','suppliers.write']))return;const item=items.value.find(m=>m.id===id);if(!item){error.value='关联辅料不存在或无法查看，请刷新清单。';return}try{await edit(item)}catch(e){error.value=e instanceof Error?e.message:'辅料加载失败。'}}
+watch(()=>route?.query.editMaterial,openLinkedSupplier)
+onMounted(async()=>{await load();await openLinkedSupplier()})
 </script>
 
 <template>

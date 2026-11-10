@@ -12,6 +12,14 @@ class ProductLookupService implements ProductLookup {
     ProductLookupService(ProductRepository repository,org.springframework.jdbc.core.simple.JdbcClient jdbc) { this.repository = repository;this.jdbc=jdbc; }
 
     @Override
+    public String skuSpecification(String productId,String variantId) {
+        return repository.findById(productId,false).flatMap(p->p.variants().stream().filter(v->v.id().equals(variantId)).findFirst()).map(v->{
+            if(v.specification()!=null&&!v.specification().isBlank())return v.specification();
+            if(v.itemLengthCm()!=null&&v.itemWidthCm()!=null&&v.itemHeightCm()!=null)return v.itemLengthCm().stripTrailingZeros().toPlainString()+" × "+v.itemWidthCm().stripTrailingZeros().toPlainString()+" × "+v.itemHeightCm().stripTrailingZeros().toPlainString()+" cm";
+            return v.itemDimensions()==null?"":v.itemDimensions();
+        }).orElse("");
+    }
+    @Override
     public NamePresentation namePresentation(String productId, String variantId, String snapshotName) {
         if (variantId == null) return null;
         return jdbc.sql("SELECT variant_name,name_highlighted,name_styles FROM product_variant WHERE product_id=:product AND id=:variant")

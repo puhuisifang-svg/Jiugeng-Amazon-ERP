@@ -119,7 +119,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
     <template v-else-if="detail">
       <section class="panel purchase-summary">
         <dl>
-          <div><dt>状态</dt><dd>{{ statusLabels[detail.order.status] }}</dd></div><div><dt>采购类型</dt><dd>{{ detail.order.orderType === 'PRODUCT' ? '产品采购' : '辅料采购' }}</dd></div><div><dt>供应商</dt><dd>{{ detail.order.supplierName }}</dd></div><div><dt>采购金额</dt><dd>{{ detail.order.currency }} {{ detail.order.lines.reduce((sum,line) => sum + line.orderedQuantity * line.unitPrice, 0).toFixed(2) }}</dd></div><div><dt>创建时间</dt><dd>{{ new Date(detail.order.createdAt).toLocaleString() }}</dd></div><div><dt>预计到货日期</dt><dd>{{ detail.order.expectedDeliveryDate || '未约定' }}</dd></div><div><dt>物流公司</dt><dd>{{ detail.order.carrier || '未填写' }}</dd></div><div><dt>运单号</dt><dd>{{ detail.order.trackingNumber || '未填写' }}</dd></div><div><dt>收货信息</dt><dd>{{ detail.order.deliveryAddress || '未填写' }}</dd></div><div><dt>备注</dt><dd>{{ detail.order.remark || '—' }}</dd></div><div v-if="detail.order.status === 'CANCELLED'">
+          <div><dt>状态</dt><dd>{{ statusLabels[detail.order.status] }}</dd></div><div><dt>采购类型</dt><dd>{{ detail.order.orderType === 'MANUAL' ? '日常物品采购' : detail.order.orderType === 'PRODUCT' ? '产品采购' : '辅料采购' }}</dd></div><div><dt>供应商</dt><dd>{{ detail.order.supplierName }}</dd></div><div><dt>采购金额</dt><dd>{{ detail.order.currency }} {{ detail.order.lines.reduce((sum,line) => sum + line.orderedQuantity * line.unitPrice, 0).toFixed(2) }}</dd></div><div><dt>创建时间</dt><dd>{{ new Date(detail.order.createdAt).toLocaleString() }}</dd></div><div><dt>预计到货日期</dt><dd>{{ detail.order.expectedDeliveryDate || '未约定' }}</dd></div><div><dt>物流公司</dt><dd>{{ detail.order.carrier || '未填写' }}</dd></div><div><dt>运单号</dt><dd>{{ detail.order.trackingNumber || '未填写' }}</dd></div><div><dt>收货信息</dt><dd>{{ detail.order.deliveryAddress || '未填写' }}</dd></div><div><dt>备注</dt><dd>{{ detail.order.remark || '—' }}</dd></div><div v-if="detail.order.status === 'CANCELLED'">
             <dt>取消 / 关闭原因</dt><dd>{{ detail.order.cancellationReason || '历史单据未记录' }}</dd>
           </div>
         </dl><div class="purchase-detail-actions">
@@ -157,7 +157,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
                   v-for="line in detail.order.lines"
                   :key="line.id"
                 >
-                  <td><strong>{{ line.itemCode }}</strong><small>{{ line.itemName }}</small></td><td>{{ line.unit }}</td><td>{{ line.orderedQuantity }}</td><td>{{ line.receivedQuantity }}</td><td>{{ line.remainingQuantity }}</td><td>{{ detail.order.currency }} {{ line.unitPrice.toFixed(2) }}</td><td>{{ detail.order.currency }} {{ (line.orderedQuantity * line.unitPrice).toFixed(2) }}</td>
+                  <td><strong>{{ line.itemCode || line.specification || '手动物品' }}</strong><small>{{ line.itemName }}</small></td><td>{{ line.unit }}</td><td>{{ line.orderedQuantity }}</td><td>{{ line.receivedQuantity }}</td><td>{{ line.remainingQuantity }}</td><td>{{ detail.order.currency }} {{ line.unitPrice.toFixed(2) }}</td><td>{{ detail.order.currency }} {{ (line.orderedQuantity * line.unitPrice).toFixed(2) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -236,7 +236,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
           v-for="line in detail.order.lines.filter(item => item.remainingQuantity > 0)"
           :key="line.id"
           class="form-wide"
-        >{{ line.itemCode }} · 待收 {{ line.remainingQuantity }} {{ line.unit }}<input
+        >{{ line.itemCode || line.specification || '手动物品' }} · 待收 {{ line.remainingQuantity }} {{ line.unit }}<input
           v-model.number="quantities[line.id]"
           :disabled="saving || receiptUncertain"
           type="number"

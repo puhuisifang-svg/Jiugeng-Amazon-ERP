@@ -190,6 +190,57 @@ class PurchaseControllerTest {
         mvc.perform(get("/api/v1/purchases/orders/{id}",id).header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.carrier").value("合成物流"));
     }
 
+    @Test void deletesOnlyUnreceivedOrdersWithVersionAuditAndNoSupplierDependency() throws Exception {
+        String token=login("delete-buyer","PRODUCT_MATERIAL");
+        for(String state:List.of("DRAFT","SUBMITTED","CANCELLED")) {
+            JsonNode order=createOrder(token,"MATERIAL",materialId,"10","2");
+            String id=order.path("id").asText();
+            jdbc.update("UPDATE purchase_order SET status=? WHERE id=?",state,id);
+            mvc.perform(delete("/api/v1/purchases/orders/{id}",id).param("version","99").header("Authorization",bearer(token))).andExpect(status().isConflict());
+            mvc.perform(delete("/api/v1/purchases/orders/{id}",id).param("version","0").header("Authorization",bearer(token))).andExpect(status().isNoContent());
+            mvc.perform(get("/api/v1/purchases/orders/{id}",id).header("Authorization",bearer(token))).andExpect(status().isNotFound());
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM purchase_order_line WHERE order_id=?",Integer.class,id)).isZero();
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM purchase_order WHERE supplier_id=?",Integer.class,supplierId)).isZero();
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE action='PURCHASE_ORDER_DELETE' AND resource_id=?",Integer.class,id)).isEqualTo(1);
+        }
+        // With all other associations removed, deleted orders no longer block supplier deletion.
+        jdbc.update("DELETE FROM product_variant_supplier WHERE supplier_id=?",supplierId);
+        jdbc.update("DELETE FROM auxiliary_material_supplier WHERE supplier_id=?",supplierId);
+        mvc.perform(delete("/api/v1/suppliers/{id}",supplierId).param("version","0").header("Authorization",bearer(token))).andExpect(status().isNoContent());
+    }
+
+    @Test void receivedEvenCancelledOrdersAndUnauthorizedDeletionAreProtected() throws Exception {
+        String token=login("delete-received-buyer","PRODUCT_MATERIAL");
+        JsonNode order=createOrder(token,"MATERIAL",materialId,"10","2");
+        String id=order.path("id").asText();
+        String denied=login("delete-denied","SELECTION");
+        mvc.perform(delete("/api/v1/purchases/orders/{id}",id).param("version","0").header("Authorization",bearer(denied))).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/purchases/orders/{id}/submit",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("version",0)))).andExpect(status().isOk());
+        mvc.perform(post("/api/v1/purchases/orders/{id}/receipts",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON)
+            .content(json(Map.of("requestId","DELETE-PROTECTED","receivedAt","2026-10-16T08:00:00Z","lines",List.of(Map.of("orderLineId",order.at("/lines/0/id").asText(),"quantity",2)))))).andExpect(status().isOk());
+        mvc.perform(delete("/api/v1/purchases/orders/{id}",id).param("version","2").header("Authorization",bearer(token))).andExpect(status().isConflict());
+        mvc.perform(post("/api/v1/purchases/orders/{id}/cancel",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("version",2,"reason","测试余量关闭")))).andExpect(status().isOk());
+        mvc.perform(delete("/api/v1/purchases/orders/{id}",id).param("version","3").header("Authorization",bearer(token))).andExpect(status().isConflict());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM purchase_receipt WHERE order_id=?",Integer.class,id)).isEqualTo(1);
+    }
+
+    @Test void manualItemsNeedNoCatalogAndReceiveWithoutInventory() throws Exception {
+        String token=login("manual-buyer","PRODUCT_MATERIAL");
+        var bytes=new java.io.ByteArrayOutputStream();javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(2,2,java.awt.image.BufferedImage.TYPE_INT_RGB),"png",bytes);
+        var file=new org.springframework.mock.web.MockMultipartFile("file","synthetic.png","image/png",bytes.toByteArray());
+        String image=objectMapper.readTree(mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/v1/catalog-images").file(file).param("purpose","PURCHASE_ITEM").header("Authorization",bearer(token))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("id").asText();
+        var payload=Map.of("orderType","MANUAL","supplierName","Synthetic store","currency","CNY","lines",List.of(Map.of("itemName","Synthetic bulb","unit","个","specification","12 W","quantity",4,"unitPrice",8,"imageAssetId",image)));
+        JsonNode order=objectMapper.readTree(mvc.perform(post("/api/v1/purchases/orders").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(payload))).andExpect(status().isOk()).andExpect(jsonPath("$.supplierName").value("Synthetic store")).andExpect(jsonPath("$.lines[0].imageAssetId").value(image)).andReturn().getResponse().getContentAsString());
+        String id=order.path("id").asText();
+        var edit=new java.util.LinkedHashMap<String,Object>(payload);edit.put("version",0);
+        order=objectMapper.readTree(mvc.perform(put("/api/v1/purchases/orders/{id}",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(edit))).andExpect(status().isOk()).andExpect(jsonPath("$.version").value(1)).andExpect(jsonPath("$.lines[0].imageAssetId").value(image)).andReturn().getResponse().getContentAsString());
+        assertThat(jdbc.queryForObject("SELECT status FROM catalog_image_asset WHERE id=?",String.class,image)).isEqualTo("ACTIVE");
+        mvc.perform(get("/api/v1/catalog-images/{id}/thumbnail",image).header("Authorization",bearer(token))).andExpect(status().isOk());
+        mvc.perform(post("/api/v1/purchases/orders/{id}/submit",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("version",1)))).andExpect(status().isOk());
+        for(int i=0;i<2;i++)mvc.perform(post("/api/v1/purchases/orders/{id}/receipts",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("requestId","MANUAL-RECEIPT-"+i,"receivedAt","2026-10-16T08:00:00Z","lines",List.of(Map.of("orderLineId",order.at("/lines/0/id").asText(),"quantity",2)))))).andExpect(status().isOk()).andExpect(jsonPath("$.lines[0].inventoryTransactionId").doesNotExist());
+        mvc.perform(get("/api/v1/purchases/orders/{id}",id).header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("COMPLETED")).andExpect(jsonPath("$.lines[0].specification").value("12 W"));
+    }
+
     private JsonNode createOrder(String token,String type,String itemId,String quantity,String price)throws Exception{
         Map<String,Object> request=Map.of("orderType",type,"supplierId",supplierId,"currency","CNY","lines",List.of(Map.of("itemId",itemId,"quantity",quantity,"unitPrice",price)));
         String body=mvc.perform(post("/api/v1/purchases/orders").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(request)))

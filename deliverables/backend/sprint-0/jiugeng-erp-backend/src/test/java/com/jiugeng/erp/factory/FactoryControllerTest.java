@@ -109,7 +109,11 @@ class FactoryControllerTest {
  }
  @Test void expenseLedgerValidationVersionTotalsPermissionsAndVouchers()throws Exception{
   var input=map("name","Synthetic Utility","date","2026-01-01","amount","12.50","payee","Synthetic payee");var e=command("expenses","save",input,200);assertThat(command("expenses","save",input,200).path("id")).isEqualTo(e.path("id"));
-  mvc.perform(get("/api/v1/factory/expenses").param("q","Synthetic payee").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.amount").value(12.5));
+  mvc.perform(get("/api/v1/factory/expenses").param("q",e.path("payerName").asText()).header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.amount").value(12.5));
+  assertThat(e.path("payerId").asText()).isNotBlank();
+  var options=json.readTree(mvc.perform(get("/api/v1/factory/expense-payers").header("Authorization",token)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString());assertThat(options.isArray()).isTrue();assertThat(options.get(0).has("password")).isFalse();
+  mvc.perform(get("/api/v1/factory/expense-payers").header("Authorization",user("SELECTION"))).andExpect(status().isForbidden());
+  command("expenses","save",map("name","Invalid payer","date","2026-01-01","amount","1","payerId","missing-user"),400);
   var edit=identity(e);edit.putAll(map("name","Synthetic Utility","date","2026-01-02","amount","15"));var updated=command("expenses","save",edit,200);edit.put("requestId",UUID.randomUUID().toString());command("expenses","save",edit,409);
   command("expenses","save",map("name","Invalid","date","2026-01-01","amount","-1"),400);command("expenses","save",map("name","Invalid","date","2026-01-01","amount","0.001"),400);
   String path="/api/v1/factory/expenses/"+e.path("id").asText()+"/attachments";var file=new org.springframework.mock.web.MockMultipartFile("file","synthetic.pdf","application/pdf","%PDF-1.4 synthetic".getBytes());mvc.perform(multipart(path).file(file).header("Authorization",token)).andExpect(status().isOk());

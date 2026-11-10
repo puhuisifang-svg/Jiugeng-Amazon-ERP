@@ -295,6 +295,7 @@ async function createMaterial(input: MaterialInput | { materialCode: string; nam
   }), mockData: false }
 }
 
+export interface SupplierDependency { type:'PRODUCT'|'MATERIAL'|'PURCHASE'; id:string; parentId:string; code:string; name:string; accessible:boolean; archived?:boolean }
 export const domainApi = {
   products,
   skus: async (filters: { productId?: string | undefined; field?: string | undefined; q?: string | undefined; exact?: boolean | undefined; status?: VariantStatus | undefined; productStatus?: ProductStatus | undefined; hasImage?: boolean | undefined; hasSupplier?: boolean | undefined; hasMaterial?: boolean | undefined; sort?: string | undefined; direction?: string | undefined; page?: number | undefined; size?: number | undefined } = {}) => {
@@ -333,6 +334,8 @@ export const domainApi = {
   supplier: (id: string) => apiRequest<SupplierDto>(`/v1/suppliers/${id}`),
   createSupplier: (input: SupplierInput) => apiRequest<SupplierDto>('/v1/suppliers', { method: 'POST', body: JSON.stringify(input) }),
   updateSupplier: (id: string, input: SupplierInput) => apiRequest<SupplierDto>(`/v1/suppliers/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
+  unlinkArchivedSupplierVariant:(supplierId:string,variantId:string,version:number)=>apiRequest<void>(`/v1/suppliers/${encodeURIComponent(supplierId)}/archived-variants/${encodeURIComponent(variantId)}?version=${version}`,{method:'DELETE'}),
+  supplierDependencies: (id:string) => apiRequest<SupplierDependency[]>(`/v1/suppliers/${encodeURIComponent(id)}/dependencies`),
   deleteSupplier: (id: string, version: number) => apiRequest<void>(`/v1/suppliers/${encodeURIComponent(id)}?version=${version}`, { method: 'DELETE' }),
   disableSupplier: (id: string, version: number) => apiRequest<SupplierDto>(`/v1/suppliers/${id}/disable`, { method: 'POST', body: JSON.stringify({ version }) }),
   materialSupplierLinks: (id: string) => apiRequest<SupplierLinkDto[]>(`/v1/suppliers/material/${id}`),

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SupplierDeleteDialog from '@/components/SupplierDeleteDialog.vue'
 import SingleFileUpload from '@/components/SingleFileUpload.vue'
 import { vSingleSelect } from '@/directives/singleSelect'
 import { confirmAction } from '@/state/uiConfirmation'
@@ -36,18 +37,11 @@ function supplierInput(): SupplierInput {
 }
 async function save() { saving.value = true; error.value = ''; success.value = ''; try { const input = supplierInput(); const result = editing.value ? await domainApi.updateSupplier(editing.value.id, input) : await domainApi.createSupplier(input); items.value = editing.value ? items.value.map(item => item.id === result.id ? result : item) : [result, ...items.value]; success.value = editing.value ? '供应商已更新。' : '供应商已创建。'; reset() } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '供应商保存失败。' } finally { saving.value = false } }
 async function disable(item: SupplierDto) { if (!await confirmAction(`确认停用供应商 ${item.name}？`)) return; saving.value = true; try { const result = await domainApi.disableSupplier(item.id, item.version); items.value = items.value.map(value => value.id === item.id ? result : value); success.value = '供应商已停用。' } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '供应商停用失败。' } finally { saving.value = false } }
-async function remove(item: SupplierDto) {
-  if (!writable.value || saving.value) return
-  if (!await confirmAction(`确认删除供应商“${item.name}”？删除后无法恢复；已关联产品、辅料或采购单的供应商无法删除。`)) return
-  saving.value = true; error.value = ''; success.value = ''
-  try {
-    await domainApi.deleteSupplier(item.id, item.version)
-    items.value = items.value.filter(value => value.id !== item.id)
-    if (editing.value?.id === item.id) reset()
-    success.value = '供应商已删除。'
-  } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '供应商删除失败，请稍后重试。' }
-  finally { saving.value = false }
-}
+const deleteTarget=ref<SupplierDto>()
+function remove(item:SupplierDto){if(saving.value||!session.canAccess(['suppliers.delete']))return;deleteTarget.value=item}
+async function deleted(){deleteTarget.value=undefined;success.value='供应商已删除。';await load()}
+async function disabled(){deleteTarget.value=undefined;success.value='供应商已停用，历史记录保留。';await load()}
+
 onMounted(load)
 </script>
 
@@ -339,6 +333,13 @@ onMounted(load)
       </div>
     </div>
   </section>
+  <SupplierDeleteDialog
+    v-if="deleteTarget"
+    :supplier="deleteTarget"
+    @close="deleteTarget=undefined"
+    @deleted="deleted"
+    @disabled="disabled"
+  />
 </template>
 
 <style scoped>

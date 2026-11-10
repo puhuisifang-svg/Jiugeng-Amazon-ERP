@@ -7,7 +7,7 @@ export interface FactoryLine { rateId:string; project:string; operation:string; 
 export interface FactoryAdjustment { direction:'ADD'|'SUBTRACT';amount:Amount;remark:string }
 export interface FactoryPayment { id:string;date:string;amount:Amount;method:string;advance:boolean;actor:string;remark:string;voided:boolean;voidReason?:string }
 export interface FactoryRecord {
- id:string; version:number; status:string; date:string; name?:string; number?:string;team?:string;phone?:string;bankName?:string;bankAccount?:string;identityNumber?:string;insured?:boolean;category?:string;payee?:string;method?:string;imageAssetId?:string|null;imageUrl?:string|null;operations?:string;endDate?:string;remark?:string;
+ id:string; version:number; status:string; date:string; name?:string; number?:string;team?:string;phone?:string;bankName?:string;bankAccount?:string;identityNumber?:string;insured?:boolean;category?:string;payee?:string;payerId?:string;payerName?:string;method?:string;imageAssetId?:string|null;imageUrl?:string|null;operations?:string;endDate?:string;remark?:string;
  project?:string;operation?:string;unit?:string;price?:Amount;employeeId?:string;employeeName?:string;productId?:string;variantId?:string;skuCode?:string;decimalQuantity?:boolean;
  lines?:FactoryLine[];amount?:Amount;reports?:FactoryRecord[];adjustments?:FactoryAdjustment[];payments?:FactoryPayment[];base?:Amount;plus?:Amount;minus?:Amount;paid?:Amount;remaining?:Amount;
  pending?:number;days?:number;revision?:number;stale?:boolean;historical?:boolean;historicalAmount?:Amount;updatedAt?:string;updatedBy?:string;duplicateConfirmed?:boolean;pricingIncomplete?:boolean
@@ -15,6 +15,7 @@ export interface FactoryRecord {
 export interface FactoryPage { items:FactoryRecord[];totalCount:number;amount:Amount }
 export interface FactoryEvent { id:string;action:string;actor:string;time:string;reason:string;before:FactoryRecord;after:FactoryRecord }
 export const factoryApi={
+ payers:()=>apiRequest<{id:string;loginName:string;displayName:string}[]>('/v1/factory/expense-payers'),
  list:(kind:FactoryResourceKind,query:Record<string,string|number>={})=>apiRequest<FactoryPage>(`/v1/factory/${kind}?${new URLSearchParams(Object.entries(query).map(([k,v])=>[k,String(v)]))}`),
  get:(kind:FactoryResourceKind,id:string)=>apiRequest<FactoryRecord>(`/v1/factory/${kind}/${encodeURIComponent(id)}`),
  history:(kind:FactoryResourceKind,id:string,page=0,size=10)=>apiRequest<{items:FactoryEvent[];totalCount:number}>(`/v1/factory/${kind}/${encodeURIComponent(id)}/history?page=${page}&size=${size}`),

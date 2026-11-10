@@ -41,7 +41,7 @@ function chooseTitle() { const t = titleIndex.value === 'snapshot' ? props.initi
 function addProducts(products:CustomerProduct[]) {
  for(const p of products){if(form.lines.some(line=>line.customerProductId===p.id))continue
   productReferences.value[p.id] = { customerProductCode: p.customerProductCode ?? '', skuCode: p.skuCode ?? '' }
-  form.lines.push({ customerProductId: p.id, name: p.productName, specification: '', unit: p.priceUnit || '套', quantity: 1, netUnitPrice: '', taxRate: 1, deliveryDate: form.deliveryDate, remark: p.requirements || '' })
+  form.lines.push({ customerProductId: p.id, name: p.productName, specification: p.specification ?? '', unit: p.priceUnit || '套', quantity: 1, netUnitPrice: p.supplyPrice ?? '', taxRate: 1, deliveryDate: form.deliveryDate, remark: p.requirements || '' })
  }
  pickerOpen.value=false
 }

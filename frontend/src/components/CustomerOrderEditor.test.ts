@@ -7,7 +7,7 @@ vi.mock('@/api/customers', async (importOriginal) => ({ ...await importOriginal<
 import { customersApi } from '@/api/customers'
 import CustomerOrderEditor from './CustomerOrderEditor.vue'
 const customer = { id: 'c1', name: '合成客户', status: 'ACTIVE', contactPerson: '测试', phone: 'SYN', address: '测试地址', invoiceTitles: [{ invoiceTitle: '测试抬头', taxNumber: 'SYN-TAX' }] } as Customer
-const product = { id: 'cp1', productName: '测试商品\n红色规格', priceUnit: '米', skuCode: 'SYN-SKU', customerProductCode: 'CLIENT-001' } as CustomerProduct
+const product = { id: 'cp1', productName: '测试商品\n红色规格', priceUnit: '米', specification:'合成规格 20 × 30 cm', supplyPrice:'12.50', skuCode: 'SYN-SKU', customerProductCode: 'CLIENT-001' } as CustomerProduct
 beforeEach(() => {
   HTMLDialogElement.prototype.showModal = function () { this.open = true }
   HTMLDialogElement.prototype.close = function () { this.open = false }
@@ -17,6 +17,8 @@ it('retains input on backdrop, confirms discard, defaults unique title and emits
   const w = mount(CustomerOrderEditor, { props: { busy: false, error: '' } }); await flushPromises()
   const labels = w.findAll('label'), byLabel = (name: string) => labels.find(l => l.text().startsWith(name))!
   await w.findAll('button').find(b=>b.text()==='选择客户商品')!.trigger('click');await flushPromises();await w.get('input[type=checkbox]').setValue(true);await w.findAll('button').find(b=>b.text()==='添加所选（1）')!.trigger('click')
+  expect(w.get('[aria-label="规格型号"]').element).toHaveProperty('value','合成规格 20 × 30 cm')
+  expect(w.get('[aria-label="不含税单价"]').element).toHaveProperty('value','12.50')
   expect(w.get('.order-customer-code').text()).toBe('CLIENT-001')
   expect(w.get('.order-line-sku').text()).toContain('SYN-SKU')
   await w.get('[aria-label="数量"]').setValue('1.25'); await w.get('[aria-label="不含税单价"]').setValue('10')

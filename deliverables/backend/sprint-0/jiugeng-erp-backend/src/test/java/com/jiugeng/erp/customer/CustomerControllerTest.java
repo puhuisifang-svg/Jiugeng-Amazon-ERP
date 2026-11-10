@@ -23,6 +23,21 @@ class CustomerControllerTest {
     @Autowired ObjectMapper mapper;
     @Autowired JdbcTemplate jdbc;
 
+    @Test void wechatImageCanBeUploadedAttachedReplacedAndPermissionChecked() throws Exception {
+        String token=login("ADMIN"),reader=login("SELECTION");
+        var buffer=new java.io.ByteArrayOutputStream();javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(2,2,java.awt.image.BufferedImage.TYPE_INT_RGB),"png",buffer);
+        var file=new org.springframework.mock.web.MockMultipartFile("file","synthetic.png","image/png",buffer.toByteArray());
+        mvc.perform(multipart("/api/v1/catalog-images").file(file).param("purpose","CUSTOMER_WECHAT").header("Authorization",reader)).andExpect(status().isForbidden());
+        String image=body(mvc.perform(multipart("/api/v1/catalog-images").file(file).param("purpose","CUSTOMER_WECHAT").header("Authorization",token)).andExpect(status().isOk())).path("id").asText();
+        var input=customer("合成名片客户");input.put("wechatImageId",image);
+        var saved=body(write(token,"",null,input).andExpect(status().isOk()).andExpect(jsonPath("$.wechatImageId").value(image)));
+        mvc.perform(get("/api/v1/catalog-images/"+image+"/thumbnail").header("Authorization",token)).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/catalog-images/"+image+"/thumbnail").header("Authorization",reader)).andExpect(status().is4xxClientError());
+        write(token,"",null,input).andExpect(status().isConflict());
+        input.put("version",0);input.put("wechatImageId","");write(token,"",saved.path("id").asText(),input).andExpect(status().isOk()).andExpect(jsonPath("$.wechatImageId").isEmpty());
+        assertThat(jdbc.queryForObject("SELECT status FROM catalog_image_asset WHERE id=?",String.class,image)).isEqualTo("PENDING");
+    }
+
     @Test void addressBookPreservesLegacyAndValidatesDefaultsAndVersions() throws Exception {
         String token=login("ADMIN");var input=customer("合成地址客户");
         input.put("address","合成旧地址");input.put("contactPerson","合成联系人");input.put("phone","SYN-PHONE");
@@ -80,9 +95,10 @@ class CustomerControllerTest {
     }
     @Test void differentCustomersCanQuoteSameSkuAndUpdatesKeepPriceAudit() throws Exception {
         String token=login("ADMIN"), a=createCustomer(token), b=createCustomer(token); String[] sku=sku();
+        jdbc.update("UPDATE product_variant SET specification=? WHERE id=?","合成规格",sku[1]);
         var first=quote(a,sku,"12.50");
         var saved=body(write(token,"/products",null,first).andExpect(status().isOk())
-            .andExpect(jsonPath("$.productName").value("合成SKU蓝色")));
+            .andExpect(jsonPath("$.productName").value("合成SKU蓝色")).andExpect(jsonPath("$.specification").value("合成规格")));
         var second=quote(b,sku,"15.90"); write(token,"/products",null,second).andExpect(status().isOk());
         write(token,"/products",null,first).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CUSTOMER_SKU_DUPLICATE"));
         String id=saved.path("id").asText(); first.put("version",0); first.put("supplyPrice","13.20");

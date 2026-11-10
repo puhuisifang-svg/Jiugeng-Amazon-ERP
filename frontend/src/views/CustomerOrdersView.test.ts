@@ -37,3 +37,10 @@ describe('客户订单', () => {
     expect(w.text()).not.toContain('新增客户订单'); expect(w.text()).toContain('加载失败'); w.unmount()
   })
 })
+
+it('places order history after documents and supplies SKU references to the thumbnail',async()=>{
+ state.route.params={id:'o1'};vi.mocked(ordersApi.get).mockResolvedValue({...order,status:'DRAFT',lines:order.lines.map(l=>({...l,product:{...l.product,productId:'p1',variantId:'v1'}}))})
+ const w=mount(CustomerOrdersView,{global:{stubs:{OrderDocuments:{template:'<div>合成订单附件</div>'},CustomerProductImage:true}}});await flushPromises()
+ expect(w.text().indexOf('变更记录')).toBeGreaterThan(w.text().indexOf('合成订单附件'))
+ expect(w.get('.order-delete-button').text()).toBe('删除草稿');expect(w.findComponent({name:'CustomerProductImage'}).props()).toMatchObject({productId:'p1',variantId:'v1'});w.unmount()
+})

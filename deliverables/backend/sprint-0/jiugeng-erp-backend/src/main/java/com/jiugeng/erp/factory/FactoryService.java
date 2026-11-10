@@ -19,8 +19,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service @Profile("!mock") @Transactional
 class FactoryService {
-    final JdbcClient db; final ObjectMapper json; final AuditTrail audit; final FactoryOperationDirectory operations; final ProductLookup products;
-    FactoryService(JdbcClient db,ObjectMapper json,AuditTrail audit,FactoryOperationDirectory operations,ProductLookup products){this.db=db;this.json=json;this.audit=audit;this.operations=operations;this.products=products;}
+    final JdbcClient db; final ObjectMapper json; final AuditTrail audit; final FactoryOperationDirectory operations; final ProductLookup products; final com.jiugeng.erp.iam.UserDirectory users;
+    FactoryService(JdbcClient db,ObjectMapper json,AuditTrail audit,FactoryOperationDirectory operations,ProductLookup products,com.jiugeng.erp.iam.UserDirectory users){this.users=users;this.db=db;this.json=json;this.audit=audit;this.operations=operations;this.products=products;}
+    List<com.jiugeng.erp.iam.UserDirectory.Entry> payers(){return users.active();}
     List<Map<String,Object>> operationList(){return operations.list();}
     static final Set<String> KINDS=Set.of("employees","rates","reports","payroll","expenses");
     record Page(List<Map<String,Object>> items,long totalCount,BigDecimal amount){}
@@ -68,7 +69,7 @@ class FactoryService {
         String id=before==null?UUID.randomUUID().toString():str(before,"id");long version=before==null?0:dec(before.get("version")).longValue()+1;
         d.put("id",id);d.put("version",version);d.put("updatedAt",Instant.now().toString());d.put("updatedBy",a.displayName());
         if(before==null){d.put("createdAt",Instant.now().toString());if(kind.equals("employees"))d.put("number",nextEmployeeNumber());}
-        String search=String.join(" ",List.of(str(d,"number"),str(d,"name"),str(d,"team"),str(d,"phone"),str(d,"project"),str(d,"operation"),str(d,"employeeName"),str(d,"remark"),str(d,"skuCode"),str(d,"category"),str(d,"payee"),str(d,"method")));
+        String search=String.join(" ",List.of(str(d,"number"),str(d,"name"),str(d,"team"),str(d,"phone"),str(d,"project"),str(d,"operation"),str(d,"employeeName"),str(d,"remark"),str(d,"skuCode"),str(d,"category"),str(d,"payee"),str(d,"payerName"),str(d,"method")));
         var params=new HashMap<String,Object>();params.put("id",id);params.put("kind",kind);params.put("e",str(d,"employeeId"));params.put("date",str(d,"date"));params.put("s",str(d,"status"));params.put("search",search);params.put("amount",dec(d.get("amount")));params.put("doc",encode(d));params.put("v",version);
         if(before==null)db.sql("INSERT INTO factory_record(id,kind,employee_id,date_key,status,search_text,amount,document_json,version) VALUES(:id,:kind,:e,:date,:s,:search,:amount,:doc,:v)").params(params).update();
         else db.sql("UPDATE factory_record SET employee_id=:e,date_key=:date,status=:s,search_text=:search,amount=:amount,document_json=:doc,version=:v,updated_at=CURRENT_TIMESTAMP WHERE id=:id").params(params).update();
@@ -85,7 +86,16 @@ class FactoryService {
         check(action.equals("save"),"开销操作无效");
         d.put("name",text(in,"name",100,true));d.put("date",date(str(in,"date")).toString());check(!date(str(d,"date")).isAfter(LocalDate.now()),"开销日期不能晚于今天");
         var amount=money(in.get("amount"));check(amount.signum()>0,"开销金额必须大于0");d.put("amount",amount);
-        for(String k:List.of("payee","remark"))d.put(k,text(in,k,k.equals("remark")?500:100,false));
+        d.put("remark",text(in,"remark",500,false));
+        String payerId=text(in,"payerId",36,false);
+        if(payerId.isEmpty() && before==null)payerId=a.userId();
+        final String selectedPayer=payerId;
+        if(!payerId.isEmpty()){
+            var payer=users.active().stream().filter(u->u.id().equals(selectedPayer)).findFirst();
+            if(payer.isPresent()){d.put("payerId",payer.get().id());d.put("payerName",payer.get().loginName());}
+            else check(before!=null&&payerId.equals(str(before,"payerId")),"请选择有效付款人");
+        }
+        // Legacy payee describes the recipient, never silently relabel it as payer.
         d.put("status","ACTIVE");return save("expenses",before,d,"EXPENSE_SAVE","",a);
     }
     Map<String,Object> employee(String action,Map<String,Object>in,AuthenticatedActor a){

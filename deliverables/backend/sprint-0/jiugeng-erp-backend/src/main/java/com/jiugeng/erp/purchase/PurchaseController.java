@@ -24,6 +24,9 @@ class PurchaseController {
             @RequestParam OrderType orderType,@RequestParam String supplierId){return service.references(orderType,supplierId);}
     @PostMapping("/orders") @PreAuthorize("hasAuthority('purchases.write')") OrderView create(@RequestBody OrderRequest request,@AuthenticationPrincipal AuthenticatedActor actor){return service.create(request.input(),actor);}
     @PutMapping("/orders/{id}") @PreAuthorize("hasAuthority('purchases.write')") OrderView update(@PathVariable String id,@RequestBody OrderRequest request,@AuthenticationPrincipal AuthenticatedActor actor){return service.update(id,request.input(),actor);}
+    @DeleteMapping("/orders/{id}") @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAuthority('purchases.write') and hasAuthority('purchases.cancel')")
+    void delete(@PathVariable String id,@RequestParam long version,@AuthenticationPrincipal AuthenticatedActor actor){service.delete(id,version,actor);}
     @PostMapping("/orders/{id}/submit") @PreAuthorize("hasAuthority('purchases.submit')") OrderView submit(@PathVariable String id,@RequestBody VersionRequest request,@AuthenticationPrincipal AuthenticatedActor actor){return service.submit(id,request.version(),actor);}
     @PostMapping("/orders/{id}/cancel") @PreAuthorize("hasAuthority('purchases.cancel')") OrderView cancel(@PathVariable String id,@RequestBody CancelRequest request,@AuthenticationPrincipal AuthenticatedActor actor){return service.cancel(id,request.version(),request.reason(),actor);}
     @PostMapping("/orders/{id}/receipts") @PreAuthorize("hasAuthority('purchases.receive')") ReceiptView receive(@PathVariable String id,@RequestBody ReceiptRequest request,@AuthenticationPrincipal AuthenticatedActor actor){return service.receive(id,request.input(),actor);}
@@ -32,8 +35,8 @@ class PurchaseController {
     @PutMapping("/orders/{id}/logistics") @PreAuthorize("hasAuthority('purchases.write')") OrderView logistics(@PathVariable String id,@RequestBody LogisticsRequest request,@AuthenticationPrincipal AuthenticatedActor actor){return service.logistics(id,request.version(),request.carrier(),request.trackingNumber(),actor);}
     record LogisticsRequest(long version,String carrier,String trackingNumber){}
 
-    record LineRequest(String itemId,BigDecimal quantity,BigDecimal unitPrice){LineInput input(){return new LineInput(itemId,quantity,unitPrice);}}
-    record OrderRequest(OrderType orderType,String supplierId,String currency,String remark,Long version,List<LineRequest>lines,LocalDate expectedDeliveryDate,String deliveryAddress){OrderInput input(){return new OrderInput(orderType,supplierId,currency,remark,version,lines==null?null:lines.stream().map(line -> line == null ? null : line.input()).toList(),expectedDeliveryDate,deliveryAddress);}}
+    record LineRequest(String itemId,BigDecimal quantity,BigDecimal unitPrice,String itemName,String unit,String specification,String imageAssetId){LineInput input(){return new LineInput(itemId,quantity,unitPrice,itemName,unit,specification,imageAssetId);}}
+    record OrderRequest(OrderType orderType,String supplierId,String currency,String remark,Long version,List<LineRequest>lines,LocalDate expectedDeliveryDate,String deliveryAddress,String supplierName){OrderInput input(){return new OrderInput(orderType,supplierId,currency,remark,version,lines==null?null:lines.stream().map(line -> line == null ? null : line.input()).toList(),expectedDeliveryDate,deliveryAddress,supplierName);}}
     record VersionRequest(long version){}
     record CancelRequest(long version,String reason){}
     record ReceiptLineRequest(String orderLineId,BigDecimal quantity){ReceiptLineInput input(){return new ReceiptLineInput(orderLineId,quantity);}}

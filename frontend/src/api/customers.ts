@@ -10,6 +10,7 @@ export function customerAddresses(customer?: CustomerInput): CustomerAddress[] {
   return customer?.address ? [{ contactPerson: customer.contactPerson, phone: customer.phone, address: customer.address, defaultAddress: true }] : []
 }
 export interface CustomerInput {
+  wechatImageId?: string | null
   addresses?: CustomerAddress[]
   invoiceTitles?: InvoiceTitle[]
   name: string; account1688: string; contactPerson: string; phone: string; wechatId: string
@@ -22,6 +23,7 @@ export interface CustomerProductInput {
   customerProductCode: string; requirements: string; status: CustomerStatus; version?: number | undefined
 }
 export interface CustomerProduct extends CustomerProductInput {
+  specification?: string
   id: string; customerName: string; customerStatus: CustomerStatus; skuCode: string; productName: string
   version: number; updatedAt: string
 }

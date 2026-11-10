@@ -39,3 +39,10 @@ describe('订单发票', () => {
     expect(w.findAll('button').some(b => b.text() === '保存')).toBe(false); w.unmount()
   })
 })
+
+it('shows thumbnails for invoice SKU lines using the preserved product reference',async()=>{
+ const item={...invoice,snapshot:{...invoice.snapshot,lines:invoice.snapshot.lines.map(l=>({...l,product:{...l.product,productId:'p1',variantId:'v1'}}))}}
+ vi.mocked(ordersApi.invoices).mockResolvedValue({items:[item],totalCount:1,page:0,size:20})
+ const w=mount(OrderInvoicesView,{global:{stubs:{OrderDocuments:true,CustomerProductImage:true}}});await flushPromises();await w.findAll('button').find(b=>b.text()==='详情')!.trigger('click')
+ expect(w.findAllComponents({name:'CustomerProductImage'})).toHaveLength(2);w.unmount()
+})

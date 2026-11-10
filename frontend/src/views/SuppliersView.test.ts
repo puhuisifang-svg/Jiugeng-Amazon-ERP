@@ -12,6 +12,7 @@ vi.mock('@/api/domain', () => ({
     updateSupplier: vi.fn(),
     disableSupplier: vi.fn(),
     deleteSupplier: vi.fn(),
+    supplier:vi.fn(),supplierDependencies:vi.fn(),
   },
 }))
 
@@ -23,6 +24,9 @@ const AuthenticatedCatalogImage = { props: ['imageId', 'alt'], template: '<span>
 
 describe('SuppliersView', () => {
   beforeEach(() => {
+    HTMLDialogElement.prototype.showModal=function(){this.open=true};HTMLDialogElement.prototype.close=function(){this.open=false};
+    vi.mocked(domainApi.supplier).mockResolvedValue({id:'s1',name:'合成供应商',version:3,status:'ACTIVE'} as never)
+    vi.mocked(domainApi.supplierDependencies).mockResolvedValue([])
     suppliers.mockReset().mockResolvedValue({ items: [], totalCount: 0, page: 0, size: 100 })
     createSupplier.mockReset().mockResolvedValue({ id: 's1', name: '包装供应商', status: 'ACTIVE', version: 0 })
   })
@@ -31,10 +35,10 @@ describe('SuppliersView', () => {
     suppliers.mockResolvedValue({ items: [{ id: 's1', name: '合成供应商', status: 'ACTIVE', version: 3 }], totalCount: 1 })
     const w = mount(SuppliersView); await flushPromises()
     await w.findAll('button').find(b => b.text() === '删除')!.trigger('click')
-    settleConfirmation(null); await flushPromises()
+    await flushPromises();await w.findAll('button').find(b=>b.text()==='关闭')!.trigger('click');await flushPromises()
     expect(domainApi.deleteSupplier).not.toHaveBeenCalled()
     await w.findAll('button').find(b => b.text() === '删除')!.trigger('click')
-    settleConfirmation('confirmed'); await flushPromises()
+    await flushPromises();suppliers.mockResolvedValue({items:[],totalCount:0});await w.findAll('button').find(b=>b.text()==='确认删除')!.trigger('click');await flushPromises()
     expect(domainApi.deleteSupplier).toHaveBeenCalledWith('s1', 3)
     expect(w.find('tbody tr').exists()).toBe(false)
     expect(w.text()).toContain('供应商已删除')

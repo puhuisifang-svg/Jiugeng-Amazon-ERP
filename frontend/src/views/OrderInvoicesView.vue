@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CustomerProductImage from '@/components/CustomerProductImage.vue'
 import { vSingleSelect } from '@/directives/singleSelect'
 import DatePicker from '@/components/DatePicker.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
@@ -136,12 +137,19 @@ onMounted(async () => { await load(); await openFromRoute() })
         <p>抬头：{{ selected.snapshot.invoiceTitle.invoiceTitle }} · 税号：{{ selected.snapshot.invoiceTitle.taxNumber }}</p><p>注册地址：{{ selected.snapshot.invoiceTitle.registeredAddress }} · 电话：{{ selected.snapshot.invoiceTitle.registeredPhone }}</p><p>开户银行：{{ selected.snapshot.invoiceTitle.bankName }} · 账号：{{ selected.snapshot.invoiceTitle.bankAccount }}</p>
         <div class="invoice-lines">
           <table class="data-table">
-            <thead><tr><th>品名</th><th>客户编码</th><th>规格及型号</th><th>单位</th><th>数量</th><th>不含税单价</th><th>税率%</th><th>不含税金额</th><th>税额</th><th>含税金额</th></tr></thead><tbody>
+            <thead><tr><th>图片</th><th>品名</th><th>客户编码</th><th>规格及型号</th><th>单位</th><th>数量</th><th>不含税单价</th><th>税率%</th><th>不含税金额</th><th>税额</th><th>含税金额</th></tr></thead><tbody>
               <tr
                 v-for="l in selected.snapshot.lines"
                 :key="l.id"
               >
                 <td>
+                  <CustomerProductImage
+                    v-if="l.product?.productId && l.product?.variantId"
+                    :product-id="l.product.productId"
+                    :variant-id="l.product.variantId"
+                    :alt="l.details.name"
+                  /><span v-else>暂无图片</span>
+                </td><td>
                   <ProductName
                     :text="l.details.name"
                     :styles="l.namePresentation?.styles"

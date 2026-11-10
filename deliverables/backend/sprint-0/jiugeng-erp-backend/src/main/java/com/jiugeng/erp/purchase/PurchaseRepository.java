@@ -64,6 +64,16 @@ class PurchaseRepository {
                 rs.getBoolean("primary_supplier"))).list();
     }
 
+    boolean hasReceipts(String id) {
+        return jdbc.sql("SELECT COUNT(*) FROM purchase_receipt WHERE order_id=:id")
+                .param("id", id).query(Long.class).single() > 0;
+    }
+
+    int deleteUnreceived(String id, long version) {
+        return jdbc.sql("DELETE FROM purchase_order WHERE id=:id AND version=:version")
+                .param("id", id).param("version", version).update();
+    }
+
     boolean orderNoExists(String orderNo) {
         return jdbc.sql("SELECT COUNT(*) FROM purchase_order WHERE order_no=:value").param("value", orderNo)
                 .query(Integer.class).single() > 0;
@@ -71,32 +81,32 @@ class PurchaseRepository {
 
     void insertOrder(String id, String orderNo, OrderInput input, String actorId) {
         jdbc.sql("""
-                INSERT INTO purchase_order (id,order_no,order_type,supplier_id,status,currency,remark,created_by,updated_by,expected_delivery_date,delivery_address)
-                VALUES (:id,:orderNo,:type,:supplier,'DRAFT',:currency,:remark,:actor,:actor,:deliveryDate,:address)
+                INSERT INTO purchase_order (id,order_no,order_type,supplier_id,status,currency,remark,created_by,updated_by,expected_delivery_date,delivery_address,supplier_name)
+                VALUES (:id,:orderNo,:type,:supplier,'DRAFT',:currency,:remark,:actor,:actor,:deliveryDate,:address,:supplierName)
                 """).param("id", id).param("orderNo", orderNo).param("type", input.orderType().name())
                 .param("supplier", input.supplierId()).param("currency", input.currency()).param("remark", input.remark())
                 .param("actor", actorId).param("deliveryDate", input.expectedDeliveryDate())
-                .param("address", input.deliveryAddress()).update();
+                .param("address", input.deliveryAddress()).param("supplierName",input.supplierName()).update();
     }
 
     void replaceLines(String orderId, List<ResolvedLine> lines) {
         jdbc.sql("DELETE FROM purchase_order_line WHERE order_id=:id").param("id", orderId).update();
         for (ResolvedLine line : lines) jdbc.sql("""
-                INSERT INTO purchase_order_line (id,order_id,line_no,item_id,item_code,item_name,unit,ordered_quantity,unit_price)
-                VALUES (:id,:orderId,:lineNo,:itemId,:code,:name,:unit,:quantity,:price)
+                INSERT INTO purchase_order_line (id,order_id,line_no,item_id,item_code,item_name,unit,ordered_quantity,unit_price,specification,image_asset_id)
+                VALUES (:id,:orderId,:lineNo,:itemId,:code,:name,:unit,:quantity,:price,:spec,:image)
                 """).param("id", line.id()).param("orderId", orderId).param("lineNo", line.lineNo())
                 .param("itemId", line.item().id()).param("code", line.item().code()).param("name", line.item().name())
-                .param("unit", line.item().unit()).param("quantity", line.quantity()).param("price", line.unitPrice()).update();
+                .param("unit", line.item().unit()).param("quantity", line.quantity()).param("price", line.unitPrice()).param("spec",line.specification()).param("image",line.imageAssetId()).update();
     }
 
     int updateDraft(String id, OrderInput input, String actorId, long version) {
         return jdbc.sql("""
                 UPDATE purchase_order SET supplier_id=:supplier,currency=:currency,remark=:remark,version=version+1,
-                  updated_by=:actor,updated_at=CURRENT_TIMESTAMP,expected_delivery_date=:deliveryDate,delivery_address=:address
+                  updated_by=:actor,updated_at=CURRENT_TIMESTAMP,expected_delivery_date=:deliveryDate,delivery_address=:address,supplier_name=:supplierName
                 WHERE id=:id AND status='DRAFT' AND version=:version
                 """).param("supplier", input.supplierId()).param("currency", input.currency()).param("remark", input.remark())
                 .param("actor", actorId).param("id", id).param("version", version)
-                .param("deliveryDate", input.expectedDeliveryDate()).param("address", input.deliveryAddress()).update();
+                .param("deliveryDate", input.expectedDeliveryDate()).param("address", input.deliveryAddress()).param("supplierName",input.supplierName()).update();
     }
 
     int updateLogistics(String id,long version,String carrier,String tracking,String actor) {
@@ -127,14 +137,14 @@ class PurchaseRepository {
     Optional<OrderView> find(String id, boolean lock) {
         String suffix = lock ? " FOR UPDATE" : "";
         return jdbc.sql("""
-                SELECT o.*,s.name AS supplier_name FROM purchase_order o JOIN supplier s ON s.id=o.supplier_id
+                SELECT o.*,COALESCE(s.name,o.supplier_name,'未填写') AS resolved_supplier_name FROM purchase_order o LEFT JOIN supplier s ON s.id=o.supplier_id
                 WHERE o.id=:id
                 """ + suffix).param("id", id).query(this::mapOrder).optional().map(this::withLines);
     }
 
     List<OrderView> list(Status status) {
         String where = status == null ? "" : " WHERE o.status=:status";
-        var query = jdbc.sql("SELECT o.*,s.name AS supplier_name FROM purchase_order o JOIN supplier s ON s.id=o.supplier_id" +
+        var query = jdbc.sql("SELECT o.*,COALESCE(s.name,o.supplier_name,'未填写') AS resolved_supplier_name FROM purchase_order o LEFT JOIN supplier s ON s.id=o.supplier_id" +
                 where + " ORDER BY o.updated_at DESC,o.id DESC");
         if (status != null) query = query.param("status", status.name());
         return query.query(this::mapOrder).list().stream().map(this::withLines).toList();
@@ -142,7 +152,7 @@ class PurchaseRepository {
 
     List<LineView> lines(String orderId) {
         return jdbc.sql("""
-                SELECT l.*,CASE WHEN o.order_type='PRODUCT' THEN v.main_image_asset_id ELSE m.image_asset_id END AS image_asset_id,
+                SELECT l.*,CASE WHEN o.order_type='PRODUCT' THEN v.main_image_asset_id WHEN o.order_type='MATERIAL' THEN m.image_asset_id ELSE l.image_asset_id END AS resolved_image_asset_id,
                   CASE WHEN o.order_type='PRODUCT' THEN v.main_image_url ELSE m.image_url END AS image_url
                 FROM purchase_order_line l JOIN purchase_order o ON o.id=l.order_id
                 LEFT JOIN product_variant v ON o.order_type='PRODUCT' AND v.id=l.item_id
@@ -153,7 +163,7 @@ class PurchaseRepository {
                     BigDecimal received = rs.getBigDecimal("received_quantity");
                     return new LineView(rs.getString("id"), rs.getInt("line_no"), rs.getString("item_id"),
                             rs.getString("item_code"), rs.getString("item_name"), rs.getString("unit"), ordered,
-                            received, ordered.subtract(received), rs.getBigDecimal("unit_price"),rs.getString("image_asset_id"),rs.getString("image_url"));
+                            received, ordered.subtract(received), rs.getBigDecimal("unit_price"),rs.getString("resolved_image_asset_id"),rs.getString("image_url"),rs.getString("specification"));
                 }).list();
     }
 
@@ -231,7 +241,7 @@ class PurchaseRepository {
 
     private OrderView mapOrder(ResultSet rs, int row) throws SQLException {
         return new OrderView(rs.getString("id"), rs.getString("order_no"), OrderType.valueOf(rs.getString("order_type")),
-                rs.getString("supplier_id"), rs.getString("supplier_name"), Status.valueOf(rs.getString("status")),
+                rs.getString("supplier_id"), rs.getString("resolved_supplier_name"), Status.valueOf(rs.getString("status")),
                 rs.getString("currency"), rs.getString("remark"), rs.getLong("version"), List.of(),
                 instant(rs,"created_at"), instant(rs,"updated_at"), rs.getObject("expected_delivery_date", java.time.LocalDate.class),
                 rs.getString("delivery_address"), rs.getString("cancellation_reason"),rs.getString("carrier"),rs.getString("tracking_number"));
@@ -240,7 +250,7 @@ class PurchaseRepository {
 
     record SupplierRef(String id, String name) {}
     record ItemRef(String id, String code, String name, String unit) {}
-    record ResolvedLine(String id, int lineNo, ItemRef item, BigDecimal quantity, BigDecimal unitPrice) {}
+    record ResolvedLine(String id, int lineNo, ItemRef item, BigDecimal quantity, BigDecimal unitPrice, String specification, String imageAssetId) {}
     record ReceiptStored(String id, String orderId, String payloadHash) {}
     record ReceiptHead(String id,String orderId,String orderNo,String requestId,Instant receivedAt,String remark,
                        String actorLoginName,Instant createdAt) {}

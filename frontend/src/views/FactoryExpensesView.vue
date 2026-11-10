@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vSingleSelect } from '@/directives/singleSelect'
 import { computed, onMounted, onBeforeUnmount, reactive, ref } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { factoryApi, type FactoryRecord, type FactoryEvent } from '@/api/factory'
@@ -24,10 +25,12 @@ async function load(){const seq=++sequence;loading.value=true;error.value='';try
 function search(){if(from.value&&to.value&&from.value>to.value){error.value='开始日期不能晚于结束日期';return}applied.value={q:q.value,from:from.value,to:to.value};page.value=1;void load()}
 function reset(){q.value='';from.value='';to.value='';search()}
 const editor=ref(false),editing=ref<FactoryRecord>(),editorDialog=ref<InstanceType<typeof AccessDialog>>(),formError=ref(''),initial=ref(''),voucher=ref<File>(),voucherKey=ref(0),request=ref({content:'',key:''})
-const form=reactive({name:'',date:localDay(),amount:'',payee:'',remark:''})
+const payers=ref<{id:string;loginName:string;displayName:string}[]>([]),payerError=ref(''),payersLoading=ref(false)
+async function loadPayers(){payersLoading.value=true;payerError.value='';try{payers.value=await factoryApi.payers()}catch{payerError.value='付款人列表加载失败，请重试'}finally{payersLoading.value=false}}
+const form=reactive({name:'',date:localDay(),amount:'',payerId:'',remark:''})
 const serialize=()=>JSON.stringify([form,voucher.value?.name,voucher.value?.size,voucher.value?.lastModified])
 const dirty=computed(()=>serialize()!==initial.value)
-function edit(row?:FactoryRecord){editing.value=row;Object.assign(form,{name:row?.name??'',date:row?.date??localDay(),amount:row?.amount===undefined?'':String(row.amount),payee:row?.payee??'',remark:row?.remark??''});voucher.value=undefined;voucherKey.value++;request.value={content:'',key:''};formError.value='';initial.value=serialize();editor.value=true}
+function edit(row?:FactoryRecord){editing.value=row;Object.assign(form,{name:row?.name??'',date:row?.date??localDay(),amount:row?.amount===undefined?'':String(row.amount),payerId:row ? row.payerId??'' : session.user.value?.id??'',remark:row?.remark??''});voucher.value=undefined;voucherKey.value++;request.value={content:'',key:''};formError.value='';initial.value=serialize();editor.value=true;void loadPayers()}
 async function save(){if(busy.value)return;busy.value=true;formError.value='';try{
  const data={...form,...(editing.value?{id:editing.value.id,version:editing.value.version}:{})};const content=JSON.stringify(data);if(content!==request.value.content)request.value={content,key:createRequestId()};
  const saved=await factoryApi.command('expenses','save',{...data,requestId:request.value.key});editing.value=saved;
@@ -54,7 +57,7 @@ onBeforeUnmount(()=>{sequence++;window.removeEventListener('beforeunload',before
       <label>关键词<input
         v-model="q"
         maxlength="200"
-        placeholder="开销项目、收款人或备注"
+        placeholder="开销项目、付款人或备注"
       ></label>
       <label>开始日期<DatePicker v-model="from" /></label><label>结束日期<DatePicker v-model="to" /></label>
       <button
@@ -90,14 +93,14 @@ onBeforeUnmount(()=>{sequence++;window.removeEventListener('beforeunload',before
     </p>
     <TableViewport>
       <table class="data-table ui-action-table">
-        <thead><tr><th>日期</th><th>开销项目</th><th>金额（元）</th><th>收款人</th><th>备注</th><th>操作</th></tr></thead><tbody>
+        <thead><tr><th>日期</th><th>开销项目</th><th>金额（元）</th><th>付款人</th><th>备注</th><th>操作</th></tr></thead><tbody>
           <tr
             v-for="row in rows"
             :key="row.id"
           >
             <td>{{ row.date }}</td><td><strong>{{ row.name }}</strong></td><td class="expense-amount">
               {{ factoryMoney(row.amount) }}
-            </td><td>{{ row.payee||'—' }}</td><td>{{ row.remark||'—' }}</td><td class="expense-actions">
+            </td><td>{{ row.payerName||'待补充' }}</td><td>{{ row.remark||'—' }}</td><td class="expense-actions">
               <button
                 type="button"
                 @click="show(row)"
@@ -183,12 +186,43 @@ onBeforeUnmount(()=>{sequence++;window.removeEventListener('beforeunload',before
           :disabled="busy"
         ></label>
         
-        <label>收款人<input
-          v-model="form.payee"
-          maxlength="100"
-          placeholder="选填"
-          :disabled="busy"
-        ></label>
+        <label>付款人<select
+          v-model="form.payerId"
+          v-single-select
+          :disabled="busy || payersLoading"
+          required
+        >
+          <option
+            value=""
+            disabled
+          >请选择付款人</option>
+          <option
+            v-if="form.payerId && !payers.some(p=>p.id===form.payerId)"
+            :value="form.payerId"
+          >{{ editing?.payerName || session.user.value?.loginName || '原付款人' }}</option>
+          <option
+            v-for="payer in payers"
+            :key="payer.id"
+            :value="payer.id"
+          >{{ payer.loginName }}{{ payer.displayName && payer.displayName!==payer.loginName ? ' · '+payer.displayName : '' }}</option>
+        </select></label>
+        <p
+          v-if="payerError"
+          class="wide error-message"
+        >
+          {{ payerError }} <button
+            type="button"
+            @click="loadPayers"
+          >
+            重试
+          </button>
+        </p>
+        <p
+          v-if="editing?.payee"
+          class="wide muted"
+        >
+          历史收款人：{{ editing.payee }}（保留原记录，请核对付款人）
+        </p>
         <label class="wide">备注<textarea
           v-model="form.remark"
           maxlength="500"
@@ -263,7 +297,7 @@ onBeforeUnmount(()=>{sequence++;window.removeEventListener('beforeunload',before
         v-if="tab==='overview'"
         class="expense-facts"
       >
-        <dt>开销项目</dt><dd>{{ detail.name }}</dd><dt>日期</dt><dd>{{ detail.date }}</dd><dt>金额</dt><dd>¥ {{ factoryMoney(detail.amount) }}</dd><dt>收款人</dt><dd>{{ detail.payee||'—' }}</dd><dt>备注</dt><dd>{{ detail.remark||'—' }}</dd>
+        <dt>开销项目</dt><dd>{{ detail.name }}</dd><dt>日期</dt><dd>{{ detail.date }}</dd><dt>金额</dt><dd>¥ {{ factoryMoney(detail.amount) }}</dd><dt>付款人</dt><dd>{{ detail.payerName||'待补充' }}</dd><dt>备注</dt><dd>{{ detail.remark||'—' }}</dd>
       </dl>
       <FactoryAttachments
         v-if="tab==='files'"

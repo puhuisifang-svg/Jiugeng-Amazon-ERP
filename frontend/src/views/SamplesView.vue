@@ -20,17 +20,18 @@ const rows=ref<SampleLocation[]>([]),query=ref(''),applied=ref(''),page=ref(1),s
 const dialog=ref<HTMLDialogElement>(),locationInput=ref<HTMLInputElement>(),open=ref(false),busy=ref(false),editing=ref<SampleLocation>(),location=ref(''),selected=ref<SkuListItemDto>(),initial=ref(''),formError=ref(''),discard=ref(false)
 const skuPickerOpen=ref(false)
 const parents=ref<{id:string;name:string}[]>([]),parent=ref(''),appliedParent=ref(''),parentError=ref('')
-const manual=ref(false),sampleName=ref(''),sampleCode=ref(''),specification=ref(''),remark=ref(''),storageImageId=ref<string|null>(null),uploading=ref(false)
+const manual=ref(false),sampleName=ref(''),sampleCode=ref(''),specification=ref(''),remark=ref(''),sampleImageId=ref<string|null>(null),storageImageId=ref<string|null>(null),uploading=ref(false)
 const blocked=computed(()=>busy.value||uploading.value)
 async function loadParents(){try{parents.value=await samplesApi.parents();parentError.value=''}catch{parentError.value='父体选项加载失败，请重试'}}
 async function uploadStorage(file:File){uploading.value=true;formError.value='';try{storageImageId.value=(await catalogApi.uploadImage('SAMPLE_STORAGE',file)).id}catch(e){formError.value=message(e);throw e}finally{uploading.value=false}}
+async function uploadSample(file:File){uploading.value=true;formError.value='';try{sampleImageId.value=(await catalogApi.uploadImage('SAMPLE_IMAGE',file)).id}catch(e){formError.value=message(e);throw e}finally{uploading.value=false}}
 let listSequence=0
-const snapshot=()=>JSON.stringify([selected.value?.variant.id??'',location.value,manual.value,sampleName.value,sampleCode.value,specification.value,remark.value,storageImageId.value])
+const snapshot=()=>JSON.stringify([selected.value?.variant.id??'',location.value,manual.value,sampleName.value,sampleCode.value,specification.value,remark.value,storageImageId.value,sampleImageId.value])
 const dirty=computed(()=>open.value&&snapshot()!==initial.value)
 async function load(){if(runtimeConfig.authMode!=='password'){error.value='样品库位管理仅在正式登录模式使用';return}const sequence=++listSequence;loading.value=true;error.value='';try{const result=await samplesApi.list(applied.value,page.value-1,size.value,appliedParent.value);if(sequence===listSequence){rows.value=result.items;total.value=result.totalCount;if(page.value>1&&!rows.value.length){page.value--;await load()}}}catch(e){if(sequence===listSequence)error.value=message(e)}finally{if(sequence===listSequence)loading.value=false}}
 function search(){applied.value=query.value;appliedParent.value=parent.value;page.value=1;void load()}
 function reset(){query.value='';parent.value='';search()}
-async function edit(row?:SampleLocation){editing.value=row;manual.value=!!row&&!row.variantId;sampleName.value=row?.skuName??'';sampleCode.value=row?.skuCode??'';specification.value=row?.specification??'';remark.value=row?.remark??'';storageImageId.value=row?.storageImageId??null;location.value=row?.locationCode??'';selected.value=undefined;formError.value='';skuPickerOpen.value=false;open.value=true;initial.value=snapshot();await nextTick();dialog.value?.showModal();if(row)locationInput.value?.focus();else{dialog.value?.querySelector<HTMLInputElement>('input')?.focus()}}
+async function edit(row?:SampleLocation){editing.value=row;manual.value=!!row&&!row.variantId;sampleName.value=row?.skuName??'';sampleCode.value=row?.skuCode??'';specification.value=row?.specification??'';remark.value=row?.remark??'';storageImageId.value=row?.storageImageId??null;sampleImageId.value=row?.sampleImageId??null;location.value=row?.locationCode??'';selected.value=undefined;formError.value='';skuPickerOpen.value=false;open.value=true;initial.value=snapshot();await nextTick();dialog.value?.showModal();if(row)locationInput.value?.focus();else{dialog.value?.querySelector<HTMLInputElement>('input')?.focus()}}
 function close(){skuPickerOpen.value=false;dialog.value?.close();open.value=false;discard.value=false}
 function requestClose(){if(blocked.value)return;if(dirty.value){discard.value=true;return}close()}
 async function save(){
@@ -40,7 +41,7 @@ async function save(){
  if(manual.value&&!sampleName.value.trim()){formError.value='请输入样品名称';return}
  if(!location.value.trim()){formError.value='请输入库位编码';return}
  busy.value=true;formError.value=''
- try{const input={productId:productId??null,variantId:variantId??null,locationCode:location.value,sampleName:sampleName.value,sampleCode:sampleCode.value,specification:specification.value,remark:remark.value,storageImageId:storageImageId.value,...(editing.value?{version:editing.value.version}:{})};if(editing.value)await samplesApi.update(editing.value.id,input);else await samplesApi.create(input);close();success.value='样品库位已保存';await Promise.all([load(),loadParents()])}catch(e){formError.value=message(e)}finally{busy.value=false}
+ try{const input={productId:productId??null,variantId:variantId??null,locationCode:location.value,sampleName:sampleName.value,sampleCode:sampleCode.value,specification:specification.value,remark:remark.value,storageImageId:storageImageId.value,sampleImageId:manual.value?sampleImageId.value:null,...(editing.value?{version:editing.value.version}:{})};if(editing.value)await samplesApi.update(editing.value.id,input);else await samplesApi.create(input);close();success.value='样品库位已保存';await Promise.all([load(),loadParents()])}catch(e){formError.value=message(e)}finally{busy.value=false}
 }
 async function remove(row:SampleLocation){if(busy.value||!await confirmAction(`移除 ${row.skuCode || row.skuName} 在 ${row.locationCode} 的样品库位登记？不会删除产品或 SKU。`))return;busy.value=true;error.value='';try{await samplesApi.remove(row.id,row.version);success.value='样品库位登记已移除';await Promise.all([load(),loadParents()])}catch(e){error.value=message(e)}finally{busy.value=false}}
 function message(e:unknown){return e instanceof Error?e.message:'操作失败，请重试'}
@@ -124,10 +125,11 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
                 :variant-id="row.variantId"
                 :alt="row.skuName"
               />
-              <span
+              <PurchaseItemImage
                 v-else
-                class="muted"
-              >手动样品</span>
+                :image-asset-id="row.sampleImageId"
+                :alt="row.skuName"
+              />
             </td><td>
               <strong>{{ row.skuName }}</strong><small class="muted">{{ row.skuCode || '无编码' }}</small><small
                 v-if="row.specification"
@@ -301,6 +303,35 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
             :disabled="blocked"
             placeholder="选填"
           ></label>
+          <section
+            v-if="manual"
+            class="sample-storage-editor"
+          >
+            <div
+              v-if="sampleImageId"
+              class="sample-storage-preview"
+            >
+              <PurchaseItemImage
+                :image-asset-id="sampleImageId"
+                alt="样品图片"
+              /><button
+                type="button"
+                class="ui-image-remove"
+                :disabled="blocked"
+                @click="sampleImageId=null"
+              >
+                移除图片
+              </button>
+            </div>
+            <SingleFileUpload
+              title="样品图片"
+              accept=".png,.jpg,.jpeg,.webp"
+              :max-mb="5"
+              :disabled="blocked"
+              :upload="uploadSample"
+              hint="上传样品本身的图片，支持选择或粘贴；与库位存放照片分开保存。"
+            />
+          </section>
           <section class="sample-storage-editor">
             <div
               v-if="storageImageId"

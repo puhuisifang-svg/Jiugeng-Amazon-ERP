@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DashboardPurchaseReceipts from '@/components/DashboardPurchaseReceipts.vue'
 import { createRequestId } from '@/utils/requestId'
 
 import { stateNames } from '@/api/launch'
@@ -19,6 +20,8 @@ import CartonLabelExport from '@/components/CartonLabelExport.vue'
 import SuccessToast from '@/components/SuccessToast.vue'
 import { createShipmentImage } from '@/ui/shipmentExport'
 
+const purchaseActive = ref(false), purchaseVisited = ref(false), purchaseCount = ref<number>(), purchaseBusy = ref(false)
+const purchaseList = ref<InstanceType<typeof DashboardPurchaseReceipts>>()
 const formal = runtimeConfig.authMode === 'password'
 const summaries = ref<DashboardSummaryItem[]>([]); const loading = ref(true); const errorMessage = ref('')
 const active = ref<DashboardKind>('today-shipments'); const previewId = ref('')
@@ -165,12 +168,12 @@ onBeforeUnmount(() => { window.clearInterval(refreshTimer); window.removeEventLi
 
     <template v-else>
       <div class="page-actions">
-        <p>今日发货表示当日安排，不代表已确认出库或物流发运。</p>
+        <p>{{ purchaseActive ? '采购待接收供现场核对实物、确认收货。' : '今日发货表示当日安排，不代表已确认出库或物流发运。' }}</p>
         <button
           class="secondary-action"
           type="button"
-          :disabled="loading"
-          @click="load()"
+          :disabled="loading || purchaseBusy"
+          @click="purchaseActive ? purchaseList?.reload() : load()"
         >
           刷新
         </button>
@@ -194,163 +197,184 @@ onBeforeUnmount(() => { window.clearInterval(refreshTimer); window.removeEventLi
             :key="tab.kind"
             type="button"
             role="tab"
-            :aria-selected="active === tab.kind"
-            :class="{ 'is-active': active === tab.kind }"
-            @click="active = tab.kind"
+            :aria-selected="!purchaseActive && active === tab.kind"
+            :disabled="purchaseBusy"
+            :class="{ 'is-active': !purchaseActive && active === tab.kind }"
+            @click="purchaseActive = false; active = tab.kind"
           >
             {{ tab.label }} <span>{{ slices[tab.kind]?.totalCount ?? 0 }}</span>
           </button>
-        </div>
-        <p
-          v-if="loading"
-          class="data-state"
-        >
-          正在加载工作清单…
-        </p>
-        <div
-          v-else-if="!currentSlice?.items.length"
-          class="empty-state dashboard-empty"
-        >
-          <h2>{{ currentTab.empty }}</h2>
-        </div>
-        <template v-else>
-          <TableViewport v-if="active !== 'pending-products'">
-            <table
-              class="data-table dashboard-shipment-table"
-              :aria-label="currentTab.label"
-            >
-              <thead>
-                <tr>
-                  <th
-                    v-if="active === 'today-shipments'"
-                    class="shipment-select-cell"
-                  >
-                    <input
-                      type="checkbox"
-                      aria-label="全选当前今日发货列表"
-                      :checked="allSelected"
-                      :indeterminate="selectedShipments.length > 0 && !allSelected"
-                      :disabled="dispatching || exporting"
-                      @change="selectAll"
-                    >
-                  </th><th v-if="active === 'pending-shipments'">
-                    计划 / 最晚日期
-                  </th><th>产品图片</th><th>产品名称 / SKU</th><th>发货数量</th><th>发货箱数</th><th>备注</th><th>商品标签</th><th>外箱标签</th><th>说明书下载</th>
-                </tr>
-              </thead>
-              <tbody>
-                <DashboardShipmentRow
-                  v-for="item in currentSlice.items"
-                  :key="item.id"
-                  :item="(item as TodayShipment | PendingShipment)"
-                  :scope="active"
-                  :selectable="true"
-                  :selected="selectedIds.includes(item.id)"
-                  :disabled="dispatching || exporting"
-                  @select="toggleSelection"
-                />
-              </tbody>
-            </table>
-          </TableViewport>
-          <ContinuousWorklist
-            v-else
-            :key="active"
-            :items="currentSlice.items"
-            :label="currentTab.label"
+          <button
+            id="tab-pending-purchases"
+            type="button"
+            role="tab"
+            :aria-selected="purchaseActive"
+            :class="{ 'is-active': purchaseActive }"
+            @click="purchaseActive = true; purchaseVisited = true"
           >
-            <template #default="{ item }">
-              <ShipmentProductImage
-                v-if="'productId' in item"
-                :product-id="item.productId"
-                :alt="item.productName"
-              />
-              <button
-                v-else-if="item.imageId"
-                class="image-button"
-                type="button"
-                aria-label="预览产品图案"
-                @click="previewId = item.imageId"
+            采购待接收 <span v-if="purchaseCount !== undefined">{{ purchaseCount }}</span>
+          </button>
+        </div>
+        <DashboardPurchaseReceipts
+          v-if="purchaseVisited"
+          v-show="purchaseActive"
+          ref="purchaseList"
+          :visible="purchaseActive"
+          @count="purchaseCount = $event"
+          @busy="purchaseBusy = $event"
+        />
+        <template v-if="!purchaseActive">
+          <p
+            v-if="loading"
+            class="data-state"
+          >
+            正在加载工作清单…
+          </p>
+          <div
+            v-else-if="!currentSlice?.items.length"
+            class="empty-state dashboard-empty"
+          >
+            <h2>{{ currentTab.empty }}</h2>
+          </div>
+          <template v-else>
+            <TableViewport v-if="active !== 'pending-products'">
+              <table
+                class="data-table dashboard-shipment-table"
+                :aria-label="currentTab.label"
               >
-                <AuthenticatedDashboardImage
-                  :image-id="item.imageId"
+                <thead>
+                  <tr>
+                    <th
+                      v-if="active === 'today-shipments'"
+                      class="shipment-select-cell"
+                    >
+                      <input
+                        type="checkbox"
+                        aria-label="全选当前今日发货列表"
+                        :checked="allSelected"
+                        :indeterminate="selectedShipments.length > 0 && !allSelected"
+                        :disabled="dispatching || exporting"
+                        @change="selectAll"
+                      >
+                    </th><th v-if="active === 'pending-shipments'">
+                      计划 / 最晚日期
+                    </th><th>产品图片</th><th>产品名称 / SKU</th><th>发货数量</th><th>发货箱数</th><th>备注</th><th>商品标签</th><th>外箱标签</th><th>说明书下载</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <DashboardShipmentRow
+                    v-for="item in currentSlice.items"
+                    :key="item.id"
+                    :item="(item as TodayShipment | PendingShipment)"
+                    :scope="active"
+                    :selectable="true"
+                    :selected="selectedIds.includes(item.id)"
+                    :disabled="dispatching || exporting"
+                    @select="toggleSelection"
+                  />
+                </tbody>
+              </table>
+            </TableViewport>
+            <ContinuousWorklist
+              v-else
+              :key="active"
+              :items="currentSlice.items"
+              :label="currentTab.label"
+            >
+              <template #default="{ item }">
+                <ShipmentProductImage
+                  v-if="'productId' in item"
+                  :product-id="item.productId"
                   :alt="item.productName"
                 />
-              </button>
-              <AuthenticatedDashboardImage
-                v-else
-                :image-id="undefined"
-                :alt="item.productName"
-              />
-              <div class="worklist-row__main">
-                <RouterLink
-                  v-if="'developmentId' in item && item.developmentId && session.canAccess(['products.read'])"
-                  :to="`/product-development/${item.developmentId}`"
+                <button
+                  v-else-if="item.imageId"
+                  class="image-button"
+                  type="button"
+                  aria-label="预览产品图案"
+                  @click="previewId = item.imageId"
                 >
-                  {{ item.productName }}
-                </RouterLink><strong v-else>{{ item.productName }}</strong>
-                <small v-if="'developmentId' in item && item.developmentId">{{ item.number }} · {{ stateNames[item.developmentState ?? ''] ?? item.developmentState }} · {{ item.stage == null ? '阶段待确认' : ['方案确认','供应与打样','样品验证','定型风险复核','定型与建档'][item.stage] }}</small>
-                <small v-else-if="active === 'pending-products'">手工待办</small><small v-if="'productCode' in item">{{ item.productCode }}</small><small>{{ item.remark || '无备注' }}</small>
-              </div>
-              <div v-if="'developmentId' in item && item.developmentId">
-                <span class="worklist-label">负责人</span><strong>{{ item.owner || '待分配' }}</strong>
-              </div>
-              <div v-else>
-                <span class="worklist-label">{{ 'expectedQuantity' in item ? '预计数量' : '发货数量' }}</span><strong>{{ number(quantityOf(item) ?? 0) }} 套</strong>
-              </div>
-              <div v-if="'boxCount' in item">
-                <span class="worklist-label">箱数</span><strong>{{ item.boxCount }}</strong>
-              </div>
-              <div><span class="worklist-label">{{ 'expectedCompletionDate' in item ? '预计完成' : 'latestShipAt' in item ? '最晚时间' : '日期' }}</span><strong>{{ 'latestShipAt' in item ? shanghaiDateTime(item.latestShipAt) : dateOf(item) || '待安排' }}</strong></div>
-              <span
-                v-if="isLate(item, currentSlice?.businessDate)"
-                class="overdue-badge"
-              >{{ 'shipDate' in item ? '已超时' : '已逾期' }}</span>
-            </template>
-          </ContinuousWorklist>
-        </template>
-        <div class="dashboard-worklist-footer shipment-home-footer">
-          <div class="shipment-home-actions">
-            <RouterLink :to="currentTab.route">
-              前往{{ currentTab.label }}管理
-            </RouterLink>
-            <button
-              v-if="active === 'today-shipments' && canDispatch"
-              type="button"
-              class="primary-link"
-              :disabled="!selectedShipments.length || dispatching || loading || exporting"
-              @click="openDispatch"
-            >
-              一键发货
-            </button>
-            <button
-              v-if="active === 'today-shipments'"
-              type="button"
-              class="secondary-action shipment-export-button"
-              :class="{ 'is-selected': selectedShipments.length > 0 }"
-              :disabled="!selectedShipments.length || exporting || dispatching || loading"
-              @click="exportImage"
-            >
-              {{ exporting ? '生成图片中…' : '导出图片' }}
-            </button>
-            <button
-              v-if="active === 'today-shipments' && canDispatch"
-              type="button"
-              class="secondary-action shipment-export-button shipment-label-export-button"
-              :class="{ 'is-selected': selectedShipments.length > 0 }"
-              :disabled="!selectedShipments.length || loading || dispatching"
-              @click="labelIds = selectedShipments.map(item => item.id)"
-            >
-              导出外箱标 PDF
-            </button>
-            <CartonLabelExport
-              v-if="labelIds"
-              :shipment-ids="labelIds"
-              @close="labelIds = undefined"
-            />
-            <small v-if="active === 'today-shipments'">{{ selectedShipments.length ? `已选 ${selectedShipments.length} 条` : '请先勾选需要导出的记录' }}（最多展示10条）</small>
+                  <AuthenticatedDashboardImage
+                    :image-id="item.imageId"
+                    :alt="item.productName"
+                  />
+                </button>
+                <AuthenticatedDashboardImage
+                  v-else
+                  :image-id="undefined"
+                  :alt="item.productName"
+                />
+                <div class="worklist-row__main">
+                  <RouterLink
+                    v-if="'developmentId' in item && item.developmentId && session.canAccess(['products.read'])"
+                    :to="`/product-development/${item.developmentId}`"
+                  >
+                    {{ item.productName }}
+                  </RouterLink><strong v-else>{{ item.productName }}</strong>
+                  <small v-if="'developmentId' in item && item.developmentId">{{ item.number }} · {{ stateNames[item.developmentState ?? ''] ?? item.developmentState }} · {{ item.stage == null ? '阶段待确认' : ['方案确认','供应与打样','样品验证','定型风险复核','定型与建档'][item.stage] }}</small>
+                  <small v-else-if="active === 'pending-products'">手工待办</small><small v-if="'productCode' in item">{{ item.productCode }}</small><small>{{ item.remark || '无备注' }}</small>
+                </div>
+                <div v-if="'developmentId' in item && item.developmentId">
+                  <span class="worklist-label">负责人</span><strong>{{ item.owner || '待分配' }}</strong>
+                </div>
+                <div v-else>
+                  <span class="worklist-label">{{ 'expectedQuantity' in item ? '预计数量' : '发货数量' }}</span><strong>{{ number(quantityOf(item) ?? 0) }} 套</strong>
+                </div>
+                <div v-if="'boxCount' in item">
+                  <span class="worklist-label">箱数</span><strong>{{ item.boxCount }}</strong>
+                </div>
+                <div><span class="worklist-label">{{ 'expectedCompletionDate' in item ? '预计完成' : 'latestShipAt' in item ? '最晚时间' : '日期' }}</span><strong>{{ 'latestShipAt' in item ? shanghaiDateTime(item.latestShipAt) : dateOf(item) || '待安排' }}</strong></div>
+                <span
+                  v-if="isLate(item, currentSlice?.businessDate)"
+                  class="overdue-badge"
+                >{{ 'shipDate' in item ? '已超时' : '已逾期' }}</span>
+              </template>
+            </ContinuousWorklist>
+          </template>
+          <div class="dashboard-worklist-footer shipment-home-footer">
+            <div class="shipment-home-actions">
+              <RouterLink :to="currentTab.route">
+                前往{{ currentTab.label }}管理
+              </RouterLink>
+              <button
+                v-if="active === 'today-shipments' && canDispatch"
+                type="button"
+                class="primary-link"
+                :disabled="!selectedShipments.length || dispatching || loading || exporting"
+                @click="openDispatch"
+              >
+                一键发货
+              </button>
+              <button
+                v-if="active === 'today-shipments'"
+                type="button"
+                class="secondary-action shipment-export-button"
+                :class="{ 'is-selected': selectedShipments.length > 0 }"
+                :disabled="!selectedShipments.length || exporting || dispatching || loading"
+                @click="exportImage"
+              >
+                {{ exporting ? '生成图片中…' : '导出图片' }}
+              </button>
+              <button
+                v-if="active === 'today-shipments' && canDispatch"
+                type="button"
+                class="secondary-action shipment-export-button shipment-label-export-button"
+                :class="{ 'is-selected': selectedShipments.length > 0 }"
+                :disabled="!selectedShipments.length || loading || dispatching"
+                @click="labelIds = selectedShipments.map(item => item.id)"
+              >
+                导出外箱标 PDF
+              </button>
+              <CartonLabelExport
+                v-if="labelIds"
+                :shipment-ids="labelIds"
+                @close="labelIds = undefined"
+              />
+              <small v-if="active === 'today-shipments'">{{ selectedShipments.length ? `已选 ${selectedShipments.length} 条` : '请先勾选需要导出的记录' }}（最多展示10条）</small>
+            </div>
+            <span v-if="currentSlice?.truncated">仅展示前 10 条，前往维护页查看全部</span>
           </div>
-          <span v-if="currentSlice?.truncated">仅展示前 10 条，前往维护页查看全部</span>
-        </div>
+        </template>
       </article>
     </template>
 

@@ -6,8 +6,9 @@ import { purchaseApi, type PurchaseOrder, type PurchaseReferenceItem } from '@/a
 import { session } from '@/state/session'
 import PurchasesView from './PurchasesView.vue'
 
+vi.mock('@/state/uiConfirmation', () => ({ confirmAction: vi.fn().mockResolvedValue(true) }))
 vi.mock('@/api/domain', () => ({ domainApi: { suppliers: vi.fn() } }))
-vi.mock('@/api/purchases', () => ({ purchaseApi: { orders: vi.fn(), create: vi.fn(), update: vi.fn(), references: vi.fn() } }))
+vi.mock('@/api/purchases', () => ({ purchaseApi: { remove: vi.fn(), orders: vi.fn(), create: vi.fn(), update: vi.fn(), references: vi.fn() } }))
 const order: PurchaseOrder = {
   id: 'order-1', orderNo: 'PO-MATERIAL', orderType: 'MATERIAL', supplierId: 'supplier-1', supplierName: '测试供应商', status: 'DRAFT', currency: 'CNY', version: 1,
   lines: [{ id: 'line-1', lineNo: 1, itemId: 'material-1', itemCode: 'MAT-001', itemName: '纸箱', unit: 'PCS', orderedQuantity: 10, receivedQuantity: 0, remainingQuantity: 10, unitPrice: 3 }],
@@ -88,4 +89,39 @@ describe('purchase order workspace', () => {
     expect(wrapper.get('.purchase-pagination').text()).toContain('1 / 1')
     expect(wrapper.text()).toContain('PO-24')
   })
+})
+
+it('deletes an unreceived purchase with its version and removes it from the list', async () => {
+  const { wrapper } = await setup('?type=MATERIAL')
+  vi.mocked(purchaseApi.remove).mockResolvedValue(undefined)
+  await wrapper.findAll('button').find(b => b.text() === '删除')!.trigger('click'); await flushPromises()
+  expect(purchaseApi.remove).toHaveBeenCalledWith('order-1', 1)
+  expect(wrapper.text()).not.toContain('PO-MATERIAL')
+})
+it('disables deleting received orders and keeps failed deletions visible', async () => {
+  vi.mocked(purchaseApi.orders).mockResolvedValue([{ ...order, status: 'CANCELLED', lines: [{ ...order.lines[0]!, receivedQuantity: 2 }] }])
+  const { wrapper } = await setup('?type=MATERIAL')
+  expect(wrapper.findAll('button').find(b => b.text() === '删除')!.attributes('disabled')).toBeDefined()
+  expect(purchaseApi.remove).not.toHaveBeenCalled()
+})
+it('does not remove a row after server rejection', async () => {
+  const { wrapper } = await setup('?type=MATERIAL')
+  vi.mocked(purchaseApi.remove).mockRejectedValue(new Error('offline'))
+  await wrapper.findAll('button').find(b => b.text() === '删除')!.trigger('click'); await flushPromises()
+  expect(wrapper.text()).toContain('PO-MATERIAL'); expect(wrapper.text()).toContain('删除结果未确认')
+})
+
+it('creates manual daily supplies without catalog or supplier references',async()=>{
+ const {wrapper}=await setup('?type=MANUAL')
+ await wrapper.get('.purchase-header button').trigger('click');await flushPromises()
+ expect(domainApi.suppliers).not.toHaveBeenCalled();expect(purchaseApi.references).not.toHaveBeenCalled()
+ expect(wrapper.get('button[type=submit]').attributes('disabled')).toBeUndefined()
+ expect(wrapper.findAll('button').find(b=>b.text()==='增加明细')!.attributes('disabled')).toBeUndefined()
+ await wrapper.get('[aria-label="物品名称 1"]').setValue('Synthetic bulb')
+ await wrapper.get('[aria-label="物品单位"]').setValue('个')
+ await wrapper.get('[aria-label="物品规格"]').setValue('12 W')
+ await wrapper.get('[aria-label="采购数量"]').setValue('3')
+ await wrapper.get('[aria-label="采购单价"]').setValue('8')
+ await wrapper.get('form').trigger('submit');await flushPromises()
+ expect(purchaseApi.create).toHaveBeenCalledWith(expect.objectContaining({orderType:'MANUAL',lines:[expect.objectContaining({itemName:'Synthetic bulb',unit:'个',specification:'12 W',quantity:3,unitPrice:8})]}))
 })

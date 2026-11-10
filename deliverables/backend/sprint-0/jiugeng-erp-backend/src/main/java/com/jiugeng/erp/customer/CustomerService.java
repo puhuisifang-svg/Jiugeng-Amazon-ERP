@@ -62,6 +62,7 @@ class CustomerService implements CustomerProductLookup {
     }
     @Transactional
     CustomerView saveCustomer(String id,CustomerInput input,AuthenticatedActor actor) {
+        var addresses=input.addresses()==null?null:CustomerAddresses.normalize(input.addresses());
         String encodedTitles=input.invoiceTitles()==null?null:CustomerInvoiceTitles.encode(input.invoiceTitles());
         String oldDefault=jdbc.sql("SELECT COALESCE(default_customer_id,'') FROM customer_preferences WHERE id=1 FOR UPDATE").query(String.class).single();
         boolean create=id==null; CustomerView before=create?null:getCustomer(id);
@@ -85,6 +86,7 @@ class CustomerService implements CustomerProductLookup {
             params.put("registeredAddress",text(first.registeredAddress()));params.put("registeredPhone",text(first.registeredPhone()));
             params.put("bank",text(first.bankName()));params.put("accountNumber",text(first.bankAccount()));
         }
+        if(addresses!=null) params.put("address",addresses.stream().filter(Address::defaultAddress).findFirst().map(Address::address).orElse(""));
         if(create) {
             jdbc.sql("""
                 INSERT INTO customer(id,name,account_1688,contact_person,phone,wechat_id,address,remark,status,created_by,updated_by,invoice_title,tax_number,registered_address,registered_phone,bank_name,bank_account)
@@ -103,6 +105,8 @@ class CustomerService implements CustomerProductLookup {
         if(input.invoiceTitles()!=null)
             jdbc.sql("UPDATE customer SET invoice_titles=:titles WHERE id=:id")
                 .param("titles",encodedTitles).param("id",id).update();
+        if(addresses!=null) jdbc.sql("UPDATE customer SET addresses=:addresses WHERE id=:id")
+            .param("addresses",CustomerAddresses.encode(addresses)).param("id",id).update();
         var after=getCustomer(id);
         // Contact details and free text never enter audit logs.
         audit(actor,create?"CUSTOMER_CREATE":"CUSTOMER_UPDATE","CUSTOMER",id,
@@ -192,7 +196,7 @@ class CustomerService implements CustomerProductLookup {
     private CustomerView customer(ResultSet r,int row) throws SQLException {
         return new CustomerView(r.getString("id"),r.getString("name"),r.getString("account_1688"),r.getString("contact_person"),
             r.getString("phone"),r.getString("wechat_id"),r.getString("address"),r.getString("remark"),Status.valueOf(r.getString("status")),
-            r.getLong("version"),r.getTimestamp("updated_at").toInstant(),r.getString("invoice_title"),r.getString("tax_number"),r.getString("registered_address"),r.getString("registered_phone"),r.getString("bank_name"),r.getString("bank_account"),r.getBoolean("default_customer"),CustomerInvoiceTitles.read(r));
+            r.getLong("version"),r.getTimestamp("updated_at").toInstant(),r.getString("invoice_title"),r.getString("tax_number"),r.getString("registered_address"),r.getString("registered_phone"),r.getString("bank_name"),r.getString("bank_account"),r.getBoolean("default_customer"),CustomerInvoiceTitles.read(r),CustomerAddresses.read(r));
     }
     private ProductView product(ResultSet r,int row) throws SQLException {
         return new ProductView(r.getString("id"),r.getString("customer_id"),r.getString("customer_name"),Status.valueOf(r.getString("customer_status")),

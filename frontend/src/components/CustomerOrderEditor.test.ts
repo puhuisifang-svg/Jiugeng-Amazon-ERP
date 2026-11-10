@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import type { Customer, CustomerProduct } from '@/api/customers'
 import type { CustomerOrder } from '@/api/orders'
 vi.mock('vue-router', () => ({ onBeforeRouteLeave: vi.fn() }))
-vi.mock('@/api/customers', () => ({ customersApi: { list: vi.fn(), defaultCustomer: vi.fn(), products: vi.fn() } }))
+vi.mock('@/api/customers', async (importOriginal) => ({ ...await importOriginal<typeof import('@/api/customers')>(), customersApi: { list: vi.fn(), defaultCustomer: vi.fn(), products: vi.fn() } }))
 import { customersApi } from '@/api/customers'
 import CustomerOrderEditor from './CustomerOrderEditor.vue'
 const customer = { id: 'c1', name: '合成客户', status: 'ACTIVE', contactPerson: '测试', phone: 'SYN', address: '测试地址', invoiceTitles: [{ invoiceTitle: '测试抬头', taxNumber: 'SYN-TAX' }] } as Customer
@@ -31,12 +31,12 @@ it('retains input on backdrop, confirms discard, defaults unique title and emits
 it('can edit a reactive order snapshot without DataCloneError or losing line IDs', async () => {
   const { reactive } = await import('vue')
   const line = { id: 'l1', customerProductId: 'cp1', name: '原订单商品', specification: '', quantity: 2, unit: '米', netUnitPrice: '10', taxRate: 1, deliveryDate: '2026-10-26', remark: '' }
-  const initial = reactive({ id: 'o1', customerName: customer.name, version: 3, details: { customerId: 'c1', lines: [line], invoiceTitle: '历史抬头', taxNumber: 'SYN-OLD' }, invoiceTitle: { invoiceTitle: '历史抬头', taxNumber: 'SYN-OLD' }, lines: [{ id: 'l1', details: line, product: { customerProductCode: 'HISTORICAL-001' }, skuCode: 'SYN-OLD' }] }) as unknown as CustomerOrder
+  const initial = reactive({ id: 'o1', customerName: customer.name, version: 3, details: { customerId: 'c1', lines: [line], invoiceTitle: '历史抬头', taxNumber: 'SYN-OLD', recipient:'历史收货人',phone:'OLD',address:'历史地址' }, invoiceTitle: { invoiceTitle: '历史抬头', taxNumber: 'SYN-OLD' }, lines: [{ id: 'l1', details: line, product: { customerProductCode: 'HISTORICAL-001' }, skuCode: 'SYN-OLD' }] }) as unknown as CustomerOrder
   const w = mount(CustomerOrderEditor, { props: { initial, busy: false, error: '' } }); await flushPromises()
   expect(w.get('.order-customer-code').text()).toBe('HISTORICAL-001')
   expect(customersApi.products).not.toHaveBeenCalled()
   expect(w.text()).toContain('编辑客户订单'); await w.get('form').trigger('submit')
-  expect(w.emitted('save')?.[0]?.[0]).toMatchObject({ version: 3, invoiceTitle: '历史抬头', lines: [expect.objectContaining({ id: 'l1' })] }); w.unmount()
+  expect(w.emitted('save')?.[0]?.[0]).toMatchObject({ version: 3, invoiceTitle: '历史抬头', address:'历史地址',recipient:'历史收货人', lines: [expect.objectContaining({ id: 'l1' })] }); w.unmount()
 })
 
 it('uses one order reference and keeps shipping fields together without customer search',async()=>{
@@ -62,4 +62,16 @@ it('clears codes with customer changes and never substitutes SKU for a missing c
  await add({...product,id:'cp2',customerProductCode:'',skuCode:'OTHER-SKU'})
  expect(w.get('.order-customer-code').text()).toBe('未填写')
  expect(w.get('.order-line-sku').text()).toContain('OTHER-SKU');w.unmount()
+})
+
+it('selects the default address and allows another address or manual edits without changing the directory', async()=>{
+ const addresses=[{contactPerson:'甲',phone:'SYN-A',address:'合成地址甲',defaultAddress:false},{contactPerson:'乙',phone:'SYN-B',address:'合成地址乙',defaultAddress:true}]
+ const c={...customer,addresses};vi.mocked(customersApi.list).mockResolvedValue({items:[c],totalCount:1,page:0,size:100});vi.mocked(customersApi.defaultCustomer).mockResolvedValue(c)
+ const w=mount(CustomerOrderEditor,{props:{busy:false,error:''}});await flushPromises()
+ const label=(name:string)=>w.findAll('label').find(l=>l.text().startsWith(name))!
+ expect(label('收货人').get('input').element.value).toBe('乙')
+ await label('选择收货地址').get('select').setValue('0')
+ expect(label('收货地址').get('input').element.value).toBe('合成地址甲')
+ await label('收货地址').get('input').setValue('本单临时地址')
+ expect(addresses[0]?.address).toBe('合成地址甲');expect(w.text()).not.toContain('发货信息');w.unmount()
 })

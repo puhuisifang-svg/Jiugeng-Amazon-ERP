@@ -22,7 +22,7 @@ class FactoryService {
     final JdbcClient db; final ObjectMapper json; final AuditTrail audit; final FactoryOperationDirectory operations; final ProductLookup products;
     FactoryService(JdbcClient db,ObjectMapper json,AuditTrail audit,FactoryOperationDirectory operations,ProductLookup products){this.db=db;this.json=json;this.audit=audit;this.operations=operations;this.products=products;}
     List<Map<String,Object>> operationList(){return operations.list();}
-    static final Set<String> KINDS=Set.of("employees","rates","reports","payroll");
+    static final Set<String> KINDS=Set.of("employees","rates","reports","payroll","expenses");
     record Page(List<Map<String,Object>> items,long totalCount,BigDecimal amount){}
     static String str(Map<String,Object> d,String k){return Objects.toString(d.get(k),"").trim();}
     static String text(Map<String,Object>d,String k,int max,boolean required){String v=str(d,k);check((!required||!v.isBlank())&&v.length()<=max,k+" 内容缺失或过长");return v;}
@@ -59,6 +59,7 @@ class FactoryService {
         else if(kind.equals("rates"))result=rate(action,in,actor);
         else if(kind.equals("reports"))result=report(action,in,actor);
         else if(kind.equals("payroll"))result=payroll(action,in,actor);
+        else if(kind.equals("expenses"))result=expense(action,in,actor);
         else throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"未知功能");
         db.sql("INSERT INTO factory_request(request_id,actor_id,request_json,response_json) VALUES(:id,:a,:q,:r)").param("id",key).param("a",actor.userId()).param("q",request).param("r",encode(result)).update();return result;
     }
@@ -66,8 +67,8 @@ class FactoryService {
     Map<String,Object> save(String kind,Map<String,Object>before,Map<String,Object>d,String action,String reason,AuthenticatedActor a){
         String id=before==null?UUID.randomUUID().toString():str(before,"id");long version=before==null?0:dec(before.get("version")).longValue()+1;
         d.put("id",id);d.put("version",version);d.put("updatedAt",Instant.now().toString());d.put("updatedBy",a.displayName());
-        if(before==null){d.put("createdAt",Instant.now().toString());if(kind.equals("employees"))d.put("number",String.format("YG-%06d",db.sql("SELECT COUNT(*) FROM factory_record WHERE kind='employees'").query(Long.class).single()+1));}
-        String search=String.join(" ",List.of(str(d,"number"),str(d,"name"),str(d,"team"),str(d,"phone"),str(d,"project"),str(d,"operation"),str(d,"employeeName"),str(d,"remark"),str(d,"skuCode")));
+        if(before==null){d.put("createdAt",Instant.now().toString());if(kind.equals("employees"))d.put("number",nextEmployeeNumber());}
+        String search=String.join(" ",List.of(str(d,"number"),str(d,"name"),str(d,"team"),str(d,"phone"),str(d,"project"),str(d,"operation"),str(d,"employeeName"),str(d,"remark"),str(d,"skuCode"),str(d,"category"),str(d,"payee"),str(d,"method")));
         var params=new HashMap<String,Object>();params.put("id",id);params.put("kind",kind);params.put("e",str(d,"employeeId"));params.put("date",str(d,"date"));params.put("s",str(d,"status"));params.put("search",search);params.put("amount",dec(d.get("amount")));params.put("doc",encode(d));params.put("v",version);
         if(before==null)db.sql("INSERT INTO factory_record(id,kind,employee_id,date_key,status,search_text,amount,document_json,version) VALUES(:id,:kind,:e,:date,:s,:search,:amount,:doc,:v)").params(params).update();
         else db.sql("UPDATE factory_record SET employee_id=:e,date_key=:date,status=:s,search_text=:search,amount=:amount,document_json=:doc,version=:v,updated_at=CURRENT_TIMESTAMP WHERE id=:id").params(params).update();
@@ -75,12 +76,27 @@ class FactoryService {
         audit.record(new AuditTrail.BusinessOperation(a.userId(),a.loginName(),a.displayName(),"FACTORY_"+action,"FACTORY_"+kind.toUpperCase(Locale.ROOT),id,true,Map.of(),Map.of("version",version),"工厂台账操作，详情需对应工厂权限查看"));
         return decorate(kind,d);
     }
+    String nextEmployeeNumber(){long max=find("employees","","").stream().map(d->str(d,"number")).filter(n->n.matches("CS-[0-9]+" )).mapToLong(n->Long.parseLong(n.substring(3))).max().orElse(0);return String.format("CS-%04d",max+1);}
+    static String projectLabel(Map<String,Object>d){String project=str(d,"project"),operation=str(d,"operation");return operation.isEmpty()||operation.equals(project)?project:project+" / "+operation;}
+    String rateGroup(Map<String,Object>d){return encode(List.of(projectLabel(d).toLowerCase(Locale.ROOT),str(d,"unit"),str(d,"productId"),str(d,"variantId")));}
+    Map<String,Object> expense(String action,Map<String,Object>in,AuthenticatedActor a){
+        var before=existing("expenses",in);check(before==null||!str(before,"status").equals("ARCHIVED"),"开销已删除");var d=before==null?new LinkedHashMap<String,Object>():new LinkedHashMap<>(before);
+        if(action.equals("remove")){check(before!=null,"请选择开销");d.put("status","ARCHIVED");return save("expenses",before,d,"EXPENSE_REMOVE",text(in,"reason",500,false),a);}
+        check(action.equals("save"),"开销操作无效");
+        d.put("name",text(in,"name",100,true));d.put("date",date(str(in,"date")).toString());check(!date(str(d,"date")).isAfter(LocalDate.now()),"开销日期不能晚于今天");
+        var amount=money(in.get("amount"));check(amount.signum()>0,"开销金额必须大于0");d.put("amount",amount);
+        for(String k:List.of("payee","remark"))d.put(k,text(in,k,k.equals("remark")?500:100,false));
+        d.put("status","ACTIVE");return save("expenses",before,d,"EXPENSE_SAVE","",a);
+    }
     Map<String,Object> employee(String action,Map<String,Object>in,AuthenticatedActor a){
-        if(action.equals("remove")){var old=existing("employees",in);check(old!=null,"请选择员工");for(String k:List.of("reports","payroll","rates"))check(find(k,str(old,"id"),"").isEmpty(),"员工已有业务引用，请维护离职日期，不可移除");var removed=new LinkedHashMap<>(old);removed.put("status","ARCHIVED");return save("employees",old,removed,"EMPLOYEE_REMOVE",text(in,"reason",500,true),a);}
+        if(action.equals("remove")){var old=existing("employees",in);check(old!=null,"请选择员工");check(!str(old,"status").equals("ARCHIVED"),"员工已删除");var removed=new LinkedHashMap<>(old);removed.put("status","ARCHIVED");return save("employees",old,removed,"EMPLOYEE_REMOVE",text(in,"reason",500,false),a);}
         check(action.equals("save"),"员工操作无效");var before=existing("employees",in);var d=before==null?new LinkedHashMap<String,Object>():new LinkedHashMap<>(before);
-        for(String k:List.of("name","team","phone","remark","operations"))d.put(k,text(in,k,k.equals("remark")?500:100,k.equals("name")));
+        for(String k:List.of("name","team","phone","remark"))d.put(k,text(in,k,k.equals("remark")?500:100,k.equals("name")));
         if(in.containsKey("bankName"))d.put("bankName",text(in,"bankName",100,false));
         if(in.containsKey("bankAccount")){String account=text(in,"bankAccount",40,false).replaceAll("\\s","");check(account.isEmpty()||account.matches("[0-9]{1,32}"),"银行卡号请填写不超过32位的数字");d.put("bankAccount",account);}
+        if(in.containsKey("identityNumber")){String identity=text(in,"identityNumber",18,false).toUpperCase(Locale.ROOT);check(identity.isEmpty()||identity.matches("(?:[0-9]{15}|[0-9]{17}[0-9X])"),"身份证号须为15位数字或18位号码（末位可为X）");d.put("identityNumber",identity);}
+        if(in.containsKey("insured"))check(in.get("insured") instanceof Boolean,"是否缴纳医社保请选择是或否");
+        d.put("insured",in.containsKey("insured")?in.get("insured"):Boolean.TRUE.equals(d.get("insured")));
         LocalDate start=date(str(in,"date"));String end=str(in,"endDate");if(!end.isEmpty())check(!date(end).isBefore(start),"离职日期不能早于入职日期");
         if(before!=null){check(!str(before,"status").equals("ARCHIVED"),"员工已移除");for(var r:find("reports",str(before,"id"),"")){if(str(r,"status").equals("VOID"))continue;LocalDate day=date(str(r,"date"));check(!day.isBefore(start)&&(end.isEmpty()||!day.isAfter(date(end))),"任职日期不能排除已登记的有效报工");}}
         d.put("date",start.toString());d.put("endDate",end);d.put("status",end.isEmpty()?"ACTIVE":"LEFT");return save("employees",before,d,"EMPLOYEE_SAVE","",a);
@@ -88,22 +104,22 @@ class FactoryService {
     Map<String,Object> rate(String action,Map<String,Object>in,AuthenticatedActor a){
         if(action.equals("stop")){var before=existing("rates",in);check(before!=null,"请选择工价");String end=str(in,"endDate");check(!date(end).isBefore(date(str(before,"date"))),"停止日期不能早于生效日期");String reason=text(in,"reason",500,true);var d=new LinkedHashMap<>(before);d.put("endDate",end);d.put("status","STOPPED");return save("rates",before,d,"RATE_STOP",reason,a);}
         check(action.equals("save")&&str(in,"id").isEmpty(),"历史工价不可覆盖，请新增价格版本");var d=new LinkedHashMap<String,Object>();
-        for(String k:List.of("project","operation","unit","remark","employeeId","productId","variantId"))d.put(k,text(in,k,k.equals("remark")?500:100,Set.of("project","operation","unit").contains(k)));
-        String emp=str(d,"employeeId");d.put("employeeName",emp.isEmpty()?"全部员工":str(get("employees",emp),"name"));
+        for(String k:List.of("project","operation","unit","remark","employeeId","productId","variantId"))d.put(k,text(in,k,k.equals("remark")?500:k.equals("project")?220:100,Set.of("project","unit").contains(k)));
+        String emp=str(d,"employeeId");if(!emp.isEmpty())check(!str(get("employees",emp),"status").equals("ARCHIVED"),"员工已删除，请选择其他员工");d.put("employeeName",emp.isEmpty()?"全部员工":str(get("employees",emp),"name"));
         d.put("skuCode","");if(!str(d,"productId").isEmpty()){var prod=products.findById(str(d,"productId")).orElseThrow(()->new ResponseStatusException(HttpStatus.BAD_REQUEST,"产品不存在"));check(prod.active(),"请选择启用产品");if(!str(d,"variantId").isEmpty()){var sku=products.findSku(prod.id(),str(d,"variantId")).orElseThrow(()->new ResponseStatusException(HttpStatus.BAD_REQUEST,"SKU不存在"));check(sku.active(),"请选择启用SKU");d.put("skuCode",sku.skuCode());}}
         else check(str(d,"variantId").isEmpty(),"SKU必须属于所选产品");
         var price=dec(in.get("price"));check(price.signum()>0&&price.scale()<=6&&price.compareTo(new BigDecimal("1000000"))<0,"工价须大于0、少于100万，最多6位小数");
         d.put("price",price);d.put("date",date(str(in,"date")).toString());d.put("decimalQuantity",Boolean.TRUE.equals(in.get("decimalQuantity")));d.put("status","ACTIVE");d.put("endDate","");
-        String group=encode(List.of(str(d,"project").toLowerCase(Locale.ROOT),str(d,"operation").toLowerCase(Locale.ROOT),str(d,"unit"),str(d,"productId"),str(d,"variantId")));d.put("groupKey",group);
-        for(var r:find("rates","",""))check(!(str(r,"groupKey").equals(group)&&str(r,"employeeId").equals(emp)&&str(r,"date").equals(str(d,"date"))),"该日期已有适用工价，请选择新的生效日期");
-        d.put("operationId",operations.ensure(str(d,"operation")));return save("rates",null,d,"RATE_CREATE",str(d,"remark"),a);
+        String group=rateGroup(d);d.put("groupKey",group);
+        for(var r:find("rates","",""))check(!(rateGroup(r).equals(group)&&str(r,"employeeId").equals(emp)&&str(r,"date").equals(str(d,"date"))),"该日期已有适用工价，请选择新的生效日期");
+        return save("rates",null,d,"RATE_CREATE",str(d,"remark"),a);
     }
     Map<String,Object> match(String rateId,String employee,String day){
-        var selected=get("rates",rateId);var candidates=find("rates","","").stream().filter(r->str(r,"groupKey").equals(str(selected,"groupKey"))&&(str(r,"employeeId").isEmpty()||str(r,"employeeId").equals(employee))&&str(r,"date").compareTo(day)<=0).toList();
+        var selected=get("rates",rateId);var candidates=find("rates","","").stream().filter(r->rateGroup(r).equals(rateGroup(selected))&&(str(r,"employeeId").isEmpty()||str(r,"employeeId").equals(employee))&&str(r,"date").compareTo(day)<=0).toList();
         var personal=candidates.stream().filter(r->str(r,"employeeId").equals(employee)).max(Comparator.comparing(r->str(r,"date")));
         var standard=candidates.stream().filter(r->str(r,"employeeId").isEmpty()).max(Comparator.comparing(r->str(r,"date")));
         var chosen=personal.orElseGet(()->standard.orElseThrow(()->new ResponseStatusException(HttpStatus.BAD_REQUEST,"工作日期没有有效工价")));
-        if(!str(chosen,"endDate").isEmpty()&&day.compareTo(str(chosen,"endDate"))>=0){if(personal.isPresent()&&standard.isPresent())chosen=standard.get();check(str(chosen,"endDate").isEmpty()||day.compareTo(str(chosen,"endDate"))<0,"该工序已停用，请维护工作日期适用工价");}
+        if(!str(chosen,"endDate").isEmpty()&&day.compareTo(str(chosen,"endDate"))>=0){if(personal.isPresent()&&standard.isPresent())chosen=standard.get();check(str(chosen,"endDate").isEmpty()||day.compareTo(str(chosen,"endDate"))<0,"该加工项目已停用，请维护工作日期适用工价");}
         return chosen;
     }
     Map<String,Object> preview(Map<String,Object>in){return match(text(in,"rateId",64,true),text(in,"employeeId",64,true),date(str(in,"date")).toString());}
@@ -122,17 +138,17 @@ class FactoryService {
             return save("reports",before,d,"REPORT_"+action.toUpperCase(Locale.ROOT),reason,a);
         }
         check(before==null||Set.of("DRAFT","PENDING").contains(str(before,"status")),"已核对报工须先撤回，已作废不可修改");
-        String emp=text(in,"employeeId",64,true),day=date(str(in,"date")).toString();check(!date(day).isAfter(LocalDate.now()),"不能记录未来日期报工");editableMonth(emp,day);var e=get("employees",emp);check(!str(e,"status").equals("ARCHIVED"),"员工已移除");check(day.compareTo(str(e,"date"))>=0&&(str(e,"endDate").isEmpty()||day.compareTo(str(e,"endDate"))<=0),"工作日期不在员工任职范围内");
+        String emp=text(in,"employeeId",64,true),day=date(str(in,"date")).toString();check(!date(day).isAfter(LocalDate.now()),"不能记录未来日期报工");editableMonth(emp,day);var e=get("employees",emp);check(!str(e,"status").equals("ARCHIVED")||(before!=null&&str(before,"employeeId").equals(emp)),"员工已删除，不能新增报工");check(day.compareTo(str(e,"date"))>=0&&(str(e,"endDate").isEmpty()||day.compareTo(str(e,"endDate"))<=0),"工作日期不在员工任职范围内");
         String status=text(in,"status",20,true);check(Set.of("DRAFT","PENDING","REVIEWED").contains(status),"报工状态无效");if(status.equals("REVIEWED"))permission("factory.reports.review");
         var inputLines=rows(in,"lines");check(!inputLines.isEmpty(),"请添加至少一条加工明细");var lines=new ArrayList<Map<String,Object>>();BigDecimal total=BigDecimal.ZERO;Set<String> seen=new HashSet<>();boolean duplicate=false, incomplete=false;
-        for(var input:inputLines){Map<String,Object> r;boolean priced=true;String rateId=text(input,"rateId",64,true);get("rates",rateId);try{r=match(rateId,emp,day);}catch(ResponseStatusException ex){if(!status.equals("DRAFT"))throw ex;r=get("rates",rateId);priced=false;incomplete=true;}String group=str(r,"groupKey");if(!seen.add(group))duplicate=true;
+        for(var input:inputLines){Map<String,Object> r;boolean priced=true;String rateId=text(input,"rateId",64,true);get("rates",rateId);try{r=match(rateId,emp,day);}catch(ResponseStatusException ex){if(!status.equals("DRAFT"))throw ex;r=get("rates",rateId);priced=false;incomplete=true;}String group=rateGroup(r);if(!seen.add(group))duplicate=true;
             var quantity=dec(input.get("quantity"));check(quantity.signum()>0&&quantity.compareTo(new BigDecimal("100000000"))<0&&quantity.scale()<=(Boolean.TRUE.equals(r.get("decimalQuantity"))?3:0),"数量必须大于0且符合该工价的小数精度");
             var amount=priced?quantity.multiply(dec(r.get("price"))).setScale(2,RoundingMode.HALF_UP):BigDecimal.ZERO.setScale(2);check(amount.compareTo(new BigDecimal("1000000000000"))<0,"报工金额超出允许范围");var line=new LinkedHashMap<>(r);line.remove("id");line.remove("version");line.put("rateId",r.get("id"));line.put("priced",priced);if(!priced)line.put("price",null);line.put("quantity",quantity);line.put("amount",amount);line.put("remark",text(input,"remark",300,false));lines.add(line);total=total.add(amount);check(total.compareTo(new BigDecimal("1000000000000"))<0,"报工合计金额超出允许范围");
         }
-        for(var other:find("reports",emp,day)){if(!str(other,"id").equals(str(in,"id"))&&!str(other,"status").equals("VOID")&&rows(other,"lines").stream().anyMatch(l->seen.contains(str(l,"groupKey"))))duplicate=true;}
+        for(var other:find("reports",emp,day)){if(!str(other,"id").equals(str(in,"id"))&&!str(other,"status").equals("VOID")&&rows(other,"lines").stream().anyMatch(l->seen.contains(rateGroup(l))))duplicate=true;}
         String remark=text(in,"remark",500,false);check(!duplicate||(Boolean.TRUE.equals(in.get("duplicateConfirmed"))&&!remark.isBlank()),"可能重复报工：请核对同日记录，并勾选确认、填写不同批次说明");
         if(before!=null)reason=text(in,"reason",500,true);
-        d.put("employeeId",emp);d.put("employeeName",e.get("name"));d.put("number",e.get("number"));d.put("team",e.get("team"));d.put("date",day);d.put("lines",lines);d.put("amount",total);d.put("status",status);d.put("remark",remark);d.put("duplicateConfirmed",duplicate);d.put("pricingIncomplete",incomplete);d.put("project",String.join("、",lines.stream().map(l->str(l,"project")+" / "+str(l,"operation")).distinct().toList()));
+        d.put("employeeId",emp);d.put("employeeName",e.get("name"));d.put("number",e.get("number"));d.put("team",e.get("team"));d.put("date",day);d.put("lines",lines);d.put("amount",total);d.put("status",status);d.put("remark",remark);d.put("duplicateConfirmed",duplicate);d.put("pricingIncomplete",incomplete);d.put("project",String.join("、",lines.stream().map(FactoryService::projectLabel).distinct().toList()));
         return save("reports",before,d,"REPORT_SAVE",reason,a);
     }
     String signature(String employee,String m){return encode(find("reports",employee,m).stream().map(r->List.of(str(r,"id"),str(r,"version"),str(r,"status"))).toList());}
@@ -149,7 +165,7 @@ class FactoryService {
         if(action.equals("lockBatch")){var items=rows(in,"items");check(!items.isEmpty(),"请选择工资单");for(var item:items)payroll("lock",item,a);return Map.of("count",items.size());}
         var before=existing("payroll",in);var d=before==null?new LinkedHashMap<String,Object>():new LinkedHashMap<>(before);String reason="";
         if(action.equals("generate")){
-            check(before==null,"不能重复创建");String employee=text(in,"employeeId",64,true),m=month(str(in,"date"));var same=find("payroll",employee,m);if(!same.isEmpty())return decorate("payroll",same.get(0));var e=get("employees",employee);check(!str(e,"status").equals("ARCHIVED"),"员工已移除");
+            check(before==null,"不能重复创建");String employee=text(in,"employeeId",64,true),m=month(str(in,"date"));var same=find("payroll",employee,m);if(!same.isEmpty())return decorate("payroll",same.get(0));var e=get("employees",employee);check(!str(e,"status").equals("ARCHIVED")||!find("reports",employee,m).isEmpty(),"员工已删除，且该月份无报工记录");
             d.put("employeeId",employee);d.put("employeeName",e.get("name"));d.put("number",e.get("number"));d.put("team",e.get("team"));d.put("date",m);d.put("status","DRAFT");d.put("adjustments",List.of());d.put("payments",List.of());d.put("revision",0);d.put("historical",Boolean.TRUE.equals(in.get("historical")));
             if(Boolean.TRUE.equals(d.get("historical"))){check(find("reports",employee,m).isEmpty(),"历史期初月份已存在报工，不能重复计薪");d.put("historicalAmount",money(in.get("historicalAmount")));check(dec(d.get("historicalAmount")).signum()>=0,"历史金额不能为负");d.put("remark",text(in,"remark",500,true));}recalculate(d);
         }else{

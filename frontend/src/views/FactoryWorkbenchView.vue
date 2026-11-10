@@ -4,7 +4,7 @@ import { createRequestId } from '@/utils/requestId'
 import {computed,ref,watch} from 'vue'
 import {useRoute,useRouter} from 'vue-router'
 import {factoryApi,type FactoryKind,type FactoryRecord,type FactoryEvent} from '@/api/factory'
-import {factoryTitles,factoryStates,factoryMoney,factoryActions,localDay,paymentState} from '@/utils/factoryPresentation'
+import {factoryTitles,factoryStates,factoryMoney,factoryActions,localDay,paymentState,factoryProject} from '@/utils/factoryPresentation'
 import type {Capability} from '@/router/meta'
 import {session} from '@/state/session'
 import {confirmAction,promptReason} from '@/state/uiConfirmation'
@@ -44,6 +44,7 @@ async function reasonAction(action:string,r:FactoryRecord,label:string,extra:Rec
 async function lock(r:FactoryRecord){if(await confirmAction(`锁定 ${r.employeeName} ${r.date} 工资，应发 ¥${r.pricingIncomplete?'待定':factoryMoney(r.amount)}？锁定后更改须走更正流程。`))await command('lock',r)}
 async function batchAction(){if(!chosen.value.length)return;const action=props.kind==='reports'?'reviewBatch':'lockBatch';if(await confirmAction(`确认${props.kind==='reports'?'核对报工':'锁定工资'} ${chosen.value.length} 条？所有所选记录验证通过才会生效。`))await command(action,undefined,{items:chosen.value.map(r=>({id:r.id,version:r.version}))})}
 function toggleAll(e:Event){selected.value=(e.target as HTMLInputElement).checked?rows.value.filter(selectable).map(r=>r.id):[]}
+async function deleteEmployee(record:FactoryRecord){if(await confirmAction(`删除员工 ${record.name}（${record.number}）？员工将从列表隐藏，历史报工及工资保留。`))await command('remove',record)}
 async function saved(){editor.value=undefined;notice.value='保存成功';await load();try{if(detail.value)detail.value=await factoryApi.get(props.kind,detail.value.id)}catch(e){detailError.value=message(e)}}
 async function exportMonth(){busy.value=true;try{await factoryApi.export(String(applied.value.from||month.value),String(applied.value.employeeId||''))}catch(e){error.value=message(e)}finally{busy.value=false}}
 function goEmployee(target:FactoryKind){if(!detail.value)return;void router.push({path:`/factory/${target}`,query:{employeeId:detail.value.id,employeeName:detail.value.name}})}
@@ -177,10 +178,10 @@ function print(){window.print()}
               >
             </th>
             <template v-if="kind==='employees'">
-              <th>员工 / 工号</th><th>班组</th><th>手机号</th><th>开户行</th><th>银行卡号</th><th>常做工序</th><th>入职日期</th><th>状态</th>
+              <th>员工 / 工号</th><th>班组</th><th>手机号</th><th>开户行</th><th>银行卡号</th><th>身份证号</th><th>缴纳医社保</th><th>入职日期</th><th>状态</th>
             </template>
             <template v-else-if="kind==='rates'">
-              <th>加工项目 / SKU</th><th>工序</th><th>单位</th><th>单价（元）</th><th>适用员工</th><th>生效 / 停止日期</th><th>状态</th>
+              <th>加工项目 / SKU</th><th>单位</th><th>单价（元）</th><th>适用员工</th><th>生效 / 停止日期</th><th>状态</th>
             </template>
             <template v-else-if="kind==='reports'">
               <th>工作日期</th><th>员工 / 工号</th><th>加工项目摘要</th><th>明细项数</th><th>金额（元）</th><th>状态</th><th>最近维护</th>
@@ -212,7 +213,7 @@ function print(){window.print()}
             <template v-if="kind==='employees'">
               <td><strong>{{ r.name }}</strong><small>{{ r.number }}</small></td><td>{{ r.team||'—' }}</td><td>{{ r.phone||'—' }}</td><td>{{ r.bankName||'未填写' }}</td><td class="factory-bank-account">
                 {{ r.bankAccount||'未填写' }}
-              </td><td>{{ r.operations||'—' }}</td><td>{{ r.date }}</td><td>
+              </td><td>{{ r.identityNumber||'—' }}</td><td>{{ r.insured?'是':'否' }}</td><td>{{ r.date }}</td><td>
                 <span
                   class="factory-badge"
                   :data-status="r.status"
@@ -220,7 +221,7 @@ function print(){window.print()}
               </td>
             </template>
             <template v-else-if="kind==='rates'">
-              <td><strong>{{ r.project }}</strong><small>{{ r.skuCode||'自定义加工项目' }}</small></td><td>{{ r.operation }}</td><td>{{ r.unit }}</td><td class="factory-number">
+              <td><strong>{{ factoryProject(r) }}</strong><small>{{ r.skuCode||'自定义加工项目' }}</small></td><td>{{ r.unit }}</td><td class="factory-number">
                 {{ r.price }}
               </td><td>{{ r.employeeName }}</td><td>{{ r.date }}<small v-if="r.endDate">{{ r.endDate }} 起停止</small></td><td>
                 <span
@@ -281,6 +282,13 @@ function print(){window.print()}
               >
                 编辑
               </button><button
+                v-if="kind==='employees'&&can('write')"
+                class="factory-link danger"
+                :disabled="busy"
+                @click="deleteEmployee(r)"
+              >
+                删除
+              </button><button
                 v-if="kind==='rates'&&can('write')"
                 class="factory-link"
                 @click="editor={mode:'save',record:r}"
@@ -297,7 +305,7 @@ function print(){window.print()}
             </td>
           </tr><tr v-if="!rows.length">
             <td
-              :colspan="kind==='payroll'?13:kind==='employees'?9:9"
+              :colspan="kind==='payroll'?13:kind==='employees'?10:kind==='rates'?7:9"
               class="data-state"
             >
               {{ loading?'正在加载…':`暂无${title}记录，可从上方按钮开始建立` }}
@@ -442,9 +450,9 @@ function print(){window.print()}
             v-if="can('write')"
             class="danger"
             :disabled="busy"
-            @click="reasonAction('remove',detail,'只允许移除没有工价、报工或工资引用的员工。请说明原因。')"
+            @click="deleteEmployee(detail)"
           >
-            移除误建员工
+            删除员工
           </button><button
             v-if="session.canAccess(['factory.reports.read'])"
             @click="goEmployee('reports')"

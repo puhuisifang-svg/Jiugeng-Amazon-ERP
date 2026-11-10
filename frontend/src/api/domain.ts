@@ -297,7 +297,7 @@ async function createMaterial(input: MaterialInput | { materialCode: string; nam
 
 export const domainApi = {
   products,
-  skus: async (filters: { field?: string | undefined; q?: string | undefined; exact?: boolean | undefined; status?: VariantStatus | undefined; productStatus?: ProductStatus | undefined; hasImage?: boolean | undefined; hasSupplier?: boolean | undefined; hasMaterial?: boolean | undefined; sort?: string | undefined; direction?: string | undefined; page?: number | undefined; size?: number | undefined } = {}) => {
+  skus: async (filters: { productId?: string | undefined; field?: string | undefined; q?: string | undefined; exact?: boolean | undefined; status?: VariantStatus | undefined; productStatus?: ProductStatus | undefined; hasImage?: boolean | undefined; hasSupplier?: boolean | undefined; hasMaterial?: boolean | undefined; sort?: string | undefined; direction?: string | undefined; page?: number | undefined; size?: number | undefined } = {}) => {
     if (runtimeConfig.authMode === 'mock') {
       const response = await products(); const values = response.items.flatMap(product => product.variants.map(variant => ({ productId: product.id, productCode: product.productCode, productName: product.productName, productStatus: product.status, productType: product.productType, variant, businessAvailable: product.status === 'ACTIVE' && variant.status === 'ACTIVE', updatedAt: product.updatedAt })))
       return { items: values, totalCount: values.length, page: 0, size: values.length || 20 } as SkuPageDto

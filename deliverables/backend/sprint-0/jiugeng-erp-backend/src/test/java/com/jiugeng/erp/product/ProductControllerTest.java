@@ -383,6 +383,10 @@ class ProductControllerTest {
                 .andReturn().getResponse().getContentAsString();
         JsonNode created = objectMapper.readTree(body);
 
+        mvc.perform(get("/api/v1/products/skus").header("Authorization", bearer(token)).param("productId",created.path("id").asText()).param("field","KEYWORD").param("exact","false").param("q","SKU-LIST-001").param("size","1"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(1)).andExpect(jsonPath("$.items[0].productId").value(created.path("id").asText()));
+        mvc.perform(get("/api/v1/products/skus").header("Authorization", bearer(token)).param("productId","nonexistent-parent").param("field","KEYWORD").param("exact","false").param("q","SKU-LIST-001"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(0));
         mvc.perform(get("/api/v1/products/skus").header("Authorization", bearer(token))
                         .param("field", "SKU").param("q", "SKU-LIST-001").param("status", "DRAFT")
                         .param("page", "0").param("size", "20"))

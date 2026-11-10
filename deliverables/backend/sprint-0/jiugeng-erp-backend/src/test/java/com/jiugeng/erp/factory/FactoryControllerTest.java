@@ -91,8 +91,30 @@ class FactoryControllerTest {
    mvc.perform(get(path+"/"+result.path("id").asText()).header("Authorization",token)).andExpect(status().isOk()).andExpect(header().string("X-Content-Type-Options","nosniff"));
    mvc.perform(get(path+"/"+result.path("id").asText()).header("Authorization",user("SELECTION"))).andExpect(status().isForbidden());
  }
- @Test void preventsRemovingReferencedEmployeeAndRoundsPerLine()throws Exception{
-   var e=emp();String id=e.path("id").asText(),r=rate("2026-01-01","0.333333","").path("id").asText();var report=command("reports","save",map("employeeId",id,"date","2026-01-10","status","REVIEWED","duplicateConfirmed",true,"remark","Synthetic separate batches","lines",List.of(map("rateId",r,"quantity","1"),map("rateId",r,"quantity","1"))),200);assertThat(report.path("amount").decimalValue()).isEqualByComparingTo("0.66");var removal=identity(e);removal.put("reason","Synthetic removal");command("employees","remove",removal,400);
+ @Test void archivesReferencedEmployeeWithoutDeletingReportsAndRoundsPerLine()throws Exception{
+   var e=emp();String id=e.path("id").asText(),r=rate("2026-01-01","0.333333","").path("id").asText();var report=command("reports","save",map("employeeId",id,"date","2026-01-10","status","REVIEWED","duplicateConfirmed",true,"remark","Synthetic separate batches","lines",List.of(map("rateId",r,"quantity","1"),map("rateId",r,"quantity","1"))),200);assertThat(report.path("amount").decimalValue()).isEqualByComparingTo("0.66");var removal=identity(e);removal.put("reason","Synthetic removal");command("employees","remove",removal,200);assertThat(getRecord("reports",report.path("id").asText()).path("amount").decimalValue()).isEqualByComparingTo("0.66");
+   command("reports","save",map("employeeId",id,"date","2026-01-11","status","DRAFT","lines",List.of(map("rateId",r,"quantity","1"))),400);
+ }
+ @Test void employeeNumbersIdentityAndInsurance()throws Exception{
+  var first=emp();assertThat(first.path("number").asText()).isEqualTo("CS-0001");assertThat(first.path("insured").asBoolean()).isFalse();command("employees","remove",identity(first),200);
+  var next=command("employees","save",map("name","Synthetic Identity Worker","date","2025-01-01","identityNumber","00000000000000000x","insured",true),200);assertThat(next.path("number").asText()).isEqualTo("CS-0002");assertThat(next.path("identityNumber").asText()).isEqualTo("00000000000000000X");assertThat(next.path("insured").asBoolean()).isTrue();
+  command("employees","save",map("name","Invalid","date","2025-01-01","identityNumber","invalid"),400);command("employees","save",map("name","Invalid","date","2025-01-01","insured","yes"),400);
+ }
+ @Test void singleProjectContinuesLegacyRateHistoryAndExportsOneField()throws Exception{
+  var e=emp();var old=rate("2026-01-01","0.4","");var newer=command("rates","save",map("project","Synthetic Piece / Synthetic Sewing","unit","件","date","2026-01-05","price","0.6"),200);
+  var r=report(e.path("id").asText(),old.path("id").asText(),"10","REVIEWED");assertThat(r.path("amount").decimalValue()).isEqualByComparingTo("6");
+  command("rates","save",map("project","Synthetic Piece / Synthetic Sewing","unit","件","date","2026-01-05","price","0.7"),400);
+  command("payroll","generate",map("employeeId",e.path("id").asText(),"date","2026-01"),200);
+  String csv=mvc.perform(get("/api/v1/factory/payroll-export").param("month","2026-01").param("mode","lines").header("Authorization",token)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);assertThat(csv).contains("加工项目,单位").doesNotContain("工序").contains("Synthetic Piece / Synthetic Sewing");
+ }
+ @Test void expenseLedgerValidationVersionTotalsPermissionsAndVouchers()throws Exception{
+  var input=map("name","Synthetic Utility","date","2026-01-01","amount","12.50","payee","Synthetic payee");var e=command("expenses","save",input,200);assertThat(command("expenses","save",input,200).path("id")).isEqualTo(e.path("id"));
+  mvc.perform(get("/api/v1/factory/expenses").param("q","Synthetic payee").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.amount").value(12.5));
+  var edit=identity(e);edit.putAll(map("name","Synthetic Utility","date","2026-01-02","amount","15"));var updated=command("expenses","save",edit,200);edit.put("requestId",UUID.randomUUID().toString());command("expenses","save",edit,409);
+  command("expenses","save",map("name","Invalid","date","2026-01-01","amount","-1"),400);command("expenses","save",map("name","Invalid","date","2026-01-01","amount","0.001"),400);
+  String path="/api/v1/factory/expenses/"+e.path("id").asText()+"/attachments";var file=new org.springframework.mock.web.MockMultipartFile("file","synthetic.pdf","application/pdf","%PDF-1.4 synthetic".getBytes());mvc.perform(multipart(path).file(file).header("Authorization",token)).andExpect(status().isOk());
+  mvc.perform(get(path).header("Authorization",user("SELECTION"))).andExpect(status().isForbidden());mvc.perform(get("/api/v1/factory/expenses").header("Authorization",user("SELECTION"))).andExpect(status().isForbidden());
+  command("expenses","remove",identity(updated),200);mvc.perform(get("/api/v1/factory/expenses").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(0)).andExpect(jsonPath("$.amount").value(0));mvc.perform(multipart(path).file(file).header("Authorization",token)).andExpect(status().isBadRequest());
  }
  String user(String role)throws Exception{String id=UUID.randomUUID().toString(),password="Synthetic-Factory-Test-42!";jdbc.update("INSERT INTO iam_user(id,login_name,display_name,password_hash,role,status,must_change_password) VALUES(?,?,?,?,?,'ENABLED',FALSE)",id,id,"Synthetic factory QA",new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder().encode(password),role);jdbc.update("INSERT INTO iam_user_role(user_id,role_id) VALUES(?,?)",id,role);return "Bearer "+json.readTree(mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(map("loginName",id,"password",password)))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("token").asText();}
 }

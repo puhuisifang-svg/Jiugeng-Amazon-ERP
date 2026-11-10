@@ -13,6 +13,8 @@ final class CustomerTypes {
         @Size(max=64) String taxNumber, @Size(max=500) String registeredAddress,
         @Size(max=32) String registeredPhone, @Size(max=200) String bankName,
         @Size(max=64) String bankAccount) {}
+    record Address(@Size(max=64) String contactPerson, @Size(max=32) String phone,
+        @NotBlank @Size(max=500) String address, boolean defaultAddress) {}
     record CustomerInput(@NotBlank @Size(max=128) String name,
         @Size(max=100) String account1688, @Size(max=64) String contactPerson,
         @Size(max=32) String phone, @Size(max=100) String wechatId,
@@ -21,11 +23,11 @@ final class CustomerTypes {
         @Size(max=200) String invoiceTitle, @Size(max=64) String taxNumber,
         @Size(max=500) String registeredAddress, @Size(max=32) String registeredPhone,
         @Size(max=200) String bankName, @Size(max=64) String bankAccount, Boolean defaultCustomer,
-        @Size(max=50) List<@NotNull @Valid InvoiceTitle> invoiceTitles) {}
+        @Size(max=50) List<@NotNull @Valid InvoiceTitle> invoiceTitles, @Size(max=50) List<@NotNull @Valid Address> addresses) {}
     record CustomerView(String id, String name, String account1688, String contactPerson,
         String phone, String wechatId, String address, String remark, Status status,
         long version, Instant updatedAt, String invoiceTitle, String taxNumber, String registeredAddress,
-        String registeredPhone, String bankName, String bankAccount, boolean defaultCustomer, List<InvoiceTitle> invoiceTitles) {}
+        String registeredPhone, String bankName, String bankAccount, boolean defaultCustomer, List<InvoiceTitle> invoiceTitles, List<Address> addresses) {}
     record ProductInput(@NotBlank @Size(max=36) String customerId,
         @NotBlank @Size(max=36) String productId, @NotBlank @Size(max=36) String variantId,
         @DecimalMin("0") @Digits(integer=12, fraction=2) BigDecimal supplyPrice,

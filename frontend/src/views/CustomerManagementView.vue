@@ -5,7 +5,7 @@ import ListPagination from '@/components/ListPagination.vue'
 const listSize = ref(20)
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, RouterLink, useRoute } from 'vue-router'
-import { customersApi, type Customer, type CustomerInput, type CustomerProduct, type CustomerProductInput, type CustomerStatus, type InvoiceTitle } from '@/api/customers'
+import { customersApi, customerAddresses, type Customer, type CustomerInput, type CustomerProduct, type CustomerProductInput, type CustomerStatus, type InvoiceTitle } from '@/api/customers'
 import { type SkuListItemDto } from '@/api/domain'
 import { session } from '@/state/session'
 import AccessDialog from '@/components/AccessDialog.vue'
@@ -43,9 +43,13 @@ const dialog = ref<HTMLDialogElement>(), continueButton = ref<HTMLButtonElement>
 const selectionSummary = ref(''), initial = ref('')
 const blankTitle = (): InvoiceTitle => ({ invoiceTitle: '', taxNumber: '', registeredAddress: '', registeredPhone: '', bankName: '', bankAccount: '' })
 const titleFields = [['invoiceTitle', '开票抬头', 200], ['taxNumber', '纳税人识别号', 64], ['registeredAddress', '注册地址', 500], ['registeredPhone', '注册电话', 32], ['bankName', '开户银行', 200], ['bankAccount', '银行账号', 64]] as const
-const blankCustomer = (): CustomerInput => ({ invoiceTitles: [blankTitle()], name: '', account1688: '', contactPerson: '', phone: '', wechatId: '', invoiceTitle: '', taxNumber: '', registeredAddress: '', registeredPhone: '', bankName: '', bankAccount: '', defaultCustomer: false, address: '', remark: '', status: 'ACTIVE', version: undefined })
+const blankCustomer = (): CustomerInput => ({ addresses: [], invoiceTitles: [blankTitle()], name: '', account1688: '', contactPerson: '', phone: '', wechatId: '', invoiceTitle: '', taxNumber: '', registeredAddress: '', registeredPhone: '', bankName: '', bankAccount: '', defaultCustomer: false, address: '', remark: '', status: 'ACTIVE', version: undefined })
 const blankProduct = (): CustomerProductInput => ({ customerId: '', productId: '', variantId: '', supplyPrice: '', priceUnit: '件', customerProductCode: '', requirements: '', status: 'ACTIVE', version: undefined })
 const customerForm = reactive(blankCustomer()), productForm = reactive(blankProduct())
+function removeAddress(index:number) {
+  customerForm.addresses?.splice(index,1)
+  if(customerForm.addresses?.length && !customerForm.addresses.some(a=>a.defaultAddress)) customerForm.addresses[0]!.defaultAddress=true
+}
 const snapshot = () => JSON.stringify(isProduct.value ? productForm : customerForm)
 const routeCustomerId = computed(() => typeof route.query.customerId === 'string' ? route.query.customerId : '')
 const customerFilter = ref(''), customerOptions = ref<Customer[]>([]), customersLoading = ref(false), customersError = ref('')
@@ -100,7 +104,7 @@ async function open(item?: Customer | CustomerProduct) {
       requirements: item.requirements, status: item.status, version: item.version })
     selectionSummary.value = `${item.customerName} · ${item.productName} · SKU：${item.skuCode}`
   } else if (item) {
-    Object.assign(customerForm, { invoiceTitles: item.invoiceTitles?.map(t => ({ ...t })) ?? [{ ...blankTitle(), invoiceTitle: item.invoiceTitle ?? '', taxNumber: item.taxNumber ?? '', registeredAddress: item.registeredAddress ?? '', registeredPhone: item.registeredPhone ?? '', bankName: item.bankName ?? '', bankAccount: item.bankAccount ?? '' }], name: item.name, account1688: item.account1688, contactPerson: item.contactPerson,
+    Object.assign(customerForm, { addresses: customerAddresses(item), invoiceTitles: item.invoiceTitles?.map(t => ({ ...t })) ?? [{ ...blankTitle(), invoiceTitle: item.invoiceTitle ?? '', taxNumber: item.taxNumber ?? '', registeredAddress: item.registeredAddress ?? '', registeredPhone: item.registeredPhone ?? '', bankName: item.bankName ?? '', bankAccount: item.bankAccount ?? '' }], name: item.name, account1688: item.account1688, contactPerson: item.contactPerson,
       phone: item.phone, wechatId: item.wechatId, invoiceTitle: item.invoiceTitle ?? '', taxNumber: item.taxNumber ?? '', registeredAddress: item.registeredAddress ?? '', registeredPhone: item.registeredPhone ?? '', bankName: item.bankName ?? '', bankAccount: item.bankAccount ?? '', defaultCustomer: item.defaultCustomer ?? false, address: item.address, remark: item.remark, status: item.status, version: item.version })
   }
   initial.value = snapshot(); opened.value = true
@@ -529,11 +533,55 @@ watch(() => [props.kind, routeCustomerId.value], () => {
             v-single-select
             :disabled="saving"
           ><option value="ACTIVE">启用</option><option value="DISABLED">停用</option></select></label>
-          <label class="form-wide">收货地址<input
-            v-model="customerForm.address"
-            maxlength="500"
+          <h3 class="form-wide">
+            收货地址 <small>可维护多个地址，订单可直接选用</small>
+          </h3>
+          <fieldset
+            v-for="(entry,index) in customerForm.addresses"
+            :key="index"
+            class="form-wide customer-title-card customer-address-card"
             :disabled="saving"
-          ></label><label class="form-wide">备注<input
+          >
+            <legend>地址 {{ index + 1 }}</legend>
+            <label>联系人<input
+              v-model="entry.contactPerson"
+              maxlength="64"
+            ></label>
+            <label>联系电话<input
+              v-model="entry.phone"
+              type="tel"
+              maxlength="32"
+            ></label>
+            <label class="form-wide">详细地址 *<input
+              v-model="entry.address"
+              required
+              maxlength="500"
+            ></label>
+            <div class="form-wide customer-address-actions">
+              <label><input
+                type="radio"
+                name="default-address"
+                :checked="entry.defaultAddress"
+                @change="customerForm.addresses?.forEach((a,i)=>a.defaultAddress=i===index)"
+              > 默认地址</label>
+              <button
+                type="button"
+                class="danger-button"
+                @click="removeAddress(index)"
+              >
+                移除地址
+              </button>
+            </div>
+          </fieldset>
+          <button
+            type="button"
+            class="secondary-button form-wide"
+            :disabled="saving || (customerForm.addresses?.length ?? 0)>=50"
+            @click="customerForm.addresses?.push({contactPerson:'',phone:'',address:'',defaultAddress:!customerForm.addresses.length})"
+          >
+            添加收货地址
+          </button>
+          <label class="form-wide">备注<input
             v-model="customerForm.remark"
             maxlength="500"
             :disabled="saving"
@@ -674,4 +722,9 @@ small { display: block; margin-top: 6px; color: #68758c; }
 .customer-picker-search button { white-space: nowrap; }
 .customer-picker-pages { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
 .customer-picker-pages button { padding: 4px 8px; min-height: 28px; font-size: 12px; }
+</style>
+
+<style scoped>
+.customer-address-card{grid-template-columns:repeat(2,minmax(0,1fr))}.customer-address-actions{display:flex;align-items:center;justify-content:space-between;gap:12px}.customer-address-actions label{display:flex;align-items:center;gap:6px}.customer-address-actions input{width:auto;min-height:0;height:auto}.customer-title-card small{font-weight:400;color:var(--muted)}
+@media(max-width:640px){.customer-address-card{grid-template-columns:minmax(0,1fr)}}
 </style>

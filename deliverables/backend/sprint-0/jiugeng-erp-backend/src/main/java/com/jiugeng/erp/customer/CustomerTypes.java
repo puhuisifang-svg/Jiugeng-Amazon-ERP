@@ -23,11 +23,11 @@ final class CustomerTypes {
         @Size(max=200) String invoiceTitle, @Size(max=64) String taxNumber,
         @Size(max=500) String registeredAddress, @Size(max=32) String registeredPhone,
         @Size(max=200) String bankName, @Size(max=64) String bankAccount, Boolean defaultCustomer,
-        @Size(max=50) List<@NotNull @Valid InvoiceTitle> invoiceTitles, @Size(max=50) List<@NotNull @Valid Address> addresses) {}
+        @Size(max=50) List<@NotNull @Valid InvoiceTitle> invoiceTitles, @Size(max=50) List<@NotNull @Valid Address> addresses, @Size(max=36) String wechatImageId) {}
     record CustomerView(String id, String name, String account1688, String contactPerson,
         String phone, String wechatId, String address, String remark, Status status,
         long version, Instant updatedAt, String invoiceTitle, String taxNumber, String registeredAddress,
-        String registeredPhone, String bankName, String bankAccount, boolean defaultCustomer, List<InvoiceTitle> invoiceTitles, List<Address> addresses) {}
+        String registeredPhone, String bankName, String bankAccount, boolean defaultCustomer, List<InvoiceTitle> invoiceTitles, List<Address> addresses, String wechatImageId) {}
     record ProductInput(@NotBlank @Size(max=36) String customerId,
         @NotBlank @Size(max=36) String productId, @NotBlank @Size(max=36) String variantId,
         @DecimalMin("0") @Digits(integer=12, fraction=2) BigDecimal supplyPrice,
@@ -36,6 +36,6 @@ final class CustomerTypes {
     record ProductView(String id, String customerId, String customerName, Status customerStatus,
         String productId, String variantId, String skuCode, String productName,
         BigDecimal supplyPrice, String priceUnit, String customerProductCode, String requirements,
-        Status status, long version, Instant updatedAt) {}
+        Status status, long version, Instant updatedAt, String specification) {}
     record Page<T>(List<T> items, long totalCount, int page, int size) {}
 }

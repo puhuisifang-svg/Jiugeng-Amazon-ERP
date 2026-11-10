@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import AddressRecognition from '@/components/AddressRecognition.vue'
+import SingleFileUpload from '@/components/SingleFileUpload.vue'
+import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vue'
+import {catalogApi} from '@/api/catalog'
+
 import { vSingleSelect } from '@/directives/singleSelect'
 import CustomerSkuPicker from '@/components/CustomerSkuPicker.vue'
 import ListPagination from '@/components/ListPagination.vue'
@@ -43,13 +48,15 @@ const dialog = ref<HTMLDialogElement>(), continueButton = ref<HTMLButtonElement>
 const selectionSummary = ref(''), initial = ref('')
 const blankTitle = (): InvoiceTitle => ({ invoiceTitle: '', taxNumber: '', registeredAddress: '', registeredPhone: '', bankName: '', bankAccount: '' })
 const titleFields = [['invoiceTitle', '开票抬头', 200], ['taxNumber', '纳税人识别号', 64], ['registeredAddress', '注册地址', 500], ['registeredPhone', '注册电话', 32], ['bankName', '开户银行', 200], ['bankAccount', '银行账号', 64]] as const
-const blankCustomer = (): CustomerInput => ({ addresses: [], invoiceTitles: [blankTitle()], name: '', account1688: '', contactPerson: '', phone: '', wechatId: '', invoiceTitle: '', taxNumber: '', registeredAddress: '', registeredPhone: '', bankName: '', bankAccount: '', defaultCustomer: false, address: '', remark: '', status: 'ACTIVE', version: undefined })
+const blankCustomer = (): CustomerInput => ({ wechatImageId: '', addresses: [], invoiceTitles: [blankTitle()], name: '', account1688: '', contactPerson: '', phone: '', wechatId: '', invoiceTitle: '', taxNumber: '', registeredAddress: '', registeredPhone: '', bankName: '', bankAccount: '', defaultCustomer: false, address: '', remark: '', status: 'ACTIVE', version: undefined })
 const blankProduct = (): CustomerProductInput => ({ customerId: '', productId: '', variantId: '', supplyPrice: '', priceUnit: '件', customerProductCode: '', requirements: '', status: 'ACTIVE', version: undefined })
 const customerForm = reactive(blankCustomer()), productForm = reactive(blankProduct())
 function removeAddress(index:number) {
   customerForm.addresses?.splice(index,1)
   if(customerForm.addresses?.length && !customerForm.addresses.some(a=>a.defaultAddress)) customerForm.addresses[0]!.defaultAddress=true
 }
+const wechatPreview=ref<string>()
+async function uploadWechat(file:File){if(saving.value)return false;saving.value=true;formError.value='';try{customerForm.wechatImageId=(await catalogApi.uploadImage('CUSTOMER_WECHAT',file)).id}catch(e){formError.value=message(e);return false}finally{saving.value=false}}
 const snapshot = () => JSON.stringify(isProduct.value ? productForm : customerForm)
 const routeCustomerId = computed(() => typeof route.query.customerId === 'string' ? route.query.customerId : '')
 const customerFilter = ref(''), customerOptions = ref<Customer[]>([]), customersLoading = ref(false), customersError = ref('')
@@ -104,7 +111,7 @@ async function open(item?: Customer | CustomerProduct) {
       requirements: item.requirements, status: item.status, version: item.version })
     selectionSummary.value = `${item.customerName} · ${item.productName} · SKU：${item.skuCode}`
   } else if (item) {
-    Object.assign(customerForm, { addresses: customerAddresses(item), invoiceTitles: item.invoiceTitles?.map(t => ({ ...t })) ?? [{ ...blankTitle(), invoiceTitle: item.invoiceTitle ?? '', taxNumber: item.taxNumber ?? '', registeredAddress: item.registeredAddress ?? '', registeredPhone: item.registeredPhone ?? '', bankName: item.bankName ?? '', bankAccount: item.bankAccount ?? '' }], name: item.name, account1688: item.account1688, contactPerson: item.contactPerson,
+    Object.assign(customerForm, { wechatImageId: item.wechatImageId ?? '', addresses: customerAddresses(item), invoiceTitles: item.invoiceTitles?.map(t => ({ ...t })) ?? [{ ...blankTitle(), invoiceTitle: item.invoiceTitle ?? '', taxNumber: item.taxNumber ?? '', registeredAddress: item.registeredAddress ?? '', registeredPhone: item.registeredPhone ?? '', bankName: item.bankName ?? '', bankAccount: item.bankAccount ?? '' }], name: item.name, account1688: item.account1688, contactPerson: item.contactPerson,
       phone: item.phone, wechatId: item.wechatId, invoiceTitle: item.invoiceTitle ?? '', taxNumber: item.taxNumber ?? '', registeredAddress: item.registeredAddress ?? '', registeredPhone: item.registeredPhone ?? '', bankName: item.bankName ?? '', bankAccount: item.bankAccount ?? '', defaultCustomer: item.defaultCustomer ?? false, address: item.address, remark: item.remark, status: item.status, version: item.version })
   }
   initial.value = snapshot(); opened.value = true
@@ -277,7 +284,16 @@ watch(() => [props.kind, routeCustomerId.value], () => {
                     v-if="item.phone"
                     :href="`tel:${encodeURIComponent(item.phone)}`"
                   >{{ item.phone }}</a><span v-else>—</span>
-                </td><td>{{ item.wechatId || '—' }}</td><td class="customer-long-text">
+                </td><td>
+                  {{ item.wechatId || '—' }}<button
+                    v-if="item.wechatImageId"
+                    type="button"
+                    class="customer-wechat-link"
+                    @click="wechatPreview=item.wechatImageId"
+                  >
+                    查看名片
+                  </button>
+                </td><td class="customer-long-text">
                   {{ item.address || '—' }}
                 </td><td class="customer-long-text">
                   {{ item.remark || '—' }}
@@ -508,13 +524,7 @@ watch(() => [props.kind, routeCustomerId.value], () => {
           </button>
           <h3 class="form-wide">
             联系信息
-          </h3><label>1688账号<input
-            v-model="customerForm.account1688"
-            maxlength="100"
-            :disabled="saving"
-            placeholder="客户的1688会员账号"
-          ></label>
-          <label>联系人<input
+          </h3>          <label>联系人<input
             v-model="customerForm.contactPerson"
             maxlength="64"
             :disabled="saving"
@@ -528,11 +538,47 @@ watch(() => [props.kind, routeCustomerId.value], () => {
             v-model="customerForm.wechatId"
             maxlength="100"
             :disabled="saving"
-          ></label><label>状态<select
-            v-model="customerForm.status"
-            v-single-select
+          ></label><label>1688账号<input
+            v-model="customerForm.account1688"
+            maxlength="100"
             :disabled="saving"
-          ><option value="ACTIVE">启用</option><option value="DISABLED">停用</option></select></label>
+            placeholder="客户的1688会员账号"
+          ></label>
+
+          <div class="form-wide customer-wechat-upload">
+            <label>微信名片</label>
+            <div
+              v-if="customerForm.wechatImageId"
+              class="customer-wechat-preview"
+            >
+              <button
+                type="button"
+                class="image-button"
+                @click="wechatPreview=customerForm.wechatImageId || undefined"
+              >
+                <AuthenticatedCatalogImage
+                  :image-id="customerForm.wechatImageId"
+                  alt="微信名片"
+                />
+              </button><button
+                type="button"
+                class="ui-image-remove"
+                :disabled="saving"
+                @click="customerForm.wechatImageId=''"
+              >
+                移除图片
+              </button>
+            </div>
+            <SingleFileUpload
+              :key="editingId || 'new'"
+              title="上传微信名片"
+              hint="选择或粘贴后立即上传，保存客户后关联"
+              accept=".png,.jpg,.jpeg,.webp"
+              :max-mb="5"
+              :disabled="saving"
+              :upload="uploadWechat"
+            />
+          </div>
           <h3 class="form-wide">
             收货地址 <small>可维护多个地址，订单可直接选用</small>
           </h3>
@@ -543,6 +589,11 @@ watch(() => [props.kind, routeCustomerId.value], () => {
             :disabled="saving"
           >
             <legend>地址 {{ index + 1 }}</legend>
+            <AddressRecognition
+              class="form-wide"
+              :disabled="saving"
+              @recognize="Object.assign(entry,$event)"
+            />
             <label>联系人<input
               v-model="entry.contactPerson"
               maxlength="64"
@@ -693,6 +744,18 @@ watch(() => [props.kind, routeCustomerId.value], () => {
       @select="pickSku"
     />
   </section>
+  <AccessDialog
+    v-if="wechatPreview"
+    title="微信名片"
+    @close="wechatPreview=undefined"
+  >
+    <AuthenticatedCatalogImage
+      :image-id="wechatPreview"
+      variant="original"
+      alt="微信名片"
+      class="customer-wechat-full"
+    />
+  </AccessDialog>
 </template>
 
 <style scoped>
@@ -727,4 +790,8 @@ small { display: block; margin-top: 6px; color: #68758c; }
 <style scoped>
 .customer-address-card{grid-template-columns:repeat(2,minmax(0,1fr))}.customer-address-actions{display:flex;align-items:center;justify-content:space-between;gap:12px}.customer-address-actions label{display:flex;align-items:center;gap:6px}.customer-address-actions input{width:auto;min-height:0;height:auto}.customer-title-card small{font-weight:400;color:var(--muted)}
 @media(max-width:640px){.customer-address-card{grid-template-columns:minmax(0,1fr)}}
+</style>
+
+<style scoped>
+.customer-wechat-upload{display:grid;gap:8px;min-width:0}.customer-wechat-preview{display:flex;align-items:center;gap:12px}.customer-wechat-preview :deep(img){width:64px;height:64px;object-fit:contain}.customer-wechat-full{max-width:100%;max-height:65vh;object-fit:contain}.customer-wechat-link{display:block;background:transparent;color:#2673c9;padding:4px 0}
 </style>

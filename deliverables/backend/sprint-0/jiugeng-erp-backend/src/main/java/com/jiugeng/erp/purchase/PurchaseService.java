@@ -34,9 +34,11 @@ class PurchaseService {
     private final InventoryInboundGateway inventory;
     private final AuditTrail audit;
     private final AuditHistoryLookup history;
+    private final com.jiugeng.erp.catalogmedia.CatalogImageGateway images;
 
     PurchaseService(PurchaseRepository repository, InventoryInboundGateway inventory, AuditTrail audit,
-            AuditHistoryLookup history) {
+            AuditHistoryLookup history, com.jiugeng.erp.catalogmedia.CatalogImageGateway images) {
+        this.images=images;
         this.repository = repository; this.inventory = inventory; this.audit = audit; this.history = history;
     }
 
@@ -70,6 +72,7 @@ class PurchaseService {
         String orderNo = nextOrderNo();
         repository.insertOrder(id, orderNo, valid.input(), actor.userId());
         repository.replaceLines(id, valid.lines());
+        attachImages(id, valid.lines(), actor);
         OrderView created = order(id);
         audit(actor, "PURCHASE_ORDER_CREATE", id, null, snapshot(created));
         return created;
@@ -84,9 +87,23 @@ class PurchaseService {
         long version = requireVersion(raw.version());
         if (repository.updateDraft(id, valid.input(), actor.userId(), version) != 1) throw versionConflict();
         repository.replaceLines(id, valid.lines());
+        attachImages(id, valid.lines(), actor);
         OrderView after = order(id);
+        releaseImages(before, after);
         audit(actor, "PURCHASE_ORDER_UPDATE", id, snapshot(before), snapshot(after));
         return after;
+    }
+
+    @Transactional
+    void delete(String id, long version, AuthenticatedActor actor) {
+        OrderView before = repository.find(id, true).orElseThrow(() -> missing(id));
+        if (before.version() != version) throw versionConflict();
+        if (repository.hasReceipts(id) || before.lines().stream().anyMatch(line -> line.receivedQuantity().signum() > 0)
+                || before.status() == Status.PARTIALLY_RECEIVED || before.status() == Status.COMPLETED)
+            throw state("已有收货记录的采购单不能删除，请保留收货和库存追溯依据");
+        if (repository.deleteUnreceived(id, version) != 1) throw versionConflict();
+        releaseImages(before, null);
+        audit(actor, "PURCHASE_ORDER_DELETE", id, snapshot(before), null);
     }
 
     @Transactional
@@ -103,8 +120,8 @@ class PurchaseService {
     OrderView submit(String id, long version, AuthenticatedActor actor) {
         OrderView before = repository.find(id, true).orElseThrow(() -> missing(id));
         if (before.status() != Status.DRAFT) throw state("只有草稿采购单可提交");
-        repository.activeSupplier(before.supplierId());
-        for (LineView line : before.lines()) repository.existingItem(before.orderType(), before.supplierId(), line.itemId());
+        if(before.orderType()!=OrderType.MANUAL){repository.activeSupplier(before.supplierId());
+        for (LineView line : before.lines()) repository.existingItem(before.orderType(), before.supplierId(), line.itemId());}
         transition(id, Status.DRAFT, Status.SUBMITTED, actor, version);
         OrderView after = order(id); audit(actor,"PURCHASE_ORDER_SUBMIT",id,snapshot(before),snapshot(after)); return after;
     }
@@ -172,7 +189,8 @@ class PurchaseService {
     private ValidatedOrder validate(OrderInput raw, OrderType expectedType,OrderView before) {
         if (raw == null || raw.orderType() == null) throw invalid("采购类型不能为空");
         if (expectedType != null && raw.orderType() != expectedType) throw invalid("采购类型不可修改");
-        String supplierId = required(raw.supplierId(), "供应商", 36); repository.activeSupplier(supplierId);
+        String supplierId = raw.orderType()==OrderType.MANUAL ? null : required(raw.supplierId(), "供应商", 36);
+        if(supplierId!=null)repository.activeSupplier(supplierId);
         String currency = required(raw.currency(), "币种", 3).toUpperCase(Locale.ROOT);
         if (!currency.matches("[A-Z]{3}")) throw invalid("币种必须为三位字母代码");
         String remark = optional(raw.remark(), 500);
@@ -180,6 +198,11 @@ class PurchaseService {
         Set<String> items = new HashSet<>(); List<PurchaseRepository.ResolvedLine> lines = new ArrayList<>(); int number=1;
         for (LineInput line : raw.lines()) {
             if (line == null) throw invalid("采购明细不能为空");
+            if(raw.orderType()==OrderType.MANUAL){
+                var item=new PurchaseRepository.ItemRef(UUID.randomUUID().toString(), "", required(line.itemName(),"物品名称",200),required(line.unit(),"单位",32));
+                lines.add(new PurchaseRepository.ResolvedLine(UUID.randomUUID().toString(),number++,item,positive(line.quantity(),"采购数量"),nonNegative(line.unitPrice(),"采购单价"),optional(line.specification(),500),optional(line.imageAssetId(),36)));
+                continue;
+            }
             String itemId = required(line.itemId(), "采购对象", 36);
             if (!items.add(itemId)) throw invalid("同一采购对象不可重复");
             var prior=before!=null && before.supplierId().equals(supplierId)?before.lines().stream().filter(v->v.itemId().equals(itemId)).findFirst():java.util.Optional.<LineView>empty();
@@ -189,12 +212,20 @@ class PurchaseService {
                 var saved=prior.get();item=new PurchaseRepository.ItemRef(saved.itemId(),saved.itemCode(),saved.itemName(),saved.unit());
             } else item=repository.activeItem(raw.orderType(), supplierId, itemId);
             lines.add(new PurchaseRepository.ResolvedLine(UUID.randomUUID().toString(), number++, item,
-                    positive(line.quantity(), "采购数量"), nonNegative(line.unitPrice(), "采购单价")));
+                    positive(line.quantity(), "采购数量"), nonNegative(line.unitPrice(), "采购单价"),null,null));
         }
         LocalDate deliveryDate = raw.expectedDeliveryDate();
         if (deliveryDate != null && (deliveryDate.getYear() < 2000 || deliveryDate.getYear() > 9999)) throw invalid("预计到货日期超出有效范围");
         return new ValidatedOrder(new OrderInput(raw.orderType(), supplierId, currency, remark, raw.version(), raw.lines(),
-                deliveryDate, optional(raw.deliveryAddress(), 500)), lines);
+                deliveryDate, optional(raw.deliveryAddress(), 500),raw.orderType()==OrderType.MANUAL?optional(raw.supplierName(),200):null), lines);
+    }
+    private void attachImages(String id,List<PurchaseRepository.ResolvedLine> lines,AuthenticatedActor actor){
+        for(var line:lines) images.attach(line.imageAssetId(),com.jiugeng.erp.catalogmedia.CatalogImageGateway.Purpose.PURCHASE_ITEM,"PURCHASE",id,actor);
+    }
+    private void releaseImages(OrderView before,OrderView after){
+        if(before.orderType()!=OrderType.MANUAL)return;
+        var retained=after==null?List.<String>of():after.lines().stream().map(LineView::imageAssetId).filter(java.util.Objects::nonNull).toList();
+        for(var line:before.lines())if(line.imageAssetId()!=null&&!retained.contains(line.imageAssetId()))images.releaseReplaced(line.imageAssetId(),null,"PURCHASE",before.id());
     }
     private ReceiptInput validateReceipt(ReceiptInput raw) {
         if (raw == null) throw invalid("收货请求不能为空");

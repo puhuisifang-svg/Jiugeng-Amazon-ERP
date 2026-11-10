@@ -199,8 +199,17 @@ it('maintains multiple delivery addresses independently and reassigns the defaul
  const cards=w.findAll('fieldset').filter(c=>c.find('legend').exists()&&c.get('legend').text().startsWith('地址'))
  expect(cards).toHaveLength(2)
  await cards[1]!.findAll('input')[0]!.setValue('合成乙');await cards[1]!.findAll('input')[1]!.setValue('SYN-B');await cards[1]!.findAll('input')[2]!.setValue('合成地址乙')
- await cards[0]!.get('button').trigger('click')
+ await cards[0]!.findAll('button').find(b=>b.text()==='移除地址')!.trigger('click')
  await w.get('dialog form').trigger('submit');await flushPromises()
  expect(mocks.save).toHaveBeenCalledWith('c1',expect.objectContaining({addresses:[{contactPerson:'合成乙',phone:'SYN-B',address:'合成地址乙',defaultAddress:true}]}))
  expect(addresses).toHaveLength(1);expect(addresses[0]?.address).toBe('合成地址甲');w.unmount()
+})
+
+it('recognizes pasted address text and hides customer status while keeping contact fields before 1688',async()=>{
+ const w=render();await flushPromises();await w.get('tbody button').trigger('click');await flushPromises()
+ const labels=w.findAll('dialog label').map(l=>l.text());expect(labels.some(t=>t==='状态启用停用')).toBe(false);expect(labels.findIndex(t=>t==='联系人')).toBeLessThan(labels.findIndex(t=>t==='1688账号'))
+ await w.findAll('dialog button').find(b=>b.text()==='添加收货地址')!.trigger('click')
+ const input=w.get('.address-recognition textarea');await input.trigger('paste',{clipboardData:{getData:()=> '测试市合成路6号C栋2楼，测试甲,13800000000'}})
+ const fields=w.get('.customer-address-card').findAll('input');expect(fields[0]!.element.value).toBe('测试甲');expect(fields[1]!.element.value).toBe('13800000000');expect(fields[2]!.element.value).toBe('测试市合成路6号C栋2楼')
+ expect(w.text()).toContain('上传微信名片');w.unmount()
 })

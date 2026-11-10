@@ -188,9 +188,31 @@ class SupplierControllerTest {
         String materialId=UUID.randomUUID().toString();
         jdbc.update("INSERT INTO auxiliary_material(id,material_code,material_code_normalized,name,material_type,unit,status,created_by,updated_by) VALUES(?,?,?,'合成辅料','PACKAGING','个','ACTIVE','test','test')",materialId,materialId,materialId);
         mvc.perform(put("/api/v1/suppliers/material/{id}",materialId).header("Authorization",bearer(writer)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("links",List.of(Map.of("supplierId",id,"primary",true)))))).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/suppliers/{id}/dependencies",id).header("Authorization",bearer(writer))).andExpect(status().isOk()).andExpect(jsonPath("$[0].type").value("MATERIAL")).andExpect(jsonPath("$[0].id").value(materialId)).andExpect(jsonPath("$[0].name").value("合成辅料"));
         mvc.perform(delete("/api/v1/suppliers/{id}?version=0",id).header("Authorization",bearer(writer))).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SUPPLIER_IN_USE"));
         mvc.perform(get("/api/v1/suppliers/{id}",id).header("Authorization",bearer(writer))).andExpect(status().isOk());
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE action='SUPPLIER_DELETE' AND resource_id=?",Integer.class,id)).isZero();
+    }
+
+    @Test void dependencyListIncludesSkuAndHistoricalPurchaseAndRefreshesAfterUnlink() throws Exception {
+        String token=createUserAndLogin("dependency-writer","PRODUCT_MATERIAL"), denied=createUserAndLogin("dependency-denied","SELECTION");
+        String id=createSupplier(token,"合成关联供应商","SYN-01"),p=UUID.randomUUID().toString(),v=UUID.randomUUID().toString(),order=UUID.randomUUID().toString();
+        jdbc.update("INSERT INTO product(id,product_code,product_code_normalized,name_zh,status,created_by,updated_by) VALUES(?,?,?,'合成父体','ACTIVE','test','test')",p,p,p);
+        jdbc.update("INSERT INTO product_variant(id,product_id,sku_code,sku_code_normalized,variant_name,status,attribute_signature) VALUES(?,?,?,?,'合成SKU','ACTIVE',?)",v,p,v,v,v);
+        jdbc.update("INSERT INTO product_variant_supplier(id,variant_id,supplier_id,created_by,updated_by) VALUES(?,?,?,'test','test')",UUID.randomUUID().toString(),v,id);
+        jdbc.update("INSERT INTO purchase_order(id,order_no,order_type,supplier_id,status,currency,created_by,updated_by) VALUES(?,'SYN-DEPENDENCY','PRODUCT',?,'CANCELLED','CNY','test','test')",order,id);
+        mvc.perform(get("/api/v1/suppliers/{id}/dependencies",id).header("Authorization",bearer(denied))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/suppliers/{id}/dependencies",id).header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(2)).andExpect(jsonPath("$[0].type").value("PRODUCT")).andExpect(jsonPath("$[0].parentId").value(p)).andExpect(jsonPath("$[1].type").value("PURCHASE"));
+        mvc.perform(delete("/api/v1/suppliers/{id}/archived-variants/{variant}?version=0",id,v).header("Authorization",bearer(token))).andExpect(status().isConflict());
+        jdbc.update("UPDATE product SET deleted_at=CURRENT_TIMESTAMP WHERE id=?",p);
+        mvc.perform(get("/api/v1/suppliers/{id}/dependencies",id).header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$[0].archived").value(true));
+        mvc.perform(delete("/api/v1/suppliers/{id}/archived-variants/{variant}?version=0",id,v).header("Authorization",bearer(denied))).andExpect(status().isForbidden());
+        mvc.perform(delete("/api/v1/suppliers/{id}/archived-variants/{variant}?version=1",id,v).header("Authorization",bearer(token))).andExpect(status().isConflict());
+        mvc.perform(delete("/api/v1/suppliers/{id}/archived-variants/{variant}?version=0",id,v).header("Authorization",bearer(token))).andExpect(status().isNoContent());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product WHERE id=?",Integer.class,p)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE action='SUPPLIER_ARCHIVED_LINK_REMOVE' AND resource_id=?",Integer.class,id)).isEqualTo(1);
+        mvc.perform(get("/api/v1/suppliers/{id}/dependencies",id).header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1));
+        mvc.perform(delete("/api/v1/suppliers/{id}?version=0",id).header("Authorization",bearer(token))).andExpect(status().isConflict());
     }
 
     private String createSupplier(String token, String name, String phone) throws Exception {

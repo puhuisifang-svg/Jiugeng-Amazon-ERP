@@ -8,7 +8,7 @@ import CatalogDeleteDialog from '@/components/CatalogDeleteDialog.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, reactive, ref, toRaw, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 
 import { ApiError } from '@/api/client'
 import { domainApi, type BatchVariantPatchInput, type ProductDetailDto, type ProductInput, type ProductVariantDto, type SkuListItemDto, type VariantStatus } from '@/api/domain'
@@ -236,7 +236,10 @@ async function exportRows() {
   } catch (exception) { error.value = apiMessage(exception, 'SKU 导出失败。') } finally { saving.value = false }
 }
 function changePage(next: number) { page.value = next; selected.value = [] }
-onMounted(load)
+const route=useRoute()
+async function openLinkedSupplier(){const id=route?.query.editProduct;if(typeof id!=='string'||!session.canAccess(['products.write','suppliers.write']))return;try{editProduct.value=await domainApi.product(id);focusVariantId.value=typeof route?.query.variantId==='string'?route?.query.variantId:undefined;showEdit.value=true}catch(e){error.value=apiMessage(e,'产品加载失败。')}}
+watch(()=>route?.query.editProduct,openLinkedSupplier)
+onMounted(async()=>{await load();await openLinkedSupplier()})
 </script>
 
 <template>

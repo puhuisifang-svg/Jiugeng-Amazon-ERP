@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CustomerProductImage from '@/components/CustomerProductImage.vue'
 import { createRequestId } from '@/utils/requestId'
 
 import { vSingleSelect } from '@/directives/singleSelect'
@@ -235,7 +236,7 @@ watch(() => route.params.id, load); onMounted(load)
           关闭剩余订单
         </button><button
           v-if="session.canAccess(['orders.transition']) && detail.status === 'DRAFT'"
-          class="danger-button"
+          class="order-delete-button"
           @click="ask(detail,'DELETE')"
         >
           删除草稿
@@ -260,11 +261,19 @@ watch(() => route.params.id, load); onMounted(load)
       </article>
       <TableViewport>
         <table class="data-table">
-          <thead><tr><th>品名 / SKU</th><th>客户编码</th><th>规格型号</th><th>数量 / 单位</th><th>不含税单价</th><th>税率%</th><th>含税金额</th><th>交期</th><th>已安排未发</th><th>已发货</th><th>特殊需求/备注</th></tr></thead><tbody>
+          <thead><tr><th>图片</th><th>品名 / SKU</th><th>客户编码</th><th>规格型号</th><th>数量 / 单位</th><th>不含税单价</th><th>税率%</th><th>含税金额</th><th>交期</th><th>已安排未发</th><th>已发货</th><th>特殊需求/备注</th></tr></thead><tbody>
             <tr
               v-for="l in detail.lines"
               :key="l.id"
             >
+              <td>
+                <CustomerProductImage
+                  v-if="l.product?.productId && l.product?.variantId"
+                  :product-id="l.product.productId"
+                  :variant-id="l.product.variantId"
+                  :alt="l.details.name"
+                /><span v-else>暂无图片</span>
+              </td>
               <td>
                 <ProductName
                   :text="l.details.name"
@@ -297,18 +306,6 @@ watch(() => route.params.id, load); onMounted(load)
           </button>
         </div>
       </article>
-      <article class="panel order-information">
-        <h2>变更记录</h2><p
-          v-for="h in history"
-          :key="h.id"
-        >
-          {{ h.occurredAt }} · {{ h.actorDisplayName || h.actorLoginName }} · {{ h.detail }}
-          <small
-            v-for="(change,index) in orderHistoryChanges(h)"
-            :key="index"
-          >{{ change }}</small>
-        </p>
-      </article>
     </template>
     <OrderDocuments
       v-if="detail"
@@ -316,6 +313,21 @@ watch(() => route.params.id, load); onMounted(load)
       scope="ORDER"
       :writable="writable"
     />
+    <article
+      v-if="detail"
+      class="panel order-information"
+    >
+      <h2>变更记录</h2><p
+        v-for="h in history"
+        :key="h.id"
+      >
+        {{ h.occurredAt }} · {{ h.actorDisplayName || h.actorLoginName }} · {{ h.detail }}
+        <small
+          v-for="(change,index) in orderHistoryChanges(h)"
+          :key="index"
+        >{{ change }}</small>
+      </p>
+    </article>
     <CustomerOrderEditor
       v-if="editing"
       :initial="editTarget"
@@ -513,4 +525,8 @@ watch(() => route.params.id, load); onMounted(load)
 .customer-orders{min-width:0;grid-template-columns:minmax(0,1fr)}.customer-orders small{display:block;color:#68758c;font-size:12px}.data-table{min-width:1100px}.order-information{padding:12px}.order-information p{white-space:pre-wrap;overflow-wrap:anywhere}.order-batch{border-top:1px solid #e2e7ee;padding:12px 0}.order-arrange{box-sizing:border-box;width:min(1200px,100%);max-width:100%;min-width:0;margin:0;max-height:calc(100dvh - 32px);overflow:auto}.order-scroll{overflow:auto;min-width:0}.order-scroll input{min-width:90px}.order-scroll input[type=checkbox]{min-width:0}
 .order-main-table th:last-child,.order-main-table td:last-child{position:sticky;right:0;min-width:128px;background:#fff;box-shadow:-2px 0 4px #18263b0d}.order-main-table th:last-child{z-index:3;background:#f7f8fa}.customer-orders>.filter-panel{display:flex;flex-wrap:wrap;align-items:center}.customer-orders>.filter-panel label{flex:0 1 auto}.customer-orders>.filter-panel input{width:150px}.customer-orders>.filter-panel input:not([type=date]){width:210px}.customer-orders>.filter-panel select{width:110px}
 .order-information{min-height:0}.order-information h2{font-size:17px;margin:0 0 10px}.order-information p{margin:8px 0}.customer-orders>.material-toolbar{justify-content:flex-start;gap:8px}.order-arrange .form-footer{grid-column:1 / -1;position:sticky;bottom:-24px;background:#fff;padding:12px 0;z-index:2}
+</style>
+
+<style scoped>
+.customer-orders .order-detail-toolbar button{min-height:32px;padding:0 12px;white-space:nowrap;border-radius:4px;flex:0 0 auto}#app .customer-orders .order-detail-toolbar .order-delete-button{background:#fff1f0;color:#b42318;border:1px solid #f0b5af}#app .customer-orders .order-detail-toolbar .order-delete-button:hover{background:#ffe3e0}
 </style>

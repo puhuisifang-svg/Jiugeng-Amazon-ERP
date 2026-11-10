@@ -4,6 +4,7 @@ import static com.jiugeng.erp.customer.CustomerTypes.*;
 import com.jiugeng.erp.iam.AuditTrail;
 import com.jiugeng.erp.iam.AuthenticatedActor;
 import com.jiugeng.erp.product.ProductLookup;
+import com.jiugeng.erp.catalogmedia.CatalogImageGateway;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
@@ -17,8 +18,9 @@ class CustomerService implements CustomerProductLookup {
     private final JdbcClient jdbc;
     private final ProductLookup catalog;
     private final AuditTrail audit;
-    CustomerService(JdbcClient jdbc, ProductLookup catalog, AuditTrail audit) {
-        this.jdbc=jdbc; this.catalog=catalog; this.audit=audit;
+    private final CatalogImageGateway images;
+    CustomerService(JdbcClient jdbc, ProductLookup catalog, AuditTrail audit, CatalogImageGateway images) {
+        this.jdbc=jdbc; this.catalog=catalog; this.audit=audit; this.images=images;
     }
     private static final String CUSTOMER_FILTER = """
         FROM customer WHERE (:status='' OR status=:status) AND (:q='' OR
@@ -107,6 +109,11 @@ class CustomerService implements CustomerProductLookup {
                 .param("titles",encodedTitles).param("id",id).update();
         if(addresses!=null) jdbc.sql("UPDATE customer SET addresses=:addresses WHERE id=:id")
             .param("addresses",CustomerAddresses.encode(addresses)).param("id",id).update();
+        String image=input.wechatImageId()==null?(before==null?null:before.wechatImageId()):input.wechatImageId().isBlank()?null:input.wechatImageId();
+        try { images.attach(image,CatalogImageGateway.Purpose.CUSTOMER_WECHAT,"CUSTOMER",id,actor); }
+        catch(CatalogImageGateway.AttachmentException e) { throw new CustomerException(e.status(),e.code(),e.getMessage()); }
+        if(before!=null)images.releaseReplaced(before.wechatImageId(),image,"CUSTOMER",id);
+        jdbc.sql("UPDATE customer SET wechat_image_id=:image WHERE id=:id").param("image",image,java.sql.Types.VARCHAR).param("id",id).update();
         var after=getCustomer(id);
         // Contact details and free text never enter audit logs.
         audit(actor,create?"CUSTOMER_CREATE":"CUSTOMER_UPDATE","CUSTOMER",id,
@@ -196,12 +203,12 @@ class CustomerService implements CustomerProductLookup {
     private CustomerView customer(ResultSet r,int row) throws SQLException {
         return new CustomerView(r.getString("id"),r.getString("name"),r.getString("account_1688"),r.getString("contact_person"),
             r.getString("phone"),r.getString("wechat_id"),r.getString("address"),r.getString("remark"),Status.valueOf(r.getString("status")),
-            r.getLong("version"),r.getTimestamp("updated_at").toInstant(),r.getString("invoice_title"),r.getString("tax_number"),r.getString("registered_address"),r.getString("registered_phone"),r.getString("bank_name"),r.getString("bank_account"),r.getBoolean("default_customer"),CustomerInvoiceTitles.read(r),CustomerAddresses.read(r));
+            r.getLong("version"),r.getTimestamp("updated_at").toInstant(),r.getString("invoice_title"),r.getString("tax_number"),r.getString("registered_address"),r.getString("registered_phone"),r.getString("bank_name"),r.getString("bank_account"),r.getBoolean("default_customer"),CustomerInvoiceTitles.read(r),CustomerAddresses.read(r),r.getString("wechat_image_id"));
     }
     private ProductView product(ResultSet r,int row) throws SQLException {
         return new ProductView(r.getString("id"),r.getString("customer_id"),r.getString("customer_name"),Status.valueOf(r.getString("customer_status")),
             r.getString("product_id"),r.getString("variant_id"),r.getString("sku_code"),r.getString("product_name"),r.getBigDecimal("supply_price"),
             r.getString("price_unit"),r.getString("customer_product_code"),r.getString("requirements"),Status.valueOf(r.getString("status")),
-            r.getLong("version"),r.getTimestamp("updated_at").toInstant());
+            r.getLong("version"),r.getTimestamp("updated_at").toInstant(),catalog.skuSpecification(r.getString("product_id"),r.getString("variant_id")));
     }
 }

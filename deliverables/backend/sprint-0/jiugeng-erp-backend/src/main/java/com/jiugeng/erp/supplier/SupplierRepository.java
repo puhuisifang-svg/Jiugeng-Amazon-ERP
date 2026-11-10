@@ -10,6 +10,19 @@ Optional<View> find(String id){return jdbc.sql("SELECT * FROM supplier WHERE id=
 void insert(String id,Input i,String actor){jdbc.sql("INSERT INTO supplier(id,name,contact_person,phone,wechat_id,source_url,qr_image_url,qr_image_asset_id,remark,status,created_by,updated_by) VALUES(:id,:name,:contact,:phone,:wechat,:url,:qrUrl,:qr,:remark,:status,:actor,:actor)").param("id",id).param("name",i.name()).param("contact",i.contactPerson()).param("phone",i.phone()).param("wechat",i.wechatId()).param("url",i.sourceUrl()).param("qrUrl",i.qrImageUrl()).param("qr",i.qrImageId()).param("remark",i.remark()).param("status",i.status().name()).param("actor",actor).update();}
 int update(String id,Input i,String actor,long version){return jdbc.sql("UPDATE supplier SET name=:name,contact_person=:contact,phone=:phone,wechat_id=:wechat,source_url=:url,qr_image_url=:qrUrl,qr_image_asset_id=:qr,remark=:remark,status=:status,version=version+1,updated_by=:actor,updated_at=CURRENT_TIMESTAMP WHERE id=:id AND version=:version").param("id",id).param("name",i.name()).param("contact",i.contactPerson()).param("phone",i.phone()).param("wechat",i.wechatId()).param("url",i.sourceUrl()).param("qrUrl",i.qrImageUrl()).param("qr",i.qrImageId()).param("remark",i.remark()).param("status",i.status().name()).param("actor",actor).param("version",version).update();}
 int delete(String id,long version){return jdbc.sql("DELETE FROM supplier WHERE id=:id AND version=:version").param("id",id).param("version",version).update();}
+List<Dependency> dependencies(String id){return jdbc.sql("""
+ SELECT 'PRODUCT' kind,v.id,p.id parent_id,v.sku_code code,v.variant_name label,CASE WHEN p.deleted_at IS NOT NULL OR v.deleted_at IS NOT NULL THEN 1 ELSE 0 END archived
+ FROM product_variant_supplier l JOIN product_variant v ON v.id=l.variant_id JOIN product p ON p.id=v.product_id WHERE l.supplier_id=:id
+ UNION ALL
+ SELECT 'MATERIAL',m.id,m.id,m.material_code,m.name,0 FROM auxiliary_material_supplier l JOIN auxiliary_material m ON m.id=l.auxiliary_material_id WHERE l.supplier_id=:id
+ UNION ALL
+ SELECT 'PURCHASE',p.id,p.id,p.order_no,p.status,0 FROM purchase_order p WHERE p.supplier_id=:id
+ ORDER BY kind,code,id
+ """).param("id",id).query((r,n)->new Dependency(r.getString("kind"),r.getString("id"),r.getString("parent_id"),r.getString("code"),r.getString("label"),true,r.getBoolean("archived"))).list();}
+int unlinkArchivedVariant(String supplier,String variant){return jdbc.sql("""
+ DELETE FROM product_variant_supplier WHERE supplier_id=:supplier AND variant_id=:variant
+ AND EXISTS (SELECT 1 FROM product_variant v JOIN product p ON p.id=v.product_id WHERE v.id=:variant AND (p.deleted_at IS NOT NULL OR v.deleted_at IS NOT NULL))
+ """).param("supplier",supplier).param("variant",variant).update();}
 boolean active(String id){return jdbc.sql("SELECT COUNT(*) FROM supplier WHERE id=:id AND status='ACTIVE'").param("id",id).query(Integer.class).single()>0;}
 List<LinkView> links(String table,String ownerColumn,String ownerId){String sql="SELECT r.id,r."+ownerColumn+" owner_id,r.supplier_id,s.name,s.status,r.purchase_url,r.remark,r.primary_slot,r.updated_at FROM "+table+" r JOIN supplier s ON s.id=r.supplier_id WHERE r."+ownerColumn+"=:owner ORDER BY CASE WHEN r.primary_slot='PRIMARY' THEN 0 ELSE 1 END,s.name";return jdbc.sql(sql).param("owner",ownerId).query(this::link).list();}
 void deleteLinks(String table,String ownerColumn,String ownerId){jdbc.sql("DELETE FROM "+table+" WHERE "+ownerColumn+"=:owner").param("owner",ownerId).update();}

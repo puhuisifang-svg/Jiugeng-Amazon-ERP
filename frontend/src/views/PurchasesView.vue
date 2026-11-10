@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { confirmAction } from '@/state/uiConfirmation'
+import AccessDialog from '@/components/AccessDialog.vue'
+import SingleFileUpload from '@/components/SingleFileUpload.vue'
+import { catalogApi } from '@/api/catalog'
 import PurchaseItemImage from '@/components/PurchaseItemImage.vue'
 import PurchaseLogisticsDialog from '@/components/PurchaseLogisticsDialog.vue'
 import { vSingleSelect } from '@/directives/singleSelect'
@@ -18,15 +22,34 @@ const orders = ref<PurchaseOrder[]>([])
 const suppliers = ref<SupplierDto[]>([]); const references = ref<PurchaseReferenceItem[]>([])
 const loading = ref(false); const referenceLoading = ref(false); const supplierLoading = ref(false); const saving = ref(false)
 const error = ref(''); const formError = ref(''); const success = ref('')
-const type = computed<PurchaseOrderType>(() => route.query.type === 'MATERIAL' ? 'MATERIAL' : 'PRODUCT')
+const type = computed<PurchaseOrderType>(() => route.query.type === 'MANUAL' ? 'MANUAL' : route.query.type === 'MATERIAL' ? 'MATERIAL' : 'PRODUCT')
 const status = ref<PurchaseStatus | ''>(''); const keyword = ref(''); const delivery = ref(''); const page = ref(1); const size = ref(20)
 const editing = ref<PurchaseOrder>(); const showOrderForm = ref(false)
 const form = reactive<PurchaseOrderInput>({ orderType: 'PRODUCT', supplierId: '', currency: 'CNY', remark: '', lines: [] })
 const logisticsOrder = ref<PurchaseOrder>()
 function logisticsSaved(order: PurchaseOrder) { orders.value = orders.value.map(item => item.id === order.id ? order : item); logisticsOrder.value = undefined; success.value = '运单资料已保存。' }
+const deleting = ref('')
+const removable = computed(() => session.canAccess(['purchases.write', 'purchases.cancel']))
+const hasReceipts = (order: PurchaseOrder) => ['PARTIALLY_RECEIVED', 'COMPLETED'].includes(order.status) || order.lines.some(line => line.receivedQuantity > 0)
+async function removeOrder(order: PurchaseOrder) {
+  if (deleting.value || !removable.value || hasReceipts(order)) return
+  deleting.value = order.id
+  try {
+    if (!await confirmAction(`确认删除采购单「${order.orderNo}」？删除后将移出采购列表及待接收清单，并解除该单据的供应商关联。此操作不可恢复。`)) return
+    error.value = ''; success.value = ''
+    await purchaseApi.remove(order.id, order.version)
+    orders.value = orders.value.filter(item => item.id !== order.id)
+    page.value = Math.min(page.value, pageCount.value)
+    success.value = '采购单已删除。'
+  } catch (e) { error.value = message(e, '删除结果未确认，请刷新列表核对后再操作。') }
+  finally { deleting.value = '' }
+}
 const writable = computed(() => session.canAccess(['purchases.write']))
 const statusLabels: Record<PurchaseStatus, string> = { DRAFT: '草稿', SUBMITTED: '待收货', PARTIALLY_RECEIVED: '部分收货', COMPLETED: '已完成', CANCELLED: '已取消 / 余量关闭' }
-const typeLabels = { PRODUCT: '产品采购', MATERIAL: '辅料采购' }
+const typeLabels = { PRODUCT: '产品采购', MATERIAL: '辅料采购', MANUAL: '日常物品采购' }
+const uploading = ref(false), uploadTarget = ref<number>()
+async function uploadItem(file:File,index:number){uploading.value=true;try{const image=await catalogApi.uploadImage('PURCHASE_ITEM',file);if(form.lines[index])form.lines[index]!.imageAssetId=image.id;uploadTarget.value=undefined}catch(e){formError.value=message(e,'图片上传失败');throw e}finally{uploading.value=false}}
+function moveType(step:number){const types:PurchaseOrderType[]=['PRODUCT','MATERIAL','MANUAL'];void changeType(types[(types.indexOf(type.value)+step+3)%3]!)}
 const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai' }).format(new Date())
 const overdue = (order: PurchaseOrder) => ['SUBMITTED', 'PARTIALLY_RECEIVED'].includes(order.status) && !!order.expectedDeliveryDate && order.expectedDeliveryDate < today
 const typedOrders = computed(() => orders.value.filter(order => order.orderType === type.value))
@@ -44,7 +67,7 @@ let referenceSequence = 0
 function message(exception: unknown, fallback: string) { return exception instanceof ApiError ? exception.message : fallback }
 function resetFilters() { status.value = ''; keyword.value = ''; delivery.value = ''; page.value = 1 }
 async function changeType(value: PurchaseOrderType) { resetFilters(); await router.replace({ query: { type: value } }) }
-function closeForm() { if (saving.value) return; referenceSequence++; showOrderForm.value = false; references.value = []; formError.value = '' }
+function closeForm() { if (saving.value || uploading.value) return; referenceSequence++; showOrderForm.value = false; references.value = []; formError.value = '' }
 async function load() {
   loading.value = true; error.value = ''
   try { orders.value = await purchaseApi.orders() }
@@ -68,7 +91,7 @@ async function loadReferences(resetLines = true) {
   const sequence = ++referenceSequence
   references.value = []; formError.value = ''
   if (resetLines) form.lines = [{ itemId: '', quantity: 1, unitPrice: 0 }]
-  if (!form.supplierId) { referenceLoading.value = false; return }
+  if (form.orderType === 'MANUAL' || !form.supplierId) { referenceLoading.value = false; return }
   referenceLoading.value = true
   try { const result = await purchaseApi.references(form.orderType, form.supplierId); if (sequence === referenceSequence) references.value = result }
   catch (exception) { if (sequence === referenceSequence) formError.value = message(exception, '可采购项目加载失败，请重新选择供应商。') }
@@ -76,21 +99,22 @@ async function loadReferences(resetLines = true) {
 }
 async function openCreate() {
   editing.value = undefined; formError.value = ''; references.value = []; referenceSequence++
-  Object.assign(form, { orderType: type.value, supplierId: '', currency: 'CNY', remark: '', version: undefined, expectedDeliveryDate: '', deliveryAddress: '', lines: [{ itemId: '', quantity: 1, unitPrice: 0 }] })
-  showOrderForm.value = true; await loadSuppliers()
+  Object.assign(form, { orderType: type.value, supplierId: '', supplierName: '', currency: 'CNY', remark: '', version: undefined, expectedDeliveryDate: '', deliveryAddress: '', lines: [{ itemId: '', quantity: 1, unitPrice: 0 }] })
+  showOrderForm.value = true; if(type.value!=='MANUAL')await loadSuppliers()
 }
 async function openEdit(order: PurchaseOrder) {
   editing.value = order; formError.value = ''; showOrderForm.value = true
-  Object.assign(form, { orderType: order.orderType, supplierId: order.supplierId, currency: order.currency, remark: order.remark ?? '', version: order.version, expectedDeliveryDate: order.expectedDeliveryDate ?? '', deliveryAddress: order.deliveryAddress ?? '', lines: order.lines.map(line => ({ itemId: line.itemId, quantity: line.orderedQuantity, unitPrice: line.unitPrice })) })
-  await Promise.all([loadSuppliers(), loadReferences(false)])
+  Object.assign(form, { orderType: order.orderType, supplierId: order.supplierId, supplierName: order.supplierName, currency: order.currency, remark: order.remark ?? '', version: order.version, expectedDeliveryDate: order.expectedDeliveryDate ?? '', deliveryAddress: order.deliveryAddress ?? '', lines: order.lines.map(line => ({ itemId: line.itemId, quantity: line.orderedQuantity, unitPrice: line.unitPrice, itemName:line.itemName, unit:line.unit, specification:line.specification??'', imageAssetId:line.imageAssetId })) })
+  if(order.orderType!=='MANUAL')await Promise.all([loadSuppliers(), loadReferences(false)])
 }
 function addLine() { if (form.lines.length < 200) form.lines.push({ itemId: '', quantity: 1, unitPrice: 0 }) }
 function validNumber(value: number, positive: boolean) { return Number.isFinite(Number(value)) && (positive ? Number(value) > 0 : Number(value) >= 0) && /^\d+(\.\d{1,4})?$/.test(String(value)) }
 async function saveOrder() {
-  if (saving.value || referenceLoading.value) return
+  if (saving.value || uploading.value || referenceLoading.value) return
   formError.value = ''; success.value = ''
-  if (!form.supplierId || !form.lines.length || form.lines.some(line => !references.value.some(item => item.id === line.itemId))) { formError.value = '请选择供应商及有效采购项目。'; return }
-  if (new Set(form.lines.map(line => line.itemId)).size !== form.lines.length) { formError.value = '采购项目不可重复，请合并相同项目的数量。'; return }
+  if (form.orderType !== 'MANUAL' && (!form.supplierId || !form.lines.length || form.lines.some(line => !references.value.some(item => item.id === line.itemId)))) { formError.value = '请选择供应商及有效采购项目。'; return }
+  if(form.orderType==='MANUAL' && form.lines.some(line=>!line.itemName?.trim()||!line.unit?.trim())){formError.value='请填写物品名称及单位。';return}
+  if (form.orderType !== 'MANUAL' && new Set(form.lines.map(line => line.itemId)).size !== form.lines.length) { formError.value = '采购项目不可重复，请合并相同项目的数量。'; return }
   if (form.lines.some(line => !validNumber(line.quantity, true) || !validNumber(line.unitPrice, false))) { formError.value = '数量必须大于 0，单价不可为负数，最多支持四位小数。'; return }
   saving.value = true
   try {
@@ -138,8 +162,8 @@ onMounted(load)
         :aria-selected="type === key"
         aria-controls="purchase-orders-panel"
         @click="changeType(key)"
-        @keydown.right.prevent="changeType(type === 'PRODUCT' ? 'MATERIAL' : 'PRODUCT')"
-        @keydown.left.prevent="changeType(type === 'PRODUCT' ? 'MATERIAL' : 'PRODUCT')"
+        @keydown.right.prevent="moveType(1)"
+        @keydown.left.prevent="moveType(-1)"
       >
         {{ label }} <span>{{ orders.filter(order => order.orderType === key).length }}</span>
       </button>
@@ -190,7 +214,7 @@ onMounted(load)
       :aria-busy="loading"
     >
       <p class="purchase-list-note">
-        {{ type === 'PRODUCT' ? '产品按 SKU 采购，收货登记到货数量；暂不生成成品库存。' : '辅料按档案单位采购，登记收货后同步增加固定仓库存。' }} 收货与历史记录在采购单详情查看。
+        {{ type === 'MANUAL' ? '直接录入未建档的日常物品，支持图片及分批收货，不计入产品或辅料库存。' : type === 'PRODUCT' ? '产品按 SKU 采购，收货登记到货数量；暂不生成成品库存。' : '辅料按档案单位采购，登记收货后同步增加固定仓库存。' }} 收货与历史记录在采购单详情查看。
       </p>
       <p
         v-if="loading"
@@ -269,6 +293,15 @@ onMounted(load)
                     @click="openEdit(order)"
                   >
                     编辑
+                  </button><button
+                    v-if="removable"
+                    type="button"
+                    class="danger-link"
+                    :disabled="!!deleting || hasReceipts(order)"
+                    :title="hasReceipts(order) ? '已有收货记录，不能删除' : '删除采购单'"
+                    @click="removeOrder(order)"
+                  >
+                    {{ deleting === order.id ? '处理中…' : '删除' }}
                   </button>
                 </td>
               </tr>
@@ -301,7 +334,7 @@ onMounted(load)
           type="button"
           class="operation-dialog__close"
           aria-label="关闭"
-          :disabled="saving"
+          :disabled="saving || uploading"
           @click="closeForm"
         >
           ×
@@ -310,7 +343,7 @@ onMounted(load)
           {{ editing ? '编辑' : '新建' }}{{ typeLabels[form.orderType] }}单
         </h2>
         <p class="form-wide purchase-form-hint">
-          一单一供应商，产品与辅料不混单。保存为草稿后，请在详情确认下单。
+          {{ form.orderType==='MANUAL' ? '直接填写物品及图片，无需维护 SKU 或辅料；供应商 / 购买渠道可选填。' : '一单一供应商，产品与辅料不混单。' }}保存为草稿后，请在详情确认下单。
         </p>
         <p
           v-if="formError"
@@ -321,9 +354,14 @@ onMounted(load)
         </p>
         <fieldset
           class="purchase-form-fields form-wide"
-          :disabled="saving"
+          :disabled="saving || uploading"
         >
-          <label>供应商<select
+          <label v-if="form.orderType==='MANUAL'">供应商 / 购买渠道<input
+            v-model="form.supplierName"
+            maxlength="200"
+            placeholder="选填，如五金店、采购平台"
+          ></label>
+          <label v-else>供应商<select
             v-model="form.supplierId"
             v-single-select
             class="ui-supplier-select"
@@ -357,21 +395,70 @@ onMounted(load)
             placeholder="收货地址、联系人或内部仓库说明"
           ></label>
           <p
-            v-if="form.supplierId && !referenceLoading && !references.length"
+            v-if="form.orderType!=='MANUAL' && form.supplierId && !referenceLoading && !references.length"
             class="form-wide empty-inline"
           >
             该供应商尚未关联启用的{{ form.orderType === 'PRODUCT' ? 'SKU' : '辅料' }}，请先到对应档案维护供货关系。
           </p>
           <div class="form-wide table-scroll">
             <TableViewport>
-              <table class="data-table purchase-edit-lines">
-                <thead><tr><th>采购项目</th><th>数量</th><th>单位</th><th>单价</th><th>金额</th><th>操作</th></tr></thead><tbody>
+              <table
+                class="data-table purchase-edit-lines"
+                :class="{'manual-purchase-lines':form.orderType==='MANUAL'}"
+              >
+                <thead>
+                  <tr>
+                    <th v-if="form.orderType==='MANUAL'">
+                      图片
+                    </th><th>采购项目</th><th>数量</th><th>单位</th><th>单价</th><th>金额</th><th>操作</th>
+                  </tr>
+                </thead><tbody>
                   <tr
                     v-for="(line,index) in form.lines"
                     :key="index"
                   >
+                    <td
+                      v-if="form.orderType==='MANUAL'"
+                      class="manual-image-cell"
+                    >
+                      <PurchaseItemImage
+                        v-if="line.imageAssetId"
+                        :image-asset-id="line.imageAssetId"
+                        :alt="line.itemName||'采购物品'"
+                      />
+                      <button
+                        v-if="line.imageAssetId"
+                        type="button"
+                        class="ui-image-remove"
+                        @click="line.imageAssetId=null"
+                      >
+                        移除图片
+                      </button>
+                      <button
+                        type="button"
+                        class="secondary-button"
+                        @click="uploadTarget=index"
+                      >
+                        {{ line.imageAssetId ? '更换图片' : '上传图片' }}
+                      </button>
+                    </td>
                     <td>
+                      <template v-if="form.orderType==='MANUAL'">
+                        <input
+                          v-model="line.itemName"
+                          required
+                          maxlength="200"
+                          :aria-label="`物品名称 ${index+1}`"
+                          placeholder="名称，如纸巾、灯泡"
+                        ><input
+                          v-model="line.specification"
+                          maxlength="500"
+                          aria-label="物品规格"
+                          placeholder="规格 / 型号（选填）"
+                        >
+                      </template>
                       <select
+                        v-else
                         v-model="line.itemId"
                         v-single-select
                         required
@@ -403,7 +490,18 @@ onMounted(load)
                         aria-label="采购数量"
                       >
                     </td>
-                    <td>{{ references.find(item => item.id === line.itemId)?.unit || '—' }}</td>
+                    <td>
+                      <input
+                        v-if="form.orderType==='MANUAL'"
+                        v-model="line.unit"
+                        required
+                        maxlength="32"
+                        aria-label="物品单位"
+                        placeholder="个 / 包 / 箱"
+                      ><template v-else>
+                        {{ references.find(item => item.id === line.itemId)?.unit || '—' }}
+                      </template>
+                    </td>
                     <td>
                       <input
                         v-model.number="line.unitPrice"
@@ -434,7 +532,7 @@ onMounted(load)
             <button
               type="button"
               class="secondary-button"
-              :disabled="!references.length || form.lines.length >= 200"
+              :disabled="(form.orderType!=='MANUAL' && !references.length) || form.lines.length >= 200"
               @click="addLine"
             >
               增加明细
@@ -450,19 +548,33 @@ onMounted(load)
           <button
             type="button"
             class="secondary-button"
-            :disabled="saving"
+            :disabled="saving || uploading"
             @click="closeForm"
           >
             取消
           </button><button
             type="submit"
-            :disabled="saving || referenceLoading || supplierLoading || !references.length"
+            :disabled="saving || uploading || (form.orderType!=='MANUAL' && (referenceLoading || supplierLoading || !references.length))"
           >
             {{ saving ? '保存中…' : '保存草稿' }}
           </button>
         </div>
       </form>
     </div>
+    <AccessDialog
+      v-if="uploadTarget!==undefined"
+      title="采购物品图片"
+      :busy="uploading"
+      @close="uploadTarget=undefined"
+    >
+      <SingleFileUpload
+        title="物品图片"
+        accept=".png,.jpg,.jpeg,.webp"
+        :max-mb="5"
+        :disabled="saving||uploading"
+        :upload="file=>uploadItem(file,uploadTarget!)"
+      />
+    </AccessDialog>
   </section>
   <PurchaseLogisticsDialog
     v-if="logisticsOrder"
@@ -474,5 +586,6 @@ onMounted(load)
 </template>
 
 <style scoped>
+.manual-image-cell { min-width:110px; max-width:130px; white-space:normal; }.manual-image-cell > button { display:block; margin:5px 0; }.manual-purchase-lines { min-width:850px; }.manual-purchase-lines td:nth-child(2) { min-width:230px; }.manual-purchase-lines td:nth-child(2) input { display:block; width:100%; max-width:none; }.manual-purchase-lines td:nth-child(4) input { width:70px; }.purchase-edit-lines td input + input { margin-top:6px; }
 .purchase-thumbnails{display:flex;gap:6px;max-width:240px;overflow-x:auto}.purchase-thumbnails>*{flex:none}
 </style>

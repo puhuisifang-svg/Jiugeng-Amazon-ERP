@@ -1,8 +1,8 @@
 import { apiRequest } from './client'
 
-export type PurchaseOrderType = 'PRODUCT' | 'MATERIAL'
+export type PurchaseOrderType = 'PRODUCT' | 'MATERIAL' | 'MANUAL'
 export type PurchaseStatus = 'DRAFT' | 'SUBMITTED' | 'PARTIALLY_RECEIVED' | 'COMPLETED' | 'CANCELLED'
-export interface PurchaseLine { imageAssetId?: string | null; imageUrl?: string | null; id: string; lineNo: number; itemId: string; itemCode: string; itemName: string; unit: string; orderedQuantity: number; receivedQuantity: number; remainingQuantity: number; unitPrice: number }
+export interface PurchaseLine { specification?: string | null; imageAssetId?: string | null; imageUrl?: string | null; id: string; lineNo: number; itemId: string; itemCode: string; itemName: string; unit: string; orderedQuantity: number; receivedQuantity: number; remainingQuantity: number; unitPrice: number }
 export interface PurchaseOrder { carrier?: string | null; trackingNumber?: string | null; id: string; orderNo: string; orderType: PurchaseOrderType; supplierId: string; supplierName: string; status: PurchaseStatus; currency: string; remark?: string; version: number; lines: PurchaseLine[]; createdAt: string; updatedAt: string; expectedDeliveryDate?: string | null; deliveryAddress?: string | null; cancellationReason?: string | null }
 export interface PurchaseReceiptLine { orderLineId: string; itemCode: string; itemName: string; quantity: number; inventoryTransactionId?: string }
 export interface PurchaseReceipt { id: string; orderId: string; orderNo: string; requestId: string; receivedAt: string; remark?: string; actorLoginName: string; lines: PurchaseReceiptLine[]; createdAt: string; replayed: boolean }
@@ -10,9 +10,10 @@ export interface PurchaseDashboard { draft: number; pendingReceipt: number; part
 export interface PurchaseReferenceItem { id: string; code: string; name: string; unit: string; primarySupplier: boolean }
 export interface PurchaseHistoryEvent { id: string; action: string; actorLoginName: string; actorDisplayName?: string; detail?: string; occurredAt: string }
 export interface PurchaseOrderDetail { order: PurchaseOrder; receipts: PurchaseReceipt[]; history: PurchaseHistoryEvent[] }
-export interface PurchaseOrderInput { orderType: PurchaseOrderType; supplierId: string; currency: string; remark?: string; version?: number; expectedDeliveryDate?: string | null; deliveryAddress?: string; lines: Array<{ itemId: string; quantity: number; unitPrice: number }> }
+export interface PurchaseOrderInput { orderType: PurchaseOrderType; supplierId: string; supplierName?: string; currency: string; remark?: string; version?: number; expectedDeliveryDate?: string | null; deliveryAddress?: string; lines: Array<{ itemId: string; quantity: number; unitPrice: number; itemName?: string; unit?: string; specification?: string; imageAssetId?: string | null }> }
 
 export const purchaseApi = {
+  remove: (id: string, version: number) => apiRequest<void>(`/v1/purchases/orders/${id}?version=${version}`, { method: 'DELETE' }),
   logistics: (id: string, version: number, carrier: string, trackingNumber: string) => apiRequest<PurchaseOrder>(`/v1/purchases/orders/${id}/logistics`, { method: 'PUT', body: JSON.stringify({ version, carrier, trackingNumber }) }),
   dashboard: () => apiRequest<PurchaseDashboard>('/v1/purchases/dashboard'),
   orders: (status?: PurchaseStatus) => apiRequest<PurchaseOrder[]>(`/v1/purchases/orders${status ? `?status=${status}` : ''}`),

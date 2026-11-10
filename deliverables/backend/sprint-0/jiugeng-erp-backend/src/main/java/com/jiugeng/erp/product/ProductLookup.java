@@ -8,6 +8,7 @@ public interface ProductLookup {
     default NamePresentation namePresentation(String productId, String variantId, String snapshotName) { return null; }
     record NamePresentation(boolean highlighted, java.util.List<NameSpan> styles) {}
     record NameSpan(int start, int end, String color, boolean bold) {}
+    default String skuSpecification(String productId,String variantId) { return ""; }
     Optional<ProductReference> findById(String productId);
     default Optional<SkuReference> findSku(String productId, String variantId) { return Optional.empty(); }
     /** For an existing document only; deleted identities remain available, disabled status is still enforced. */

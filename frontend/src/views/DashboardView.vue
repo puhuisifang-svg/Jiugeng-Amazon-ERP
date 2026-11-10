@@ -20,7 +20,7 @@ import CartonLabelExport from '@/components/CartonLabelExport.vue'
 import SuccessToast from '@/components/SuccessToast.vue'
 import { createShipmentImage } from '@/ui/shipmentExport'
 
-const purchaseActive = ref(false), purchaseVisited = ref(false), purchaseCount = ref<number>(), purchaseBusy = ref(false)
+const purchaseActive = ref(false), purchaseCount = ref<number>(), purchaseBusy = ref(false)
 const purchaseList = ref<InstanceType<typeof DashboardPurchaseReceipts>>()
 const formal = runtimeConfig.authMode === 'password'
 const summaries = ref<DashboardSummaryItem[]>([]); const loading = ref(true); const errorMessage = ref('')
@@ -119,7 +119,7 @@ async function load(silent = false) {
   }
   finally { if (!silent && sequence === loadSequence) loading.value = false }
 }
-function onFocus() { if (formal && !dispatching.value && !dispatchTarget.value) void load(true) }
+function onFocus() { if (formal && !dispatching.value && !dispatchTarget.value && !purchaseBusy.value) { void load(true); void purchaseList.value?.reload() } }
 onMounted(() => {
   void load(); window.addEventListener('focus', onFocus)
   if (formal) refreshTimer = window.setInterval(onFocus, 60_000)
@@ -173,7 +173,7 @@ onBeforeUnmount(() => { window.clearInterval(refreshTimer); window.removeEventLi
           class="secondary-action"
           type="button"
           :disabled="loading || purchaseBusy"
-          @click="purchaseActive ? purchaseList?.reload() : load()"
+          @click="load(); purchaseList?.reload()"
         >
           刷新
         </button>
@@ -210,14 +210,12 @@ onBeforeUnmount(() => { window.clearInterval(refreshTimer); window.removeEventLi
             role="tab"
             :aria-selected="purchaseActive"
             :class="{ 'is-active': purchaseActive }"
-            @click="purchaseActive = true; purchaseVisited = true"
+            @click="purchaseActive = true"
           >
-            采购待接收 <span v-if="purchaseCount !== undefined">{{ purchaseCount }}</span>
+            采购待接收 <span>{{ purchaseCount ?? '—' }}</span>
           </button>
         </div>
         <DashboardPurchaseReceipts
-          v-if="purchaseVisited"
-          v-show="purchaseActive"
           ref="purchaseList"
           :visible="purchaseActive"
           @count="purchaseCount = $event"

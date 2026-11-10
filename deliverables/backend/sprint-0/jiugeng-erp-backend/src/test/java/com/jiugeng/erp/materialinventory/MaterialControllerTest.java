@@ -35,12 +35,46 @@ class MaterialControllerTest {
         jdbc.update("DELETE FROM inventory_transaction");
         jdbc.update("DELETE FROM inventory_balance");
         jdbc.update("DELETE FROM product_auxiliary_material");
+        jdbc.update("DELETE FROM material_standard_cost");
         jdbc.update("DELETE FROM auxiliary_material");
         jdbc.update("DELETE FROM catalog_image_asset");
         jdbc.update("DELETE FROM iam_password_reset_challenge");
         jdbc.update("DELETE FROM audit_event");
         jdbc.update("DELETE FROM iam_session");
         jdbc.update("DELETE FROM iam_user");
+    }
+
+    @Test
+    void generatedCodeAndInlinePriceSaveAreAtomic() throws Exception {
+        String token = createUserAndLogin("inline-price", "ADMIN");
+        var input = material("", "自动编码辅料");
+        var price = new LinkedHashMap<String, Object>();
+        price.put("netPrice", "2.50"); price.put("unit", "PCS"); price.put("source", "MANUAL");
+        price.put("reason", "创建时核价"); price.put("version", -1); price.put("confirmedNet", true);
+        input.put("costPrice", price);
+        String body = mvc.perform(post("/api/v1/materials").header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).content(json(input)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var saved = objectMapper.readTree(body);
+        String id = saved.get("id").asText();
+        assertThat(saved.get("materialCode").asText()).startsWith("MAT-");
+        mvc.perform(get("/api/v1/product-costs/materials/prices").header("Authorization", bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].materialId").value(id));
+        input.put("name", "不可部分保存");
+        mvc.perform(put("/api/v1/materials/{id}", id).header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).content(json(input)))
+                .andExpect(status().isConflict());
+        assertThat(jdbc.queryForObject("SELECT name FROM auxiliary_material WHERE id=?", String.class, id))
+                .isEqualTo("自动编码辅料");
+        input.remove("costPrice");
+        mvc.perform(put("/api/v1/materials/{id}", id).header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).content(json(input)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.materialCode").value(saved.get("materialCode").asText()));
+        price.put("confirmedNet", false); input.put("costPrice", price);
+        mvc.perform(post("/api/v1/materials").header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).content(json(input)))
+                .andExpect(status().isBadRequest());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM auxiliary_material", Integer.class)).isEqualTo(1);
     }
 
     @Test

@@ -24,8 +24,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/materials")
 class MaterialController {
     private final MaterialService service;
+    private final CostService costs;
 
-    MaterialController(MaterialService service) { this.service = service; }
+    MaterialController(MaterialService service,CostService costs) { this.service = service;this.costs=costs; }
 
     @GetMapping
     @PreAuthorize("hasAuthority('materials.read')")
@@ -45,17 +46,23 @@ class MaterialController {
             List<@NotBlank @Size(max = 36) String> ids) {}
 
     @PostMapping
-    @PreAuthorize("hasAuthority('materials.write')")
+    @PreAuthorize("hasAuthority('materials.write') and (#request.costPrice == null or (hasAuthority('costs.write') and hasAuthority('costs.read')))")
+    @org.springframework.transaction.annotation.Transactional
     MaterialView create(@Valid @RequestBody MaterialRequest request,
             @AuthenticationPrincipal AuthenticatedActor actor) {
-        return service.create(request.input(), actor);
+        var result=service.create(request.input(), actor);
+        if(request.costPrice()!=null)costs.savePrice(result.id(),request.costPrice(),actor);
+        return result;
     }
 
     @PutMapping("/{materialId}")
-    @PreAuthorize("hasAuthority('materials.write')")
+    @PreAuthorize("hasAuthority('materials.write') and (#request.costPrice == null or (hasAuthority('costs.write') and hasAuthority('costs.read')))")
+    @org.springframework.transaction.annotation.Transactional
     MaterialView update(@PathVariable String materialId, @Valid @RequestBody MaterialRequest request,
             @AuthenticationPrincipal AuthenticatedActor actor) {
-        return service.update(materialId, request.input(), actor);
+        var result=service.update(materialId, request.input(), actor);
+        if(request.costPrice()!=null)costs.savePrice(result.id(),request.costPrice(),actor);
+        return result;
     }
 
     @PostMapping("/{materialId}/disable")
@@ -70,14 +77,14 @@ class MaterialController {
         return service.enable(materialId, actor);
     }
 
-    record MaterialRequest(@NotBlank @Size(max = 64) String materialCode,
+    record MaterialRequest(@Size(max = 64) String materialCode,
             @NotBlank @Size(max = 200) String name,
             @NotBlank @Size(max = 100) String materialType,
             @Size(max = 300) String specification,
             @NotBlank @Size(max = 32) String unit,
             @Size(max = 500) String imageUrl,
             @Size(max = 36) String imageAssetId,
-            @Size(max = 1000) String remark) {
+            @Size(max = 1000) String remark, @Valid CostTypes.PriceInput costPrice) {
         MaterialInput input() {
             return new MaterialInput(materialCode, name, materialType, specification, unit, imageUrl,
                     imageAssetId, remark);

@@ -18,6 +18,7 @@ class CostController {
     CostController(CostService service,AuditHistoryLookup audit){this.service=service;this.audit=audit;}
     @GetMapping @PreAuthorize("hasAuthority('costs.read')")
     CostService.Page list(@RequestParam(defaultValue="") @Size(max=128) String q,@RequestParam(defaultValue="") String productId,@RequestParam(defaultValue="") String state,@RequestParam(defaultValue="0") @Min(0) @Max(100000) int page,@RequestParam(defaultValue="20") @Min(1) @Max(100) int size){return service.list(q,productId,state,page,size);}
+    @GetMapping("/materials/prices") @PreAuthorize("hasAuthority('costs.read')") java.util.List<CostService.Price> prices(){return service.prices();}
     @GetMapping("/materials/{id}/price") @PreAuthorize("hasAuthority('costs.read')") CostService.Price price(@PathVariable String id){return service.price(id);}
     @PutMapping("/materials/{id}/price") @PreAuthorize("hasAuthority('costs.write') and hasAuthority('materials.write')") CostService.Price price(@PathVariable String id,@Valid @RequestBody PriceInput input,@AuthenticationPrincipal AuthenticatedActor actor){return service.savePrice(id,input,actor);}
     @GetMapping("/materials/{id}/purchases") @PreAuthorize("hasAuthority('costs.read') and hasAuthority('purchases.read')") java.util.List<CostService.PurchaseReference> purchases(@PathVariable String id){return service.purchases(id);}

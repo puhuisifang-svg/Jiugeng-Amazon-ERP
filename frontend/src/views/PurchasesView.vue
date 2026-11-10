@@ -63,11 +63,12 @@ const pageCount = computed(() => Math.max(1, Math.ceil(filtered.value.length / s
 const visibleOrders = computed(() => filtered.value.slice((page.value - 1) * size.value, page.value * size.value))
 const total = (order: PurchaseOrder) => order.lines.reduce((sum, line) => sum + line.orderedQuantity * line.unitPrice, 0).toFixed(2)
 const formTotal = computed(() => form.lines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0), 0).toFixed(2))
+const requestedMaterial = ref('')
 let referenceSequence = 0
 function message(exception: unknown, fallback: string) { return exception instanceof ApiError ? exception.message : fallback }
 function resetFilters() { status.value = ''; keyword.value = ''; delivery.value = ''; page.value = 1 }
 async function changeType(value: PurchaseOrderType) { resetFilters(); await router.replace({ query: { type: value } }) }
-function closeForm() { if (saving.value || uploading.value) return; referenceSequence++; showOrderForm.value = false; references.value = []; formError.value = '' }
+function closeForm() { if (saving.value || uploading.value) return; referenceSequence++; showOrderForm.value = false; requestedMaterial.value = ''; references.value = []; formError.value = '' }
 async function load() {
   loading.value = true; error.value = ''
   try { orders.value = await purchaseApi.orders() }
@@ -93,15 +94,41 @@ async function loadReferences(resetLines = true) {
   if (resetLines) form.lines = [{ itemId: '', quantity: 1, unitPrice: 0 }]
   if (form.orderType === 'MANUAL' || !form.supplierId) { referenceLoading.value = false; return }
   referenceLoading.value = true
-  try { const result = await purchaseApi.references(form.orderType, form.supplierId); if (sequence === referenceSequence) references.value = result }
+  try { const result = await purchaseApi.references(form.orderType, form.supplierId); if (sequence === referenceSequence) {
+    references.value = result
+    if(resetLines && requestedMaterial.value && form.orderType === 'MATERIAL') {
+      const selected=result.find(item=>item.id===requestedMaterial.value)
+      if(selected) form.lines=[{itemId:selected.id,quantity:1,unitPrice:0}]
+      else formError.value='该供应商未关联当前辅料，请选择其他供应商或先维护辅料供应商关系。'
+    }
+  } }
   catch (exception) { if (sequence === referenceSequence) formError.value = message(exception, '可采购项目加载失败，请重新选择供应商。') }
   finally { if (sequence === referenceSequence) referenceLoading.value = false }
 }
 async function openCreate() {
-  editing.value = undefined; formError.value = ''; references.value = []; referenceSequence++
+  requestedMaterial.value=''; editing.value = undefined; formError.value = ''; references.value = []; referenceSequence++
   Object.assign(form, { orderType: type.value, supplierId: '', supplierName: '', currency: 'CNY', remark: '', version: undefined, expectedDeliveryDate: '', deliveryAddress: '', lines: [{ itemId: '', quantity: 1, unitPrice: 0 }] })
   showOrderForm.value = true; if(type.value!=='MANUAL')await loadSuppliers()
 }
+async function createFromMaterial(id:string) {
+  if(!writable.value || !session.canAccess(['materials.read','suppliers.read']))return
+  await openCreate()
+  if(!showOrderForm.value || form.orderType!=='MATERIAL')return
+  requestedMaterial.value=id
+  try {
+    const links=await domainApi.materialSupplierLinks(id)
+    if(!showOrderForm.value || requestedMaterial.value!==id)return
+    const available=links.filter(link=>suppliers.value.some(s=>s.id===link.supplierId))
+    const selected=available.find(link=>link.primary)??available[0]
+    if(selected){form.supplierId=selected.supplierId;await loadReferences()}
+    else formError.value='当前辅料未关联启用的供应商，请先回到辅料管理编辑供应商关系，再发起采购。'
+  }catch(e){formError.value=message(e,'辅料供应商关系加载失败，请关闭后从辅料列表重试。')}
+}
+watch(()=>route.query.materialId, async id=>{
+  if(typeof id!=='string'||!id||type.value!=='MATERIAL')return
+  await createFromMaterial(id)
+  if(route.query.materialId===id){const query={...route.query};delete query.materialId;await router.replace({query})}
+},{immediate:true})
 async function openEdit(order: PurchaseOrder) {
   editing.value = order; formError.value = ''; showOrderForm.value = true
   Object.assign(form, { orderType: order.orderType, supplierId: order.supplierId, supplierName: order.supplierName, currency: order.currency, remark: order.remark ?? '', version: order.version, expectedDeliveryDate: order.expectedDeliveryDate ?? '', deliveryAddress: order.deliveryAddress ?? '', lines: order.lines.map(line => ({ itemId: line.itemId, quantity: line.orderedQuantity, unitPrice: line.unitPrice, itemName:line.itemName, unit:line.unit, specification:line.specification??'', imageAssetId:line.imageAssetId })) })

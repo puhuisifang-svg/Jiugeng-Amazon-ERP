@@ -10,6 +10,7 @@ const { createMaterial, disableMaterial, enableMaterial, materialSupplierLinks, 
 
 vi.mock('@/config/runtime', () => ({ runtimeConfig: { authMode: 'password' } }))
 vi.mock('@/state/session', () => ({ session: { canAccess: () => true } }))
+vi.mock('@/api/costs', () => ({ costsApi: { prices: vi.fn(async () => [{ materialId: 'm1', netPrice: '2.5', unit: 'PCS', version: 0 }]), price: vi.fn(async () => null) } }))
 vi.mock('@/api/catalog', () => ({ catalogApi: { uploadImage, imageBlob: vi.fn() } }))
 vi.mock('@/api/domain', () => ({
   domainApi: {
@@ -45,6 +46,29 @@ describe('MaterialsView merged material management', () => {
   beforeEach(() => {
     deleteMaterials.mockReset().mockResolvedValue(undefined)
     createMaterial.mockReset(); disableMaterial.mockReset(); enableMaterial.mockReset(); materialSupplierLinks.mockReset().mockResolvedValue([]); replaceMaterialSupplierLinks.mockReset(); supplier.mockReset(); transact.mockReset(); updateSafetyStock.mockReset(); uploadImage.mockReset()
+  })
+
+  it('saves confirmed cost with the material and retries supplier failure without creating twice', async () => {
+    createMaterial.mockResolvedValue({ item: { id: 'new-m', materialCode: 'GENERATED', name: '新辅料', materialType: '新类型', unit: '件', status: 'ACTIVE' }, mockData: false })
+    vi.mocked(domainApi.updateMaterial).mockResolvedValue({ id: 'new-m', materialCode: 'GENERATED', name: '新辅料', materialType: '新类型', unit: '件', status: 'ACTIVE' })
+    replaceMaterialSupplierLinks.mockRejectedValueOnce(new Error('network')).mockResolvedValue([])
+    const wrapper = mount(MaterialsView, { global }); await flushPromises()
+    expect(wrapper.get('.material-table').text()).toContain('¥ 2.5 / PCS')
+    await wrapper.get('.material-toolbar button').trigger('click')
+    const form = wrapper.get('.operation-form')
+    await form.get('input[maxlength="200"]').setValue('新辅料')
+    await form.get('[list="material-type-history"]').setValue('新类型')
+    expect(form.findAll('datalist option').map(o => o.attributes('value'))).toContain('包装')
+    await form.get('[aria-label="辅料成本价"]').setValue('3.25')
+    await form.trigger('submit'); await flushPromises()
+    expect(createMaterial).not.toHaveBeenCalled()
+    await form.get('.material-price-confirm input').setValue(true)
+    await form.trigger('submit'); await flushPromises()
+    expect(createMaterial).toHaveBeenCalledWith(expect.objectContaining({ materialCode: '', costPrice: expect.objectContaining({ netPrice: '3.25', confirmedNet: true, version: -1 }) }))
+    await form.trigger('submit'); await flushPromises()
+    expect(createMaterial).toHaveBeenCalledTimes(1)
+    expect(domainApi.updateMaterial).toHaveBeenLastCalledWith('new-m', expect.not.objectContaining({ costPrice: expect.anything() }))
+    wrapper.unmount()
   })
 
   it.each(['url', 'asset'])('removes a %s image on save and preserves it when cancelling', async kind => {
@@ -93,17 +117,17 @@ describe('MaterialsView merged material management', () => {
     const dialog = wrapper.get('[aria-labelledby="delete-material-title"]')
     await dialog.get('.danger-button').trigger('click'); await flushPromises()
     expect(dialog.get('[role="alert"]').text()).toContain('不能删除')
-    expect(wrapper.text()).toContain('MAT-2')
+    expect(wrapper.text()).toContain('胶带')
     await dialog.get('.danger-button').trigger('click'); await flushPromises()
     expect(deleteMaterials).toHaveBeenLastCalledWith(['m2'])
-    expect(wrapper.get('.material-table').text()).not.toContain('MAT-2')
+    expect(wrapper.get('.material-table').text()).not.toContain('胶带')
     expect(wrapper.get('.material-toolbar').text()).not.toContain('删除')
   })
 
   it('explains insufficient stock inside the inventory dialog without submitting', async () => {
     const wrapper = mount(MaterialsView, { global })
     await flushPromises()
-    const row = wrapper.findAll('tbody tr').find(item => item.text().includes('MAT-1'))!
+    const row = wrapper.findAll('tbody tr').find(item => item.text().includes('纸箱'))!
     await row.findAll('button').find(button => button.text() === '库存')!.trigger('click')
     const dialog = wrapper.get('[aria-labelledby="inventory-dialog-title"]')
     await dialog.findAll('select')[1]!.setValue('OUTBOUND')
@@ -118,7 +142,7 @@ describe('MaterialsView merged material management', () => {
     const wrapper = mount(MaterialsView, { global })
     await flushPromises()
 
-    const row = wrapper.findAll('tbody tr').find(item => item.text().includes('MAT-1'))!
+    const row = wrapper.findAll('tbody tr').find(item => item.text().includes('纸箱'))!
     await row.findAll('button').find(button => button.text() === '库存')!.trigger('click')
     const dialog = wrapper.get('[aria-labelledby="inventory-dialog-title"]')
     const quantity = dialog.get('input[type="number"]')
@@ -143,14 +167,14 @@ describe('MaterialsView merged material management', () => {
     const wrapper = mount(MaterialsView, { global })
     await flushPromises()
 
-    expect(wrapper.text()).toContain('MAT-1')
+    expect(wrapper.text()).toContain('纸箱')
     expect(wrapper.text()).toContain('低库存')
     expect(wrapper.text()).toContain('未初始化')
     expect(wrapper.get('a[href="/inventory/ledger"]').text()).toContain('库存流水')
 
-    await wrapper.get('input[placeholder="辅料编码、名称或规格"]').setValue('胶带')
-    expect(wrapper.text()).not.toContain('MAT-1')
-    expect(wrapper.text()).toContain('MAT-2')
+    await wrapper.get('input[placeholder="辅料名称或规格"]').setValue('胶带')
+    expect(wrapper.text()).not.toContain('纸箱')
+    expect(wrapper.text()).toContain('胶带')
   })
 
   it('opens an inventory command from a material row and updates the merged balance', async () => {
@@ -159,7 +183,7 @@ describe('MaterialsView merged material management', () => {
     const wrapper = mount(MaterialsView, { global })
     await flushPromises()
 
-    const row = wrapper.findAll('tbody tr').find(item => item.text().includes('MAT-2'))!
+    const row = wrapper.findAll('tbody tr').find(item => item.text().includes('胶带'))!
     await row.findAll('button').find(button => button.text() === '库存')!.trigger('click')
     const form = wrapper.findAll('form').find(item => item.text().includes('提交正式库存命令'))!
     expect((form.get('select').element as HTMLSelectElement).value).toBe('m2')
@@ -168,7 +192,7 @@ describe('MaterialsView merged material management', () => {
     await flushPromises()
 
     expect(transact).toHaveBeenCalledWith(expect.objectContaining({ materialId: 'm2', type: 'INBOUND', quantity: 5, unit: 'ROLL' }))
-    expect(wrapper.findAll('tbody tr').find(item => item.text().includes('MAT-2'))!.text()).toContain('5')
+    expect(wrapper.findAll('tbody tr').find(item => item.text().includes('胶带'))!.text()).toContain('5')
   })
 
   it('renders a remote material image and opens an enlarged preview', async () => {
@@ -187,32 +211,19 @@ describe('MaterialsView merged material management', () => {
     expect(wrapper.find('[aria-label="纸箱图片预览"]').exists()).toBe(false)
   })
 
-  it('opens purchasing suppliers from a material row', async () => {
-    materialSupplierLinks.mockResolvedValue([{ id: 'l1', ownerId: 'm1', supplierId: 's1', supplierName: '包装供应商', supplierStatus: 'ACTIVE', purchaseUrl: 'https://detail.1688.com/offer/1.html', primary: true, remark: '月结' }])
-    supplier.mockResolvedValue({ id: 's1', name: '包装供应商', contactPerson: '张三', phone: '13800000000', wechatId: 'packaging-zhang',
-      qrImageUrl: 'https://images.example.com/wechat-qr.png', status: 'ACTIVE', version: 0 })
-    const wrapper = mount(MaterialsView, { global })
-    await flushPromises()
-
-    const row = wrapper.findAll('tbody tr').find(item => item.text().includes('MAT-1'))!
-    await row.findAll('button').find(button => button.text() === '采购')!.trigger('click')
-    await flushPromises()
-
-    const dialog = wrapper.get('[role="dialog"][aria-labelledby="purchase-dialog-title"]')
-    expect(materialSupplierLinks).toHaveBeenCalledWith('m1')
-    expect(supplier).toHaveBeenCalledWith('s1')
-    expect(dialog.text()).toContain('包装供应商')
-    expect(dialog.text()).toContain('张三')
-    expect(dialog.text()).toContain('13800000000')
-    expect(dialog.text()).toContain('packaging-zhang')
-    const qrButton = dialog.get('button[aria-label="查看包装供应商微信二维码"]')
-    expect(qrButton.get('img').attributes('src')).toBe('https://images.example.com/wechat-qr.png')
-    expect(dialog.get('a').attributes('href')).toBe('https://detail.1688.com/offer/1.html')
-
-    await qrButton.trigger('click')
-    const preview = wrapper.get('[role="dialog"][aria-label="包装供应商微信二维码图片预览"]')
-    expect(preview.get('img').classes()).toContain('supplier-qr-preview')
-    expect(wrapper.find('[aria-labelledby="purchase-dialog-title"]').exists()).toBe(true)
+  it('links purchasing to a prefilled purchase form and deletes only the requested row', async () => {
+    const wrapper = mount(MaterialsView, { global }); await flushPromises()
+    const row = wrapper.findAll('tbody tr').find(item => item.text().includes('纸箱'))!
+    expect(row.get('a[href="/purchases/orders?type=MATERIAL&materialId=m1"]').text()).toBe('采购')
+    await wrapper.get('[aria-label="选择辅料 MAT-2"]').setValue(true)
+    await row.findAll('button').find(button => button.text() === '删除')!.trigger('click')
+    expect(deleteMaterials).not.toHaveBeenCalled()
+    const dialog=wrapper.get('[aria-labelledby="delete-material-title"]')
+    expect(dialog.text()).toContain('纸箱')
+    await dialog.get('.danger-button').trigger('click'); await flushPromises()
+    expect(deleteMaterials).toHaveBeenCalledWith(['m1'])
+    expect(wrapper.get('.material-table').text()).toContain('胶带')
+    wrapper.unmount()
   })
 
   it('keeps material and inventory operations exclusive and offers common units', async () => {
@@ -268,9 +279,8 @@ describe('MaterialsView merged material management', () => {
     await wrapper.get('.material-toolbar button').trigger('click')
     const form = wrapper.findAll('form').find(item => item.text().includes('新增辅料'))!
     const textInputs = form.findAll('input').filter(input => input.attributes('type') !== 'file' && input.attributes('type') !== 'radio')
-    await textInputs[0]!.setValue('MAT-3')
-    await textInputs[1]!.setValue('标签')
-    await textInputs[2]!.setValue('耗材')
+    await textInputs[0]!.setValue('标签')
+    await form.get('[list="material-type-history"]').setValue('新类型')
     const file = new File(['image'], 'material.png', { type: 'image/png' })
     Object.defineProperty(form.get('input[type="file"]').element, 'files', { value: [file] })
     await form.get('input[type="file"]').trigger('change')
@@ -279,6 +289,8 @@ describe('MaterialsView merged material management', () => {
     await form.trigger('submit')
     await flushPromises()
 
+    expect(form.find('input[placeholder="辅料编码"]').exists()).toBe(false)
+    expect(createMaterial).toHaveBeenCalledWith(expect.objectContaining({ materialCode: '', materialType: '新类型' }))
     expect(uploadImage).toHaveBeenCalledWith('MATERIAL_IMAGE', file)
     expect(createMaterial).toHaveBeenCalledWith(expect.objectContaining({ unit: '件', imageAssetId: 'image-1' }))
     expect(replaceMaterialSupplierLinks).toHaveBeenCalledWith('m3', [expect.objectContaining({ supplierId: 's1', primary: true })])
@@ -290,7 +302,7 @@ describe('MaterialsView merged material management', () => {
     const wrapper = mount(MaterialsView, { global })
     await flushPromises()
 
-    const row = wrapper.findAll('tbody tr').find(item => item.text().includes('MAT-3'))!
+    const row = wrapper.findAll('tbody tr').find(item => item.text().includes('标签'))!
     const enableButton = row.findAll('button').find(button => button.text() === '启用')!
     expect(enableButton.attributes('disabled')).toBeUndefined()
     await enableButton.trigger('click')

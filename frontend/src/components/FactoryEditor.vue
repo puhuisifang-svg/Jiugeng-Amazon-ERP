@@ -1,23 +1,23 @@
 <script setup lang="ts">
 import { createRequestId } from '@/utils/requestId'
 
-import { computed,onMounted,reactive,ref,watch } from 'vue'
+import { computed,reactive,ref,watch } from 'vue'
 import AccessDialog from './AccessDialog.vue'
 import FactoryPicker from './FactoryPicker.vue'
 import DatePicker from './DatePicker.vue'
 import {vSingleSelect} from '@/directives/singleSelect'
 import {factoryApi,type FactoryKind,type FactoryRecord,type FactoryAdjustment} from '@/api/factory'
-import {factoryMoney,localDay} from '@/utils/factoryPresentation'
+import {factoryMoney,localDay,factoryProject} from '@/utils/factoryPresentation'
 import {session} from '@/state/session'
 const props=defineProps<{kind:FactoryKind;mode:string;record?:FactoryRecord|undefined;month?:string}>()
 const emit=defineEmits<{close:[];saved:[]}>()
 const dialog=ref<InstanceType<typeof AccessDialog>>()
 const source=props.record
-const form=reactive({name:source?.name??'',team:source ? (source.team??'') : (props.kind==='employees'?'缝制组':''),phone:source?.phone??'',bankName:source?.bankName??'',bankAccount:source?.bankAccount??'',operations:source?.operations??'',date:props.kind==='payroll'?(props.month||source?.date||localDay().slice(0,7)):(props.kind==='rates'?localDay():source?.date||localDay()),endDate:source?.endDate??'',remark:source?.remark??'',project:source?.project??'',operation:source?.operation??'',unit:source?.unit??'件',price:String(source?.price??''),employeeId:source?.employeeId??'',employeeName:source?.employeeName??'',productId:source?.productId??'',variantId:source?.variantId??'',skuCode:source?.skuCode??'',decimalQuantity:source?.decimalQuantity??false,reason:'',status:source?.status==='PENDING'?'PENDING':'DRAFT',duplicateConfirmed:false,historical:false,historicalAmount:'',amount:'',paymentDate:localDay(),method:'现金',advance:props.mode==='pay'&&source?.status==='DRAFT'})
+const form=reactive({name:source?.name??'',team:source ? (source.team??'') : (props.kind==='employees'?'缝制组':''),phone:source?.phone??'',bankName:source?.bankName??'',bankAccount:source?.bankAccount??'',identityNumber:source?.identityNumber??'',insured:source?.insured??false,date:props.kind==='payroll'?(props.month||source?.date||localDay().slice(0,7)):(props.kind==='rates'?localDay():source?.date||localDay()),endDate:source?.endDate??'',remark:source?.remark??'',project:source?factoryProject(source):'',unit:source?.unit??'件',price:String(source?.price??''),employeeId:source?.employeeId??'',employeeName:source?.employeeName??'',productId:source?.productId??'',variantId:source?.variantId??'',skuCode:source?.skuCode??'',decimalQuantity:source?.decimalQuantity??false,reason:'',status:source?.status==='PENDING'?'PENDING':'DRAFT',duplicateConfirmed:false,historical:false,historicalAmount:'',amount:'',paymentDate:localDay(),method:'现金',advance:props.mode==='pay'&&source?.status==='DRAFT'})
 interface EditLine { key:string;rateId:string;project:string;operation:string;unit:string;quantity:string;price:string;error:string;employeeId:string;employeeName:string;remark:string }
 function emptyLine():EditLine{return {key:createRequestId(),rateId:'',project:'',operation:'',unit:'',quantity:'',price:'',error:'',employeeId:'',employeeName:'',remark:''}}
 const lines=ref<EditLine[]>(source?.lines?.map(l=>({...emptyLine(),...l,quantity:String(l.quantity),price:String(l.price??'')}))??[emptyLine()])
-const batch=ref(false),commonRate=ref<FactoryRecord>(),operations=ref<string[]>([]),adjustments=ref<FactoryAdjustment[]>(JSON.parse(JSON.stringify(source?.adjustments??[])))
+const batch=ref(false),commonRate=ref<FactoryRecord>(),adjustments=ref<FactoryAdjustment[]>(JSON.parse(JSON.stringify(source?.adjustments??[])))
 const busy=ref(false),previewing=ref(false),error=ref(''),initial=ref(''),request=ref({content:'',key:''})
 const serial=()=>JSON.stringify([form,lines.value,batch.value,commonRate.value?.id,adjustments.value])
 initial.value=serial()
@@ -45,7 +45,7 @@ async function submit(){if(busy.value||previewing.value)return;error.value='';bu
  const content=JSON.stringify(data);if(content!==request.value.content)request.value={content,key:createRequestId()};
  await factoryApi.command(props.kind,action,{...data,requestId:request.value.key});emit('saved')
  }catch(e){error.value=e instanceof Error?e.message:'保存失败，请重试'}finally{busy.value=false}}
-onMounted(async()=>{if(props.kind==='rates')try{operations.value=(await factoryApi.operations()).filter(x=>x.active).map(x=>x.name)}catch{error.value='工序列表暂时无法加载，可稍后重试'} })
+
 </script>
 <template>
   <AccessDialog
@@ -182,13 +182,7 @@ onMounted(async()=>{if(props.kind==='rates')try{operations.value=(await factoryA
             v-model="form.name"
             required
             maxlength="100"
-          ></label><label>班组<select
-            v-model="form.team"
-            v-single-select
-          ><option
-            v-if="source && !['缝制组','包装组','铁艺组'].includes(form.team)"
-            :value="form.team"
-          >{{ form.team || '未设置' }}（原班组）</option><option>缝制组</option><option>包装组</option><option>铁艺组</option></select></label><label>手机号<input
+          ></label><label>手机号<input
             v-model="form.phone"
             maxlength="100"
             inputmode="tel"
@@ -203,19 +197,33 @@ onMounted(async()=>{if(props.kind==='rates')try{operations.value=(await factoryA
             maxlength="40"
             placeholder="银行卡号（选填）"
             autocomplete="off"
-          ></label><label>入职日期<DatePicker
+          ></label><label>身份证号<input
+            v-model="form.identityNumber"
+            maxlength="18"
+            placeholder="身份证号（选填）"
+            autocomplete="off"
+          ></label><label>是否缴纳医社保<select
+            v-model="form.insured"
+            v-single-select
+          ><option :value="false">否</option><option :value="true">是</option></select></label><label>入职日期<DatePicker
             v-model="form.date"
             required
           /></label><label>离职日期<DatePicker v-model="form.endDate" /></label><label class="wide">备注<textarea
             v-model="form.remark"
             maxlength="500"
-          /></label><p class="factory-help wide">
-            工号自动生成。离职保留报工和工资，不影响结清历史款项。
+          /></label><label>班组<select
+            v-model="form.team"
+            v-single-select
+          ><option
+            v-if="source && !['缝制组','包装组','铁艺组'].includes(form.team)"
+            :value="form.team"
+          >{{ form.team || '未设置' }}（原班组）</option><option>缝制组</option><option>包装组</option><option>铁艺组</option></select></label><p class="factory-help wide">
+            工号按 CS-0001 起自动递增生成。离职保留报工和工资，不影响结清历史款项。
           </p>
         </template>
         <template v-else-if="kind==='rates'">
           <p class="factory-help wide">
-            工价按加工项目、工序、单位和生效日期管理。新价格不会自动覆盖历史报工。
+            工价按加工项目、单位和生效日期管理。新价格不会自动覆盖历史报工。
           </p>
           <div
             v-if="session.canAccess(['products.read'])"
@@ -237,19 +245,9 @@ onMounted(async()=>{if(props.kind==='rates')try{operations.value=(await factoryA
           <label>加工项目<input
             v-model="form.project"
             required
-            maxlength="100"
+            maxlength="220"
             placeholder="工人熟悉的加工名称，规格不同请分开"
-          ></label><label>工序<input
-            v-model="form.operation"
-            list="factory-operations"
-            required
-            maxlength="100"
-            placeholder="如包边、压线"
-          ><datalist id="factory-operations"><option
-            v-for="op in operations"
-            :key="op"
-            :value="op"
-          /></datalist></label>
+          ></label>
           <label>单位<input
             v-model="form.unit"
             required
@@ -325,16 +323,16 @@ onMounted(async()=>{if(props.kind==='rates')try{operations.value=(await factoryA
             v-else
             class="factory-field"
           >
-            <span>加工项目 / 工序</span><FactoryPicker
+            <span>加工项目</span><FactoryPicker
               kind="rates"
-              label="选择共同加工工序"
-              :value="commonRate?`${commonRate.project} / ${commonRate.operation}`:''"
+              label="选择共同加工项目"
+              :value="commonRate?factoryProject(commonRate):''"
               @select="commonRate=$event;refreshPrices()"
             />
           </div>
           <div class="factory-edit-table wide">
             <table>
-              <thead><tr><th>{{ batch?'员工':'加工项目 / 工序' }}</th><th>数量</th><th>单位</th><th>适用工价</th><th>预计金额</th><th>明细备注</th><th /></tr></thead><tbody>
+              <thead><tr><th>{{ batch?'员工':'加工项目' }}</th><th>数量</th><th>单位</th><th>适用工价</th><th>预计金额</th><th>明细备注</th><th /></tr></thead><tbody>
                 <tr
                   v-for="(line,i) in lines"
                   :key="line.key"
@@ -349,8 +347,8 @@ onMounted(async()=>{if(props.kind==='rates')try{operations.value=(await factoryA
                     /><FactoryPicker
                       v-else
                       kind="rates"
-                      :label="`选择第${i+1}行加工工序`"
-                      :value="line.rateId?`${line.project} / ${line.operation}`:''"
+                      :label="`选择第${i+1}行加工项目`"
+                      :value="line.rateId?factoryProject(line):''"
                       @select="chooseRate(line,$event)"
                     /><small
                       v-if="line.error"
@@ -403,11 +401,11 @@ onMounted(async()=>{if(props.kind==='rates')try{operations.value=(await factoryA
           <label class="wide">批次 / 备注<input
             v-model="form.remark"
             maxlength="500"
-            placeholder="同日重复工序请说明不同批次"
+            placeholder="同日重复加工项目请说明不同批次"
           ></label><label class="factory-check wide"><input
             v-model="form.duplicateConfirmed"
             type="checkbox"
-          >如有同日同工序记录，已核实为不同批次</label><label
+          >如有同日同加工项目记录，已核实为不同批次</label><label
             v-if="source"
             class="wide"
           >修改原因<input

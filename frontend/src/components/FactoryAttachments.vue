@@ -3,8 +3,8 @@ import SingleFileUpload from '@/components/SingleFileUpload.vue'
 import {ref,onMounted} from 'vue'
 import {apiRequest,getSessionToken} from '@/api/client'
 import {runtimeConfig} from '@/config/runtime'
-import type {FactoryKind} from '@/api/factory'
-const props=defineProps<{kind:FactoryKind;id:string;writable:boolean}>()
+import type {FactoryResourceKind} from '@/api/factory'
+const props=defineProps<{kind:FactoryResourceKind;id:string;writable:boolean}>()
 const files=ref<{id:string;name:string;time:string}[]>([]),busy=ref(false),error=ref('')
 const path=`/v1/factory/${props.kind}/${props.id}/attachments`
 async function load(){try{files.value=await apiRequest(path)}catch(e){error.value=e instanceof Error?e.message:'凭证加载失败'}}

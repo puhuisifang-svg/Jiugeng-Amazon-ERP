@@ -6,7 +6,7 @@ export interface PermissionMenuGroup extends PermissionMenuItem { children: Perm
 // Pages sharing a backend permission deliberately show the same permission.
 // This is navigation only: selecting a page never invents a new authorization scope.
 const prefixes: Record<string, string[]> = {
-  'factory/employees':['factory.employees.'], 'factory/rates':['factory.rates.'], 'factory/reports':['factory.reports.'], 'factory/payroll':['factory.payroll.'],
+  'factory/expenses':['factory.expenses.'], 'factory/employees':['factory.employees.'], 'factory/rates':['factory.rates.'], 'factory/reports':['factory.reports.'], 'factory/payroll':['factory.payroll.'],
   'home':['dashboard.read'], 'dashboard-maintenance/pending-products':['dashboard.pending-products.manage'],
   'dashboard-maintenance/today-shipments':['dashboard.shipments.manage'], 'dashboard-maintenance/pending-shipments':['dashboard.shipments.manage'], 'shipping/statistics':['dashboard.shipments.manage'],
   'product-development':['development.'], samples:['samples.'], products:['products.','imports.'], materials:['materials.','inventory.','imports.'],

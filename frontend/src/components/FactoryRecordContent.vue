@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed,ref,watch} from 'vue'
 import type {FactoryKind,FactoryRecord} from '@/api/factory'
-import {factoryMoney,factoryStates,paymentState} from '@/utils/factoryPresentation'
+import {factoryMoney,factoryStates,paymentState,factoryProject} from '@/utils/factoryPresentation'
 import ListPagination from './ListPagination.vue'
 const props=defineProps<{kind:FactoryKind;record:FactoryRecord;section?:string;printing?:boolean;canVoid?:boolean}>()
 const emit=defineEmits<{voidPayment:[string]}>()
@@ -21,10 +21,10 @@ watch(()=>[props.record.id,props.section],()=>{page.value=1})
       </div>
       <dl class="factory-facts">
         <template v-if="kind==='employees'">
-          <dt>姓名 / 工号</dt><dd>{{ record.name }} / {{ record.number }}</dd><dt>班组</dt><dd>{{ record.team||'—' }}</dd><dt>手机号</dt><dd>{{ record.phone||'—' }}</dd><dt>开户行</dt><dd>{{ record.bankName||'未填写' }}</dd><dt>银行卡号</dt><dd>{{ record.bankAccount||'未填写' }}</dd><dt>常做工序</dt><dd>{{ record.operations||'—' }}</dd><dt>入职日期</dt><dd>{{ record.date }}</dd><dt>离职日期</dt><dd>{{ record.endDate||'在职' }}</dd>
+          <dt>姓名 / 工号</dt><dd>{{ record.name }} / {{ record.number }}</dd><dt>班组</dt><dd>{{ record.team||'—' }}</dd><dt>手机号</dt><dd>{{ record.phone||'—' }}</dd><dt>开户行</dt><dd>{{ record.bankName||'未填写' }}</dd><dt>银行卡号</dt><dd>{{ record.bankAccount||'未填写' }}</dd><dt>身份证号</dt><dd>{{ record.identityNumber||'未填写' }}</dd><dt>缴纳医社保</dt><dd>{{ record.insured?'是':'否' }}</dd><dt>入职日期</dt><dd>{{ record.date }}</dd><dt>离职日期</dt><dd>{{ record.endDate||'在职' }}</dd>
         </template>
         <template v-else-if="kind==='rates'">
-          <dt>加工项目</dt><dd>{{ record.project }}</dd><dt>工序</dt><dd>{{ record.operation }}</dd><dt>计件单价</dt><dd>{{ record.price }} 元 / {{ record.unit }}</dd><dt>适用员工</dt><dd>{{ record.employeeName }}</dd><dt>生效日期</dt><dd>{{ record.date }}</dd><dt>停止日期</dt><dd>{{ record.endDate||'未设置' }}</dd><dt>关联 SKU</dt><dd>{{ record.skuCode||'未关联，自定义加工项目' }}</dd><dt>数量精度</dt><dd>{{ record.decimalQuantity?'最多3位小数':'整数' }}</dd>
+          <dt>加工项目</dt><dd>{{ factoryProject(record) }}</dd><dt>计件单价</dt><dd>{{ record.price }} 元 / {{ record.unit }}</dd><dt>适用员工</dt><dd>{{ record.employeeName }}</dd><dt>生效日期</dt><dd>{{ record.date }}</dd><dt>停止日期</dt><dd>{{ record.endDate||'未设置' }}</dd><dt>关联 SKU</dt><dd>{{ record.skuCode||'未关联，自定义加工项目' }}</dd><dt>数量精度</dt><dd>{{ record.decimalQuantity?'最多3位小数':'整数' }}</dd>
         </template>
         <template v-else>
           <dt>员工 / 工号</dt><dd>{{ record.employeeName }} / {{ record.number }}</dd><dt>{{ kind==='reports'?'工作日期':'工资月份' }}</dt><dd>{{ record.date }}</dd><dt>班组</dt><dd>{{ record.team||'—' }}</dd><dt>状态</dt><dd>{{ factoryStates[record.status]||record.status }}</dd><template v-if="kind==='payroll'">
@@ -53,12 +53,12 @@ watch(()=>[props.record.id,props.section],()=>{page.value=1})
     <template v-if="section==='lines'||(kind==='reports'&&section==='overview')">
       <div class="factory-edit-table">
         <table>
-          <thead><tr><th>工作日期</th><th>加工项目 / 工序</th><th>数量</th><th>单位</th><th>工价</th><th>金额</th><th>备注</th></tr></thead><tbody>
+          <thead><tr><th>工作日期</th><th>加工项目</th><th>数量</th><th>单位</th><th>工价</th><th>金额</th><th>备注</th></tr></thead><tbody>
             <tr
               v-for="(l,i) in shown"
               :key="`${l.reportId}-${i}`"
             >
-              <td>{{ l.date }}</td><td><strong>{{ l.project }}</strong><small>{{ l.operation }}</small></td><td>{{ l.quantity }}</td><td>{{ l.unit }}</td><td>{{ l.priced===false?'待完善':l.price }}</td><td class="factory-number">
+              <td>{{ l.date }}</td><td><strong>{{ factoryProject(l) }}</strong></td><td>{{ l.quantity }}</td><td>{{ l.unit }}</td><td>{{ l.priced===false?'待完善':l.price }}</td><td class="factory-number">
                 {{ l.priced===false?'待定':factoryMoney(l.amount) }}
               </td><td>{{ l.remark||'—' }}</td>
             </tr><tr v-if="!lines.length">

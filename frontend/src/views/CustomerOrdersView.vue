@@ -252,7 +252,7 @@ watch(() => route.params.id, load); onMounted(load)
           <div><dt>发票抬头</dt><dd>{{ detail.details.invoiceRequired ? detail.invoiceTitle.invoiceTitle || '尚未选择' : '无需开票' }}</dd></div>
           <div><dt>收货人</dt><dd>{{ detail.details.recipient || '—' }}</dd></div>
           <div><dt>联系电话</dt><dd>{{ detail.details.phone || '—' }}</dd></div>
-          <div><dt>发货地址</dt><dd>{{ detail.details.address || '—' }}</dd></div>
+          <div><dt>收货地址</dt><dd>{{ detail.details.address || '—' }}</dd></div>
           <div class="order-facts-wide">
             <dt>备注</dt><dd>{{ detail.details.remark || '—' }}</dd>
           </div>
@@ -382,7 +382,7 @@ watch(() => route.params.id, load); onMounted(load)
           v-model="phone"
           required
           maxlength="32"
-        ></label><label class="form-wide">发货地址<input
+        ></label><label class="form-wide">收货地址<input
           v-model="address"
           required
           maxlength="500"

@@ -2,7 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ list: vi.fn(), products: vi.fn(), save: vi.fn(), saveProduct: vi.fn(), deleteProduct: vi.fn(), skus: vi.fn(), canAccess: vi.fn(), leave: vi.fn() }))
-vi.mock('@/api/customers', () => ({ customersApi: mocks }))
+vi.mock('@/api/customers', async (importOriginal) => ({ ...await importOriginal<typeof import('@/api/customers')>(), customersApi: mocks }))
 vi.mock('@/api/domain', () => ({ domainApi: { skus: mocks.skus } }))
 vi.mock('@/state/session', () => ({ session: { canAccess: mocks.canAccess } }))
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }), onBeforeRouteLeave: mocks.leave, onBeforeRouteUpdate: vi.fn(), RouterLink: { template: '<a><slot /></a>' } }))
@@ -189,4 +189,18 @@ describe('客户管理', () => {
     expect(mocks.list).toHaveBeenLastCalledWith(expect.objectContaining({ q: '', page: 0 }))
     wrapper.unmount()
   })
+})
+
+it('maintains multiple delivery addresses independently and reassigns the default after removal', async()=>{
+ const addresses=[{contactPerson:'合成甲',phone:'SYN-A',address:'合成地址甲',defaultAddress:true}]
+ mocks.list.mockResolvedValue(page([{...customer,addresses}]))
+ const w=render();await flushPromises();await w.get('tbody button').trigger('click');await flushPromises()
+ await w.findAll('dialog button').find(b=>b.text()==='添加收货地址')!.trigger('click')
+ const cards=w.findAll('fieldset').filter(c=>c.find('legend').exists()&&c.get('legend').text().startsWith('地址'))
+ expect(cards).toHaveLength(2)
+ await cards[1]!.findAll('input')[0]!.setValue('合成乙');await cards[1]!.findAll('input')[1]!.setValue('SYN-B');await cards[1]!.findAll('input')[2]!.setValue('合成地址乙')
+ await cards[0]!.get('button').trigger('click')
+ await w.get('dialog form').trigger('submit');await flushPromises()
+ expect(mocks.save).toHaveBeenCalledWith('c1',expect.objectContaining({addresses:[{contactPerson:'合成乙',phone:'SYN-B',address:'合成地址乙',defaultAddress:true}]}))
+ expect(addresses).toHaveLength(1);expect(addresses[0]?.address).toBe('合成地址甲');w.unmount()
 })

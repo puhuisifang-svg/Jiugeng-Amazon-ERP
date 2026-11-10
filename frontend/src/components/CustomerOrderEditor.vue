@@ -5,7 +5,7 @@ import DatePicker from '@/components/DatePicker.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import UnsavedChangesDialog from './UnsavedChangesDialog.vue'
 import { onBeforeRouteLeave } from 'vue-router'
-import { customersApi, type Customer, type CustomerProduct } from '@/api/customers'
+import { customersApi, customerAddresses, type Customer, type CustomerProduct } from '@/api/customers'
 import type { CustomerOrder, OrderInput } from '@/api/orders'
 import { invoiceAmounts } from '@/ui/invoiceAmounts'
 const props = defineProps<{ initial?: CustomerOrder | undefined; busy: boolean; error: string }>()
@@ -15,6 +15,13 @@ const form = reactive<OrderInput>(props.initial ? { ...JSON.parse(JSON.stringify
 const initialSnapshot = ref(JSON.stringify(form)), discard = ref(false), localError = ref(''), selecting = ref(false)
 const customers = ref<Customer[]>([]), chosen = ref<Customer>(), pickerOpen=ref(false)
 const productReferences = ref<Record<string, { customerProductCode: string; skuCode: string }>>(Object.fromEntries((props.initial?.lines ?? []).map(l => [l.details.customerProductId, { customerProductCode: l.product?.customerProductCode ?? '', skuCode: l.skuCode ?? '' }])))
+const addressIndex = ref('')
+const addresses = computed(() => customerAddresses(chosen.value))
+function chooseAddress() {
+  if(addressIndex.value==='') return
+  const address=addresses.value[Number(addressIndex.value)]
+  if(address) {form.recipient=address.contactPerson;form.phone=address.phone;form.address=address.address}
+}
 const titleIndex = ref('')
 const orderReference=computed({get:()=>form.externalNumber||form.contractNumber||'',set:(value:string)=>{form.externalNumber=value;form.contractNumber=''}})
 const titles = computed(() => chosen.value?.invoiceTitles ?? [])
@@ -26,7 +33,8 @@ async function searchCustomers() {
 async function changeCustomer() {
   chosen.value = customers.value.find(c => c.id === form.customerId)
   form.lines = []; productReferences.value = {}; pickerOpen.value=false; titleIndex.value = ''; form.invoiceTitle = ''; form.taxNumber = ''
-  form.recipient = chosen.value?.contactPerson ?? ''; form.phone = chosen.value?.phone ?? ''; form.address = chosen.value?.address ?? ''
+  form.recipient = chosen.value?.contactPerson ?? ''; form.phone = chosen.value?.phone ?? ''; form.address = ''
+  const index=addresses.value.findIndex(a=>a.defaultAddress);addressIndex.value=addresses.value.length?String(index<0?0:index):'';chooseAddress()
   if (titles.value.length === 1) { titleIndex.value = '0'; chooseTitle() }
 }
 function chooseTitle() { const t = titleIndex.value === 'snapshot' ? props.initial?.invoiceTitle : titleIndex.value === '' ? undefined : titles.value[Number(titleIndex.value)]; form.invoiceTitle = t?.invoiceTitle ?? ''; form.taxNumber = t?.taxNumber ?? '' }
@@ -69,7 +77,7 @@ onMounted(async () => {
       @submit.prevent="submit"
     >
       <header class="order-editor-heading">
-        <div><h2>{{ props.initial ? '编辑客户订单' : '新增客户订单' }}</h2><p>订单信息、发货信息与商品明细集中维护</p></div>
+        <div><h2>{{ props.initial ? '编辑客户订单' : '新增客户订单' }}</h2><p>订单信息、收货信息与商品明细集中维护</p></div>
         <button
           type="button"
           class="order-editor-close"
@@ -138,15 +146,28 @@ onMounted(async () => {
             :value="String(i)"
           >{{ t.invoiceTitle }} · {{ t.taxNumber }}</option></select></label>
           <h3 class="order-section-title">
-            发货信息
+            收货信息
           </h3>
+          <label class="form-wide">选择收货地址<select
+            v-model="addressIndex"
+            v-single-select
+            :disabled="!form.customerId"
+            @change="chooseAddress"
+          >
+            <option value="">{{ props.initial ? '保留本单收货信息 / 手动填写' : '手动填写收货信息' }}</option>
+            <option
+              v-for="(a,i) in addresses"
+              :key="i"
+              :value="String(i)"
+            >{{ a.defaultAddress ? '默认 · ' : '' }}{{ a.contactPerson || '未填联系人' }} · {{ a.phone || '未填电话' }} · {{ a.address }}</option>
+          </select></label>
           <label>收货人<input
             v-model="form.recipient"
             maxlength="100"
           ></label><label>联系电话<input
             v-model="form.phone"
             maxlength="32"
-          ></label><label class="shipping-address">发货地址<input
+          ></label><label class="shipping-address">收货地址<input
             v-model="form.address"
             maxlength="500"
           ></label>

@@ -4,7 +4,13 @@ export type CustomerStatus = 'ACTIVE' | 'DISABLED'
 export interface InvoiceTitle {
   invoiceTitle: string; taxNumber: string; registeredAddress: string; registeredPhone: string; bankName: string; bankAccount: string
 }
+export interface CustomerAddress { contactPerson: string; phone: string; address: string; defaultAddress: boolean }
+export function customerAddresses(customer?: CustomerInput): CustomerAddress[] {
+  if (customer?.addresses) return customer.addresses.map(a => ({ ...a }))
+  return customer?.address ? [{ contactPerson: customer.contactPerson, phone: customer.phone, address: customer.address, defaultAddress: true }] : []
+}
 export interface CustomerInput {
+  addresses?: CustomerAddress[]
   invoiceTitles?: InvoiceTitle[]
   name: string; account1688: string; contactPerson: string; phone: string; wechatId: string
   invoiceTitle?: string; taxNumber?: string; registeredAddress?: string; registeredPhone?: string; bankName?: string; bankAccount?: string; defaultCustomer?: boolean

@@ -23,6 +23,22 @@ class CustomerControllerTest {
     @Autowired ObjectMapper mapper;
     @Autowired JdbcTemplate jdbc;
 
+    @Test void addressBookPreservesLegacyAndValidatesDefaultsAndVersions() throws Exception {
+        String token=login("ADMIN");var input=customer("合成地址客户");
+        input.put("address","合成旧地址");input.put("contactPerson","合成联系人");input.put("phone","SYN-PHONE");
+        var saved=body(write(token,"",null,input).andExpect(status().isOk()).andExpect(jsonPath("$.addresses[0].defaultAddress").value(true)));
+        String id=saved.path("id").asText();input.put("version",0);
+        var a=Map.of("contactPerson","合成甲","phone","SYN-A","address","合成地址甲","defaultAddress",false);
+        var b=Map.of("contactPerson","合成乙","phone","SYN-B","address","合成地址乙","defaultAddress",true);
+        input.put("addresses",List.of(a,b));
+        write(token,"",id,input).andExpect(status().isOk()).andExpect(jsonPath("$.addresses.length()").value(2)).andExpect(jsonPath("$.address").value("合成地址乙"));
+        write(token,"",id,input).andExpect(status().isConflict());
+        input.put("version",1);input.put("addresses",List.of(b,b));write(token,"",id,input).andExpect(status().isBadRequest());
+        input.put("addresses",List.of(Map.of("address"," ")));write(token,"",id,input).andExpect(status().isBadRequest());
+        input.remove("addresses");write(token,"",id,input).andExpect(status().isOk()).andExpect(jsonPath("$.addresses.length()").value(2));
+        input.put("version",2);input.put("addresses",List.of());write(token,"",id,input).andExpect(status().isOk()).andExpect(jsonPath("$.addresses.length()").value(0)).andExpect(jsonPath("$.address").value(""));
+    }
+
     @Test void billingDefaultCustomerAndNullablePrices() throws Exception {
         String token=login("ADMIN"); var input=customer("合成开票客户");
         input.put("invoiceTitle","合成开票抬头"); input.put("taxNumber","SYN-TAX-001");

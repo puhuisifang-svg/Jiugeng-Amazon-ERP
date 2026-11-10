@@ -1,6 +1,6 @@
 import { factoryActions } from './factoryPresentation'
 const categories: Record<string, string> = { SECURITY: '登录安全', ACCOUNT: '账号管理', BUSINESS: '业务操作', CONFIG: '系统配置' }
-const resources: Record<string, string> = { FORWARDER_DOCUMENT:'货代单据', FACTORY_EMPLOYEES:'工厂员工', FACTORY_RATES:'工厂工价', FACTORY_REPORTS:'工厂报工', FACTORY_PAYROLL:'工厂工资',
+const resources: Record<string, string> = { FORWARDER_DOCUMENT:'货代单据', FACTORY_EXPENSES:'工厂其他开销', FACTORY_EMPLOYEES:'工厂员工', FACTORY_RATES:'工厂工价', FACTORY_REPORTS:'工厂报工', FACTORY_PAYROLL:'工厂工资',
   ROLE: '角色', ACCOUNT: '账号', SECURITY_SETTING: '安全设置', CUSTOMS_WAREHOUSE: 'FBA仓库地址', CUSTOMS_SHIPPER: '报关发货人', CUSTOMS_DOCUMENT: '报关单据', PRODUCT: '产品', PRODUCT_VARIANT: '产品 SKU', MATERIAL: '辅料', AUXILIARY_MATERIAL: '辅料', INVENTORY: '辅料库存', SELECTION: '候选评估', SELECTION_CANDIDATE: '候选产品', WATCH: '店铺监控', IMPORT: '数据导入', PRODUCT_COST: '产品成本', CUSTOMER: '客户', CUSTOMER_PRODUCT: '客户产品', CUSTOMER_ORDER: '客户订单', INVOICE: '发票', CUSTOMER_INVOICE: '客户发票', PURCHASE: '采购单', SUPPLIER: '供应商', SAMPLE_LOCATION: '样品库位', FINANCE: '财务账单', PRODUCT_DEVELOPMENT: '新品开发', PENDING_SHIPMENT: '待发货计划', TODAY_SHIPMENT: '今日发货', PENDING_PRODUCT: '样品待开发', CARTON_LABEL: '外箱标', CATALOG_IMAGE: '产品图片', DASHBOARD_IMAGE: '工作台图片', PRODUCT_MONITOR: '产品监控', WATCH_STORE: '店铺监控', WATCH_PRODUCT: '监控产品',
 }
 const actions: Record<string, string> = {

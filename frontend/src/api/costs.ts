@@ -11,6 +11,7 @@ export interface MaterialPrice { netPrice: string; unit: string; source: string;
 const base = '/v1/product-costs'
 const body = (value: unknown) => JSON.stringify(value)
 export const costsApi = {
+  prices: () => apiRequest<(MaterialPrice & { materialId:string })[]>(`${base}/materials/prices`),
   list: (q: string, state: string, page: number, size: number, productId = '') => apiRequest<{ items: CostRow[]; totalCount: number }>(`${base}?${new URLSearchParams({ q, state, page: String(page), size: String(size), productId })}`),
   initial: (id: string) => apiRequest<CostInput>(`${base}/skus/${id}/initial`),
   preview: (id: string, input: CostInput) => apiRequest<CostSnapshot>(`${base}/skus/${id}/preview`, { method: 'POST', body: body(input) }),

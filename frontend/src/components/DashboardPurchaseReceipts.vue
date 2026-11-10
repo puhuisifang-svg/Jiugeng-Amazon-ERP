@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, RouterLink } from 'vue-router'
 import { purchaseApi, type PurchaseOrder } from '@/api/purchases'
 import { ApiError } from '@/api/client'
@@ -82,12 +82,14 @@ function beforeUnload(event: BeforeUnloadEvent) { if (locked.value) { event.prev
 onBeforeRouteLeave(() => !locked.value)
 window.addEventListener('beforeunload', beforeUnload)
 onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
-watch(() => props.visible, visible => { if (visible) void reload() }, { immediate: true })
+onMounted(() => { void reload() })
+watch(() => props.visible, visible => { if (visible) void reload() })
 defineExpose({ reload })
 </script>
 
 <template>
   <section
+    v-if="visible"
     aria-label="采购待接收"
     class="receipt-worklist"
   >

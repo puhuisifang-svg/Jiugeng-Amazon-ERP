@@ -70,3 +70,9 @@ it('keeps request errors visible and can reload after a failed list request', as
   await w.setProps({ visible: false }); await w.setProps({ visible: true }); await flushPromises()
   expect(w.text()).toContain('SYN-PO-1'); expect(w.text()).not.toContain('加载失败'); w.unmount()
 })
+
+it('loads count on mount even before the purchase tab is opened',async()=>{
+ const w=mount(DashboardPurchaseReceipts,{props:{visible:false}});await flushPromises()
+ expect(h.orders).toHaveBeenCalledTimes(2);expect(w.emitted('count')?.[0]).toEqual([1])
+ expect(w.findComponent({name:'ListPagination'}).exists()).toBe(false);w.unmount()
+})

@@ -99,7 +99,7 @@ class MaterialService {
     }
 
     private ValidatedMaterial validate(MaterialInput input, String excludingId) {
-        String code = required(input.materialCode(), "辅料编码", 64);
+        String code = input.materialCode()==null||input.materialCode().isBlank() ? (excludingId==null?"MAT-"+UUID.randomUUID().toString().replace("-","").substring(0,20).toUpperCase(java.util.Locale.ROOT):material(excludingId).materialCode()) : required(input.materialCode(), "辅料编码", 64);
         String normalized = MaterialRepository.normalize(code);
         if (repository.codeExists(normalized, excludingId)) {
             throw new MaterialException(409, "MATERIAL_CODE_EXISTS", "辅料编码已存在（忽略大小写）");

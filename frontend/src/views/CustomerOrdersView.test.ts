@@ -7,13 +7,13 @@ vi.mock('@/api/orders', () => ({ ordersApi: { list: vi.fn(), get: vi.fn(), alloc
 import { ordersApi } from '@/api/orders'
 import type { CustomerOrder } from '@/api/orders'
 import CustomerOrdersView from './CustomerOrdersView.vue'
-const order = { id: 'o1', orderNumber: 'SYN-ORDER', customerName: '合成客户', status: 'CONFIRMED', version: 2, details: { source: 'OFFLINE', recipient: '合成人', phone: 'SYN-PHONE', address: '合成地址', invoiceRequired: true, orderDate: '2026-10-26', deliveryDate: '2026-10-27', lines: [] }, lines: [{ id: 'l1', product: { customerProductCode: 'CLIENT-ORDER' }, details: { name: '合成SKU', quantity: 10.5, unit: '米', deliveryDate: '2026-10-27', remark: '' }, allocatedQuantity: 2, shippedQuantity: 3 }], invoiceTitle: { invoiceTitle: '合成抬头' }, totalAmount: '101.00' } as unknown as CustomerOrder
+const order = { id: 'o1', orderNumber: 'SYN-ORDER', customerName: '合成客户', status: 'CONFIRMED', version: 2, details: { source: 'OFFLINE', externalNumber:'SYN-CLIENT-ORDER', recipient: '合成人', phone: 'SYN-PHONE', address: '合成地址', invoiceRequired: true, orderDate: '2026-10-26', deliveryDate: '2026-10-27', lines: [] }, lines: [{ id: 'l1', product: { customerProductCode: 'CLIENT-ORDER' }, details: { name: '合成SKU', quantity: 10.5, unit: '米', deliveryDate: '2026-10-27', remark: '' }, allocatedQuantity: 2, shippedQuantity: 3 }], invoiceTitle: { invoiceTitle: '合成抬头' }, totalAmount: '101.00' } as unknown as CustomerOrder
 beforeEach(() => { vi.clearAllMocks(); state.write = true; state.route.params = {}; vi.mocked(ordersApi.list).mockResolvedValue({ items: [order], totalCount: 1, page: 0, size: 20 }); vi.mocked(ordersApi.get).mockResolvedValue(order) })
 describe('客户订单', () => {
  it('shows the saved customer code in order details',async()=>{state.route.params={id:'o1'};const w=mount(CustomerOrdersView,{global:{stubs:{OrderDocuments:true}}});await flushPromises();expect(w.text()).toContain('CLIENT-ORDER');w.unmount()})
   it('shows order and multi-item progress; opening an order never creates shipments', async () => {
     const w = mount(CustomerOrdersView); await flushPromises()
-    expect(w.text()).toContain('SYN-ORDER'); expect(w.text()).toContain('合成SKU')
+    expect(w.text()).toContain('SYN-CLIENT-ORDER'); expect(w.text()).not.toContain('SYN-ORDER');expect(w.get('.order-delivery-date').text()).toBe('2026-10-27'); expect(w.text()).toContain('合成SKU')
     expect(ordersApi.arrange).not.toHaveBeenCalled()
     w.unmount()
   })
@@ -43,4 +43,10 @@ it('places order history after documents and supplies SKU references to the thum
  const w=mount(CustomerOrdersView,{global:{stubs:{OrderDocuments:{template:'<div>合成订单附件</div>'},CustomerProductImage:true}}});await flushPromises()
  expect(w.text().indexOf('变更记录')).toBeGreaterThan(w.text().indexOf('合成订单附件'))
  expect(w.get('.order-delete-button').text()).toBe('删除草稿');expect(w.findComponent({name:'CustomerProductImage'}).props()).toMatchObject({productId:'p1',variantId:'v1'});w.unmount()
+})
+
+it('renders thumbnails for every order item using its SKU reference',async()=>{
+ vi.mocked(ordersApi.list).mockResolvedValue({items:[{...order,lines:order.lines.map(l=>({...l,product:{...l.product,productId:'p1',variantId:'v1'}}))}],totalCount:1,page:0,size:20})
+ const w=mount(CustomerOrdersView,{global:{stubs:{CustomerProductImage:true}}});await flushPromises()
+ expect(w.findComponent({name:'CustomerProductImage'}).props()).toMatchObject({productId:'p1',variantId:'v1'});w.unmount()
 })

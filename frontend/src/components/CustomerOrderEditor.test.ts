@@ -7,7 +7,7 @@ vi.mock('@/api/customers', async (importOriginal) => ({ ...await importOriginal<
 import { customersApi } from '@/api/customers'
 import CustomerOrderEditor from './CustomerOrderEditor.vue'
 const customer = { id: 'c1', name: '合成客户', status: 'ACTIVE', contactPerson: '测试', phone: 'SYN', address: '测试地址', invoiceTitles: [{ invoiceTitle: '测试抬头', taxNumber: 'SYN-TAX' }] } as Customer
-const product = { id: 'cp1', productName: '测试商品\n红色规格', priceUnit: '米', specification:'合成规格 20 × 30 cm', supplyPrice:'12.50', skuCode: 'SYN-SKU', customerProductCode: 'CLIENT-001' } as CustomerProduct
+const product = { id: 'cp1', productId:'p1',variantId:'v1', productName: '测试商品\n红色规格', priceUnit: '米', specification:'合成规格 20 × 30 cm', supplyPrice:'12.50', skuCode: 'SYN-SKU', customerProductCode: 'CLIENT-001' } as CustomerProduct
 beforeEach(() => {
   HTMLDialogElement.prototype.showModal = function () { this.open = true }
   HTMLDialogElement.prototype.close = function () { this.open = false }
@@ -21,11 +21,17 @@ it('retains input on backdrop, confirms discard, defaults unique title and emits
   expect(w.get('[aria-label="不含税单价"]').element).toHaveProperty('value','12.50')
   expect(w.get('.order-customer-code').text()).toBe('CLIENT-001')
   expect(w.get('.order-line-sku').text()).toContain('SYN-SKU')
+  expect(w.find('[aria-label="商品交期"]').exists()).toBe(false)
+  const dateField=w.findAllComponents({name:'DatePicker'}).find(c=>c.props('modelValue')!==undefined && c.element.closest('label')?.textContent?.startsWith('交期'))!
+  dateField.vm.$emit('update:modelValue','2026-12-15');await flushPromises()
+  expect(w.find('textarea[aria-label="品名"]').exists()).toBe(false)
+  expect(w.get('.order-line-name').text()).toContain('测试商品')
+  expect(w.findComponent({name:'CustomerProductImage'}).props()).toMatchObject({productId:'p1',variantId:'v1'})
   await w.get('[aria-label="数量"]').setValue('1.25'); await w.get('[aria-label="不含税单价"]').setValue('10')
   await byLabel('是否需要开票').get('select').setValue('true')
   await w.get('[aria-label="客户订单表单"]').trigger('click'); expect(w.emitted('close')).toBeUndefined()
   await w.get('form').trigger('submit')
-  expect(w.emitted('save')?.[0]?.[0]).toMatchObject({ invoiceTitle: '测试抬头', taxNumber: 'SYN-TAX', lines: [expect.objectContaining({ quantity: 1.25, name: '测试商品\n红色规格' })] })
+  expect(w.emitted('save')?.[0]?.[0]).toMatchObject({ invoiceTitle: '测试抬头', taxNumber: 'SYN-TAX', lines: [expect.objectContaining({ quantity: 1.25, deliveryDate:'2026-12-15', name: '测试商品\n红色规格' })] })
   await w.findAll('button').find(b => b.text() === '取消')!.trigger('click'); expect(w.text()).toContain('要放弃本次填写吗？')
   await w.findAll('button').find(b => b.text() === '继续填写')!.trigger('click'); expect(w.get('[aria-label="数量"]').element).toHaveProperty('value', '1.25')
   await w.setProps({ busy: true, error: '保存失败，输入保留' }); expect(w.text()).toContain('保存失败，输入保留'); expect(w.get('button[type=submit]').attributes('disabled')).toBeDefined(); w.unmount()

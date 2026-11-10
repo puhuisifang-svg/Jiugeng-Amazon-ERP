@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { costsApi, type MaterialPrice } from '@/api/costs'
 import SingleFileUpload from '@/components/SingleFileUpload.vue'
 import { vSingleSelect } from '@/directives/singleSelect'
 import { confirmAction } from '@/state/uiConfirmation'
@@ -10,7 +11,7 @@ import { RouterLink, useRoute } from 'vue-router'
 
 import { ApiError } from '@/api/client'
 import { catalogApi } from '@/api/catalog'
-import { domainApi, type InventoryBalanceViewDto, type InventoryCommandType, type MaterialDetailDto, type MaterialInput, type SupplierAssignmentDto, type SupplierDto, type SupplierLinkDto } from '@/api/domain'
+import { domainApi, type InventoryBalanceViewDto, type InventoryCommandType, type MaterialDetailDto, type MaterialInput, type SupplierAssignmentDto, type SupplierDto } from '@/api/domain'
 import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vue'
 import SupplierContactLinks from '@/components/SupplierContactLinks.vue'
 import SyntheticNotice from '@/components/SyntheticNotice.vue'
@@ -21,6 +22,15 @@ import { isNonNegativeInventoryInteger, isPositiveInventoryInteger } from '@/ui/
 
 const items = ref<MaterialDetailDto[]>([])
 const costMaterial = ref<MaterialDetailDto>()
+const prices=ref<Record<string,MaterialPrice>>({}),priceError=ref(''),priceLoading=ref(false)
+const netPrice=ref(''),originalPrice=ref<MaterialPrice|null>(null),priceConfirmed=ref(false),formPriceReady=ref(true)
+const canReadPrice=computed(()=>formal.value && session.canAccess(['costs.read']))
+const canWritePrice=computed(()=>canReadPrice.value && session.canAccess(['costs.write','materials.write']))
+const priceChanged=computed(()=>netPrice.value!== (originalPrice.value?.netPrice??'') || (!!originalPrice.value && form.unit!==originalPrice.value.unit))
+async function loadPrices(){if(!canReadPrice.value)return;priceLoading.value=true;priceError.value='';try{prices.value=Object.fromEntries((await costsApi.prices()).map(p=>[p.materialId,p]))}catch{priceError.value='成本价加载失败，请重试';}finally{priceLoading.value=false}}
+function priceText(item:MaterialDetailDto){if(!canReadPrice.value)return '无查看权限';if(priceError.value)return '加载失败';if(priceLoading.value)return '加载中…';const price=prices.value[item.id];return !price?'未维护':price.unit!==item.unit?'单位已变，请核定':`¥ ${Number(price.netPrice).toLocaleString('zh-CN',{maximumFractionDigits:6})} / ${price.unit}`}
+function unlinkSupplier(id:string){const primary=supplierLinks.value.find(l=>l.supplierId===id)?.primary;supplierLinks.value=supplierLinks.value.filter(l=>l.supplierId!==id);if(primary&&supplierLinks.value[0])supplierLinks.value[0].primary=true}
+
 const balances = ref<InventoryBalanceViewDto[]>([])
 const loading = ref(true); const saving = ref(false); const error = ref(''); const success = ref('')
 const editingId = ref<string | null>(null); const showMaterialForm = ref(false); const showInventoryForm = ref(false)
@@ -35,20 +45,19 @@ const uploading = ref(false); const imageError = ref('')
 const failedRemoteImages = ref<Set<string>>(new Set())
 type MaterialImagePreview = ({ alt: string; imageUrl: string } | { alt: string; imageAssetId: string }) & { kind?: 'material' | 'supplier-qr' }
 const imagePreview = ref<MaterialImagePreview | null>(null)
-const purchaseMaterial = ref<MaterialDetailDto | null>(null)
-const purchaseLoading = ref(false)
-const purchaseSuppliers = ref<Array<{ link: SupplierLinkDto; supplier: SupplierDto }>>([])
 const unitOptions = ['件', '个', '套', '盒', '包', '卷', '米', '千克', '克', 'PCS', 'SET', 'BOX', 'PACK', 'ROLL', 'M', 'KG']
 const writable = computed(() => session.canAccess(['materials.write']))
 const formal = computed(() => runtimeConfig.authMode === 'password')
 const mockMode = computed(() => runtimeConfig.authMode === 'mock')
 const inventoryReadable = computed(() => session.canAccess(['inventory.read']))
 const inventoryWritable = computed(() => inventoryReadable.value && (mockMode.value || session.canAccess(['inventory.inbound']) || session.canAccess(['inventory.outbound'])))
+const deleteIds = ref<string[]>([])
+function requestDelete(ids:string[]) { deleteIds.value=[...ids]; deleteError.value=''; deleteOpen.value=true }
 const selectedIds = ref<string[]>([]); const deleteOpen = ref(false); const deleteError = ref('')
 const page = ref(1); const pageSize = ref(20); const inventoryError = ref('')
 const supplierAccess = computed(() => session.canAccess(['suppliers.read']))
 const supplierWritable = computed(() => writable.value && session.canAccess(['suppliers.read', 'suppliers.write']))
-const rowActionsAvailable = computed(() => writable.value || inventoryWritable.value || (formal.value && (supplierAccess.value || session.canAccess(['costs.read']))))
+const rowActionsAvailable = computed(() => writable.value || inventoryWritable.value || (formal.value && (session.canAccess(['purchases.read', 'purchases.write', 'suppliers.read']) || session.canAccess(['costs.read']))))
 const activeMaterials = computed(() => items.value.filter(item => item.status === 'ACTIVE'))
 const selectedMaterial = computed(() => items.value.find(item => item.id === inventoryForm.materialId))
 const balanceByMaterial = computed(() => new Map(balances.value.map(item => [item.materialId ?? item.materialCode, item])))
@@ -77,9 +86,9 @@ watch(() => filteredItems.value.length, total => { page.value = Math.min(page.va
 const allPageSelected = computed(() => pageItems.value.length > 0 && pageItems.value.every(item => selectedIds.value.includes(item.id)))
 function selectPage(event: Event) { selectedIds.value = (event.target as HTMLInputElement).checked ? pageItems.value.map(item => item.id) : [] }
 async function deleteSelected() {
-  if (saving.value || !selectedIds.value.length) return
+  if (saving.value || !deleteIds.value.length) return
   saving.value = true; deleteError.value = ''
-  const ids = [...selectedIds.value]
+  const ids = [...deleteIds.value]
   try {
     await domainApi.deleteMaterials(ids)
     items.value = items.value.filter(item => !ids.includes(item.id)); selectedIds.value = []
@@ -89,14 +98,18 @@ async function deleteSelected() {
 }
 function resetForm() {
   Object.assign(form, { materialCode: '', name: '', materialType: '', specification: '', unit: '件', imageUrl: '', imageAssetId: '', remark: '' })
+  netPrice.value='';originalPrice.value=null;priceConfirmed.value=false;formPriceReady.value=true;
   editingId.value = null; supplierLinks.value = []; showMaterialForm.value = false
 }
 function resetFilters() { Object.assign(filters, { keyword: '', materialType: '', status: '', stock: '' }) }
 function openMaterialForm() { resetForm(); showInventoryForm.value = false; showMaterialForm.value = true; success.value = ''; error.value = '' }
 async function edit(item: MaterialDetailDto) {
+  netPrice.value='';originalPrice.value=null;priceConfirmed.value=false;formPriceReady.value=!canReadPrice.value;supplierLinks.value=[]
+
   Object.assign(form, { materialCode: item.materialCode, name: item.name, materialType: item.materialType,
     specification: item.specification ?? '', unit: item.unit, imageUrl: item.imageUrl ?? '', imageAssetId: item.imageAssetId ?? '', remark: item.remark ?? '' })
   editingId.value = item.id; showInventoryForm.value = false; showMaterialForm.value = true; success.value = ''; error.value = ''
+  if(canReadPrice.value){try{const price=await costsApi.price(item.id);originalPrice.value=price;netPrice.value=price?.netPrice??'';formPriceReady.value=true}catch{error.value='成本价读取失败，请关闭并重新编辑；本次不能保存。'}}
   if (supplierAccess.value) supplierLinks.value = (await domainApi.materialSupplierLinks(item.id)).map(link => ({ supplierId: link.supplierId, purchaseUrl: link.purchaseUrl, remark: link.remark, primary: link.primary }))
 }
 function openInventory(item?: MaterialDetailDto) {
@@ -115,19 +128,6 @@ function previewImage(item: MaterialDetailDto) {
   if (item.imageAssetId) imagePreview.value = { alt: item.name, imageAssetId: item.imageAssetId, kind: 'material' }
   else if (item.imageUrl) imagePreview.value = { alt: item.name, imageUrl: item.imageUrl, kind: 'material' }
 }
-function previewSupplierQr(supplier: SupplierDto) {
-  const alt = `${supplier.name}微信二维码`
-  if (supplier.qrImageId) imagePreview.value = { alt, imageAssetId: supplier.qrImageId, kind: 'supplier-qr' }
-  else if (supplier.qrImageUrl) imagePreview.value = { alt, imageUrl: supplier.qrImageUrl, kind: 'supplier-qr' }
-}
-async function openPurchase(item: MaterialDetailDto) {
-  purchaseMaterial.value = item; purchaseSuppliers.value = []; purchaseLoading.value = true; error.value = ''
-  try {
-    const links = await domainApi.materialSupplierLinks(item.id)
-    purchaseSuppliers.value = await Promise.all(links.map(async link => ({ link, supplier: await domainApi.supplier(link.supplierId) })))
-  } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '供应商采购信息加载失败。' }
-  finally { purchaseLoading.value = false }
-}
 async function uploadImage(file: File) {
   uploading.value = true; imageError.value = ''
   try { form.imageAssetId = (await catalogApi.uploadImage('MATERIAL_IMAGE', file)).id; form.imageUrl = '' }
@@ -140,7 +140,8 @@ async function load() {
   try {
     const materialResponse = await domainApi.materials()
     items.value = materialResponse.items
-    if (supplierAccess.value) supplierOptions.value = (await domainApi.suppliers({ status: 'ACTIVE', size: 100 })).items
+    await loadPrices()
+    if (supplierAccess.value) {const all:SupplierDto[]=[];let p=0;while(true){const result=await domainApi.suppliers({status:'ACTIVE',size:100,page:p++});all.push(...result.items);if(!result.items.length||all.length>=result.totalCount)break}supplierOptions.value=all}
     if (inventoryReadable.value) {
       try {
         balances.value = (await domainApi.balances()).items
@@ -151,25 +152,31 @@ async function load() {
   finally { loading.value = false }
 }
 async function save() {
+  if(saving.value || uploading.value || !formPriceReady.value)return
+  if(canWritePrice.value && priceChanged.value && (!netPrice.value.trim() || !/^\d+(\.\d{1,6})?$/.test(netPrice.value) || !priceConfirmed.value)){error.value='请填写有效成本价（最多六位小数），并确认人民币不含税单价。';return}
   saving.value = true; error.value = ''; success.value = ''
   try {
     const input: MaterialInput = { materialCode: form.materialCode.trim(), name: form.name.trim(),
       materialType: form.materialType.trim() || '模拟辅料', unit: form.unit.trim(),
+      ...(canWritePrice.value && priceChanged.value ? {costPrice:{netPrice:netPrice.value,unit:form.unit,source:'MANUAL',referenceId:null,reason:editingId.value?'编辑辅料时核定成本价':'新增辅料时核定成本价',version:originalPrice.value?.version??-1,confirmedNet:priceConfirmed.value}} : {}),
       ...(form.specification?.trim() ? { specification: form.specification.trim() } : {}),
       ...(form.imageUrl?.trim() ? { imageUrl: form.imageUrl.trim() } : {}),
       ...(form.imageAssetId ? { imageAssetId: form.imageAssetId } : {}),
       ...(form.remark?.trim() ? { remark: form.remark.trim() } : {}) }
     if (editingId.value) {
       const updated = await domainApi.updateMaterial(editingId.value, input)
+      if(input.costPrice){originalPrice.value={...input.costPrice,version:input.costPrice.version+1};prices.value[updated.id]=originalPrice.value}
       if (supplierWritable.value) await domainApi.replaceMaterialSupplierLinks(updated.id, supplierLinks.value)
       items.value = items.value.map(item => item.id === updated.id ? updated : item); success.value = '辅料及供应商关系已更新。'
     } else {
       const response = await domainApi.createMaterial(input)
+      editingId.value=response.item.id;form.materialCode=response.item.materialCode;items.value.unshift(response.item)
+      if(input.costPrice){originalPrice.value={...input.costPrice,version:0};prices.value[response.item.id]=originalPrice.value}
       if (supplierWritable.value) await domainApi.replaceMaterialSupplierLinks(response.item.id, supplierLinks.value)
-      items.value.unshift(response.item); success.value = response.mockData ? '模拟辅料已创建。' : '辅料已创建。'
+      success.value = response.mockData ? '模拟辅料已创建。' : '辅料已创建。'
     }
     resetForm()
-  } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '保存失败：请检查字段与编码唯一性。' }
+  } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '保存失败，请检查填写内容后重试。' }
   finally { saving.value = false }
 }
 async function submitInventory() {
@@ -242,6 +249,18 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
 
 <template>
   <section class="page-stack material-management">
+    <p
+      v-if="priceError"
+      class="error-message"
+      role="alert"
+    >
+      {{ priceError }} <button
+        type="button"
+        @click="loadPrices"
+      >
+        重试
+      </button>
+    </p>
     <SyntheticNotice v-if="!formal" />
     <form
       class="panel filter-panel material-filters"
@@ -249,7 +268,7 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
     >
       <label>关键词<input
         v-model="filters.keyword"
-        placeholder="辅料编码、名称或规格"
+        placeholder="辅料名称或规格"
       ></label>
       <label>辅料类型<select
         v-model="filters.materialType"
@@ -300,7 +319,7 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
           type="button"
           class="danger-button"
           :disabled="saving"
-          @click="deleteError = ''; deleteOpen = true"
+          @click="requestDelete(selectedIds)"
         >
           删除（{{ selectedIds.length }}）
         </button>
@@ -336,12 +355,6 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
         <h2 id="material-dialog-title">
           {{ editingId ? '编辑辅料' : formal ? '新增辅料' : '新增模拟辅料' }}
         </h2>
-        <label>辅料编码<input
-          v-model="form.materialCode"
-          required
-          maxlength="64"
-          :readonly="Boolean(editingId)"
-        ></label>
         <label>辅料名称<input
           v-model="form.name"
           required
@@ -349,9 +362,34 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
         ></label>
         <label>辅料类型<input
           v-model="form.materialType"
+          list="material-type-history"
+          placeholder="选择历史类型或输入新类型"
           :required="formal"
           maxlength="100"
         ></label>
+        <datalist id="material-type-history">
+          <option
+            v-for="type in materialTypes"
+            :key="type"
+            :value="type"
+          />
+        </datalist>
+        <label v-if="canReadPrice">成本价（人民币 / {{ form.unit }}，不含税）<input
+          v-model="netPrice"
+          aria-label="辅料成本价"
+          inputmode="decimal"
+          maxlength="19"
+          :disabled="!canWritePrice || !formPriceReady || saving"
+          placeholder="选填，未填写表示尚未维护"
+        ></label>
+        <label
+          v-if="canWritePrice && priceChanged"
+          class="material-price-confirm form-wide"
+        ><input
+          v-model="priceConfirmed"
+          type="checkbox"
+          :disabled="saving"
+        >确认成本价为人民币不含税单价，用于产品成本核算</label>
         <label>规格<input
           v-model="form.specification"
           maxlength="500"
@@ -446,34 +484,54 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
               {{ supplier.name }}
             </option>
           </select>
-          <div
-            v-for="link in supplierLinks"
-            :key="link.supplierId"
-            class="relation-row"
-          >
-            <strong>{{ supplierName(link.supplierId) }}</strong>
-            <label><input
-              type="radio"
-              name="material-primary-supplier"
-              :checked="link.primary"
-              @change="makePrimary(link.supplierId)"
-            >主供应商</label>
-            <SupplierContactLinks
-              :supplier="supplierOptions.find(item => item.id === link.supplierId)"
-              :purchase-url="link.purchaseUrl"
-            /><input
-              v-model="link.remark"
-              aria-label="辅料供应商关系备注"
-              maxlength="500"
-              placeholder="关系备注"
+          <div class="material-supplier-cards">
+            <article
+              v-for="link in supplierLinks"
+              :key="link.supplierId"
+              class="material-supplier-card"
             >
-            <button
-              type="button"
-              class="danger-link"
-              @click="supplierLinks.splice(supplierLinks.indexOf(link), 1)"
+              <header>
+                <strong>{{ supplierName(link.supplierId) }}</strong><span
+                  v-if="link.primary"
+                  class="material-primary-tag"
+                >主供应商</span><div class="material-supplier-actions">
+                  <button
+                    v-if="!link.primary"
+                    type="button"
+                    :disabled="saving"
+                    @click="makePrimary(link.supplierId)"
+                  >
+                    设为主供应商
+                  </button><button
+                    type="button"
+                    class="material-unlink"
+                    :disabled="saving"
+                    @click="unlinkSupplier(link.supplierId)"
+                  >
+                    移除
+                  </button>
+                </div>
+              </header>
+              <div class="material-supplier-contact">
+                <SupplierContactLinks
+                  :supplier="supplierOptions.find(item=>item.id===link.supplierId)"
+                  :purchase-url="link.purchaseUrl"
+                />
+              </div>
+              <label>备注<input
+                v-model="link.remark"
+                aria-label="辅料供应商关系备注"
+                maxlength="500"
+                :disabled="saving"
+                placeholder="选填，如供货约定、联系人说明"
+              ></label>
+            </article>
+            <p
+              v-if="!supplierLinks.length"
+              class="muted"
             >
-              解除
-            </button>
+              暂无关联供应商，请从上方选择。
+            </p>
           </div>
         </section>
         <div class="operation-form__actions ui-dialog-actions">
@@ -485,7 +543,7 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
             取消
           </button>
           <button
-            :disabled="saving || uploading"
+            :disabled="saving || uploading || !formPriceReady"
             type="submit"
           >
             {{ saving ? '保存中…' : editingId ? '保存修改' : '新增辅料' }}
@@ -531,7 +589,7 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
           v-for="item in activeMaterials"
           :key="item.id"
           :value="item.id"
-        >{{ item.materialCode }} · {{ item.name }}</option></select></label>
+        >{{ item.name }}</option></select></label>
         <label>类型<select
           v-model="inventoryForm.type"
           v-single-select
@@ -601,7 +659,7 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
       v-if="costMaterial"
       :material="costMaterial"
       @close="costMaterial = undefined"
-      @saved="costMaterial = undefined; success = '成本价已保存，相关成本请重新核算。'"
+      @saved="costMaterial = undefined; loadPrices(); success = '成本价已保存，相关成本请重新核算。'"
     />
     <p
       v-if="error"
@@ -637,7 +695,7 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
                     @change="selectPage"
                   >
                 </th>
-                <th>图片</th><th>辅料编码</th><th>品名 / 类型</th><th>规格</th><th v-if="inventoryReadable">
+                <th>图片</th><th>品名 / 类型</th><th>规格</th><th>成本价（不含税）</th><th v-if="inventoryReadable">
                   现存量
                 </th><th v-if="inventoryReadable">
                   安全库存
@@ -693,7 +751,9 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
                     :aria-label="`${item.name}暂无可用图片`"
                   >图</span>
                 </td>
-                <td><strong>{{ item.materialCode }}</strong></td><td>{{ item.name }}<small>{{ item.materialType }}</small></td><td>{{ item.specification || '—' }}</td>
+                <td>{{ item.name }}<small>{{ item.materialType }}</small></td><td>{{ item.specification || '—' }}</td><td class="material-cost-cell">
+                  {{ priceText(item) }}
+                </td>
                 <td v-if="inventoryReadable">
                   {{ balanceFor(item)?.quantity ?? '—' }}
                 </td>
@@ -752,13 +812,21 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
                     >
                       库存
                     </button>
-                    <button
-                      v-if="formal && supplierAccess"
+                    <RouterLink
+                      v-if="formal && item.status === 'ACTIVE' && session.canAccess(['purchases.read', 'purchases.write', 'suppliers.read'])"
                       class="secondary-button"
-                      type="button"
-                      @click="openPurchase(item)"
+                      :to="`/purchases/orders?type=MATERIAL&materialId=${encodeURIComponent(item.id)}`"
                     >
                       采购
+                    </RouterLink>
+                    <button
+                      v-if="formal && writable"
+                      type="button"
+                      class="material-unlink"
+                      :disabled="saving"
+                      @click="requestDelete([item.id])"
+                    >
+                      删除
                     </button>
                     <button
                       v-if="formal && writable"
@@ -801,7 +869,7 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
           删除所选辅料
         </h2>
         <p class="form-wide">
-          确认删除已勾选的 {{ selectedIds.length }} 条辅料？删除后不可恢复。已有库存流水、库存或产品/采购关联的辅料不能删除，可使用停用功能。
+          确认删除 {{ deleteIds.length }} 条辅料（{{ items.filter(item => deleteIds.includes(item.id)).map(item => item.name).join('、') }}）？删除后不可恢复。已有库存流水、库存或产品/采购关联的辅料不能删除，可使用停用功能。
         </p>
         <p
           v-if="deleteError"
@@ -826,95 +894,6 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
           >
             {{ saving ? '删除中…' : '确认删除' }}
           </button>
-        </div>
-      </section>
-    </div>
-    <div
-      v-if="purchaseMaterial"
-      class="operation-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="purchase-dialog-title"
-      @click.self="purchaseMaterial = null"
-      @keydown.esc="purchaseMaterial = null"
-    >
-      <section class="panel operation-dialog__card purchase-dialog">
-        <button
-          class="operation-dialog__close"
-          type="button"
-          aria-label="关闭采购信息"
-          @click="purchaseMaterial = null"
-        >
-          ×
-        </button>
-        <h2 id="purchase-dialog-title">
-          {{ purchaseMaterial.materialCode }} · {{ purchaseMaterial.name }}采购供应商
-        </h2>
-        <p
-          v-if="purchaseLoading"
-          class="data-state"
-        >
-          正在加载供应商信息…
-        </p>
-        <p
-          v-else-if="!purchaseSuppliers.length"
-          class="data-state"
-        >
-          暂未关联供应商，请先编辑辅料并维护供应商关系。
-        </p>
-        <div
-          v-else
-          class="table-scroll"
-        >
-          <TableViewport>
-            <table class="data-table purchase-table">
-              <thead><tr><th>供应商</th><th>联系人</th><th>电话</th><th>微信号</th><th>微信二维码</th><th>采购链接</th><th>关系</th><th>备注</th></tr></thead>
-              <tbody>
-                <tr
-                  v-for="item in purchaseSuppliers"
-                  :key="item.link.supplierId"
-                >
-                  <td><strong>{{ item.supplier.name }}</strong><small>{{ item.supplier.status === 'ACTIVE' ? '启用' : '停用' }}</small></td>
-                  <td>{{ item.supplier.contactPerson || '—' }}</td>
-                  <td>{{ item.supplier.phone || '—' }}</td>
-                  <td>{{ item.supplier.wechatId || '—' }}</td>
-                  <td>
-                    <button
-                      v-if="item.supplier.qrImageId || item.supplier.qrImageUrl"
-                      class="image-button"
-                      type="button"
-                      :aria-label="`查看${item.supplier.name}微信二维码`"
-                      @click="previewSupplierQr(item.supplier)"
-                    >
-                      <AuthenticatedCatalogImage
-                        v-if="item.supplier.qrImageId"
-                        class="supplier-qr-thumbnail"
-                        :image-id="item.supplier.qrImageId"
-                        :alt="`${item.supplier.name}微信二维码`"
-                      /><img
-                        v-else
-                        class="supplier-qr-thumbnail"
-                        :src="item.supplier.qrImageUrl"
-                        :alt="`${item.supplier.name}微信二维码`"
-                        loading="lazy"
-                        referrerpolicy="no-referrer"
-                      >
-                    </button><span v-else>—</span>
-                  </td>
-                  <td>
-                    <a
-                      v-if="item.link.purchaseUrl || item.supplier.sourceUrl"
-                      :href="item.link.purchaseUrl || item.supplier.sourceUrl"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >打开采购链接</a><span v-else>—</span>
-                  </td>
-                  <td>{{ item.link.primary ? '主供应商' : '备选供应商' }}</td>
-                  <td>{{ item.link.remark || item.supplier.remark || '—' }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </TableViewport>
         </div>
       </section>
     </div>
@@ -955,6 +934,9 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
 </template>
 
 <style scoped>
+.material-supplier-contact { display:flex;flex-wrap:wrap;gap:16px;color:var(--text-secondary,#64748b);font-size:12px; }
+.material-supplier-cards{display:grid;gap:8px;margin-top:10px}.material-supplier-card{border:1px solid var(--line);border-radius:6px;background:#f8fafc;padding:10px 12px;display:grid;gap:8px;min-width:0}.material-supplier-card header{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.material-supplier-card strong{font-size:13px;overflow-wrap:anywhere}.material-primary-tag{color:#2563a6;background:#eaf2ff;padding:2px 6px;border-radius:4px;font-size:12px}.material-supplier-actions{margin-left:auto;display:flex;gap:12px}.material-supplier-actions button{background:transparent;border:0;padding:4px;color:var(--accent);font-size:12px;cursor:pointer}.material-supplier-actions button.material-unlink{color:#b42318}.material-supplier-card label{display:flex;align-items:center;gap:8px;font-size:13px}.material-supplier-card input{flex:1;min-width:0}.material-price-confirm{display:flex;align-items:center;gap:8px;font-size:13px}.material-price-confirm input{width:auto}.material-cost-cell{white-space:nowrap;font-variant-numeric:tabular-nums}
+
 #app .material-management .table-actions .material-status-action{display:inline-flex;align-items:center;justify-content:center;min-height:30px;padding:4px 10px;border:1px solid;border-radius:4px;font-size:13px;font-weight:400;cursor:pointer}
 #app .material-management .table-actions .material-status-action--disable{color:#b42318;background:#fff7f6;border-color:#f1c5c1}
 #app .material-management .table-actions .material-status-action--disable:hover:not(:disabled){background:#feecea}
@@ -963,6 +945,7 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
 </style>
 
 <style scoped>
+.material-supplier-contact { display:flex;flex-wrap:wrap;gap:16px;color:var(--text-secondary,#64748b);font-size:12px; }
 #app .material-image-editor{display:grid;grid-template-columns:72px minmax(0,1fr);align-items:start;gap:12px}
 #app .material-image-controls{display:grid;gap:8px;min-width:0}#app .material-image-controls .ui-image-remove{justify-self:start}
 @media(max-width:560px){#app .material-image-editor{grid-template-columns:minmax(0,1fr)}}

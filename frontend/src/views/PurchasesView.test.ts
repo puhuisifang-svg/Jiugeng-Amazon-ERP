@@ -7,7 +7,7 @@ import { session } from '@/state/session'
 import PurchasesView from './PurchasesView.vue'
 
 vi.mock('@/state/uiConfirmation', () => ({ confirmAction: vi.fn().mockResolvedValue(true) }))
-vi.mock('@/api/domain', () => ({ domainApi: { suppliers: vi.fn() } }))
+vi.mock('@/api/domain', () => ({ domainApi: { suppliers: vi.fn(), materialSupplierLinks: vi.fn() } }))
 vi.mock('@/api/purchases', () => ({ purchaseApi: { remove: vi.fn(), orders: vi.fn(), create: vi.fn(), update: vi.fn(), references: vi.fn() } }))
 const order: PurchaseOrder = {
   id: 'order-1', orderNo: 'PO-MATERIAL', orderType: 'MATERIAL', supplierId: 'supplier-1', supplierName: '测试供应商', status: 'DRAFT', currency: 'CNY', version: 1,
@@ -18,6 +18,7 @@ const item: PurchaseReferenceItem = { id: 'material-1', code: 'MAT-001', name: '
 const wrappers: ReturnType<typeof mount>[] = []
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.mocked(domainApi.materialSupplierLinks).mockResolvedValue([{supplierId:'supplier-1',primary:true}] as never)
   vi.spyOn(session, 'canAccess').mockReturnValue(true)
   vi.mocked(purchaseApi.orders).mockResolvedValue([order, { ...order, id: 'order-2', orderNo: 'PO-PRODUCT', orderType: 'PRODUCT' }])
   vi.mocked(purchaseApi.references).mockResolvedValue([item])
@@ -33,6 +34,27 @@ async function setup(query = '') {
   return { wrapper, router }
 }
 describe('purchase order workspace', () => {
+  it('opens a material purchase with its primary supplier and requested item, without creating automatically', async () => {
+    const {wrapper,router}=await setup('?type=MATERIAL&materialId=material-1')
+    expect(domainApi.materialSupplierLinks).toHaveBeenCalledWith('material-1')
+    expect(wrapper.get('fieldset select').element).toHaveProperty('value','supplier-1')
+    expect(wrapper.get('[aria-label="采购项目 1"]').element).toHaveProperty('value','material-1')
+    expect(purchaseApi.create).not.toHaveBeenCalled()
+    expect(router.currentRoute.value.query.materialId).toBeUndefined()
+    await wrapper.get('[aria-label="采购数量"]').setValue(4)
+    await wrapper.get('[aria-label="采购单价"]').setValue(2.5)
+    await wrapper.get('form').trigger('submit');await flushPromises()
+    expect(purchaseApi.create).toHaveBeenCalledWith(expect.objectContaining({orderType:'MATERIAL',supplierId:'supplier-1',lines:[expect.objectContaining({itemId:'material-1',quantity:4,unitPrice:2.5})]}))
+  })
+  it('explains missing supplier links and does not silently select an unrelated material', async () => {
+    vi.mocked(domainApi.materialSupplierLinks).mockResolvedValue([])
+    const {wrapper}=await setup('?type=MATERIAL&materialId=missing')
+    expect(wrapper.text()).toContain('当前辅料未关联启用的供应商')
+    expect(purchaseApi.create).not.toHaveBeenCalled()
+    await wrapper.get('fieldset select').setValue('supplier-2');await flushPromises()
+    expect(wrapper.text()).toContain('该供应商未关联当前辅料')
+    expect(wrapper.get('[aria-label="采购项目 1"]').element).toHaveProperty('value','')
+  })
   it('separates product and material orders and persists tab in the URL', async () => {
     const { wrapper, router } = await setup()
     expect(wrapper.text()).toContain('PO-PRODUCT'); expect(wrapper.text()).not.toContain('PO-MATERIAL')

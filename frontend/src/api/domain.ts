@@ -100,6 +100,7 @@ export interface MaterialDetailDto {
   updatedAt?: string
 }
 export interface MaterialInput {
+  costPrice?: import('./costs').MaterialPrice & { confirmedNet: boolean }
   materialCode: string
   name: string
   materialType: string

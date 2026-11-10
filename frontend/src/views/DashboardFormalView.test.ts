@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/config/runtime', () => ({ runtimeConfig: { apiBaseUrl: 'http://api.test/api', authMode: 'password' } }))
 vi.mock('@/state/session', () => ({ session: { canAccess: () => true } }))
-vi.mock('vue-router', () => ({ RouterLink: { name:'RouterLink', props: ['to'], template: '<a><slot /></a>' } }))
+vi.mock('@/api/purchases', () => ({ purchaseApi: { orders: vi.fn(async (status:string) => status==='SUBMITTED' ? [{id:'synthetic-order',status:'SUBMITTED',orderNo:'SYN-PO',supplierName:'合成供应商',createdAt:'2026-11-10',lines:[]}] : []) } }))
+vi.mock('vue-router', () => ({ onBeforeRouteLeave:vi.fn(), RouterLink: { name:'RouterLink', props: ['to'], template: '<a><slot /></a>' } }))
 
 describe('DashboardView in formal mode', () => {
   afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
@@ -16,6 +17,7 @@ describe('DashboardView in formal mode', () => {
     ]}) }))
     const { default: DashboardView } = await import('./DashboardView.vue')
     const wrapper=mount(DashboardView);await flushPromises()
+    expect(wrapper.get('#tab-pending-purchases').text()).toContain('采购待接收 1')
     await wrapper.get('#tab-pending-products').trigger('click');await flushPromises()
     expect(wrapper.text()).toContain('样品待开发 1');expect(wrapper.text()).toContain('开发负责人');expect(wrapper.text()).toContain('样品验证');expect(wrapper.text()).toContain('待安排');expect(wrapper.text()).not.toContain('历史手工待办');expect(wrapper.text()).not.toContain('0 套');expect(wrapper.find('.overdue-badge').exists()).toBe(false)
     const destinations=wrapper.findAllComponents({name:'RouterLink'}).map(link=>link.props('to'))

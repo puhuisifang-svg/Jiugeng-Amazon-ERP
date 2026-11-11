@@ -14,13 +14,14 @@ import { session } from '@/state/session'
 
 type QrPreview = { kind: 'asset'; value: string } | { kind: 'url'; value: string }
 const items = ref<SupplierDto[]>([]); const query = ref(''); const status = ref(''); const loading = ref(true); const saving = ref(false); const error = ref(''); const success = ref(''); const editing = ref<SupplierDto | null>(null); const preview = ref<QrPreview>(); const showForm = ref(false)
+const formError = ref('')
 const form = reactive<SupplierInput>({ name: '', contactPerson: '', phone: '', wechatId: '', sourceUrl: '', qrImageUrl: '', qrImageId: '', remark: '', status: 'ACTIVE' })
 const writable = computed(() => session.canAccess(['suppliers.write']))
-function reset() { Object.assign(form, { name: '', contactPerson: '', phone: '', wechatId: '', sourceUrl: '', qrImageUrl: '', qrImageId: '', remark: '', status: 'ACTIVE', version: undefined }); editing.value = null; showForm.value = false }
+function reset() { formError.value = ''; Object.assign(form, { name: '', contactPerson: '', phone: '', wechatId: '', sourceUrl: '', qrImageUrl: '', qrImageId: '', remark: '', status: 'ACTIVE', version: undefined }); editing.value = null; showForm.value = false }
 function openCreate() { reset(); showForm.value = true; error.value = ''; success.value = '' }
-function edit(item: SupplierDto) { editing.value = item; Object.assign(form, { name: item.name, contactPerson: item.contactPerson ?? '', phone: item.phone ?? '', wechatId: item.wechatId ?? '', sourceUrl: item.sourceUrl ?? '', qrImageUrl: item.qrImageUrl ?? '', qrImageId: item.qrImageId ?? '', remark: item.remark ?? '', status: item.status, version: item.version }); showForm.value = true; error.value = ''; success.value = '' }
+function edit(item: SupplierDto) { formError.value = ''; editing.value = item; Object.assign(form, { name: item.name, contactPerson: item.contactPerson ?? '', phone: item.phone ?? '', wechatId: item.wechatId ?? '', sourceUrl: item.sourceUrl ?? '', qrImageUrl: item.qrImageUrl ?? '', qrImageId: item.qrImageId ?? '', remark: item.remark ?? '', status: item.status, version: item.version }); showForm.value = true; error.value = ''; success.value = '' }
 async function load() { loading.value = true; error.value = ''; try { const result = await domainApi.suppliers({ ...(query.value ? { q: query.value } : {}), ...(status.value ? { status: status.value as 'ACTIVE' | 'DISABLED' } : {}), size: 100 }); items.value = result.items } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '供应商加载失败。' } finally { loading.value = false } }
-async function upload(file: File) { if (saving.value) return false; saving.value = true; try { form.qrImageId = (await catalogApi.uploadImage('SUPPLIER_QR', file)).id; form.qrImageUrl = '' } catch (exception) { error.value = exception instanceof Error ? exception.message : '二维码上传失败。' ; return false } finally { saving.value = false } }
+async function upload(file: File) { if (saving.value) return false; saving.value = true; formError.value = ''; try { form.qrImageId = (await catalogApi.uploadImage('SUPPLIER_QR', file)).id; form.qrImageUrl = '' } catch (exception) { formError.value = exception instanceof Error ? exception.message : '二维码上传失败。' ; return false } finally { saving.value = false } }
 function useQrUrl() { if (form.qrImageUrl?.trim()) form.qrImageId = '' }
 function supplierInput(): SupplierInput {
   return {
@@ -35,7 +36,7 @@ function supplierInput(): SupplierInput {
     ...(editing.value ? { version: editing.value.version } : {}),
   }
 }
-async function save() { saving.value = true; error.value = ''; success.value = ''; try { const input = supplierInput(); const result = editing.value ? await domainApi.updateSupplier(editing.value.id, input) : await domainApi.createSupplier(input); items.value = editing.value ? items.value.map(item => item.id === result.id ? result : item) : [result, ...items.value]; success.value = editing.value ? '供应商已更新。' : '供应商已创建。'; reset() } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '供应商保存失败。' } finally { saving.value = false } }
+async function save() { saving.value = true; formError.value = ''; success.value = ''; try { const input = supplierInput(); const result = editing.value ? await domainApi.updateSupplier(editing.value.id, input) : await domainApi.createSupplier(input); items.value = editing.value ? items.value.map(item => item.id === result.id ? result : item) : [result, ...items.value]; success.value = editing.value ? '供应商已更新。' : '供应商已创建。'; reset() } catch (exception) { formError.value = exception instanceof ApiError ? exception.message : '供应商保存失败。' } finally { saving.value = false } }
 async function disable(item: SupplierDto) { if (!await confirmAction(`确认停用供应商 ${item.name}？`)) return; saving.value = true; try { const result = await domainApi.disableSupplier(item.id, item.version); items.value = items.value.map(value => value.id === item.id ? result : value); success.value = '供应商已停用。' } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '供应商停用失败。' } finally { saving.value = false } }
 const deleteTarget=ref<SupplierDto>()
 function remove(item:SupplierDto){if(saving.value||!session.canAccess(['suppliers.delete']))return;deleteTarget.value=item}
@@ -184,6 +185,13 @@ onMounted(load)
             移除二维码 URL
           </button>
         </div><div class="operation-form__actions ui-dialog-actions">
+          <p
+            v-if="formError"
+            class="supplier-form-error data-state data-state--error"
+            role="alert"
+          >
+            {{ formError }}
+          </p>
           <button
             type="button"
             class="secondary-button"
@@ -343,6 +351,8 @@ onMounted(load)
 </template>
 
 <style scoped>
+.operation-form__actions { flex-wrap: wrap; }
+.supplier-form-error { flex: 1 1 100%; margin: 0; text-align: left; }
 #app .supplier-row-actions{display:flex;flex-wrap:nowrap;align-items:center;gap:8px;min-width:158px}
 #app .supplier-row-actions button{display:inline-flex;align-items:center;justify-content:center;min-height:30px;padding:4px 10px;border:1px solid #c9d9f0;background:#f1f6ff;color:#2864c5;border-radius:4px;font-size:13px;font-weight:400;white-space:nowrap;cursor:pointer}
 #app .supplier-row-actions .supplier-action--disable{color:#98630b;background:#fff8eb;border-color:#ead5aa}

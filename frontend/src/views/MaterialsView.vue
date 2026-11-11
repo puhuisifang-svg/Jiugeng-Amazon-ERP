@@ -4,10 +4,9 @@ import SingleFileUpload from '@/components/SingleFileUpload.vue'
 import { vSingleSelect } from '@/directives/singleSelect'
 import { confirmAction } from '@/state/uiConfirmation'
 import SuccessToast from "@/components/SuccessToast.vue"
-import MaterialCostPriceDialog from '@/components/MaterialCostPriceDialog.vue'
 import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { ApiError } from '@/api/client'
 import { catalogApi } from '@/api/catalog'
@@ -21,9 +20,8 @@ import { session } from '@/state/session'
 import { isNonNegativeInventoryInteger, isPositiveInventoryInteger } from '@/ui/inventory'
 
 const items = ref<MaterialDetailDto[]>([])
-const costMaterial = ref<MaterialDetailDto>()
 const prices=ref<Record<string,MaterialPrice>>({}),priceError=ref(''),priceLoading=ref(false)
-const netPrice=ref(''),originalPrice=ref<MaterialPrice|null>(null),priceConfirmed=ref(false),formPriceReady=ref(true)
+const netPrice=ref(''),originalPrice=ref<MaterialPrice|null>(null),formPriceReady=ref(true)
 const canReadPrice=computed(()=>formal.value && session.canAccess(['costs.read']))
 const canWritePrice=computed(()=>canReadPrice.value && session.canAccess(['costs.write','materials.write']))
 const priceChanged=computed(()=>netPrice.value!== (originalPrice.value?.netPrice??'') || (!!originalPrice.value && form.unit!==originalPrice.value.unit))
@@ -32,6 +30,7 @@ function priceText(item:MaterialDetailDto){if(!canReadPrice.value)return '无查
 function unlinkSupplier(id:string){const primary=supplierLinks.value.find(l=>l.supplierId===id)?.primary;supplierLinks.value=supplierLinks.value.filter(l=>l.supplierId!==id);if(primary&&supplierLinks.value[0])supplierLinks.value[0].primary=true}
 
 const balances = ref<InventoryBalanceViewDto[]>([])
+const formError = ref('')
 const loading = ref(true); const saving = ref(false); const error = ref(''); const success = ref('')
 const editingId = ref<string | null>(null); const showMaterialForm = ref(false); const showInventoryForm = ref(false)
 const supplierOptions = ref<SupplierDto[]>([]); const supplierLinks = ref<SupplierAssignmentDto[]>([])
@@ -57,7 +56,7 @@ const selectedIds = ref<string[]>([]); const deleteOpen = ref(false); const dele
 const page = ref(1); const pageSize = ref(20); const inventoryError = ref('')
 const supplierAccess = computed(() => session.canAccess(['suppliers.read']))
 const supplierWritable = computed(() => writable.value && session.canAccess(['suppliers.read', 'suppliers.write']))
-const rowActionsAvailable = computed(() => writable.value || inventoryWritable.value || (formal.value && (session.canAccess(['purchases.read', 'purchases.write', 'suppliers.read']) || session.canAccess(['costs.read']))))
+const rowActionsAvailable = computed(() => writable.value || inventoryWritable.value || (formal.value && (session.canAccess(['purchases.read', 'purchases.write', 'suppliers.read']))))
 const activeMaterials = computed(() => items.value.filter(item => item.status === 'ACTIVE'))
 const selectedMaterial = computed(() => items.value.find(item => item.id === inventoryForm.materialId))
 const balanceByMaterial = computed(() => new Map(balances.value.map(item => [item.materialId ?? item.materialCode, item])))
@@ -97,19 +96,21 @@ async function deleteSelected() {
   finally { saving.value = false }
 }
 function resetForm() {
+  formError.value=''
   Object.assign(form, { materialCode: '', name: '', materialType: '', specification: '', unit: '件', imageUrl: '', imageAssetId: '', remark: '' })
-  netPrice.value='';originalPrice.value=null;priceConfirmed.value=false;formPriceReady.value=true;
+  netPrice.value='';originalPrice.value=null;formPriceReady.value=true;
   editingId.value = null; supplierLinks.value = []; showMaterialForm.value = false
 }
 function resetFilters() { Object.assign(filters, { keyword: '', materialType: '', status: '', stock: '' }) }
 function openMaterialForm() { resetForm(); showInventoryForm.value = false; showMaterialForm.value = true; success.value = ''; error.value = '' }
 async function edit(item: MaterialDetailDto) {
-  netPrice.value='';originalPrice.value=null;priceConfirmed.value=false;formPriceReady.value=!canReadPrice.value;supplierLinks.value=[]
+  formError.value=''
+  netPrice.value='';originalPrice.value=null;formPriceReady.value=!canReadPrice.value;supplierLinks.value=[]
 
   Object.assign(form, { materialCode: item.materialCode, name: item.name, materialType: item.materialType,
     specification: item.specification ?? '', unit: item.unit, imageUrl: item.imageUrl ?? '', imageAssetId: item.imageAssetId ?? '', remark: item.remark ?? '' })
   editingId.value = item.id; showInventoryForm.value = false; showMaterialForm.value = true; success.value = ''; error.value = ''
-  if(canReadPrice.value){try{const price=await costsApi.price(item.id);originalPrice.value=price;netPrice.value=price?.netPrice??'';formPriceReady.value=true}catch{error.value='成本价读取失败，请关闭并重新编辑；本次不能保存。'}}
+  if(canReadPrice.value){try{const price=await costsApi.price(item.id);originalPrice.value=price;netPrice.value=price?.netPrice??'';formPriceReady.value=true}catch{formError.value='成本价读取失败，请关闭并重新编辑；本次不能保存。'}}
   if (supplierAccess.value) supplierLinks.value = (await domainApi.materialSupplierLinks(item.id)).map(link => ({ supplierId: link.supplierId, purchaseUrl: link.purchaseUrl, remark: link.remark, primary: link.primary }))
 }
 function openInventory(item?: MaterialDetailDto) {
@@ -153,12 +154,12 @@ async function load() {
 }
 async function save() {
   if(saving.value || uploading.value || !formPriceReady.value)return
-  if(canWritePrice.value && priceChanged.value && (!netPrice.value.trim() || !/^\d+(\.\d{1,6})?$/.test(netPrice.value) || !priceConfirmed.value)){error.value='请填写有效成本价（最多六位小数），并确认人民币不含税单价。';return}
-  saving.value = true; error.value = ''; success.value = ''
+  if(canWritePrice.value && priceChanged.value && (!String(netPrice.value).trim() || !/^\d+(\.\d{1,6})?$/.test(String(netPrice.value).trim()))){formError.value='请填写大于或等于 0 的成本价，最多六位小数（例如 0.5）。';return}
+  saving.value = true; formError.value = ''; success.value = ''
   try {
     const input: MaterialInput = { materialCode: form.materialCode.trim(), name: form.name.trim(),
       materialType: form.materialType.trim() || '模拟辅料', unit: form.unit.trim(),
-      ...(canWritePrice.value && priceChanged.value ? {costPrice:{netPrice:netPrice.value,unit:form.unit,source:'MANUAL',referenceId:null,reason:editingId.value?'编辑辅料时核定成本价':'新增辅料时核定成本价',version:originalPrice.value?.version??-1,confirmedNet:priceConfirmed.value}} : {}),
+      ...(canWritePrice.value && priceChanged.value ? {costPrice:{netPrice:String(netPrice.value).trim(),unit:form.unit,source:'MANUAL',referenceId:null,reason:editingId.value?'编辑辅料时核定成本价':'新增辅料时核定成本价',version:originalPrice.value?.version??-1,confirmedNet:true}} : {}),
       ...(form.specification?.trim() ? { specification: form.specification.trim() } : {}),
       ...(form.imageUrl?.trim() ? { imageUrl: form.imageUrl.trim() } : {}),
       ...(form.imageAssetId ? { imageAssetId: form.imageAssetId } : {}),
@@ -176,7 +177,7 @@ async function save() {
       success.value = response.mockData ? '模拟辅料已创建。' : '辅料已创建。'
     }
     resetForm()
-  } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '保存失败，请检查填写内容后重试。' }
+  } catch (exception) { formError.value = exception instanceof ApiError ? exception.message : '保存失败，请检查填写内容后重试。' }
   finally { saving.value = false }
 }
 async function submitInventory() {
@@ -242,6 +243,9 @@ async function toggleStatus(item: MaterialDetailDto) {
   finally { saving.value = false }
 }
 const route=useRoute()
+const router=useRouter()
+const canBatchPurchase=computed(()=>selectedIds.value.length>0 && selectedIds.value.length<=200 && selectedIds.value.every(id=>items.value.some(item=>item.id===id&&item.status==='ACTIVE')))
+function batchPurchase(){if(canBatchPurchase.value)void router.push({path:'/purchases/orders',query:{type:'MATERIAL',materialIds:selectedIds.value.join(',')}})}
 async function openLinkedSupplier(){const id=route?.query.editMaterial;if(typeof id!=='string'||!session.canAccess(['materials.write','suppliers.write']))return;const item=items.value.find(m=>m.id===id);if(!item){error.value='关联辅料不存在或无法查看，请刷新清单。';return}try{await edit(item)}catch(e){error.value=e instanceof Error?e.message:'辅料加载失败。'}}
 watch(()=>route?.query.editMaterial,openLinkedSupplier)
 onMounted(async()=>{await load();await openLinkedSupplier()})
@@ -315,6 +319,16 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
           库存操作
         </button>
         <button
+          v-if="formal && session.canAccess(['purchases.read','purchases.write','suppliers.read'])"
+          class="secondary-button"
+          type="button"
+          :disabled="!canBatchPurchase || saving"
+          title="选择启用的辅料后批量采购，每单最多 200 项"
+          @click="batchPurchase"
+        >
+          批量采购{{ selectedIds.length ? '（' + selectedIds.length + '）' : '' }}
+        </button>
+        <button
           v-if="formal && writable && selectedIds.length"
           type="button"
           class="danger-button"
@@ -382,14 +396,6 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
           :disabled="!canWritePrice || !formPriceReady || saving"
           placeholder="选填，未填写表示尚未维护"
         ></label>
-        <label
-          v-if="canWritePrice && priceChanged"
-          class="material-price-confirm form-wide"
-        ><input
-          v-model="priceConfirmed"
-          type="checkbox"
-          :disabled="saving"
-        >确认成本价为人民币不含税单价，用于产品成本核算</label>
         <label>规格<input
           v-model="form.specification"
           maxlength="500"
@@ -535,6 +541,13 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
           </div>
         </section>
         <div class="operation-form__actions ui-dialog-actions">
+          <p
+            v-if="formError"
+            class="material-form-error data-state data-state--error"
+            role="alert"
+          >
+            {{ formError }}
+          </p>
           <button
             class="secondary-button"
             type="button"
@@ -655,12 +668,6 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
       </form>
     </div>
     <SuccessToast :message="success" />
-    <MaterialCostPriceDialog
-      v-if="costMaterial"
-      :material="costMaterial"
-      @close="costMaterial = undefined"
-      @saved="costMaterial = undefined; loadPrices(); success = '成本价已保存，相关成本请重新核算。'"
-    />
     <p
       v-if="error"
       class="data-state data-state--error"
@@ -788,13 +795,6 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
                 <td>{{ item.status === 'ACTIVE' ? '启用' : '停用' }}</td>
                 <td v-if="rowActionsAvailable">
                   <div class="table-actions">
-                    <button
-                      v-if="formal && session.canAccess(['costs.read'])"
-                      type="button"
-                      @click="costMaterial = item"
-                    >
-                      成本价
-                    </button>
                     <button
                       v-if="writable"
                       type="button"
@@ -934,6 +934,8 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
 </template>
 
 <style scoped>
+.operation-form__actions { flex-wrap: wrap; }
+.material-form-error { flex: 1 1 100%; margin: 0; text-align: left; }
 .material-supplier-contact { display:flex;flex-wrap:wrap;gap:16px;color:var(--text-secondary,#64748b);font-size:12px; }
 .material-supplier-cards{display:grid;gap:8px;margin-top:10px}.material-supplier-card{border:1px solid var(--line);border-radius:6px;background:#f8fafc;padding:10px 12px;display:grid;gap:8px;min-width:0}.material-supplier-card header{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.material-supplier-card strong{font-size:13px;overflow-wrap:anywhere}.material-primary-tag{color:#2563a6;background:#eaf2ff;padding:2px 6px;border-radius:4px;font-size:12px}.material-supplier-actions{margin-left:auto;display:flex;gap:12px}.material-supplier-actions button{background:transparent;border:0;padding:4px;color:var(--accent);font-size:12px;cursor:pointer}.material-supplier-actions button.material-unlink{color:#b42318}.material-supplier-card label{display:flex;align-items:center;gap:8px;font-size:13px}.material-supplier-card input{flex:1;min-width:0}.material-price-confirm{display:flex;align-items:center;gap:8px;font-size:13px}.material-price-confirm input{width:auto}.material-cost-cell{white-space:nowrap;font-variant-numeric:tabular-nums}
 
@@ -945,6 +947,8 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
 </style>
 
 <style scoped>
+.operation-form__actions { flex-wrap: wrap; }
+.material-form-error { flex: 1 1 100%; margin: 0; text-align: left; }
 .material-supplier-contact { display:flex;flex-wrap:wrap;gap:16px;color:var(--text-secondary,#64748b);font-size:12px; }
 #app .material-image-editor{display:grid;grid-template-columns:72px minmax(0,1fr);align-items:start;gap:12px}
 #app .material-image-controls{display:grid;gap:8px;min-width:0}#app .material-image-controls .ui-image-remove{justify-self:start}

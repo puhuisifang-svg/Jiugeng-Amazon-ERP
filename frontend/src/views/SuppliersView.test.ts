@@ -1,3 +1,4 @@
+import { ApiError } from '@/api/client'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -29,6 +30,23 @@ describe('SuppliersView', () => {
     vi.mocked(domainApi.supplierDependencies).mockResolvedValue([])
     suppliers.mockReset().mockResolvedValue({ items: [], totalCount: 0, page: 0, size: 100 })
     createSupplier.mockReset().mockResolvedValue({ id: 's1', name: '包装供应商', status: 'ACTIVE', version: 0 })
+  })
+
+  it('keeps validation errors inside the dialog and clears them on reopening', async () => {
+    createSupplier.mockRejectedValueOnce(new ApiError(400, 'VALIDATION', '电话、微信号、1688 链接、微信二维码至少填写一项'))
+    const wrapper=mount(SuppliersView);await flushPromises()
+    await wrapper.get('.material-toolbar button').trigger('click')
+    const dialog=wrapper.get('[aria-labelledby="supplier-dialog-title"]')
+    await dialog.get('input[required]').setValue('合成供应商')
+    await dialog.get('form').trigger('submit');await flushPromises()
+    expect(dialog.get('[role="alert"]').text()).toContain('至少填写一项')
+    expect(wrapper.findAll('[role="alert"]')).toHaveLength(1)
+    expect(dialog.get('input[required]').element).toHaveProperty('value','合成供应商')
+    await dialog.get('.operation-dialog__close').trigger('click')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    await wrapper.get('.material-toolbar button').trigger('click')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    wrapper.unmount()
   })
 
   it('cancels deletion and deletes only the confirmed supplier', async () => {

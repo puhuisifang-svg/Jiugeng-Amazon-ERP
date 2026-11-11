@@ -44,7 +44,7 @@ class PurchaseRepository {
     List<ReferenceItem> referenceItems(OrderType type, String supplierId) {
         activeSupplier(supplierId);
         String sql = type == OrderType.PRODUCT ? """
-                SELECT v.id,v.sku_code AS code,v.variant_name AS name,'套' AS unit,
+                SELECT v.id,v.sku_code AS code,v.variant_name AS name,'套' AS unit,v.main_image_asset_id AS image_asset_id,v.main_image_url AS image_url,
                        CASE WHEN link.primary_slot='PRIMARY' THEN TRUE ELSE FALSE END AS primary_supplier
                 FROM product_variant_supplier link
                 JOIN product_variant v ON v.id=link.variant_id
@@ -52,7 +52,7 @@ class PurchaseRepository {
                 WHERE link.supplier_id=:supplierId AND v.status='ACTIVE' AND p.status='ACTIVE' AND p.deleted_at IS NULL AND v.deleted_at IS NULL
                 ORDER BY primary_supplier DESC,v.sku_code
                 """ : """
-                SELECT m.id,m.material_code AS code,m.name,m.unit,
+                SELECT m.id,m.material_code AS code,m.name,m.unit,m.image_asset_id,m.image_url,
                        CASE WHEN link.primary_slot='PRIMARY' THEN TRUE ELSE FALSE END AS primary_supplier
                 FROM auxiliary_material_supplier link
                 JOIN auxiliary_material m ON m.id=link.auxiliary_material_id
@@ -61,7 +61,7 @@ class PurchaseRepository {
                 """;
         return jdbc.sql(sql).param("supplierId", supplierId).query((rs, row) -> new ReferenceItem(
                 rs.getString("id"), rs.getString("code"), rs.getString("name"), rs.getString("unit"),
-                rs.getBoolean("primary_supplier"))).list();
+                rs.getBoolean("primary_supplier"),rs.getString("image_asset_id"),rs.getString("image_url"))).list();
     }
 
     boolean hasReceipts(String id) {
@@ -109,9 +109,9 @@ class PurchaseRepository {
                 .param("deliveryDate", input.expectedDeliveryDate()).param("address", input.deliveryAddress()).param("supplierName",input.supplierName()).update();
     }
 
-    int updateLogistics(String id,long version,String carrier,String tracking,String actor) {
-        return jdbc.sql("UPDATE purchase_order SET carrier=:carrier,tracking_number=:tracking,version=version+1,updated_by=:actor,updated_at=CURRENT_TIMESTAMP WHERE id=:id AND version=:version AND status<>'CANCELLED'")
-            .param("id",id).param("version",version).param("carrier",carrier).param("tracking",tracking).param("actor",actor).update();
+    int updateLogistics(String id,long version,String carrier,String tracking,String image,String actor) {
+        return jdbc.sql("UPDATE purchase_order SET carrier=:carrier,tracking_number=:tracking,waybill_image_id=:image,version=version+1,updated_by=:actor,updated_at=CURRENT_TIMESTAMP WHERE id=:id AND version=:version AND status<>'CANCELLED'")
+            .param("id",id).param("version",version).param("carrier",carrier).param("tracking",tracking).param("image",image).param("actor",actor).update();
     }
 
     void cancellationReason(String id, String reason) {
@@ -236,7 +236,7 @@ class PurchaseRepository {
     private OrderView withLines(OrderView value) {
         return new OrderView(value.id(), value.orderNo(), value.orderType(), value.supplierId(), value.supplierName(),
                 value.status(), value.currency(), value.remark(), value.version(), lines(value.id()), value.createdAt(),
-                value.updatedAt(), value.expectedDeliveryDate(), value.deliveryAddress(), value.cancellationReason(), value.carrier(), value.trackingNumber());
+                value.updatedAt(), value.expectedDeliveryDate(), value.deliveryAddress(), value.cancellationReason(), value.carrier(), value.trackingNumber(),value.waybillImageId());
     }
 
     private OrderView mapOrder(ResultSet rs, int row) throws SQLException {
@@ -244,7 +244,7 @@ class PurchaseRepository {
                 rs.getString("supplier_id"), rs.getString("resolved_supplier_name"), Status.valueOf(rs.getString("status")),
                 rs.getString("currency"), rs.getString("remark"), rs.getLong("version"), List.of(),
                 instant(rs,"created_at"), instant(rs,"updated_at"), rs.getObject("expected_delivery_date", java.time.LocalDate.class),
-                rs.getString("delivery_address"), rs.getString("cancellation_reason"),rs.getString("carrier"),rs.getString("tracking_number"));
+                rs.getString("delivery_address"), rs.getString("cancellation_reason"),rs.getString("carrier"),rs.getString("tracking_number"),rs.getString("waybill_image_id"));
     }
     private Instant instant(ResultSet rs, String column) throws SQLException { return rs.getTimestamp(column).toInstant(); }
 

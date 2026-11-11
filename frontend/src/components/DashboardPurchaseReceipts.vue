@@ -196,7 +196,7 @@ defineExpose({ reload })
       </p>
       <TableViewport>
         <table class="data-table receipt-confirm-table">
-          <thead><tr><th>图片</th><th>商品 / SKU</th><th>采购</th><th>已收</th><th>待收</th><th>本次实收</th></tr></thead>
+          <thead><tr><th>图片</th><th>商品 / SKU</th><th>采购</th><th>已收</th><th>待收</th><th>本次实收</th><th>操作</th></tr></thead>
           <tbody>
             <tr
               v-for="line in target.lines.filter(item => item.remainingQuantity > 0)"
@@ -221,6 +221,15 @@ defineExpose({ reload })
                   :disabled="locked"
                   placeholder="填写实收数量"
                 >
+              </td><td>
+                <button
+                  type="button"
+                  class="secondary-button"
+                  :disabled="locked"
+                  @click="quantities[line.id]=line.remainingQuantity"
+                >
+                  全部接收
+                </button>
               </td>
             </tr>
           </tbody>

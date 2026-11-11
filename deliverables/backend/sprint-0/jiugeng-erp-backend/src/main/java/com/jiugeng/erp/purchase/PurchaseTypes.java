@@ -19,7 +19,7 @@ final class PurchaseTypes {
     record OrderView(String id, String orderNo, OrderType orderType, String supplierId, String supplierName,
                      Status status, String currency, String remark, long version, List<LineView> lines,
                      Instant createdAt, Instant updatedAt, LocalDate expectedDeliveryDate, String deliveryAddress,
-                     String cancellationReason, String carrier, String trackingNumber) {}
+                     String cancellationReason, String carrier, String trackingNumber, String waybillImageId) {}
     record ReceiptLineInput(String orderLineId, BigDecimal quantity) {}
     record ReceiptInput(String requestId, Instant receivedAt, String remark, List<ReceiptLineInput> lines) {}
     record ReceiptLineView(String orderLineId, String itemCode, String itemName, BigDecimal quantity,
@@ -28,7 +28,7 @@ final class PurchaseTypes {
                        String remark, String actorLoginName, List<ReceiptLineView> lines, Instant createdAt,
                        boolean replayed) {}
     record Dashboard(long draft, long pendingReceipt, long partial, long completed, List<OrderView> recent) {}
-    record ReferenceItem(String id, String code, String name, String unit, boolean primarySupplier) {}
+    record ReferenceItem(String id, String code, String name, String unit, boolean primarySupplier, String imageAssetId, String imageUrl) {}
     record OrderDetail(OrderView order, List<ReceiptView> receipts,
                        List<AuditHistoryLookup.HistoryEvent> history) {}
 }

@@ -63,7 +63,7 @@ describe('MaterialsView merged material management', () => {
     vi.mocked(domainApi.updateMaterial).mockResolvedValue({ id: 'new-m', materialCode: 'GENERATED', name: '新辅料', materialType: '新类型', unit: '件', status: 'ACTIVE' })
     replaceMaterialSupplierLinks.mockRejectedValueOnce(new Error('network')).mockResolvedValue([])
     const wrapper = mount(MaterialsView, { global }); await flushPromises()
-    expect(wrapper.get('.material-table').text()).toContain('¥ 2.5 / PCS')
+    expect(wrapper.get('.material-table').text()).toContain('¥ 2.50 / PCS')
     await wrapper.get('.material-toolbar button').trigger('click')
     const form = wrapper.get('.operation-form')
     await form.get('input[maxlength="200"]').setValue('新辅料')

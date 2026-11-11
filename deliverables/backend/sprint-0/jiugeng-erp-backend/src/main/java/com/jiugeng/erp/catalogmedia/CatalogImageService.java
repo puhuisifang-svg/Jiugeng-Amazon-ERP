@@ -31,7 +31,7 @@ class CatalogImageService implements CatalogImageGateway {
     @Transactional(readOnly=true)
     Content read(String id,boolean thumbnail,AuthenticatedActor actor,boolean productsRead,boolean materialsRead,boolean suppliersRead,boolean samplesRead,boolean customersRead,boolean purchasesRead)throws IOException{
         var image=asset(id);if("PENDING".equals(image.status())&&!image.uploadedBy().equals(actor.userId()))throw missing();
-        boolean allowed=switch(image.purpose()){case PRODUCT_MAIN, SKU_MAIN->productsRead;case MATERIAL_IMAGE->materialsRead;case SUPPLIER_QR->suppliersRead;case SAMPLE_STORAGE, SAMPLE_IMAGE->samplesRead;case CUSTOMER_WECHAT->customersRead;case PURCHASE_ITEM->purchasesRead;};if(!allowed)throw missing();
+        boolean allowed=switch(image.purpose()){case PRODUCT_MAIN, SKU_MAIN->productsRead;case MATERIAL_IMAGE->materialsRead;case SUPPLIER_QR->suppliersRead;case SAMPLE_STORAGE, SAMPLE_IMAGE->samplesRead;case CUSTOMER_WECHAT->customersRead;case PURCHASE_ITEM, PURCHASE_WAYBILL->purchasesRead;};if(!allowed)throw missing();
         return new Content(store.read(thumbnail?image.thumbnailKey():image.originalKey()),image.storedMediaType());}
     @Override @Transactional
     public void attach(String imageId,Purpose purpose,String type,String resourceId,AuthenticatedActor actor){if(imageId==null)return;try{var image=asset(imageId);

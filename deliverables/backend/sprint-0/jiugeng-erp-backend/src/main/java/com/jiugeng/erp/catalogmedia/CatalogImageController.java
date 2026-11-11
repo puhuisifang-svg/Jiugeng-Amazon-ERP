@@ -26,7 +26,7 @@ class CatalogImageController {
     @PreAuthorize("hasAnyAuthority('products.write','materials.write','suppliers.write','samples.write','customers.write','purchases.write')")
     CatalogImageService.Receipt upload(@RequestParam Purpose purpose,@RequestParam MultipartFile file,
             Authentication authentication,@AuthenticationPrincipal AuthenticatedActor actor)throws IOException{
-        String required=switch(purpose){case PRODUCT_MAIN, SKU_MAIN->"products.write";case MATERIAL_IMAGE->"materials.write";case SUPPLIER_QR->"suppliers.write";case SAMPLE_STORAGE, SAMPLE_IMAGE->"samples.write";case CUSTOMER_WECHAT->"customers.write";case PURCHASE_ITEM->"purchases.write";};if(!has(authentication,required))
+        String required=switch(purpose){case PRODUCT_MAIN, SKU_MAIN->"products.write";case MATERIAL_IMAGE->"materials.write";case SUPPLIER_QR->"suppliers.write";case SAMPLE_STORAGE, SAMPLE_IMAGE->"samples.write";case CUSTOMER_WECHAT->"customers.write";case PURCHASE_ITEM, PURCHASE_WAYBILL->"purchases.write";};if(!has(authentication,required))
             throw new CatalogImageException(403,"CAPABILITY_DENIED","当前账号无权上传该用途图片");
         return service.upload(purpose,file.getOriginalFilename(),file.getBytes(),actor);}
     @GetMapping("/{id}/thumbnail") @PreAuthorize("hasAnyAuthority('products.read','materials.read','suppliers.read','samples.read','customers.read','purchases.read')")

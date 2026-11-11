@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import SingleFileUpload from './SingleFileUpload.vue'
+import PurchaseItemImage from './PurchaseItemImage.vue'
+import { catalogApi } from '@/api/catalog'
 import { computed, ref } from 'vue'
 import { purchaseApi, type PurchaseOrder } from '@/api/purchases'
 import AccessDialog from './AccessDialog.vue'
@@ -6,11 +9,14 @@ const props = defineProps<{ order: PurchaseOrder; writable: boolean }>()
 const emit = defineEmits<{ close: []; saved: [order: PurchaseOrder] }>()
 const dialog = ref<InstanceType<typeof AccessDialog>>()
 const carrier = ref(props.order.carrier ?? ''), tracking = ref(props.order.trackingNumber ?? ''), busy = ref(false), error = ref('')
-const dirty = computed(() => carrier.value !== (props.order.carrier ?? '') || tracking.value !== (props.order.trackingNumber ?? ''))
+const waybill=ref(props.order.waybillImageId??null),uploading=ref(false)
+async function upload(file:File){uploading.value=true;error.value='';try{waybill.value=(await catalogApi.uploadImage('PURCHASE_WAYBILL',file)).id}catch(e){error.value=e instanceof Error?e.message:'上传失败';throw e}finally{uploading.value=false}}
+const dirty = computed(() => waybill.value!==(props.order.waybillImageId??null) || carrier.value !== (props.order.carrier ?? '') || tracking.value !== (props.order.trackingNumber ?? ''))
 async function save() {
-  if (busy.value || !props.writable) return
+  if (busy.value || uploading.value || !props.writable) return
+  if(!tracking.value.trim()&&!waybill.value){error.value='请填写运单号或上传物流单图片';return}
   busy.value = true; error.value = ''
-  try { emit('saved', await purchaseApi.logistics(props.order.id, props.order.version, carrier.value, tracking.value)) }
+  try { emit('saved', await purchaseApi.logistics(props.order.id, props.order.version, carrier.value, tracking.value, waybill.value)) }
   catch (e) { error.value = e instanceof Error ? e.message : '物流资料保存失败，请重试' }
   finally { busy.value = false }
 }
@@ -19,7 +25,7 @@ async function save() {
   <AccessDialog
     ref="dialog"
     title="采购物流"
-    :busy="busy"
+    :busy="busy || uploading"
     :dirty="dirty"
     @close="emit('close')"
   >
@@ -36,14 +42,40 @@ async function save() {
         maxlength="100"
         placeholder="例如：顺丰、中通、德邦"
         :disabled="busy || !writable"
-      ></label><label>运单号 *<input
+      ></label><label>运单号<input
         v-model="tracking"
-        required
         maxlength="64"
         pattern="[A-Za-z0-9-]{1,64}"
         placeholder="填写完整运单号"
         :disabled="busy || !writable"
       ></label>
+      <div class="form-wide">
+        <p class="access-muted">
+          运单号与物流单图片至少提供一项，零担物流可只上传图片。
+        </p>
+        <PurchaseItemImage
+          v-if="waybill"
+          :image-asset-id="waybill"
+          alt="物流单"
+        />
+        <button
+          v-if="waybill && writable"
+          type="button"
+          class="ui-image-remove"
+          :disabled="busy||uploading"
+          @click="waybill=null"
+        >
+          移除图片
+        </button>
+        <SingleFileUpload
+          v-if="writable"
+          title="物流单图片"
+          accept=".png,.jpg,.jpeg,.webp"
+          :max-mb="5"
+          :disabled="busy||uploading"
+          :upload="upload"
+        />
+      </div>
     </form>
     <p
       v-if="error"
@@ -67,7 +99,7 @@ async function save() {
         type="submit"
         form="purchase-logistics-form"
         class="primary-button"
-        :disabled="busy || !tracking.trim()"
+        :disabled="busy || uploading || (!tracking.trim() && !waybill)"
       >
         {{ busy ? '保存中…' : '保存运单' }}
       </button>

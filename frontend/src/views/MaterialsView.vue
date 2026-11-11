@@ -24,9 +24,9 @@ const prices=ref<Record<string,MaterialPrice>>({}),priceError=ref(''),priceLoadi
 const netPrice=ref(''),originalPrice=ref<MaterialPrice|null>(null),formPriceReady=ref(true)
 const canReadPrice=computed(()=>formal.value && session.canAccess(['costs.read']))
 const canWritePrice=computed(()=>canReadPrice.value && session.canAccess(['costs.write','materials.write']))
-const priceChanged=computed(()=>netPrice.value!== (originalPrice.value?.netPrice??'') || (!!originalPrice.value && form.unit!==originalPrice.value.unit))
+const priceChanged=computed(()=>(originalPrice.value ? netPrice.value==='' || Number(netPrice.value)!==Number(Number(originalPrice.value.netPrice).toFixed(2)) : netPrice.value!=='') || (!!originalPrice.value && form.unit!==originalPrice.value.unit))
 async function loadPrices(){if(!canReadPrice.value)return;priceLoading.value=true;priceError.value='';try{prices.value=Object.fromEntries((await costsApi.prices()).map(p=>[p.materialId,p]))}catch{priceError.value='成本价加载失败，请重试';}finally{priceLoading.value=false}}
-function priceText(item:MaterialDetailDto){if(!canReadPrice.value)return '无查看权限';if(priceError.value)return '加载失败';if(priceLoading.value)return '加载中…';const price=prices.value[item.id];return !price?'未维护':price.unit!==item.unit?'单位已变，请核定':`¥ ${Number(price.netPrice).toLocaleString('zh-CN',{maximumFractionDigits:6})} / ${price.unit}`}
+function priceText(item:MaterialDetailDto){if(!canReadPrice.value)return '无查看权限';if(priceError.value)return '加载失败';if(priceLoading.value)return '加载中…';const price=prices.value[item.id];return !price?'未维护':price.unit!==item.unit?'单位已变，请核定':`¥ ${Number(price.netPrice).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2})} / ${price.unit}`}
 function unlinkSupplier(id:string){const primary=supplierLinks.value.find(l=>l.supplierId===id)?.primary;supplierLinks.value=supplierLinks.value.filter(l=>l.supplierId!==id);if(primary&&supplierLinks.value[0])supplierLinks.value[0].primary=true}
 
 const balances = ref<InventoryBalanceViewDto[]>([])
@@ -110,7 +110,7 @@ async function edit(item: MaterialDetailDto) {
   Object.assign(form, { materialCode: item.materialCode, name: item.name, materialType: item.materialType,
     specification: item.specification ?? '', unit: item.unit, imageUrl: item.imageUrl ?? '', imageAssetId: item.imageAssetId ?? '', remark: item.remark ?? '' })
   editingId.value = item.id; showInventoryForm.value = false; showMaterialForm.value = true; success.value = ''; error.value = ''
-  if(canReadPrice.value){try{const price=await costsApi.price(item.id);originalPrice.value=price;netPrice.value=price?.netPrice??'';formPriceReady.value=true}catch{formError.value='成本价读取失败，请关闭并重新编辑；本次不能保存。'}}
+  if(canReadPrice.value){try{const price=await costsApi.price(item.id);originalPrice.value=price;netPrice.value=price?Number(price.netPrice).toFixed(2):'';formPriceReady.value=true}catch{formError.value='成本价读取失败，请关闭并重新编辑；本次不能保存。'}}
   if (supplierAccess.value) supplierLinks.value = (await domainApi.materialSupplierLinks(item.id)).map(link => ({ supplierId: link.supplierId, purchaseUrl: link.purchaseUrl, remark: link.remark, primary: link.primary }))
 }
 function openInventory(item?: MaterialDetailDto) {
@@ -154,7 +154,7 @@ async function load() {
 }
 async function save() {
   if(saving.value || uploading.value || !formPriceReady.value)return
-  if(canWritePrice.value && priceChanged.value && (!String(netPrice.value).trim() || !/^\d+(\.\d{1,6})?$/.test(String(netPrice.value).trim()))){formError.value='请填写大于或等于 0 的成本价，最多六位小数（例如 0.5）。';return}
+  if(canWritePrice.value && priceChanged.value && (!String(netPrice.value).trim() || !/^\d+(\.\d{1,2})?$/.test(String(netPrice.value).trim()))){formError.value='请填写大于或等于 0 的成本价，最多两位小数（例如 0.5）。';return}
   saving.value = true; formError.value = ''; success.value = ''
   try {
     const input: MaterialInput = { materialCode: form.materialCode.trim(), name: form.name.trim(),
@@ -395,6 +395,7 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
           maxlength="19"
           :disabled="!canWritePrice || !formPriceReady || saving"
           placeholder="选填，未填写表示尚未维护"
+          @blur="netPrice && Number.isFinite(Number(netPrice)) && (netPrice=Number(netPrice).toFixed(2))"
         ></label>
         <label>规格<input
           v-model="form.specification"

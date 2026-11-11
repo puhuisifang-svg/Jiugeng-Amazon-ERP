@@ -124,9 +124,35 @@ async function loadReferences(resetLines = true) {
   catch (exception) { if (sequence === referenceSequence) formError.value = message(exception, '可采购项目加载失败，请重新选择供应商。') }
   finally { if (sequence === referenceSequence) referenceLoading.value = false }
 }
+const priceLoads=ref(0)
+async function selectItem(line:PurchaseOrderInput['lines'][number]){
+  const id=line.itemId, supplier=form.supplierId
+  line.unitPrice=0
+  const item=references.value.find(item=>item.id===id)
+  if(!item)return
+  priceLoads.value++;formError.value=''
+  try{
+    if(form.orderType==='MATERIAL'&&session.canAccess(['costs.read'])){
+      const price=await costsApi.price(id)
+      if(line.itemId!==id||form.supplierId!==supplier||!form.lines.includes(line))return
+      if(price&&price.unit===item.unit&&form.currency==='CNY')line.unitPrice=Number(Number(price.netPrice).toFixed(2))
+      else formError.value='当前辅料未维护同单位人民币成本价，请填写采购单价。'
+    }else{
+      const previous=[...orders.value].filter(o=>o.supplierId===supplier&&o.orderType===form.orderType&&o.currency===form.currency&&o.status!=='CANCELLED'&&o.status!=='DRAFT').sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).flatMap(o=>o.lines).find(l=>l.itemId===id&&l.unit===item.unit)
+      if(previous)line.unitPrice=previous.unitPrice
+      else formError.value='暂无可带入的采购价格，请填写本次采购单价。'
+    }
+  }catch{if(line.itemId===id)formError.value='单价读取失败，请手动填写采购单价。'}
+  finally{priceLoads.value--}
+}
+function defaultDeliveryDate(){
+  const day=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai'}).format(new Date())
+  const date=new Date(day+'T00:00:00Z');date.setUTCDate(date.getUTCDate()+2)
+  return date.toISOString().slice(0,10)
+}
 async function openCreate() {
   requestedMaterials.value=[]; editing.value = undefined; formError.value = ''; references.value = []; referenceSequence++
-  Object.assign(form, { orderType: type.value, supplierId: '', supplierName: '', currency: 'CNY', remark: '', version: undefined, expectedDeliveryDate: '', deliveryAddress: '', lines: [{ itemId: '', quantity: 1, unitPrice: 0 }] })
+  Object.assign(form, { orderType: type.value, supplierId: '', supplierName: '', currency: 'CNY', remark: '', version: undefined, expectedDeliveryDate: defaultDeliveryDate(), deliveryAddress: '', lines: [{ itemId: '', quantity: 1, unitPrice: 0 }] })
   showOrderForm.value = true; if(type.value!=='MANUAL')await loadSuppliers()
 }
 async function createFromMaterials(ids:string[]) {
@@ -158,7 +184,7 @@ async function openEdit(order: PurchaseOrder) {
 function addLine() { if (form.lines.length < 200) form.lines.push({ itemId: '', quantity: 1, unitPrice: 0 }) }
 function validNumber(value: number, positive: boolean) { return Number.isFinite(Number(value)) && (positive ? Number(value) > 0 : Number(value) >= 0) && /^\d+(\.\d{1,4})?$/.test(String(value)) }
 async function saveOrder() {
-  if (saving.value || uploading.value || referenceLoading.value) return
+  if (saving.value || uploading.value || referenceLoading.value || priceLoads.value>0) return
   formError.value = ''; success.value = ''
   if (form.orderType !== 'MANUAL' && (!form.supplierId || !form.lines.length || form.lines.some(line => !references.value.some(item => item.id === line.itemId)))) { formError.value = '请选择供应商及有效采购项目。'; return }
   if(form.orderType==='MANUAL' && form.lines.some(line=>!line.itemName?.trim()||!line.unit?.trim())){formError.value='请填写物品名称及单位。';return}
@@ -428,13 +454,6 @@ onMounted(load)
             :key="supplier.id"
             :value="supplier.id"
           >{{ supplier.name }}</option></select></label>
-          <label>币种<input
-            v-model="form.currency"
-            required
-            maxlength="3"
-            pattern="[A-Za-z]{3}"
-            placeholder="CNY"
-          ></label>
           <label>预计到货日期<DatePicker
             v-model="form.expectedDeliveryDate"
             type="date"
@@ -460,7 +479,7 @@ onMounted(load)
               >
                 <thead>
                   <tr>
-                    <th v-if="form.orderType==='MANUAL'">
+                    <th>
                       图片
                     </th><th>采购项目</th><th>数量</th><th>单位</th><th>单价</th><th>金额</th><th>操作</th>
                   </tr>
@@ -469,8 +488,15 @@ onMounted(load)
                     v-for="(line,index) in form.lines"
                     :key="index"
                   >
+                    <td v-if="form.orderType!=='MANUAL'">
+                      <PurchaseItemImage
+                        :image-asset-id="references.find(item=>item.id===line.itemId)?.imageAssetId"
+                        :image-url="references.find(item=>item.id===line.itemId)?.imageUrl"
+                        :alt="references.find(item=>item.id===line.itemId)?.name||'采购项目'"
+                      />
+                    </td>
                     <td
-                      v-if="form.orderType==='MANUAL'"
+                      v-else
                       class="manual-image-cell"
                     >
                       <PurchaseItemImage
@@ -516,6 +542,7 @@ onMounted(load)
                         required
                         :aria-label="`采购项目 ${index + 1}`"
                         :disabled="referenceLoading || !references.length"
+                        @change="selectItem(line)"
                       >
                         <option
                           value=""
@@ -528,7 +555,7 @@ onMounted(load)
                           :value="item.id"
                           :disabled="form.lines.some((other, otherIndex) => otherIndex !== index && other.itemId === item.id)"
                         >
-                          {{ item.code }} · {{ item.name }}
+                          {{ item.name }}
                         </option>
                       </select>
                     </td>

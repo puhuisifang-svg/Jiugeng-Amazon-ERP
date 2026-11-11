@@ -76,3 +76,12 @@ it('loads count on mount even before the purchase tab is opened',async()=>{
  expect(h.orders).toHaveBeenCalledTimes(2);expect(w.emitted('count')?.[0]).toEqual([1])
  expect(w.findComponent({name:'ListPagination'}).exists()).toBe(false);w.unmount()
 })
+
+it('fills all remaining quantity without submitting the receipt',async()=>{
+ const w=mount(DashboardPurchaseReceipts,{props:{visible:true}});await flushPromises()
+ await w.findAll('button').find(b=>b.text()==='确认收货')!.trigger('click');await flushPromises()
+ await w.findAll('button').find(b=>b.text()==='全部接收')!.trigger('click')
+ expect(Number((w.get('input[type=number]').element as HTMLInputElement).value)).toBe(order.lines[0]!.remainingQuantity)
+ expect(h.receive).not.toHaveBeenCalled()
+ w.unmount()
+})

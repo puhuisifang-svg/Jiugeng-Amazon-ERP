@@ -103,16 +103,21 @@ class PurchaseService {
             throw state("已有收货记录的采购单不能删除，请保留收货和库存追溯依据");
         if (repository.deleteUnreceived(id, version) != 1) throw versionConflict();
         releaseImages(before, null);
+        images.releaseReplaced(before.waybillImageId(),null,"PURCHASE_WAYBILL",id);
         audit(actor, "PURCHASE_ORDER_DELETE", id, snapshot(before), null);
     }
 
     @Transactional
-    OrderView logistics(String id,long version,String carrier,String tracking,AuthenticatedActor actor) {
+    OrderView logistics(String id,long version,String carrier,String tracking,String waybillImageId,AuthenticatedActor actor) {
         OrderView before=repository.find(id,true).orElseThrow(()->missing(id));
         if(before.status()==Status.CANCELLED)throw state("已取消采购单不能修改物流");
         String company=carrier==null?"":carrier.trim(),number=tracking==null?"":tracking.trim();
-        if(company.length()>100||!number.matches("[A-Za-z0-9-]{1,64}"))throw invalid("请填写有效运单号（字母、数字或连字符，最多64位）");
-        if(repository.updateLogistics(id,version,company,number,actor.userId())!=1)throw versionConflict();
+        String image=optional(waybillImageId,36);
+        if(number.isEmpty()&&image==null)throw invalid("请填写运单号或上传物流单图片");
+        if(company.length()>100||(!number.isEmpty()&&!number.matches("[A-Za-z0-9-]{1,64}")))throw invalid("请填写有效运单号（字母、数字或连字符，最多64位）");
+        if(repository.updateLogistics(id,version,company,number,image,actor.userId())!=1)throw versionConflict();
+        images.attach(image,com.jiugeng.erp.catalogmedia.CatalogImageGateway.Purpose.PURCHASE_WAYBILL,"PURCHASE_WAYBILL",id,actor);
+        images.releaseReplaced(before.waybillImageId(),image,"PURCHASE_WAYBILL",id);
         OrderView after=order(id);audit(actor,"PURCHASE_LOGISTICS_UPDATE",id,snapshot(before),snapshot(after));return after;
     }
 
@@ -259,7 +264,7 @@ class PurchaseService {
     private PurchaseException state(String message){return new PurchaseException(409,"PURCHASE_STATE_INVALID",message);}
     private PurchaseException versionConflict(){return new PurchaseException(409,"PURCHASE_VERSION_CONFLICT","采购单已被其他用户更新");}
     private PurchaseException missing(String id){return new PurchaseException(404,"PURCHASE_ORDER_NOT_FOUND","采购单不存在："+id);}
-    private Map<String,Object> snapshot(OrderView value){Map<String,Object> result=new LinkedHashMap<>();result.put("orderNo",value.orderNo());result.put("orderType",value.orderType());result.put("supplierId",value.supplierId());result.put("status",value.status());result.put("currency",value.currency());result.put("carrier",value.carrier());result.put("trackingNumber",value.trackingNumber());result.put("version",value.version());result.put("lines",value.lines().stream().map(line->Map.of("itemId",line.itemId(),"quantity",line.orderedQuantity(),"received",line.receivedQuantity(),"unitPrice",line.unitPrice())).toList());return result;}
+    private Map<String,Object> snapshot(OrderView value){Map<String,Object> result=new LinkedHashMap<>();result.put("orderNo",value.orderNo());result.put("orderType",value.orderType());result.put("supplierId",value.supplierId());result.put("status",value.status());result.put("currency",value.currency());result.put("carrier",value.carrier());result.put("trackingNumber",value.trackingNumber());result.put("waybillImageId",value.waybillImageId());result.put("version",value.version());result.put("lines",value.lines().stream().map(line->Map.of("itemId",line.itemId(),"quantity",line.orderedQuantity(),"received",line.receivedQuantity(),"unitPrice",line.unitPrice())).toList());return result;}
     private void audit(AuthenticatedActor actor,String action,String id,Map<String,?>before,Map<String,?>after){audit.record(new AuditTrail.BusinessOperation(actor.userId(),actor.loginName(),actor.displayName(),action,"PURCHASE",id,true,before,after,"采购管理业务变更"));}
     private record ValidatedOrder(OrderInput input,List<PurchaseRepository.ResolvedLine> lines){}
 }

@@ -32,8 +32,8 @@ class PurchaseController {
     @PostMapping("/orders/{id}/receipts") @PreAuthorize("hasAuthority('purchases.receive')") ReceiptView receive(@PathVariable String id,@RequestBody ReceiptRequest request,@AuthenticationPrincipal AuthenticatedActor actor){return service.receive(id,request.input(),actor);}
     @GetMapping("/receipts") @PreAuthorize("hasAuthority('purchases.read')") List<ReceiptView> receipts(@RequestParam(required=false)String orderId){return service.receipts(orderId);}
 
-    @PutMapping("/orders/{id}/logistics") @PreAuthorize("hasAuthority('purchases.write')") OrderView logistics(@PathVariable String id,@RequestBody LogisticsRequest request,@AuthenticationPrincipal AuthenticatedActor actor){return service.logistics(id,request.version(),request.carrier(),request.trackingNumber(),actor);}
-    record LogisticsRequest(long version,String carrier,String trackingNumber){}
+    @PutMapping("/orders/{id}/logistics") @PreAuthorize("hasAuthority('purchases.write')") OrderView logistics(@PathVariable String id,@RequestBody LogisticsRequest request,@AuthenticationPrincipal AuthenticatedActor actor){return service.logistics(id,request.version(),request.carrier(),request.trackingNumber(),request.waybillImageId(),actor);}
+    record LogisticsRequest(long version,String carrier,String trackingNumber,String waybillImageId){}
 
     record LineRequest(String itemId,BigDecimal quantity,BigDecimal unitPrice,String itemName,String unit,String specification,String imageAssetId){LineInput input(){return new LineInput(itemId,quantity,unitPrice,itemName,unit,specification,imageAssetId);}}
     record OrderRequest(OrderType orderType,String supplierId,String currency,String remark,Long version,List<LineRequest>lines,LocalDate expectedDeliveryDate,String deliveryAddress,String supplierName){OrderInput input(){return new OrderInput(orderType,supplierId,currency,remark,version,lines==null?null:lines.stream().map(line -> line == null ? null : line.input()).toList(),expectedDeliveryDate,deliveryAddress,supplierName);}}

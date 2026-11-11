@@ -178,6 +178,23 @@ class PurchaseControllerTest {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test void waybillOnlyLogisticsPersistsAndIsProtected()throws Exception {
+        String token=login("waybill-buyer","PRODUCT_MATERIAL");
+        JsonNode order=createOrder(token,"MATERIAL",materialId,"2","3");String id=order.path("id").asText();
+        var bytes=new java.io.ByteArrayOutputStream();javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(2,2,java.awt.image.BufferedImage.TYPE_INT_RGB),"png",bytes);
+        var file=new org.springframework.mock.web.MockMultipartFile("file","waybill.png","image/png",bytes.toByteArray());
+        String image=objectMapper.readTree(mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/v1/catalog-images").file(file).param("purpose","PURCHASE_WAYBILL").header("Authorization",bearer(token))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("id").asText();
+        var payload=Map.of("version",0,"trackingNumber","","waybillImageId",image);
+        mvc.perform(put("/api/v1/purchases/orders/{id}/logistics",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(payload)))
+          .andExpect(status().isOk()).andExpect(jsonPath("$.waybillImageId").value(image)).andExpect(jsonPath("$.trackingNumber").value(""));
+        mvc.perform(get("/api/v1/purchases/orders/{id}",id).header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.waybillImageId").value(image));
+        mvc.perform(get("/api/v1/catalog-images/{id}/thumbnail",image).header("Authorization",bearer(token))).andExpect(status().isOk());
+        mvc.perform(put("/api/v1/purchases/orders/{id}/logistics",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(payload))).andExpect(status().isConflict());
+        mvc.perform(put("/api/v1/purchases/orders/{id}/logistics",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("version",1,"trackingNumber","","waybillImageId","")))).andExpect(status().isBadRequest());
+        mvc.perform(put("/api/v1/purchases/orders/{id}/logistics",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("version",1,"trackingNumber","SYN-123","waybillImageId","missing")))).andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/purchases/orders/{id}",id).header("Authorization",bearer(token))).andExpect(jsonPath("$.version").value(1));
+    }
+
     @Test void logisticsPreservesVersionAndExposesMaterialImage()throws Exception {
         String token=login("logistics-buyer","PRODUCT_MATERIAL");
         jdbc.update("UPDATE auxiliary_material SET image_url=? WHERE id=?","https://example.com/synthetic.png",materialId);

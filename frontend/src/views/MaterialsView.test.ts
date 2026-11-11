@@ -48,7 +48,17 @@ describe('MaterialsView merged material management', () => {
     createMaterial.mockReset(); disableMaterial.mockReset(); enableMaterial.mockReset(); materialSupplierLinks.mockReset().mockResolvedValue([]); replaceMaterialSupplierLinks.mockReset(); supplier.mockReset(); transact.mockReset(); updateSafetyStock.mockReset(); uploadImage.mockReset()
   })
 
-  it('saves confirmed cost with the material and retries supplier failure without creating twice', async () => {
+  it('enables batch purchasing only after selecting active materials', async () => {
+    const wrapper=mount(MaterialsView,{global});await flushPromises()
+    const button=wrapper.findAll('.material-toolbar button').find(b=>b.text()==='批量采购')!
+    expect(button.attributes('disabled')).toBeDefined()
+    await wrapper.get('[aria-label="选择辅料 MAT-1"]').setValue(true)
+    expect(button.attributes('disabled')).toBeUndefined()
+    await wrapper.get('[aria-label="选择辅料 MAT-3"]').setValue(true)
+    expect(button.attributes('disabled')).toBeDefined()
+    wrapper.unmount()
+  })
+  it('saves decimal cost directly with the material and retries supplier failure without creating twice', async () => {
     createMaterial.mockResolvedValue({ item: { id: 'new-m', materialCode: 'GENERATED', name: '新辅料', materialType: '新类型', unit: '件', status: 'ACTIVE' }, mockData: false })
     vi.mocked(domainApi.updateMaterial).mockResolvedValue({ id: 'new-m', materialCode: 'GENERATED', name: '新辅料', materialType: '新类型', unit: '件', status: 'ACTIVE' })
     replaceMaterialSupplierLinks.mockRejectedValueOnce(new Error('network')).mockResolvedValue([])
@@ -59,12 +69,13 @@ describe('MaterialsView merged material management', () => {
     await form.get('input[maxlength="200"]').setValue('新辅料')
     await form.get('[list="material-type-history"]').setValue('新类型')
     expect(form.findAll('datalist option').map(o => o.attributes('value'))).toContain('包装')
-    await form.get('[aria-label="辅料成本价"]').setValue('3.25')
+    await form.get('[aria-label="辅料成本价"]').setValue('invalid')
     await form.trigger('submit'); await flushPromises()
     expect(createMaterial).not.toHaveBeenCalled()
-    await form.get('.material-price-confirm input').setValue(true)
+    expect(form.get('[role="alert"]').text()).toContain('例如 0.5')
+    await form.get('[aria-label="辅料成本价"]').setValue('0.5')
     await form.trigger('submit'); await flushPromises()
-    expect(createMaterial).toHaveBeenCalledWith(expect.objectContaining({ materialCode: '', costPrice: expect.objectContaining({ netPrice: '3.25', confirmedNet: true, version: -1 }) }))
+    expect(createMaterial).toHaveBeenCalledWith(expect.objectContaining({ materialCode: '', costPrice: expect.objectContaining({ netPrice: '0.5', confirmedNet: true, version: -1 }) }))
     await form.trigger('submit'); await flushPromises()
     expect(createMaterial).toHaveBeenCalledTimes(1)
     expect(domainApi.updateMaterial).toHaveBeenLastCalledWith('new-m', expect.not.objectContaining({ costPrice: expect.anything() }))

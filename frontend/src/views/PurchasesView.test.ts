@@ -1,11 +1,13 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { costsApi } from '@/api/costs'
 import { domainApi } from '@/api/domain'
 import { purchaseApi, type PurchaseOrder, type PurchaseReferenceItem } from '@/api/purchases'
 import { session } from '@/state/session'
 import PurchasesView from './PurchasesView.vue'
 
+vi.mock('@/api/costs',()=>({costsApi:{price:vi.fn()}}))
 vi.mock('@/state/uiConfirmation', () => ({ confirmAction: vi.fn().mockResolvedValue(true) }))
 vi.mock('@/api/domain', () => ({ domainApi: { suppliers: vi.fn(), materialSupplierLinks: vi.fn() } }))
 vi.mock('@/api/purchases', () => ({ purchaseApi: { remove: vi.fn(), orders: vi.fn(), create: vi.fn(), update: vi.fn(), references: vi.fn() } }))
@@ -18,6 +20,7 @@ const item: PurchaseReferenceItem = { id: 'material-1', code: 'MAT-001', name: '
 const wrappers: ReturnType<typeof mount>[] = []
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.mocked(costsApi.price).mockResolvedValue({netPrice:'0.5',unit:'PCS',source:'MANUAL',referenceId:null,reason:'测试',version:0})
   vi.mocked(domainApi.materialSupplierLinks).mockResolvedValue([{supplierId:'supplier-1',primary:true}] as never)
   vi.spyOn(session, 'canAccess').mockReturnValue(true)
   vi.mocked(purchaseApi.orders).mockResolvedValue([order, { ...order, id: 'order-2', orderNo: 'PO-PRODUCT', orderType: 'PRODUCT' }])
@@ -39,12 +42,22 @@ describe('purchase order workspace', () => {
     expect(domainApi.materialSupplierLinks).toHaveBeenCalledWith('material-1')
     expect(wrapper.get('fieldset select').element).toHaveProperty('value','supplier-1')
     expect(wrapper.get('[aria-label="采购项目 1"]').element).toHaveProperty('value','material-1')
+    expect(wrapper.get('[aria-label="采购单价"]').element).toHaveProperty('value','0.5')
     expect(purchaseApi.create).not.toHaveBeenCalled()
     expect(router.currentRoute.value.query.materialId).toBeUndefined()
     await wrapper.get('[aria-label="采购数量"]').setValue(4)
     await wrapper.get('[aria-label="采购单价"]').setValue(2.5)
     await wrapper.get('form').trigger('submit');await flushPromises()
     expect(purchaseApi.create).toHaveBeenCalledWith(expect.objectContaining({orderType:'MATERIAL',supplierId:'supplier-1',lines:[expect.objectContaining({itemId:'material-1',quantity:4,unitPrice:2.5})]}))
+  })
+  it('does not use a cost with a different unit and explains price load failure', async () => {
+    vi.mocked(costsApi.price).mockResolvedValueOnce({netPrice:'0.5',unit:'KG'} as never)
+    const {wrapper}=await setup('?type=MATERIAL&materialId=material-1')
+    expect(wrapper.text()).toContain('单位或币制与采购单不一致')
+    expect(wrapper.get('[aria-label="采购单价"]').element).toHaveProperty('value','0')
+    vi.mocked(costsApi.price).mockRejectedValueOnce(new Error('offline'))
+    await wrapper.get('fieldset select').setValue('supplier-2');await flushPromises()
+    expect(wrapper.text()).toContain('成本价读取失败')
   })
   it('explains missing supplier links and does not silently select an unrelated material', async () => {
     vi.mocked(domainApi.materialSupplierLinks).mockResolvedValue([])
@@ -54,6 +67,37 @@ describe('purchase order workspace', () => {
     await wrapper.get('fieldset select').setValue('supplier-2');await flushPromises()
     expect(wrapper.text()).toContain('该供应商未关联当前辅料')
     expect(wrapper.get('[aria-label="采购项目 1"]').element).toHaveProperty('value','')
+  })
+  it('prefills every selected material and its cost for a common supplier', async () => {
+    vi.mocked(purchaseApi.references).mockResolvedValue([item,{...item,id:'material-2',name:'胶带'}])
+    const {wrapper}=await setup('?type=MATERIAL&materialIds=material-1,material-2')
+    expect(domainApi.materialSupplierLinks).toHaveBeenCalledWith('material-2')
+    expect(wrapper.get('[aria-label="采购项目 1"]').element).toHaveProperty('value','material-1')
+    expect(wrapper.get('[aria-label="采购项目 2"]').element).toHaveProperty('value','material-2')
+    expect(wrapper.findAll('[aria-label="采购单价"]').map(x=>(x.element as HTMLInputElement).value)).toEqual(['0.5','0.5'])
+    await wrapper.get('form').trigger('submit');await flushPromises()
+    expect(purchaseApi.create).toHaveBeenCalledWith(expect.objectContaining({lines:[expect.objectContaining({itemId:'material-1',unitPrice:0.5}),expect.objectContaining({itemId:'material-2',unitPrice:0.5})]}))
+  })
+  it('does not silently drop materials without a common supplier', async () => {
+    vi.mocked(domainApi.materialSupplierLinks).mockResolvedValueOnce([{supplierId:'supplier-1',primary:true}] as never).mockResolvedValueOnce([{supplierId:'supplier-2',primary:true}] as never)
+    const {wrapper}=await setup('?type=MATERIAL&materialIds=material-1,material-2')
+    expect(wrapper.text()).toContain('没有共同的启用供应商')
+    await wrapper.get('fieldset select').setValue('supplier-1');await flushPromises()
+    expect(wrapper.text()).toContain('部分所选辅料')
+    await wrapper.get('form').trigger('submit');await flushPromises()
+    expect(purchaseApi.create).not.toHaveBeenCalled()
+  })
+  it('groups each purchase item image, name and code together like customer orders', async () => {
+    vi.mocked(purchaseApi.orders).mockResolvedValue([{...order,lines:[order.lines[0]!,{...order.lines[0]!,id:'line-2',itemName:'胶带',itemCode:'MAT-002'}]}])
+    const {wrapper}=await setup('?type=MATERIAL')
+    const products=wrapper.findAll('.purchase-list-product')
+    expect(products).toHaveLength(2)
+    expect(products[0]!.text()).toContain('纸箱')
+    expect(products[0]!.text()).toContain('MAT-001')
+    expect(products[1]!.text()).toContain('胶带')
+    expect(products[1]!.text()).toContain('MAT-002')
+    expect(wrapper.get('thead').text()).not.toContain('商品图片')
+    expect(wrapper.text()).toContain('共 2 项')
   })
   it('separates product and material orders and persists tab in the URL', async () => {
     const { wrapper, router } = await setup()

@@ -135,7 +135,7 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
                 v-if="row.specification"
                 class="muted"
               >{{ row.specification }}</small>
-            </td><td>{{ row.productName || '手动录入' }}</td><td><strong>{{ row.locationCode }}</strong></td><td>
+            </td><td>{{ row.productName || '手动录入' }}</td><td><strong class="sample-location-code">{{ row.locationCode }}</strong></td><td>
               <PurchaseItemImage
                 v-if="row.storageImageId"
                 :image-asset-id="row.storageImageId"
@@ -398,6 +398,7 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
   </section>
 </template>
 <style scoped>
+.sample-location-code { color: #dc2626; }
 .sample-manual-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.sample-manual-fields label{display:grid;gap:6px}.sample-source{margin-bottom:12px}.sample-storage-editor{margin-top:16px;display:grid;gap:10px}.sample-storage-preview{display:flex;align-items:center;gap:12px}.required{color:#b42318}@media(max-width:600px){.sample-manual-fields{grid-template-columns:1fr}}
 #app .samples-ui .sample-sku-picker-button{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:6px 14px;background:#2864c5;color:white;border:1px solid #2864c5;border-radius:5px;font-size:13px;cursor:pointer}.sample-sku-picker-button:disabled{opacity:.5}
 

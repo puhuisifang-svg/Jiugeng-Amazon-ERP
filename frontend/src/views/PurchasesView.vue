@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { costsApi } from '@/api/costs'
 import { confirmAction } from '@/state/uiConfirmation'
 import AccessDialog from '@/components/AccessDialog.vue'
 import SingleFileUpload from '@/components/SingleFileUpload.vue'
@@ -63,12 +64,12 @@ const pageCount = computed(() => Math.max(1, Math.ceil(filtered.value.length / s
 const visibleOrders = computed(() => filtered.value.slice((page.value - 1) * size.value, page.value * size.value))
 const total = (order: PurchaseOrder) => order.lines.reduce((sum, line) => sum + line.orderedQuantity * line.unitPrice, 0).toFixed(2)
 const formTotal = computed(() => form.lines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0), 0).toFixed(2))
-const requestedMaterial = ref('')
+const requestedMaterials = ref<string[]>([])
 let referenceSequence = 0
 function message(exception: unknown, fallback: string) { return exception instanceof ApiError ? exception.message : fallback }
 function resetFilters() { status.value = ''; keyword.value = ''; delivery.value = ''; page.value = 1 }
 async function changeType(value: PurchaseOrderType) { resetFilters(); await router.replace({ query: { type: value } }) }
-function closeForm() { if (saving.value || uploading.value) return; referenceSequence++; showOrderForm.value = false; requestedMaterial.value = ''; references.value = []; formError.value = '' }
+function closeForm() { if (saving.value || uploading.value) return; referenceSequence++; showOrderForm.value = false; requestedMaterials.value = []; references.value = []; formError.value = '' }
 async function load() {
   loading.value = true; error.value = ''
   try { orders.value = await purchaseApi.orders() }
@@ -96,38 +97,58 @@ async function loadReferences(resetLines = true) {
   referenceLoading.value = true
   try { const result = await purchaseApi.references(form.orderType, form.supplierId); if (sequence === referenceSequence) {
     references.value = result
-    if(resetLines && requestedMaterial.value && form.orderType === 'MATERIAL') {
-      const selected=result.find(item=>item.id===requestedMaterial.value)
-      if(selected) form.lines=[{itemId:selected.id,quantity:1,unitPrice:0}]
-      else formError.value='该供应商未关联当前辅料，请选择其他供应商或先维护辅料供应商关系。'
+    if(resetLines && requestedMaterials.value.length && form.orderType === 'MATERIAL') {
+      const selected=requestedMaterials.value.map(id=>result.find(item=>item.id===id))
+      if(selected.some(item=>!item)) {
+        formError.value='该供应商未关联当前辅料（或部分所选辅料），请换共同供应商或分批采购。'
+        return
+      }
+      const lines=selected.map(item=>({itemId:item!.id,quantity:1,unitPrice:0}))
+      const warnings:string[]=[]
+      if(session.canAccess(['costs.read'])) {
+        await Promise.all(selected.map(async (item,index)=>{
+          try {
+            const price=await costsApi.price(item!.id)
+            if(!price) warnings.push(item!.name+'尚未维护成本价')
+            else if(price.unit!==item!.unit || form.currency!=='CNY') warnings.push(item!.name+'：单位或币制与采购单不一致')
+            else if(!validNumber(Number(price.netPrice),false)) warnings.push(item!.name+'：成本价超出四位小数')
+            else lines[index]!.unitPrice=Number(price.netPrice)
+          }catch {warnings.push(item!.name+'：成本价读取失败')}
+        }))
+      }else warnings.push('当前账号无成本价查看权限')
+      if(sequence!==referenceSequence)return
+      form.lines=lines
+      if(warnings.length)formError.value=warnings.join('；')+'，请手动填写本次采购单价。'
     }
   } }
   catch (exception) { if (sequence === referenceSequence) formError.value = message(exception, '可采购项目加载失败，请重新选择供应商。') }
   finally { if (sequence === referenceSequence) referenceLoading.value = false }
 }
 async function openCreate() {
-  requestedMaterial.value=''; editing.value = undefined; formError.value = ''; references.value = []; referenceSequence++
+  requestedMaterials.value=[]; editing.value = undefined; formError.value = ''; references.value = []; referenceSequence++
   Object.assign(form, { orderType: type.value, supplierId: '', supplierName: '', currency: 'CNY', remark: '', version: undefined, expectedDeliveryDate: '', deliveryAddress: '', lines: [{ itemId: '', quantity: 1, unitPrice: 0 }] })
   showOrderForm.value = true; if(type.value!=='MANUAL')await loadSuppliers()
 }
-async function createFromMaterial(id:string) {
+async function createFromMaterials(ids:string[]) {
   if(!writable.value || !session.canAccess(['materials.read','suppliers.read']))return
   await openCreate()
   if(!showOrderForm.value || form.orderType!=='MATERIAL')return
-  requestedMaterial.value=id
+  if(ids.length>200){formError.value='每张采购单最多 200 项，请分批选择。';return}
+  requestedMaterials.value=ids
   try {
-    const links=await domainApi.materialSupplierLinks(id)
-    if(!showOrderForm.value || requestedMaterial.value!==id)return
-    const available=links.filter(link=>suppliers.value.some(s=>s.id===link.supplierId))
-    const selected=available.find(link=>link.primary)??available[0]
+    const groups=await Promise.all(ids.map(id=>domainApi.materialSupplierLinks(id)))
+    if(!showOrderForm.value || requestedMaterials.value.join(',')!==ids.join(','))return
+    const available=(groups[0]??[]).filter(link=>suppliers.value.some(s=>s.id===link.supplierId)&&groups.every(group=>group.some(l=>l.supplierId===link.supplierId)))
+    const selected=available.find(link=>groups.every(group=>group.some(l=>l.supplierId===link.supplierId&&l.primary)))??available[0]
     if(selected){form.supplierId=selected.supplierId;await loadReferences()}
-    else formError.value='当前辅料未关联启用的供应商，请先回到辅料管理编辑供应商关系，再发起采购。'
+    else formError.value=ids.length===1?'当前辅料未关联启用的供应商，请先回到辅料管理编辑供应商关系，再发起采购。':'所选辅料没有共同的启用供应商，请按供应商分批勾选采购，或先维护供应商关系。'
   }catch(e){formError.value=message(e,'辅料供应商关系加载失败，请关闭后从辅料列表重试。')}
 }
-watch(()=>route.query.materialId, async id=>{
-  if(typeof id!=='string'||!id||type.value!=='MATERIAL')return
-  await createFromMaterial(id)
-  if(route.query.materialId===id){const query={...route.query};delete query.materialId;await router.replace({query})}
+watch(()=>[route.query.materialId,route.query.materialIds], async ([id,batch])=>{
+  const value=typeof batch==='string'?batch:typeof id==='string'?id:''
+  if(!value||type.value!=='MATERIAL')return
+  await createFromMaterials([...new Set(value.split(',').filter(Boolean))])
+  if(route.query.materialId===id&&route.query.materialIds===batch){const query={...route.query};delete query.materialId;delete query.materialIds;await router.replace({query})}
 },{immediate:true})
 async function openEdit(order: PurchaseOrder) {
   editing.value = order; formError.value = ''; showOrderForm.value = true
@@ -261,7 +282,7 @@ onMounted(load)
       >
         <TableViewport>
           <table class="data-table ui-action-table">
-            <thead><tr><th>采购单 / 供应商</th><th>商品图片</th><th>明细</th><th>物流</th><th>采购金额</th><th>收货进度</th><th>预计到货</th><th>状态</th><th>操作</th></tr></thead>
+            <thead><tr><th>采购单 / 供应商</th><th>商品</th><th>物流</th><th>采购金额</th><th>收货进度</th><th>预计到货</th><th>状态</th><th>操作</th></tr></thead>
             <tbody>
               <tr
                 v-for="order in visibleOrders"
@@ -276,16 +297,20 @@ onMounted(load)
                   </RouterLink><small>{{ order.supplierName }}</small><small>{{ new Date(order.createdAt).toLocaleDateString() }} 创建</small>
                 </td>
                 <td>
-                  <div class="purchase-thumbnails">
+                  <div
+                    v-for="line in order.lines"
+                    :key="line.id"
+                    class="purchase-list-product"
+                  >
                     <PurchaseItemImage
-                      v-for="line in order.lines"
-                      :key="line.id"
                       :image-asset-id="line.imageAssetId"
                       :image-url="line.imageUrl"
                       :alt="line.itemName"
                     />
+                    <div><span>{{ line.itemName }}</span><small>{{ line.itemCode || '—' }}</small></div>
                   </div>
-                </td><td>{{ order.lines.length }} 项<small>{{ order.lines[0]?.itemCode }}{{ order.lines.length > 1 ? ' 等' : '' }}</small></td>
+                  <small>共 {{ order.lines.length }} 项</small>
+                </td>
                 <td>
                   <span>{{ order.carrier || '未填写物流公司' }}</span><small>{{ order.trackingNumber || '未填写运单号' }}</small><button
                     v-if="writable || order.trackingNumber"
@@ -298,7 +323,7 @@ onMounted(load)
                 </td>
                 <td>{{ order.currency }} {{ total(order) }}</td>
                 <td>{{ order.lines.filter(line => line.remainingQuantity === 0).length }} / {{ order.lines.length }} 项已收齐<small>{{ order.status === 'CANCELLED' ? '未收余量已关闭' : '分项数量见详情' }}</small></td>
-                <td :class="{ 'error-message': overdue(order) }">
+                <td :class="{ 'purchase-delivery-date': !!order.expectedDeliveryDate }">
                   {{ order.expectedDeliveryDate || '未约定' }}<small v-if="overdue(order)">逾期未收齐</small>
                 </td>
                 <td>
@@ -613,6 +638,7 @@ onMounted(load)
 </template>
 
 <style scoped>
+.purchase-delivery-date { color: #dc2626; }
 .manual-image-cell { min-width:110px; max-width:130px; white-space:normal; }.manual-image-cell > button { display:block; margin:5px 0; }.manual-purchase-lines { min-width:850px; }.manual-purchase-lines td:nth-child(2) { min-width:230px; }.manual-purchase-lines td:nth-child(2) input { display:block; width:100%; max-width:none; }.manual-purchase-lines td:nth-child(4) input { width:70px; }.purchase-edit-lines td input + input { margin-top:6px; }
-.purchase-thumbnails{display:flex;gap:6px;max-width:240px;overflow-x:auto}.purchase-thumbnails>*{flex:none}
+.purchase-list-product{display:flex;align-items:center;gap:10px;min-width:240px;max-width:420px;white-space:normal;margin-bottom:8px}.purchase-list-product>div{min-width:0;overflow-wrap:anywhere}.purchase-list-product>:first-child{flex:none}
 </style>

@@ -45,7 +45,12 @@ class PurchaseControllerTest {
         jdbc.update("INSERT INTO product_variant_supplier(id,variant_id,supplier_id,primary_slot,created_by,updated_by) VALUES(?,?,?,'PRIMARY','test','test')",UUID.randomUUID().toString(),variantId,supplierId);
         jdbc.update("INSERT INTO auxiliary_material_supplier(id,auxiliary_material_id,supplier_id,primary_slot,created_by,updated_by) VALUES(?,?,?,'PRIMARY','test','test')",UUID.randomUUID().toString(),materialId,supplierId);
     }
-    @AfterEach void cleanup(){cleanupPurchases();}
+    @AfterEach void cleanup(){
+        cleanupPurchases();
+        // Release this fixture's links before another test class deletes catalog rows.
+        jdbc.update("DELETE FROM auxiliary_material_supplier WHERE supplier_id=?",supplierId);
+        jdbc.update("DELETE FROM product_variant_supplier WHERE supplier_id=?",supplierId);
+    }
 
     @Test void deletingDeliveryHistoryPreservesOrdersAndStaysDeleted() throws Exception {
         String token=login("dh-"+UUID.randomUUID().toString().substring(0,8),"PRODUCT_MATERIAL");

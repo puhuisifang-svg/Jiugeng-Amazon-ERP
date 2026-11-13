@@ -32,6 +32,8 @@ class MaterialControllerTest {
 
     @BeforeEach
     void reset() {
+        jdbc.update("DELETE FROM material_type_hidden");
+        jdbc.update("DELETE FROM material_unit_hidden");
         jdbc.update("DELETE FROM inventory_transaction");
         jdbc.update("DELETE FROM inventory_balance");
         jdbc.update("DELETE FROM product_auxiliary_material");
@@ -42,6 +44,27 @@ class MaterialControllerTest {
         jdbc.update("DELETE FROM audit_event");
         jdbc.update("DELETE FROM iam_session");
         jdbc.update("DELETE FROM iam_user");
+    }
+
+    @Test void unitOptionsCanBeRemovedWithoutChangingMaterials() throws Exception {
+        String token=createUserAndLogin("unit-editor","PRODUCT_MATERIAL");
+        Map<String,Object> data=material("UNIT-TEST","单位测试辅料");data.put("unit","根");
+        mvc.perform(post("/api/v1/materials").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(data))).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/materials/unit-options").header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$",org.hamcrest.Matchers.hasItem("根")));
+        mvc.perform(post("/api/v1/materials/unit-options/remove").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("name","根")))).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/materials/unit-options").header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$",org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("根"))));
+        mvc.perform(get("/api/v1/materials").header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$[0].unit").value("根"));
+    }
+
+    @Test void removeTypeOptionPreservesMaterial() throws Exception {
+        String token=createUserAndLogin("type-editor","PRODUCT_MATERIAL");
+        Map<String,Object> data=material("TYPE-TEST","测试辅料");data.put("materialType","类型删除测试");
+        mvc.perform(post("/api/v1/materials").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(data))).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/materials/type-options").header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$[0]").value("类型删除测试"));
+        mvc.perform(post("/api/v1/materials/type-options/remove").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("name","类型删除测试")))).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/materials/type-options").header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$").isEmpty());
+        mvc.perform(get("/api/v1/materials").header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$[0].materialType").value("类型删除测试"));
+        mvc.perform(post("/api/v1/materials/type-options/remove").contentType(MediaType.APPLICATION_JSON).content(json(Map.of("name","类型删除测试")))).andExpect(status().isUnauthorized());
     }
 
     @Test

@@ -5,7 +5,7 @@ import { purchaseApi, type PurchaseOrder } from '@/api/purchases'
 import { ApiError } from '@/api/client'
 import { session } from '@/state/session'
 import { createRequestId } from '@/utils/requestId'
-import AccessDialog from './AccessDialog.vue'
+import PurchaseReceiptDialog from './PurchaseReceiptDialog.vue'
 import TableViewport from './TableViewport.vue'
 import ListPagination from './ListPagination.vue'
 import PurchaseItemImage from './PurchaseItemImage.vue'
@@ -24,6 +24,7 @@ const pending = ref<Payload>()
 const locked = computed(() => saving.value || !!pending.value)
 watch(locked, value => emit('busy', value))
 const filtered = computed(() => orders.value.filter(order => [order.orderNo, order.supplierName, order.trackingNumber, ...order.lines.flatMap(line => [line.itemName, line.itemCode])].join(' ').toLowerCase().includes(query.value.trim().toLowerCase())))
+function purchaseName(order:PurchaseOrder){return (order.lines[0]?.itemName || '未命名采购')+(order.lines.length>1?` 等 ${order.lines.length} 项`:'')}
 const rows = computed(() => filtered.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
 watch([query, pageSize], () => { page.value = 1 })
 watch(() => filtered.value.length, total => { page.value = Math.min(page.value, Math.max(1, Math.ceil(total / pageSize.value))) })
@@ -124,7 +125,7 @@ defineExpose({ reload })
       </p>
       <TableViewport v-else-if="rows.length">
         <table class="data-table receipt-table">
-          <thead><tr><th>采购单 / 供应商</th><th>采购内容</th><th>预计到货</th><th>物流信息</th><th>状态</th><th>操作</th></tr></thead>
+          <thead><tr><th>采购名称 / 供应商</th><th>采购内容</th><th>预计到货</th><th>物流信息</th><th>状态</th><th>操作</th></tr></thead>
           <tbody>
             <tr
               v-for="order in rows"
@@ -132,7 +133,7 @@ defineExpose({ reload })
             >
               <td>
                 <RouterLink :to="`/purchases/orders/${order.id}`">
-                  {{ order.orderNo }}
+                  {{ purchaseName(order) }}
                 </RouterLink><small>{{ order.supplierName }}</small><small>{{ order.orderType === 'MANUAL' ? '日常物品采购' : order.orderType === 'MATERIAL' ? '辅料采购' : '产品采购' }}</small>
               </td>
               <td>
@@ -146,7 +147,7 @@ defineExpose({ reload })
                     :image-url="line.imageUrl"
                     :alt="line.itemName"
                   />
-                  <div>{{ line.itemName }}<small>{{ line.itemCode || line.specification || '手动物品' }}</small><small>已收 {{ line.receivedQuantity }} / 采购 {{ line.orderedQuantity }} {{ line.unit }} · 待收 <strong>{{ line.remainingQuantity }}</strong> {{ line.unit }}</small></div>
+                  <div>{{ line.itemName }}<small v-if="line.specification">{{ line.specification }}</small><small>已收 {{ line.receivedQuantity }} / 采购 {{ line.orderedQuantity }} {{ line.unit }} · 待收 <strong>{{ line.remainingQuantity }}</strong> {{ line.unit }}</small></div>
                 </div>
               </td>
               <td>{{ order.expectedDeliveryDate || '未约定' }}</td>
@@ -181,91 +182,20 @@ defineExpose({ reload })
         :disabled="loading || locked"
       />
     </template>
-    <AccessDialog
+    <PurchaseReceiptDialog
       v-if="target"
-      title="确认采购收货"
-      wide
-      :busy="locked"
+      :order="target"
+      :quantities="quantities"
+      :remark="remark"
+      :receipt-error="receiptError"
+      :locked="locked"
+      :saving="saving"
+      :pending="!!pending"
       @close="close"
-    >
-      <div class="receipt-summary">
-        <strong>{{ target.orderNo }}</strong><span>{{ target.supplierName }}</span><span>{{ target.deliveryAddress || '未填写收货地址' }}</span>
-      </div>
-      <p class="receipt-hint">
-        核对实物后填写本次实收数量，未到货的项目留空。确认后登记收货；辅料采购同时计入辅料库存。
-      </p>
-      <TableViewport>
-        <table class="data-table receipt-confirm-table">
-          <thead><tr><th>图片</th><th>商品 / SKU</th><th>采购</th><th>已收</th><th>待收</th><th>本次实收</th><th>操作</th></tr></thead>
-          <tbody>
-            <tr
-              v-for="line in target.lines.filter(item => item.remainingQuantity > 0)"
-              :key="line.id"
-            >
-              <td>
-                <PurchaseItemImage
-                  :image-asset-id="line.imageAssetId"
-                  :image-url="line.imageUrl"
-                  :alt="line.itemName"
-                />
-              </td>
-              <td>{{ line.itemName }}<small>{{ line.itemCode || line.specification || '手动物品' }}</small></td><td>{{ line.orderedQuantity }} {{ line.unit }}</td><td>{{ line.receivedQuantity }}</td><td>{{ line.remainingQuantity }}</td>
-              <td>
-                <input
-                  v-model="quantities[line.id]"
-                  type="number"
-                  min="0"
-                  :max="line.remainingQuantity"
-                  step="0.0001"
-                  :aria-label="`${line.itemCode}本次实收`"
-                  :disabled="locked"
-                  placeholder="填写实收数量"
-                >
-              </td><td>
-                <button
-                  type="button"
-                  class="secondary-button"
-                  :disabled="locked"
-                  @click="quantities[line.id]=line.remainingQuantity"
-                >
-                  全部接收
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </TableViewport>
-      <label class="receipt-remark">收货备注<input
-        v-model="remark"
-        :disabled="locked"
-        maxlength="500"
-        placeholder="可选，如外包装情况、少货说明"
-      ></label>
-      <p
-        v-if="receiptError"
-        role="alert"
-        class="error-message"
-      >
-        {{ receiptError }}
-      </p>
-      <template #footer>
-        <button
-          type="button"
-          class="secondary-button"
-          :disabled="locked"
-          @click="close"
-        >
-          取消
-        </button><button
-          type="button"
-          class="primary-button"
-          :disabled="saving"
-          @click="receive"
-        >
-          {{ saving ? '确认中…' : pending ? '重试本次收货' : '确认本次收货' }}
-        </button>
-      </template>
-    </AccessDialog>
+      @submit="receive"
+      @quantity="(id,value)=>quantities[id]=value===''?'':Number(value)"
+      @remark="remark=$event"
+    />
   </section>
 </template>
 <style scoped>

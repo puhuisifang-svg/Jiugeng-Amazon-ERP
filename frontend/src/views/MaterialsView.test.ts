@@ -8,6 +8,7 @@ const { createMaterial, disableMaterial, enableMaterial, materialSupplierLinks, 
   createMaterial: vi.fn(), disableMaterial: vi.fn(), enableMaterial: vi.fn(), materialSupplierLinks: vi.fn(), replaceMaterialSupplierLinks: vi.fn(), supplier: vi.fn(), transact: vi.fn(), updateSafetyStock: vi.fn(), uploadImage: vi.fn(),
 }))
 
+vi.mock('@/api/materialTypes', () => ({materialTypesApi:{units:vi.fn(async()=>['件','个','米','套']),removeUnit:vi.fn(async()=>undefined),list:vi.fn(async()=>['包装','耗材']),remove:vi.fn(async()=>undefined)}}))
 vi.mock('@/config/runtime', () => ({ runtimeConfig: { authMode: 'password' } }))
 vi.mock('@/state/session', () => ({ session: { canAccess: () => true } }))
 vi.mock('@/api/costs', () => ({ costsApi: { prices: vi.fn(async () => [{ materialId: 'm1', netPrice: '2.5', unit: 'PCS', version: 0 }]), price: vi.fn(async () => null) } }))
@@ -48,6 +49,20 @@ describe('MaterialsView merged material management', () => {
     createMaterial.mockReset(); disableMaterial.mockReset(); enableMaterial.mockReset(); materialSupplierLinks.mockReset().mockResolvedValue([]); replaceMaterialSupplierLinks.mockReset(); supplier.mockReset(); transact.mockReset(); updateSafetyStock.mockReset(); uploadImage.mockReset()
   })
 
+  it('uses one input for typing and choosing material types', async () => {
+    const wrapper=mount(MaterialsView,{global});await flushPromises()
+    await wrapper.get('.material-toolbar button').trigger('click')
+    const input=wrapper.get('input[aria-label="辅料类型"]')
+    expect(wrapper.find('datalist').exists()).toBe(false)
+    await input.setValue('新包装')
+    expect(input.element).toHaveProperty('value','新包装')
+    await input.trigger('keydown',{key:'Escape'})
+    await wrapper.get('[aria-label="选择辅料类型"]').trigger('click')
+    expect(wrapper.findAll('.editable-select [role="option"]').map(o=>o.text())).toContain('包装')
+    await wrapper.findAll('.editable-select [role="option"]').find(o=>o.text()==='包装')!.trigger('click')
+    expect(input.element).toHaveProperty('value','包装')
+    wrapper.unmount()
+  })
   it('enables batch purchasing only after selecting active materials', async () => {
     const wrapper=mount(MaterialsView,{global});await flushPromises()
     const button=wrapper.findAll('.material-toolbar button').find(b=>b.text()==='批量采购')!
@@ -67,8 +82,7 @@ describe('MaterialsView merged material management', () => {
     await wrapper.get('.material-toolbar button').trigger('click')
     const form = wrapper.get('.operation-form')
     await form.get('input[maxlength="200"]').setValue('新辅料')
-    await form.get('[list="material-type-history"]').setValue('新类型')
-    expect(form.findAll('datalist option').map(o => o.attributes('value'))).toContain('包装')
+    await form.get('input[aria-label="辅料类型"]').setValue('新类型')
     await form.get('[aria-label="辅料成本价"]').setValue('invalid')
     await form.trigger('submit'); await flushPromises()
     expect(createMaterial).not.toHaveBeenCalled()
@@ -249,9 +263,10 @@ describe('MaterialsView merged material management', () => {
     expect(wrapper.text()).toContain('新增辅料')
     expect(wrapper.text()).not.toContain('提交正式库存命令')
     const materialForm = wrapper.findAll('form').find(item => item.text().includes('新增辅料'))!
-    const unitSelect = materialForm.findAll('select').find(select => select.text().includes('件'))!
-    expect(unitSelect.text()).toContain('件')
-    expect(unitSelect.text()).toContain('套')
+    const unitInput = materialForm.get('input[aria-label="单位"]')
+    await unitInput.setValue('根')
+    expect(unitInput.element).toHaveProperty('value','根')
+    expect(unitInput.attributes('maxlength')).toBe('32')
 
     await toolbar.findAll('button').find(button => button.text() === '库存操作')!.trigger('click')
     expect(wrapper.findAll('[role="dialog"]')).toHaveLength(1)
@@ -291,7 +306,7 @@ describe('MaterialsView merged material management', () => {
     const form = wrapper.findAll('form').find(item => item.text().includes('新增辅料'))!
     const textInputs = form.findAll('input').filter(input => input.attributes('type') !== 'file' && input.attributes('type') !== 'radio')
     await textInputs[0]!.setValue('标签')
-    await form.get('[list="material-type-history"]').setValue('新类型')
+    await form.get('input[aria-label="辅料类型"]').setValue('新类型')
     const file = new File(['image'], 'material.png', { type: 'image/png' })
     Object.defineProperty(form.get('input[type="file"]').element, 'files', { value: [file] })
     await form.get('input[type="file"]').trigger('change')

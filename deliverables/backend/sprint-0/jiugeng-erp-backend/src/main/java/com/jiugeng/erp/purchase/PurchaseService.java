@@ -66,6 +66,18 @@ class PurchaseService {
     }
 
     @Transactional
+    OrderView place(OrderInput raw, AuthenticatedActor actor) {
+        OrderView created=create(raw,actor);
+        return submit(created.id(),created.version(),actor);
+    }
+
+    @Transactional
+    OrderView updateAndPlace(String id,OrderInput raw,AuthenticatedActor actor) {
+        OrderView updated=update(id,raw,actor);
+        return updated.status()==Status.SUBMITTED ? updated : submit(id,updated.version(),actor);
+    }
+
+    @Transactional
     OrderView create(OrderInput raw, AuthenticatedActor actor) {
         ValidatedOrder valid = validate(raw, null);
         String id = UUID.randomUUID().toString();
@@ -80,8 +92,9 @@ class PurchaseService {
 
     @Transactional
     OrderView update(String id, OrderInput raw, AuthenticatedActor actor) {
-        OrderView before = order(id);
-        if (before.status() != Status.DRAFT) throw state("只有草稿采购单可编辑");
+        OrderView before = repository.find(id, true).orElseThrow(() -> missing(id));
+        if (before.status() != Status.DRAFT && before.status() != Status.SUBMITTED) throw state("只有草稿或待收货采购单可编辑");
+        if (!repository.receipts(id).isEmpty()) throw state("已有收货记录的采购单不可编辑");
         if (raw == null || raw.orderType() != before.orderType()) throw invalid("采购类型保存后不可修改");
         ValidatedOrder valid = validate(raw, before.orderType(),before);
         long version = requireVersion(raw.version());
@@ -205,7 +218,7 @@ class PurchaseService {
             if (line == null) throw invalid("采购明细不能为空");
             if(raw.orderType()==OrderType.MANUAL){
                 var item=new PurchaseRepository.ItemRef(UUID.randomUUID().toString(), "", required(line.itemName(),"物品名称",200),required(line.unit(),"单位",32));
-                lines.add(new PurchaseRepository.ResolvedLine(UUID.randomUUID().toString(),number++,item,positive(line.quantity(),"采购数量"),nonNegative(line.unitPrice(),"采购单价"),optional(line.specification(),500),optional(line.imageAssetId(),36)));
+                lines.add(new PurchaseRepository.ResolvedLine(UUID.randomUUID().toString(),number++,item,positive(line.quantity(),"采购数量"),nonNegative(line.unitPrice(),"采购单价"),optional(line.specification(),500),optional(line.imageAssetId(),36),line.taxIncluded(),taxRate(line)));
                 continue;
             }
             String itemId = required(line.itemId(), "采购对象", 36);
@@ -217,7 +230,7 @@ class PurchaseService {
                 var saved=prior.get();item=new PurchaseRepository.ItemRef(saved.itemId(),saved.itemCode(),saved.itemName(),saved.unit());
             } else item=repository.activeItem(raw.orderType(), supplierId, itemId);
             lines.add(new PurchaseRepository.ResolvedLine(UUID.randomUUID().toString(), number++, item,
-                    positive(line.quantity(), "采购数量"), nonNegative(line.unitPrice(), "采购单价"),null,null));
+                    positive(line.quantity(), "采购数量"), nonNegative(line.unitPrice(), "采购单价"),null,null,line.taxIncluded(),taxRate(line)));
         }
         LocalDate deliveryDate = raw.expectedDeliveryDate();
         if (deliveryDate != null && (deliveryDate.getYear() < 2000 || deliveryDate.getYear() > 9999)) throw invalid("预计到货日期超出有效范围");
@@ -264,7 +277,14 @@ class PurchaseService {
     private PurchaseException state(String message){return new PurchaseException(409,"PURCHASE_STATE_INVALID",message);}
     private PurchaseException versionConflict(){return new PurchaseException(409,"PURCHASE_VERSION_CONFLICT","采购单已被其他用户更新");}
     private PurchaseException missing(String id){return new PurchaseException(404,"PURCHASE_ORDER_NOT_FOUND","采购单不存在："+id);}
-    private Map<String,Object> snapshot(OrderView value){Map<String,Object> result=new LinkedHashMap<>();result.put("orderNo",value.orderNo());result.put("orderType",value.orderType());result.put("supplierId",value.supplierId());result.put("status",value.status());result.put("currency",value.currency());result.put("carrier",value.carrier());result.put("trackingNumber",value.trackingNumber());result.put("waybillImageId",value.waybillImageId());result.put("version",value.version());result.put("lines",value.lines().stream().map(line->Map.of("itemId",line.itemId(),"quantity",line.orderedQuantity(),"received",line.receivedQuantity(),"unitPrice",line.unitPrice())).toList());return result;}
+    private BigDecimal taxRate(LineInput line) {
+        if(!line.taxIncluded())return BigDecimal.ZERO;
+        BigDecimal rate=line.taxRate()==null?BigDecimal.ONE:line.taxRate();
+        if(rate.signum()<0||rate.compareTo(new BigDecimal("100"))>0||rate.stripTrailingZeros().scale()>2)
+            throw invalid("税率须为 0 至 100，最多两位小数");
+        return rate;
+    }
+    private Map<String,Object> snapshot(OrderView value){Map<String,Object> result=new LinkedHashMap<>();result.put("orderNo",value.orderNo());result.put("orderType",value.orderType());result.put("supplierId",value.supplierId());result.put("status",value.status());result.put("currency",value.currency());result.put("carrier",value.carrier());result.put("trackingNumber",value.trackingNumber());result.put("waybillImageId",value.waybillImageId());result.put("version",value.version());result.put("lines",value.lines().stream().map(line->Map.of("itemId",line.itemId(),"quantity",line.orderedQuantity(),"received",line.receivedQuantity(),"unitPrice",line.unitPrice(),"taxIncluded",line.taxIncluded(),"taxRate",line.taxRate())).toList());return result;}
     private void audit(AuthenticatedActor actor,String action,String id,Map<String,?>before,Map<String,?>after){audit.record(new AuditTrail.BusinessOperation(actor.userId(),actor.loginName(),actor.displayName(),action,"PURCHASE",id,true,before,after,"采购管理业务变更"));}
     private record ValidatedOrder(OrderInput input,List<PurchaseRepository.ResolvedLine> lines){}
 }

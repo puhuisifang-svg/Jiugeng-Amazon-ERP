@@ -3,13 +3,13 @@ import { onMounted, ref } from 'vue'
 import { customersApi, type CustomerProduct } from '@/api/customers'
 import CustomerProductImage from './CustomerProductImage.vue'
 import ListPagination from './ListPagination.vue'
-const props=defineProps<{customerId:string; existing:string[]}>()
+const props=defineProps<{customerId:string; existing:string[];single?:boolean}>()
 const emit=defineEmits<{confirm:[products:CustomerProduct[]];close:[]}>()
 const dialog=ref<HTMLDialogElement>(), rows=ref<CustomerProduct[]>([]), selected=ref<CustomerProduct[]>([])
 const query=ref(''), applied=ref(''), page=ref(1), size=ref(20), total=ref(0), busy=ref(false), error=ref('')
 let sequence=0
 async function load(){const current=++sequence;busy.value=true;error.value='';try{const result=await customersApi.products({customerId:props.customerId,q:applied.value,status:'ACTIVE',page:page.value-1,size:size.value});if(current===sequence){rows.value=result.items;total.value=result.totalCount}}catch(e){if(current===sequence){rows.value=[];error.value=e instanceof Error?e.message:'商品加载失败'}}finally{if(current===sequence)busy.value=false}}
-function toggle(product:CustomerProduct,checked:boolean){selected.value=selected.value.filter(p=>p.id!==product.id);if(checked)selected.value.push(product)}
+function toggle(product:CustomerProduct,checked:boolean){selected.value=selected.value.filter(p=>p.id!==product.id);if(checked){if(props.single)selected.value=[product];else selected.value.push(product)}}
 function search(){applied.value=query.value.trim();page.value=1;void load()}
 function resize(value:number){size.value=value;page.value=1;void load()}
 onMounted(()=>{dialog.value?.showModal();void load()})
@@ -67,7 +67,8 @@ onMounted(()=>{dialog.value?.showModal();void load()})
           >
             <td>
               <input
-                type="checkbox"
+                :type="single?'radio':'checkbox'"
+                :name="single?'customer-product-selection':undefined"
                 :aria-label="`选择 ${product.productName}`"
                 :disabled="busy||existing.includes(product.id)"
                 :checked="existing.includes(product.id)||selected.some(p=>p.id===product.id)"
@@ -110,7 +111,7 @@ onMounted(()=>{dialog.value?.showModal();void load()})
         :disabled="busy||!selected.length"
         @click="emit('confirm',selected)"
       >
-        添加所选（{{ selected.length }}）
+        {{ single ? '确认选择' : `添加所选（${selected.length}）` }}
       </button>
     </footer>
   </dialog>

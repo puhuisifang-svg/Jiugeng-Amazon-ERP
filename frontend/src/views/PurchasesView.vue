@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import PurchaseExportDialog from '@/components/PurchaseExportDialog.vue'
+import { purchaseLineAmount } from '@/ui/purchaseAmounts'
 import { costsApi } from '@/api/costs'
+import PurchaseOrderDetailView from './PurchaseOrderDetailView.vue'
 import { confirmAction } from '@/state/uiConfirmation'
 import AccessDialog from '@/components/AccessDialog.vue'
 import SingleFileUpload from '@/components/SingleFileUpload.vue'
@@ -12,14 +15,21 @@ import ListPagination from '@/components/ListPagination.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
 import { domainApi, type SupplierDto } from '@/api/domain'
 import { purchaseApi, type PurchaseOrder, type PurchaseOrderInput, type PurchaseOrderType, type PurchaseReferenceItem, type PurchaseStatus } from '@/api/purchases'
 import { session } from '@/state/session'
 
 const route = useRoute(); const router = useRouter()
+const detailId=ref('')
+const detailView=ref<InstanceType<typeof PurchaseOrderDetailView>>()
+async function closeDetail(){if(await detailView.value?.mayLeave()!==false){detailId.value='';await load()}}
 const orders = ref<PurchaseOrder[]>([])
+const selectedIds=ref<string[]>([]),exportOrders=ref<PurchaseOrder[]>([])
+const selectedOrders=computed(()=>filtered.value.filter(order=>selectedIds.value.includes(order.id)))
+const allPageSelected=computed(()=>visibleOrders.value.length>0&&visibleOrders.value.every(o=>selectedIds.value.includes(o.id)))
+function togglePage(checked:boolean){const ids=visibleOrders.value.map(o=>o.id);selectedIds.value=checked?[...new Set([...selectedIds.value,...ids])]:selectedIds.value.filter(id=>!ids.includes(id))}
 const suppliers = ref<SupplierDto[]>([]); const references = ref<PurchaseReferenceItem[]>([])
 const loading = ref(false); const referenceLoading = ref(false); const supplierLoading = ref(false); const saving = ref(false)
 const error = ref(''); const formError = ref(''); const success = ref('')
@@ -45,7 +55,7 @@ async function removeOrder(order: PurchaseOrder) {
   } catch (e) { error.value = message(e, '删除结果未确认，请刷新列表核对后再操作。') }
   finally { deleting.value = '' }
 }
-const writable = computed(() => session.canAccess(['purchases.write']))
+const writable = computed(() => session.canAccess(['purchases.write','purchases.submit']))
 const statusLabels: Record<PurchaseStatus, string> = { DRAFT: '草稿', SUBMITTED: '待收货', PARTIALLY_RECEIVED: '部分收货', COMPLETED: '已完成', CANCELLED: '已取消 / 余量关闭' }
 const typeLabels = { PRODUCT: '产品采购', MATERIAL: '辅料采购', MANUAL: '日常物品采购' }
 const uploading = ref(false), uploadTarget = ref<number>()
@@ -62,8 +72,10 @@ const filtered = computed(() => typedOrders.value.filter(order => {
 }))
 const pageCount = computed(() => Math.max(1, Math.ceil(filtered.value.length / size.value)))
 const visibleOrders = computed(() => filtered.value.slice((page.value - 1) * size.value, page.value * size.value))
-const total = (order: PurchaseOrder) => order.lines.reduce((sum, line) => sum + line.orderedQuantity * line.unitPrice, 0).toFixed(2)
-const formTotal = computed(() => form.lines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0), 0).toFixed(2))
+const total = (order: PurchaseOrder) => order.lines.reduce((sum, line) => sum + purchaseLineAmount(line), 0).toFixed(2)
+const showTaxRate=computed(()=>form.lines.some(line=>line.taxIncluded))
+function purchaseName(order:PurchaseOrder){return (order.lines[0]?.itemName||'未命名采购')+(order.lines.length>1?' 等 '+order.lines.length+' 项':'')}
+const formTotal = computed(() => form.lines.reduce((sum, line) => sum + purchaseLineAmount(line), 0).toFixed(2))
 const requestedMaterials = ref<string[]>([])
 let referenceSequence = 0
 function message(exception: unknown, fallback: string) { return exception instanceof ApiError ? exception.message : fallback }
@@ -92,7 +104,7 @@ async function loadSuppliers() {
 async function loadReferences(resetLines = true) {
   const sequence = ++referenceSequence
   references.value = []; formError.value = ''
-  if (resetLines) form.lines = [{ itemId: '', quantity: 1, unitPrice: 0 }]
+  if (resetLines) form.lines = [{ itemId: '', quantity: 1, unitPrice: 0, taxIncluded:false, taxRate:1 }]
   if (form.orderType === 'MANUAL' || !form.supplierId) { referenceLoading.value = false; return }
   referenceLoading.value = true
   try { const result = await purchaseApi.references(form.orderType, form.supplierId); if (sequence === referenceSequence) {
@@ -103,7 +115,7 @@ async function loadReferences(resetLines = true) {
         formError.value='该供应商未关联当前辅料（或部分所选辅料），请换共同供应商或分批采购。'
         return
       }
-      const lines=selected.map(item=>({itemId:item!.id,quantity:1,unitPrice:0}))
+      const lines=selected.map(item=>({itemId:item!.id,quantity:1,unitPrice:0,taxIncluded:false,taxRate:1}))
       const warnings:string[]=[]
       if(session.canAccess(['costs.read'])) {
         await Promise.all(selected.map(async (item,index)=>{
@@ -127,7 +139,7 @@ async function loadReferences(resetLines = true) {
 const priceLoads=ref(0)
 async function selectItem(line:PurchaseOrderInput['lines'][number]){
   const id=line.itemId, supplier=form.supplierId
-  line.unitPrice=0
+  line.unitPrice=0;line.taxIncluded=false;line.taxRate=1
   const item=references.value.find(item=>item.id===id)
   if(!item)return
   priceLoads.value++;formError.value=''
@@ -139,7 +151,7 @@ async function selectItem(line:PurchaseOrderInput['lines'][number]){
       else formError.value='当前辅料未维护同单位人民币成本价，请填写采购单价。'
     }else{
       const previous=[...orders.value].filter(o=>o.supplierId===supplier&&o.orderType===form.orderType&&o.currency===form.currency&&o.status!=='CANCELLED'&&o.status!=='DRAFT').sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).flatMap(o=>o.lines).find(l=>l.itemId===id&&l.unit===item.unit)
-      if(previous)line.unitPrice=previous.unitPrice
+      if(previous){line.unitPrice=previous.unitPrice;line.taxIncluded=previous.taxIncluded??false;line.taxRate=previous.taxIncluded?(previous.taxRate??1):1}
       else formError.value='暂无可带入的采购价格，请填写本次采购单价。'
     }
   }catch{if(line.itemId===id)formError.value='单价读取失败，请手动填写采购单价。'}
@@ -152,7 +164,7 @@ function defaultDeliveryDate(){
 }
 async function openCreate() {
   requestedMaterials.value=[]; editing.value = undefined; formError.value = ''; references.value = []; referenceSequence++
-  Object.assign(form, { orderType: type.value, supplierId: '', supplierName: '', currency: 'CNY', remark: '', version: undefined, expectedDeliveryDate: defaultDeliveryDate(), deliveryAddress: '', lines: [{ itemId: '', quantity: 1, unitPrice: 0 }] })
+  Object.assign(form, { orderType: type.value, supplierId: '', supplierName: '', currency: 'CNY', remark: '', version: undefined, expectedDeliveryDate: defaultDeliveryDate(), deliveryAddress: '', lines: [{ itemId: '', quantity: 1, unitPrice: 0, taxIncluded:false, taxRate:1 }] })
   showOrderForm.value = true; if(type.value!=='MANUAL')await loadSuppliers()
 }
 async function createFromMaterials(ids:string[]) {
@@ -178,28 +190,29 @@ watch(()=>[route.query.materialId,route.query.materialIds], async ([id,batch])=>
 },{immediate:true})
 async function openEdit(order: PurchaseOrder) {
   editing.value = order; formError.value = ''; showOrderForm.value = true
-  Object.assign(form, { orderType: order.orderType, supplierId: order.supplierId, supplierName: order.supplierName, currency: order.currency, remark: order.remark ?? '', version: order.version, expectedDeliveryDate: order.expectedDeliveryDate ?? '', deliveryAddress: order.deliveryAddress ?? '', lines: order.lines.map(line => ({ itemId: line.itemId, quantity: line.orderedQuantity, unitPrice: line.unitPrice, itemName:line.itemName, unit:line.unit, specification:line.specification??'', imageAssetId:line.imageAssetId })) })
+  Object.assign(form, { orderType: order.orderType, supplierId: order.supplierId, supplierName: order.supplierName, currency: order.currency, remark: order.remark ?? '', version: order.version, expectedDeliveryDate: order.expectedDeliveryDate ?? '', deliveryAddress: order.deliveryAddress ?? '', lines: order.lines.map(line => ({ itemId: line.itemId, quantity: line.orderedQuantity, unitPrice: line.unitPrice, taxIncluded:line.taxIncluded??false,taxRate:line.taxIncluded?(line.taxRate??1):1, itemName:line.itemName, unit:line.unit, specification:line.specification??'', imageAssetId:line.imageAssetId })) })
   if(order.orderType!=='MANUAL')await Promise.all([loadSuppliers(), loadReferences(false)])
 }
-function addLine() { if (form.lines.length < 200) form.lines.push({ itemId: '', quantity: 1, unitPrice: 0 }) }
+function addLine() { if (form.lines.length < 200) form.lines.push({ itemId: '', quantity: 1, unitPrice: 0, taxIncluded:false, taxRate:1 }) }
 function validNumber(value: number, positive: boolean) { return Number.isFinite(Number(value)) && (positive ? Number(value) > 0 : Number(value) >= 0) && /^\d+(\.\d{1,4})?$/.test(String(value)) }
 async function saveOrder() {
   if (saving.value || uploading.value || referenceLoading.value || priceLoads.value>0) return
   formError.value = ''; success.value = ''
+  if(form.lines.some(line=>line.taxIncluded&&(!Number.isFinite(Number(line.taxRate))||Number(line.taxRate)<0||Number(line.taxRate)>100||!/^\d+(\.\d{1,2})?$/.test(String(line.taxRate))))){formError.value='税率须为 0 至 100，最多两位小数。';return}
   if (form.orderType !== 'MANUAL' && (!form.supplierId || !form.lines.length || form.lines.some(line => !references.value.some(item => item.id === line.itemId)))) { formError.value = '请选择供应商及有效采购项目。'; return }
   if(form.orderType==='MANUAL' && form.lines.some(line=>!line.itemName?.trim()||!line.unit?.trim())){formError.value='请填写物品名称及单位。';return}
   if (form.orderType !== 'MANUAL' && new Set(form.lines.map(line => line.itemId)).size !== form.lines.length) { formError.value = '采购项目不可重复，请合并相同项目的数量。'; return }
   if (form.lines.some(line => !validNumber(line.quantity, true) || !validNumber(line.unitPrice, false))) { formError.value = '数量必须大于 0，单价不可为负数，最多支持四位小数。'; return }
   saving.value = true
   try {
-    const payload = { ...form, expectedDeliveryDate: form.expectedDeliveryDate || null, lines: form.lines.map(line => ({ ...line })) }
-    if (editing.value) await purchaseApi.update(editing.value.id, payload); else await purchaseApi.create(payload)
-    success.value = editing.value ? '采购单草稿已更新。' : '采购单草稿已保存，请进入详情核对并确认下单。'
+    const payload = { ...form, expectedDeliveryDate: form.expectedDeliveryDate || null, lines: form.lines.map(line => ({ ...line,taxIncluded:line.taxIncluded??false,taxRate:line.taxIncluded?(line.taxRate??1):0 })) }
+    if (editing.value) await purchaseApi.updateAndPlace(editing.value.id, payload); else await purchaseApi.place(payload)
+    success.value = editing.value ? '采购单已更新并确认下单，等待收货。' : '采购单已创建并确认下单，等待收货。'
     saving.value = false; closeForm(); await load()
   } catch (exception) { formError.value = message(exception, '保存结果未确认，请先刷新列表检查是否已保存，避免重复建单。') }
   finally { saving.value = false }
 }
-watch([type, status, keyword, delivery, size], () => { page.value = 1 })
+watch([type, status, keyword, delivery, size], () => { page.value = 1;selectedIds.value=[] })
 watch(pageCount, value => { if (page.value > value) page.value = value })
 onMounted(load)
 </script>
@@ -210,17 +223,25 @@ onMounted(load)
       <div>
         <p class="eyebrow">
           PURCHASE ORDERS
-        </p><h1>采购管理</h1><p>建单 → 确认下单 → 分批收货 → 完成，采购与到货进度在一处管理。</p>
+        </p><h1>采购管理</h1><p>建单并下单 → 分批收货 → 完成，采购与到货进度在一处管理。</p>
       </div>
-      <button
-        v-if="writable"
-        class="primary-link"
-        type="button"
-        :disabled="showOrderForm"
-        @click="openCreate"
-      >
-        新建{{ typeLabels[type] }}单
-      </button>
+      <div class="purchase-header-actions">
+        <button
+          type="button"
+          :disabled="!selectedOrders.length"
+          @click="exportOrders=[...selectedOrders]"
+        >
+          导出图片{{ selectedOrders.length ? `（${selectedOrders.length}）` : '' }}
+        </button><button
+          v-if="writable"
+          class="primary-link"
+          type="button"
+          :disabled="showOrderForm"
+          @click="openCreate"
+        >
+          新建{{ typeLabels[type] }}单
+        </button>
+      </div>
     </header>
     <div
       class="purchase-tabs"
@@ -308,19 +329,41 @@ onMounted(load)
       >
         <TableViewport>
           <table class="data-table ui-action-table">
-            <thead><tr><th>采购单 / 供应商</th><th>商品</th><th>物流</th><th>采购金额</th><th>收货进度</th><th>预计到货</th><th>状态</th><th>操作</th></tr></thead>
+            <thead>
+              <tr>
+                <th>
+                  <input
+                    type="checkbox"
+                    aria-label="全选当前页采购单"
+                    :checked="allPageSelected"
+                    :indeterminate="!allPageSelected && visibleOrders.some(o=>selectedIds.includes(o.id))"
+                    @change="togglePage(($event.target as HTMLInputElement).checked)"
+                  >
+                </th><th>采购名称 / 供应商</th><th>商品</th><th>数量</th><th>单位</th><th>物流</th><th>采购金额</th><th>收货进度</th><th>预计到货</th><th>状态</th><th>操作</th>
+              </tr>
+            </thead>
             <tbody>
               <tr
                 v-for="order in visibleOrders"
                 :key="order.id"
               >
                 <td>
-                  <RouterLink
-                    class="text-link"
-                    :to="`/purchases/orders/${order.id}`"
+                  <input
+                    v-model="selectedIds"
+                    type="checkbox"
+                    :value="order.id"
+                    :aria-label="`选择采购单 ${purchaseName(order)}`"
                   >
-                    <strong>{{ order.orderNo }}</strong>
-                  </RouterLink><small>{{ order.supplierName }}</small><small>{{ new Date(order.createdAt).toLocaleDateString() }} 创建</small>
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    class="text-link purchase-name-link"
+                    :data-order-id="order.id"
+                    @click="detailId=order.id"
+                  >
+                    <strong>{{ purchaseName(order) }}</strong>
+                  </button><small>{{ order.supplierName }}</small><small>{{ new Date(order.createdAt).toLocaleDateString() }} 创建</small>
                 </td>
                 <td>
                   <div
@@ -333,9 +376,29 @@ onMounted(load)
                       :image-url="line.imageUrl"
                       :alt="line.itemName"
                     />
-                    <div><span>{{ line.itemName }}</span><small>{{ line.itemCode || '—' }}</small></div>
+                    <div :title="line.itemName">
+                      <span>{{ line.itemName }}</span>
+                    </div>
                   </div>
                   <small>共 {{ order.lines.length }} 项</small>
+                </td>
+                <td>
+                  <div
+                    v-for="line in order.lines"
+                    :key="line.id"
+                    class="purchase-list-measure"
+                  >
+                    {{ line.orderedQuantity }}
+                  </div><small>&nbsp;</small>
+                </td>
+                <td>
+                  <div
+                    v-for="line in order.lines"
+                    :key="line.id"
+                    class="purchase-list-measure"
+                  >
+                    {{ line.unit }}
+                  </div><small>&nbsp;</small>
                 </td>
                 <td>
                   <span>{{ order.carrier || '未填写物流公司' }}</span><small>{{ order.trackingNumber || '未填写运单号' }}</small><button
@@ -359,13 +422,14 @@ onMounted(load)
                   >{{ statusLabels[order.status] }}</span>
                 </td>
                 <td class="table-actions">
-                  <RouterLink
+                  <button
+                    type="button"
                     class="text-link"
-                    :to="`/purchases/orders/${order.id}`"
+                    @click="detailId=order.id"
                   >
-                    {{ order.status === 'DRAFT' ? '核对 / 下单' : '查看详情' }}
-                  </RouterLink><button
-                    v-if="writable && order.status === 'DRAFT'"
+                    详情
+                  </button><button
+                    v-if="writable && ['DRAFT','SUBMITTED'].includes(order.status)"
                     type="button"
                     class="secondary-button"
                     @click="openEdit(order)"
@@ -421,7 +485,7 @@ onMounted(load)
           {{ editing ? '编辑' : '新建' }}{{ typeLabels[form.orderType] }}单
         </h2>
         <p class="form-wide purchase-form-hint">
-          {{ form.orderType==='MANUAL' ? '直接填写物品及图片，无需维护 SKU 或辅料；供应商 / 购买渠道可选填。' : '一单一供应商，产品与辅料不混单。' }}保存为草稿后，请在详情确认下单。
+          {{ form.orderType==='MANUAL' ? '直接填写物品及图片，无需维护 SKU 或辅料；供应商 / 购买渠道可选填。' : '一单一供应商，产品与辅料不混单。' }}保存即确认下单，进入待收货；系统不会向供应商自动发送订单。
         </p>
         <p
           v-if="formError"
@@ -471,6 +535,9 @@ onMounted(load)
           >
             该供应商尚未关联启用的{{ form.orderType === 'PRODUCT' ? 'SKU' : '辅料' }}，请先到对应档案维护供货关系。
           </p>
+          <p class="form-wide muted">
+            单价填写不含税价格；选“是”后，金额 = 数量 × 单价 ×（1 + 税率），按行保留两位小数。
+          </p>
           <div class="form-wide table-scroll">
             <TableViewport>
               <table
@@ -481,7 +548,9 @@ onMounted(load)
                   <tr>
                     <th>
                       图片
-                    </th><th>采购项目</th><th>数量</th><th>单位</th><th>单价</th><th>金额</th><th>操作</th>
+                    </th><th>采购项目</th><th>数量</th><th>单位</th><th>不含税单价</th><th>是否含税</th><th v-if="showTaxRate">
+                      税率（%）
+                    </th><th>金额</th><th>操作</th>
                   </tr>
                 </thead><tbody>
                   <tr
@@ -591,7 +660,32 @@ onMounted(load)
                         aria-label="采购单价"
                       >
                     </td>
-                    <td>{{ (Number(line.quantity || 0) * Number(line.unitPrice || 0)).toFixed(2) }}</td>
+                    <td>
+                      <select
+                        v-model="line.taxIncluded"
+                        v-single-select
+                        :aria-label="`是否含税 ${index+1}`"
+                      >
+                        <option :value="false">
+                          否
+                        </option><option :value="true">
+                          是
+                        </option>
+                      </select>
+                    </td>
+                    <td v-if="showTaxRate">
+                      <input
+                        v-if="line.taxIncluded"
+                        v-model.number="line.taxRate"
+                        required
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        :aria-label="`税率 ${index+1}`"
+                      ><span v-else>—</span>
+                    </td>
+                    <td>{{ (purchaseLineAmount(line)).toFixed(2) }}</td>
                     <td>
                       <button
                         type="button"
@@ -635,7 +729,7 @@ onMounted(load)
             type="submit"
             :disabled="saving || uploading || (form.orderType!=='MANUAL' && (referenceLoading || supplierLoading || !references.length))"
           >
-            {{ saving ? '保存中…' : '保存草稿' }}
+            {{ saving ? '提交中…' : editing ? (editing.status === 'SUBMITTED' ? '保存修改' : '保存并确认下单') : '创建并确认下单' }}
           </button>
         </div>
       </form>
@@ -654,7 +748,32 @@ onMounted(load)
         :upload="file=>uploadItem(file,uploadTarget!)"
       />
     </AccessDialog>
+    <PurchaseExportDialog
+      v-if="exportOrders.length"
+      :orders="exportOrders"
+      @close="exportOrders=[]"
+    />
   </section>
+  <AccessDialog
+    v-if="detailId"
+    title="采购单详情"
+    wide
+    @close="closeDetail"
+  >
+    <PurchaseOrderDetailView
+      ref="detailView"
+      :order-id="detailId"
+      embedded
+    />
+    <template #footer>
+      <button
+        type="button"
+        @click="closeDetail"
+      >
+        关闭
+      </button>
+    </template>
+  </AccessDialog>
   <PurchaseLogisticsDialog
     v-if="logisticsOrder"
     :order="logisticsOrder"
@@ -665,7 +784,8 @@ onMounted(load)
 </template>
 
 <style scoped>
+.purchase-name-link{color:#2864c5!important;border:0;background:transparent!important;padding:0;text-align:left;cursor:pointer;}
 .purchase-delivery-date { color: #dc2626; }
 .manual-image-cell { min-width:110px; max-width:130px; white-space:normal; }.manual-image-cell > button { display:block; margin:5px 0; }.manual-purchase-lines { min-width:850px; }.manual-purchase-lines td:nth-child(2) { min-width:230px; }.manual-purchase-lines td:nth-child(2) input { display:block; width:100%; max-width:none; }.manual-purchase-lines td:nth-child(4) input { width:70px; }.purchase-edit-lines td input + input { margin-top:6px; }
-.purchase-list-product{display:flex;align-items:center;gap:10px;min-width:240px;max-width:420px;white-space:normal;margin-bottom:8px}.purchase-list-product>div{min-width:0;overflow-wrap:anywhere}.purchase-list-product>:first-child{flex:none}
+.purchase-header-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.purchase-list-measure{height:84px;display:flex;align-items:center;margin-bottom:8px;white-space:nowrap}.purchase-list-product{height:84px;display:flex;align-items:center;gap:10px;min-width:240px;max-width:420px;white-space:normal;margin-bottom:8px}.purchase-list-product>div{min-width:0;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.purchase-list-product>:first-child{flex:none}
 </style>

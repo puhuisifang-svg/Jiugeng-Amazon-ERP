@@ -9,13 +9,35 @@ vi.mock('@/api/domain', () => ({ domainApi: { products: vi.fn(async () => ({ ite
   { id: 'p1', productCode: 'P-1', productName: '测试产品', status: 'ACTIVE', variants: [{ id: 'v1', skuCode: 'SKU-1', variantName: '测试 SKU', status: 'ACTIVE', imageUrl: 'https://example.com/product.png' }] },
 ] })) } }))
 vi.mock('@/components/ShipmentCustomerPicker.vue', () => ({ default: {
-  props: ['initial'], emits: ['select'],
+  name:'ShipmentCustomerPicker', props: ['initial','multiple','existing'], emits: ['select','add'],
   data() { return { selected: '' } },
   template: '<select v-model="selected" @change="$emit(\'select\', { id: selected, productId: \'p1\', variantId: selected })"><option value="">请选择客户商品</option><option value="v1">测试客户商品</option></select>',
 } }))
 import DashboardMaintenanceView from './DashboardMaintenanceView.vue'
 import { dashboardApi, type PendingShipment, type TodayShipment } from '@/api/dashboard'
 describe('today shipment dates', () => {
+  it.each(['today-shipments','pending-shipments'] as const)('adds multiple %s products and retries only failures with the original key',async kind=>{
+    createShipment.mockReset();createShipment.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({})
+    const wrapper=mount(DashboardMaintenanceView,{props:{kind},global:{stubs:{RouterLink:true,CustomerProductImage:true}}});await flushPromises()
+    await wrapper.get('.material-toolbar button').trigger('click')
+    const picker=wrapper.findComponent({name:'ShipmentCustomerPicker'})
+    const products=[{id:'cp1',productId:'p1',variantId:'v1',productName:'商品一'},{id:'cp2',productId:'p1',variantId:'v2',productName:'商品二'}]
+    picker.vm.$emit('add',products);picker.vm.$emit('add',products);await flushPromises()
+    expect(wrapper.findAll('.shipping-lines tbody tr')).toHaveLength(2)
+    await wrapper.get('[aria-label="商品1发货数量"]').setValue(12)
+    await wrapper.get('[aria-label="商品2箱数"]').setValue(3)
+    for(const input of wrapper.findAll('input[type=date]'))await input.setValue('2026-11-12')
+    await wrapper.get('.operation-form').trigger('submit');await flushPromises()
+    expect(createShipment).toHaveBeenCalledTimes(2)
+    expect(createShipment.mock.calls[0]?.[1]).toEqual(expect.objectContaining({quantity:12,customerProductId:'cp1'}))
+    expect(createShipment.mock.calls[1]?.[1]).toEqual(expect.objectContaining({boxCount:3,customerProductId:'cp2'}))
+    expect(wrapper.text()).toContain('已添加 1 项，1 项保存失败')
+    const failed=createShipment.mock.calls[1]
+    await wrapper.get('.operation-form').trigger('submit');await flushPromises()
+    expect(createShipment).toHaveBeenCalledTimes(3)
+    expect(createShipment.mock.calls[2]).toEqual(failed)
+    expect(wrapper.find('.shipping-editor').exists()).toBe(false);wrapper.unmount()
+  })
   it('confirms overdue dispatch in the fixed action column and reuses the key after failure', async () => {
     const item = { id: 'overdue', productId: 'p1', variantId: 'v1', customerProduct: { id: 'v1', customerId: 'c1', customerName: '合成客户', productId: 'p1', variantId: 'v1', customerProductCode: 'CP-1', requirements: '' }, productCode: 'SKU-1', productName: '测试 SKU', shipDate: '2020-01-01', latestShipAt: '2020-01-01T15:59:00Z', quantity: 5, boxCount: 2, status: 'ACTIVE', version: 3 } as TodayShipment
     vi.mocked(dashboardApi.page).mockResolvedValueOnce({ items: [item], totalPages: 1, totalElements: 1, page: 0, size: 20 })
@@ -46,14 +68,14 @@ describe('today shipment dates', () => {
     await flushPromises()
     await wrapper.get('.material-toolbar button').trigger('click')
     await wrapper.get('.operation-form select').setValue('v1')
-    await wrapper.get('.operation-form input[maxlength="500"]').setValue('请勿丢失这条备注')
+    await wrapper.get('.operation-form textarea[maxlength="500"]').setValue('请勿丢失这条备注')
     await wrapper.get('.operation-form input[type="number"]').setValue(8)
     for (const input of wrapper.findAll('.operation-form input[type="date"]')) await input.setValue('2026-10-20')
     await wrapper.get('[aria-label="发货记录"]').trigger('click')
     expect(wrapper.find('[aria-label="发货记录"] form').exists()).toBe(true)
     const assertRetained = () => {
       expect((wrapper.get('.operation-form select').element as HTMLSelectElement).value).toBe('v1')
-      expect((wrapper.get('.operation-form input[maxlength="500"]').element as HTMLInputElement).value).toBe('请勿丢失这条备注')
+      expect((wrapper.get('.operation-form textarea[maxlength="500"]').element as HTMLInputElement).value).toBe('请勿丢失这条备注')
       expect((wrapper.get('.operation-form input[type="number"]').element as HTMLInputElement).value).toBe('8')
       for (const input of wrapper.findAll('.operation-form input[type="date"]')) expect((input.element as HTMLInputElement).value).toBe('2026-10-20')
     }
@@ -83,7 +105,7 @@ describe('today shipment dates', () => {
     const wrapper = mount(DashboardMaintenanceView, { props: { kind: 'today-shipments' }, global: { stubs: { RouterLink: true, ShipmentProductImage: true } } })
     await flushPromises(); await wrapper.get('.material-toolbar button').trigger('click')
     await wrapper.get('.operation-form select').setValue('v1')
-    await wrapper.get('.operation-form input[maxlength="500"]').setValue('失败后保留')
+    await wrapper.get('.operation-form textarea[maxlength="500"]').setValue('失败后保留')
     await wrapper.get('.operation-form').trigger('submit')
     expect(wrapper.get('[aria-label="关闭发货弹窗"]').attributes('disabled')).toBeDefined()
     expect(wrapper.findAll('.operation-form button').find(button => button.text() === '取消')!.attributes('disabled')).toBeDefined()
@@ -91,7 +113,7 @@ describe('today shipment dates', () => {
     await wrapper.get('[aria-label="发货记录"]').trigger('keydown', { key: 'Escape' })
     expect(wrapper.find('[role="alertdialog"]').exists()).toBe(false)
     failSave(new Error('offline')); await flushPromises()
-    expect((wrapper.get('.operation-form input[maxlength="500"]').element as HTMLInputElement).value).toBe('失败后保留')
+    expect((wrapper.get('.operation-form textarea[maxlength="500"]').element as HTMLInputElement).value).toBe('失败后保留')
     expect(wrapper.text()).toContain('保存失败')
     await wrapper.get('[aria-label="关闭发货弹窗"]').trigger('click')
     expect(wrapper.find('[role="alertdialog"]').exists()).toBe(true)
@@ -248,13 +270,13 @@ describe('today shipment dates', () => {
     expect(form.find('input[type="datetime-local"]').exists()).toBe(false)
     await form.get('select').setValue('v1')
     expect(form.find('input[type="file"]').exists()).toBe(false)
-    expect(form.find('textarea').exists()).toBe(false)
-    expect(form.get('img').attributes('src')).toBe('https://example.com/product.png')
+    expect(form.find('textarea').exists()).toBe(true)
+    expect(form.find('.shipping-editor-body').exists()).toBe(true)
     await form.trigger('submit')
     await flushPromises()
     expect(createShipment).toHaveBeenCalledWith('today-shipments', expect.objectContaining({
       productId: 'p1', variantId: 'v1', customerProductId: 'v1', date: '2026-10-17', latestShipTime: '2026-10-17T23:59',
-    }))
+    }), expect.any(String))
     expect(wrapper.text()).toContain('记录已创建')
   })
   it('automatically displays the product image for pending shipments too', async () => {
@@ -265,8 +287,8 @@ describe('today shipment dates', () => {
     const form = wrapper.get('.operation-form')
     await form.get('select').setValue('v1')
     expect(form.find('input[type="file"]').exists()).toBe(false)
-    expect(form.find('textarea').exists()).toBe(false)
-    expect(form.get('img').attributes('src')).toBe('https://example.com/product.png')
+    expect(form.find('textarea').exists()).toBe(true)
+    expect(form.find('.shipping-editor-body').exists()).toBe(true)
     const dates = form.findAll('input[type="date"]')
     expect(dates).toHaveLength(2)
     await dates[0]!.setValue('2026-10-17')
@@ -275,7 +297,7 @@ describe('today shipment dates', () => {
     await flushPromises()
     expect(createShipment).toHaveBeenCalledWith('pending-shipments', expect.objectContaining({
       date: '2026-10-17', latestShipTime: '2026-10-20T23:59',
-    }))
+    }), expect.any(String))
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
   })
 })

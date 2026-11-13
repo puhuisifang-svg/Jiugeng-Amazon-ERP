@@ -22,6 +22,10 @@ class PurchaseController {
     @GetMapping("/orders/{id}/detail") @PreAuthorize("hasAuthority('purchases.read')") OrderDetail detail(@PathVariable String id){return service.detail(id);}
     @GetMapping("/references") @PreAuthorize("hasAuthority('purchases.write')") List<ReferenceItem> references(
             @RequestParam OrderType orderType,@RequestParam String supplierId){return service.references(orderType,supplierId);}
+    @PostMapping("/orders/place") @PreAuthorize("hasAuthority('purchases.write') and hasAuthority('purchases.submit')")
+    OrderView place(@RequestBody OrderRequest request,@AuthenticationPrincipal AuthenticatedActor actor){return service.place(request.input(),actor);}
+    @PutMapping("/orders/{id}/place") @PreAuthorize("hasAuthority('purchases.write') and hasAuthority('purchases.submit')")
+    OrderView updateAndPlace(@PathVariable String id,@RequestBody OrderRequest request,@AuthenticationPrincipal AuthenticatedActor actor){return service.updateAndPlace(id,request.input(),actor);}
     @PostMapping("/orders") @PreAuthorize("hasAuthority('purchases.write')") OrderView create(@RequestBody OrderRequest request,@AuthenticationPrincipal AuthenticatedActor actor){return service.create(request.input(),actor);}
     @PutMapping("/orders/{id}") @PreAuthorize("hasAuthority('purchases.write')") OrderView update(@PathVariable String id,@RequestBody OrderRequest request,@AuthenticationPrincipal AuthenticatedActor actor){return service.update(id,request.input(),actor);}
     @DeleteMapping("/orders/{id}") @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
@@ -35,7 +39,7 @@ class PurchaseController {
     @PutMapping("/orders/{id}/logistics") @PreAuthorize("hasAuthority('purchases.write')") OrderView logistics(@PathVariable String id,@RequestBody LogisticsRequest request,@AuthenticationPrincipal AuthenticatedActor actor){return service.logistics(id,request.version(),request.carrier(),request.trackingNumber(),request.waybillImageId(),actor);}
     record LogisticsRequest(long version,String carrier,String trackingNumber,String waybillImageId){}
 
-    record LineRequest(String itemId,BigDecimal quantity,BigDecimal unitPrice,String itemName,String unit,String specification,String imageAssetId){LineInput input(){return new LineInput(itemId,quantity,unitPrice,itemName,unit,specification,imageAssetId);}}
+    record LineRequest(String itemId,BigDecimal quantity,BigDecimal unitPrice,String itemName,String unit,String specification,String imageAssetId,boolean taxIncluded,BigDecimal taxRate){LineInput input(){return new LineInput(itemId,quantity,unitPrice,itemName,unit,specification,imageAssetId,taxIncluded,taxRate);}}
     record OrderRequest(OrderType orderType,String supplierId,String currency,String remark,Long version,List<LineRequest>lines,LocalDate expectedDeliveryDate,String deliveryAddress,String supplierName){OrderInput input(){return new OrderInput(orderType,supplierId,currency,remark,version,lines==null?null:lines.stream().map(line -> line == null ? null : line.input()).toList(),expectedDeliveryDate,deliveryAddress,supplierName);}}
     record VersionRequest(long version){}
     record CancelRequest(long version,String reason){}

@@ -2,7 +2,7 @@ import { apiRequest } from './client'
 
 export type PurchaseOrderType = 'PRODUCT' | 'MATERIAL' | 'MANUAL'
 export type PurchaseStatus = 'DRAFT' | 'SUBMITTED' | 'PARTIALLY_RECEIVED' | 'COMPLETED' | 'CANCELLED'
-export interface PurchaseLine { specification?: string | null; imageAssetId?: string | null; imageUrl?: string | null; id: string; lineNo: number; itemId: string; itemCode: string; itemName: string; unit: string; orderedQuantity: number; receivedQuantity: number; remainingQuantity: number; unitPrice: number }
+export interface PurchaseLine { taxIncluded?:boolean; taxRate?:number; specification?: string | null; imageAssetId?: string | null; imageUrl?: string | null; id: string; lineNo: number; itemId: string; itemCode: string; itemName: string; unit: string; orderedQuantity: number; receivedQuantity: number; remainingQuantity: number; unitPrice: number }
 export interface PurchaseOrder { waybillImageId?: string | null; carrier?: string | null; trackingNumber?: string | null; id: string; orderNo: string; orderType: PurchaseOrderType; supplierId: string; supplierName: string; status: PurchaseStatus; currency: string; remark?: string; version: number; lines: PurchaseLine[]; createdAt: string; updatedAt: string; expectedDeliveryDate?: string | null; deliveryAddress?: string | null; cancellationReason?: string | null }
 export interface PurchaseReceiptLine { orderLineId: string; itemCode: string; itemName: string; quantity: number; inventoryTransactionId?: string }
 export interface PurchaseReceipt { id: string; orderId: string; orderNo: string; requestId: string; receivedAt: string; remark?: string; actorLoginName: string; lines: PurchaseReceiptLine[]; createdAt: string; replayed: boolean }
@@ -10,7 +10,7 @@ export interface PurchaseDashboard { draft: number; pendingReceipt: number; part
 export interface PurchaseReferenceItem { id: string; code: string; name: string; unit: string; primarySupplier: boolean; imageAssetId?:string|null; imageUrl?:string|null }
 export interface PurchaseHistoryEvent { id: string; action: string; actorLoginName: string; actorDisplayName?: string; detail?: string; occurredAt: string }
 export interface PurchaseOrderDetail { order: PurchaseOrder; receipts: PurchaseReceipt[]; history: PurchaseHistoryEvent[] }
-export interface PurchaseOrderInput { orderType: PurchaseOrderType; supplierId: string; supplierName?: string; currency: string; remark?: string; version?: number; expectedDeliveryDate?: string | null; deliveryAddress?: string; lines: Array<{ itemId: string; quantity: number; unitPrice: number; itemName?: string; unit?: string; specification?: string; imageAssetId?: string | null }> }
+export interface PurchaseOrderInput { orderType: PurchaseOrderType; supplierId: string; supplierName?: string; currency: string; remark?: string; version?: number; expectedDeliveryDate?: string | null; deliveryAddress?: string; lines: Array<{ taxIncluded?:boolean; taxRate?:number; itemId: string; quantity: number; unitPrice: number; itemName?: string; unit?: string; specification?: string; imageAssetId?: string | null }> }
 
 export const purchaseApi = {
   remove: (id: string, version: number) => apiRequest<void>(`/v1/purchases/orders/${id}?version=${version}`, { method: 'DELETE' }),
@@ -20,6 +20,8 @@ export const purchaseApi = {
   order: (id: string) => apiRequest<PurchaseOrder>(`/v1/purchases/orders/${id}`),
   detail: (id: string) => apiRequest<PurchaseOrderDetail>(`/v1/purchases/orders/${id}/detail`),
   references: (orderType: PurchaseOrderType, supplierId: string) => apiRequest<PurchaseReferenceItem[]>(`/v1/purchases/references?orderType=${orderType}&supplierId=${encodeURIComponent(supplierId)}`),
+  place: (input: PurchaseOrderInput) => apiRequest<PurchaseOrder>('/v1/purchases/orders/place', { method: 'POST', body: JSON.stringify(input) }),
+  updateAndPlace: (id: string, input: PurchaseOrderInput) => apiRequest<PurchaseOrder>(`/v1/purchases/orders/${id}/place`, { method: 'PUT', body: JSON.stringify(input) }),
   create: (input: PurchaseOrderInput) => apiRequest<PurchaseOrder>('/v1/purchases/orders', { method: 'POST', body: JSON.stringify(input) }),
   update: (id: string, input: PurchaseOrderInput) => apiRequest<PurchaseOrder>(`/v1/purchases/orders/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
   submit: (id: string, version: number) => apiRequest<PurchaseOrder>(`/v1/purchases/orders/${id}/submit`, { method: 'POST', body: JSON.stringify({ version }) }),

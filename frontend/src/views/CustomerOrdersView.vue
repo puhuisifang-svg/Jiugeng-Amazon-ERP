@@ -6,7 +6,7 @@ import { vSingleSelect } from '@/directives/singleSelect'
 import DatePicker from '@/components/DatePicker.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ordersApi, type CustomerOrder, type OrderInput, type OrderAllocation, type ArrangementItem } from '@/api/orders'
+import { ordersApi, type CustomerOrder, type OrderInput, type OrderAllocation } from '@/api/orders'
 import type { DashboardHistoryEvent } from '@/api/dashboard'
 import { session } from '@/state/session'
 import CustomerOrderEditor from '@/components/CustomerOrderEditor.vue'
@@ -19,13 +19,11 @@ import { orderHistoryChanges } from '@/ui/orderHistory'
 const route = useRoute(), router = useRouter()
 const saveKey = ref('')
 const writable = computed(() => session.canAccess(['orders.write']))
-const canArrange = computed(() => session.canAccess(['orders.transition', 'dashboard.shipments.manage']))
+const canArrange = computed(() => session.canAccess(['orders.read', 'customers.write', 'dashboard.shipments.manage']))
 const rows = ref<CustomerOrder[]>([]), detail = ref<CustomerOrder>(), allocations = ref<OrderAllocation[]>([]), history = ref<DashboardHistoryEvent[]>([])
 const loading = ref(false), saving = ref(false), error = ref(''), success = ref(''), formError = ref(''), editing = ref(false), editTarget = ref<CustomerOrder>()
 const page = ref(1), size = ref(20), total = ref(0), query = reactive({ q: '', status: '', source: '', from: '', to: '', deliveryFrom: '', deliveryTo: '', shipping: '', invoiceStatus: '' })
 const transition = ref<{ order: CustomerOrder; action: string }>(), reason = ref('')
-const arranging = ref<CustomerOrder>(), arrangeItems = ref<Array<ArrangementItem & { selected: boolean; name: string; available: number; unit: string }>>([])
-const recipient = ref(''), phone = ref(''), address = ref(''), requestKey = ref('')
 const logistics = ref<OrderAllocation>(), logisticsText = ref('')
 const labels: Record<string,string> = { DRAFT: '草稿', CONFIRMED: '已确认', COMPLETED: '已完成', CANCELLED: '已取消', CLOSED: '已关闭', PENDING: '待发货', TODAY: '今日发货', SHIPPED: '已发货', CONFIRM: '确认订单', CANCEL: '取消订单', CLOSE: '关闭订单', DELETE: '删除草稿' }
 const message = (e: unknown) => e instanceof Error ? e.message : '请求失败，请重试。'
@@ -58,24 +56,7 @@ async function confirm() {
   try { await ordersApi.transition(order.id, order.version, action, reason.value); transition.value = undefined; success.value = `${labels[action]}成功。`; if (action === 'DELETE' && route.params.id) await router.push('/orders/customers'); else await load() }
   catch (e) { formError.value = message(e) } finally { saving.value = false }
 }
-async function arrange(order: CustomerOrder) {
-  error.value = ''; try {
-    const fresh = await ordersApi.get(order.id); arranging.value = fresh; formError.value = ''; requestKey.value = createRequestId()
-    recipient.value = fresh.details.recipient; phone.value = fresh.details.phone; address.value = fresh.details.address
-    arrangeItems.value = fresh.lines.map(l => ({ lineId: l.id, selected: false, name: l.details.name, unit: l.details.unit, available: Math.max(0, Number(l.details.quantity) - Number(l.allocatedQuantity) - Number(l.shippedQuantity)), quantity: 0, boxCount: 1, plannedDate: l.details.deliveryDate, latestDate: l.details.deliveryDate, remark: l.details.remark }))
-  } catch (e) { error.value = message(e) }
-}
-async function submitArrange() {
-  if (!arranging.value || saving.value) return
-  const selected = arrangeItems.value.filter(i => i.selected)
-  if (!selected.length || selected.some(i => i.quantity <= 0 || i.quantity > i.available)) { formError.value = '请选择商品，填写不超过可安排数量的本次数量。'; return }
-  saving.value = true; formError.value = ''
-  try {
-    const id = arranging.value.id
-    await ordersApi.arrange(id, { version: arranging.value.version, items: selected.map(({ lineId, quantity, boxCount, plannedDate, latestDate, remark }) => ({ lineId, quantity, boxCount, plannedDate, latestDate, remark })), recipient: recipient.value, phone: phone.value, address: address.value }, requestKey.value)
-    arranging.value = undefined; success.value = '已生成待发货安排。'; await router.push({ path: '/dashboard-maintenance/pending-shipments', query: { orderId: id } })
-  } catch (e) { formError.value = message(e) } finally { saving.value = false }
-}
+function arrange(order:CustomerOrder){void router.push({path:'/dashboard-maintenance/pending-shipments',query:{orderId:order.id,arrange:'1'}})}
 async function generate(order: CustomerOrder) { if (saving.value) return; saving.value = true; try { const invoice = await ordersApi.generateInvoice(order.id); await router.push({ path: '/customers/invoices', query: { invoiceId: invoice.id } }) } catch (e) { error.value = message(e) } finally { saving.value = false } }
 async function saveLogistics() { if (!logistics.value || saving.value) return; saving.value = true; try { await ordersApi.logistics(logistics.value.id, logistics.value.version, logisticsText.value); logistics.value = undefined; success.value = '物流信息已保存。'; await load() } catch (e) { formError.value = message(e) } finally { saving.value = false } }
 watch(() => route.params.id, load); onMounted(load)
@@ -189,11 +170,12 @@ watch(() => route.params.id, load); onMounted(load)
                 <RouterLink :to="`/orders/customers/${o.id}`">
                   详情
                 </RouterLink><button
-                  v-if="canArrange && o.status === 'CONFIRMED'"
-                  :disabled="saving"
+                  v-if="canArrange && ['DRAFT','CONFIRMED'].includes(o.status)"
+                  :disabled="saving || o.status !== 'CONFIRMED' || !o.lines.some(l=>Number(l.details.quantity)>Number(l.allocatedQuantity)+Number(l.shippedQuantity))"
+                  :title="o.status==='DRAFT' ? '请先在详情中确认订单' : '按订单剩余数量新增待发货'"
                   @click="arrange(o)"
                 >
-                  安排发货
+                  新增待发货
                 </button>
               </td>
             </tr>
@@ -231,7 +213,7 @@ watch(() => route.params.id, load); onMounted(load)
           v-if="canArrange && detail.status === 'CONFIRMED'"
           @click="arrange(detail)"
         >
-          安排发货
+          新增待发货
         </button><button
           v-if="session.canAccess(['invoices.write']) && detail.details.invoiceRequired && detail.status === 'CONFIRMED'"
           :disabled="saving"
@@ -309,7 +291,7 @@ watch(() => route.params.id, load); onMounted(load)
       </div>
       <article class="panel order-information">
         <h2>发货批次</h2><p v-if="!allocations.length">
-          尚未安排发货
+          尚未新增待发货
         </p><div
           v-for="a in allocations"
           :key="a.id"
@@ -390,117 +372,6 @@ watch(() => route.params.id, load); onMounted(load)
             返回
           </button><button :disabled="saving">
             确认
-          </button>
-        </div>
-      </form>
-    </div>
-    <div
-      v-if="arranging"
-      class="operation-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-label="安排待发货"
-    >
-      <form
-        class="panel operation-form operation-dialog__card order-arrange"
-        @submit.prevent="submitArrange"
-      >
-        <h2>安排待发货 · {{ arranging.orderNumber }}</h2><label>收货人<input
-          v-model="recipient"
-          required
-          maxlength="100"
-        ></label><label>联系电话<input
-          v-model="phone"
-          required
-          maxlength="32"
-        ></label><label class="form-wide">收货地址<input
-          v-model="address"
-          required
-          maxlength="500"
-        ></label><div class="form-wide order-scroll">
-          <table class="data-table">
-            <thead><tr><th>选择</th><th>商品</th><th>客户编码</th><th>可安排</th><th>本次数量</th><th>箱数</th><th>计划日期</th><th>最晚日期</th><th>备注</th></tr></thead><tbody>
-              <tr
-                v-for="a in arrangeItems"
-                :key="a.lineId"
-              >
-                <td>
-                  <input
-                    v-model="a.selected"
-                    type="checkbox"
-                    :aria-label="`选择${a.name}`"
-                    :disabled="a.available <= 0"
-                  >
-                </td><td>
-                  <ProductName
-                    :text="a.name"
-                    :styles="arranging.lines.find(l=>l.id===a.lineId)?.namePresentation?.styles"
-                    :highlighted="arranging.lines.find(l=>l.id===a.lineId)?.namePresentation?.highlighted"
-                  />
-                </td><td>{{ arranging.lines.find(l=>l.id===a.lineId)?.product?.customerProductCode || '未填写' }}</td><td>{{ a.available }} {{ a.unit }}</td><td>
-                  <input
-                    v-model.number="a.quantity"
-                    aria-label="本次数量"
-                    type="number"
-                    step="0.001"
-                    min="0.001"
-                    :max="a.available"
-                    :disabled="!a.selected"
-                    :required="a.selected"
-                  >
-                </td><td>
-                  <input
-                    v-model.number="a.boxCount"
-                    aria-label="箱数"
-                    type="number"
-                    step="1"
-                    min="1"
-                    :disabled="!a.selected"
-                    :required="a.selected"
-                  >
-                </td><td>
-                  <DatePicker
-                    v-model="a.plannedDate"
-                    aria-label="计划日期"
-                    type="date"
-                    :disabled="!a.selected"
-                    :required="a.selected"
-                  />
-                </td><td>
-                  <DatePicker
-                    v-model="a.latestDate"
-                    aria-label="最晚日期"
-                    type="date"
-                    :min="a.plannedDate"
-                    :disabled="!a.selected"
-                    :required="a.selected"
-                  />
-                </td><td>
-                  <input
-                    v-model="a.remark"
-                    aria-label="发货备注"
-                    maxlength="500"
-                    :disabled="!a.selected"
-                  >
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div><p
-          v-if="formError"
-          role="alert"
-          class="data-state--error"
-        >
-          {{ formError }}
-        </p><div class="form-footer">
-          <button
-            type="button"
-            :disabled="saving"
-            @click="arranging=undefined"
-          >
-            取消
-          </button><button :disabled="saving">
-            {{ saving ? '处理中…' : '确认并前往待发货' }}
           </button>
         </div>
       </form>

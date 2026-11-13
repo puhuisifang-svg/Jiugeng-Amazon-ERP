@@ -29,6 +29,22 @@ class MaterialService {
     }
 
     @Transactional(readOnly = true)
+    List<String> unitOptions() { return repository.unitOptions(); }
+    @Transactional
+    void hideUnit(String name, AuthenticatedActor actor) {
+        repository.hideUnit(name.trim());
+        auditTrail.record(operation(actor,"MATERIAL_UNIT_REMOVE", "unit-option", null, Map.of("name",name.trim()),"移除辅料单位候选项，保留已有辅料资料"));
+    }
+
+    @Transactional(readOnly = true)
+    List<String> typeOptions() { return repository.typeOptions(); }
+    @Transactional
+    void hideType(String name, AuthenticatedActor actor) {
+        repository.hideType(name.trim());
+        auditTrail.record(operation(actor,"MATERIAL_TYPE_REMOVE", "type-option", null, Map.of("name",name.trim()),"移除辅料类型候选项，保留已有辅料资料"));
+    }
+
+    @Transactional(readOnly = true)
     List<MaterialView> materials() { return repository.findAll(); }
 
     @Transactional(readOnly = true)
@@ -43,6 +59,8 @@ class MaterialService {
                     valid.unit(), valid.imageUrl(), valid.imageAssetId(), valid.remark(), actor.userId());
             images.attach(valid.imageAssetId(), CatalogImageGateway.Purpose.MATERIAL_IMAGE,
                     "AUXILIARY_MATERIAL", id, actor);
+            repository.restoreType(valid.type());
+            repository.restoreUnit(valid.unit());
             MaterialView created = material(id);
             auditTrail.record(operation(actor, "MATERIAL_CREATE", id, null, snapshot(created), "创建辅料主数据"));
             return created;
@@ -69,6 +87,8 @@ class MaterialService {
             images.attach(valid.imageAssetId(), CatalogImageGateway.Purpose.MATERIAL_IMAGE,
                     "AUXILIARY_MATERIAL", id, actor);
             images.releaseReplaced(before.imageAssetId(), valid.imageAssetId(), "AUXILIARY_MATERIAL", id);
+            if(!before.materialType().equals(valid.type()))repository.restoreType(valid.type());
+            if(!before.unit().equals(valid.unit()))repository.restoreUnit(valid.unit());
             MaterialView updated = material(id);
             auditTrail.record(operation(actor, "MATERIAL_UPDATE", id, snapshot(before), snapshot(updated),
                     "更新辅料主数据"));

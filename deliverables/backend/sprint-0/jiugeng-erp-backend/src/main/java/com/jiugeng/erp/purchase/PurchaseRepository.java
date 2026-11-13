@@ -92,18 +92,18 @@ class PurchaseRepository {
     void replaceLines(String orderId, List<ResolvedLine> lines) {
         jdbc.sql("DELETE FROM purchase_order_line WHERE order_id=:id").param("id", orderId).update();
         for (ResolvedLine line : lines) jdbc.sql("""
-                INSERT INTO purchase_order_line (id,order_id,line_no,item_id,item_code,item_name,unit,ordered_quantity,unit_price,specification,image_asset_id)
-                VALUES (:id,:orderId,:lineNo,:itemId,:code,:name,:unit,:quantity,:price,:spec,:image)
+                INSERT INTO purchase_order_line (id,order_id,line_no,item_id,item_code,item_name,unit,ordered_quantity,unit_price,specification,image_asset_id,tax_included,tax_rate)
+                VALUES (:id,:orderId,:lineNo,:itemId,:code,:name,:unit,:quantity,:price,:spec,:image,:taxIncluded,:taxRate)
                 """).param("id", line.id()).param("orderId", orderId).param("lineNo", line.lineNo())
                 .param("itemId", line.item().id()).param("code", line.item().code()).param("name", line.item().name())
-                .param("unit", line.item().unit()).param("quantity", line.quantity()).param("price", line.unitPrice()).param("spec",line.specification()).param("image",line.imageAssetId()).update();
+                .param("unit", line.item().unit()).param("quantity", line.quantity()).param("price", line.unitPrice()).param("spec",line.specification()).param("image",line.imageAssetId()).param("taxIncluded",line.taxIncluded()).param("taxRate",line.taxRate()).update();
     }
 
     int updateDraft(String id, OrderInput input, String actorId, long version) {
         return jdbc.sql("""
                 UPDATE purchase_order SET supplier_id=:supplier,currency=:currency,remark=:remark,version=version+1,
                   updated_by=:actor,updated_at=CURRENT_TIMESTAMP,expected_delivery_date=:deliveryDate,delivery_address=:address,supplier_name=:supplierName
-                WHERE id=:id AND status='DRAFT' AND version=:version
+                WHERE id=:id AND status IN ('DRAFT','SUBMITTED') AND version=:version
                 """).param("supplier", input.supplierId()).param("currency", input.currency()).param("remark", input.remark())
                 .param("actor", actorId).param("id", id).param("version", version)
                 .param("deliveryDate", input.expectedDeliveryDate()).param("address", input.deliveryAddress()).param("supplierName",input.supplierName()).update();
@@ -163,7 +163,7 @@ class PurchaseRepository {
                     BigDecimal received = rs.getBigDecimal("received_quantity");
                     return new LineView(rs.getString("id"), rs.getInt("line_no"), rs.getString("item_id"),
                             rs.getString("item_code"), rs.getString("item_name"), rs.getString("unit"), ordered,
-                            received, ordered.subtract(received), rs.getBigDecimal("unit_price"),rs.getString("resolved_image_asset_id"),rs.getString("image_url"),rs.getString("specification"));
+                            received, ordered.subtract(received), rs.getBigDecimal("unit_price"),rs.getString("resolved_image_asset_id"),rs.getString("image_url"),rs.getString("specification"),rs.getBoolean("tax_included"),rs.getBigDecimal("tax_rate"));
                 }).list();
     }
 
@@ -250,7 +250,7 @@ class PurchaseRepository {
 
     record SupplierRef(String id, String name) {}
     record ItemRef(String id, String code, String name, String unit) {}
-    record ResolvedLine(String id, int lineNo, ItemRef item, BigDecimal quantity, BigDecimal unitPrice, String specification, String imageAssetId) {}
+    record ResolvedLine(String id, int lineNo, ItemRef item, BigDecimal quantity, BigDecimal unitPrice, String specification, String imageAssetId, boolean taxIncluded, BigDecimal taxRate) {}
     record ReceiptStored(String id, String orderId, String payloadHash) {}
     record ReceiptHead(String id,String orderId,String orderNo,String requestId,Instant receivedAt,String remark,
                        String actorLoginName,Instant createdAt) {}

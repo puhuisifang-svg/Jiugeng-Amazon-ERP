@@ -178,6 +178,37 @@ class PurchaseControllerTest {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test void placeCreatesSubmittedOrderAndLegacyDraftCanBePlacedAtomically()throws Exception {
+        String token=login("place-buyer","PRODUCT_MATERIAL");
+        var input=new java.util.LinkedHashMap<String,Object>(Map.of("orderType","MATERIAL","supplierId",supplierId,"currency","CNY","lines",List.of(Map.of("itemId",materialId,"quantity",2,"unitPrice",3))));
+        mvc.perform(post("/api/v1/purchases/orders/place").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input)))
+          .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("SUBMITTED"));
+        JsonNode draft=createOrder(token,"MATERIAL",materialId,"2","3");String id=draft.path("id").asText();input.put("version",0);
+        mvc.perform(put("/api/v1/purchases/orders/{id}/place",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input)))
+          .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("SUBMITTED"));
+        mvc.perform(put("/api/v1/purchases/orders/{id}/place",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input))).andExpect(status().isConflict());
+        input.put("version",2);
+        input.put("lines",java.util.List.of(Map.of("itemId",materialId,"quantity",5,"unitPrice",4)));
+        mvc.perform(put("/api/v1/purchases/orders/{id}/place",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input)))
+          .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("SUBMITTED")).andExpect(jsonPath("$.lines[0].orderedQuantity").value(5));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM purchase_order WHERE status='DRAFT'",Integer.class)).isZero();
+    }
+
+    @Test void lineTaxDefaultsAndValidationRoundTrip()throws Exception {
+        String token=login("tax-buyer","PRODUCT_MATERIAL");
+        var line=new java.util.LinkedHashMap<String,Object>(Map.of("itemId",materialId,"quantity",2,"unitPrice",101,"taxIncluded",true));
+        var input=new java.util.LinkedHashMap<String,Object>(Map.of("orderType","MATERIAL","supplierId",supplierId,"currency","CNY","lines",List.of(line)));
+        String body=mvc.perform(post("/api/v1/purchases/orders").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input)))
+          .andExpect(status().isOk()).andExpect(jsonPath("$.lines[0].taxIncluded").value(true)).andExpect(jsonPath("$.lines[0].taxRate").value(1)).andExpect(jsonPath("$.lines[0].unitPrice").value(101)).andReturn().getResponse().getContentAsString();
+        String id=objectMapper.readTree(body).path("id").asText();
+        mvc.perform(get("/api/v1/purchases/orders/{id}",id).header("Authorization",bearer(token))).andExpect(jsonPath("$.lines[0].taxRate").value(1));
+        line.put("taxRate",101);
+        mvc.perform(post("/api/v1/purchases/orders").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input))).andExpect(status().isBadRequest());
+        line.put("taxIncluded",false);input.put("version",0);
+        mvc.perform(put("/api/v1/purchases/orders/{id}",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input)))
+          .andExpect(status().isOk()).andExpect(jsonPath("$.lines[0].taxIncluded").value(false)).andExpect(jsonPath("$.lines[0].taxRate").value(0));
+    }
+
     @Test void waybillOnlyLogisticsPersistsAndIsProtected()throws Exception {
         String token=login("waybill-buyer","PRODUCT_MATERIAL");
         JsonNode order=createOrder(token,"MATERIAL",materialId,"2","3");String id=order.path("id").asText();

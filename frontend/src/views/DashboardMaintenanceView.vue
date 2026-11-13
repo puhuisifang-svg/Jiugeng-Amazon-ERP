@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { createRequestId } from '@/utils/requestId'
 
+import OrderShipmentDialog from '@/components/OrderShipmentDialog.vue'
 import SingleFileUpload from '@/components/SingleFileUpload.vue'
 import { vSingleSelect } from '@/directives/singleSelect'
 import DatePicker from '@/components/DatePicker.vue'
@@ -13,7 +14,7 @@ import CartonLabelExport from '@/components/CartonLabelExport.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { ApiError } from '@/api/client'
 import { dashboardApi, type DashboardHistoryEvent, type DashboardItem, type DashboardKind, type PendingProduct, type PendingProductInput, type PendingShipment, type ShipmentInput, type TodayShipment } from '@/api/dashboard'
@@ -21,21 +22,33 @@ import { domainApi, type ProductDetailDto } from '@/api/domain'
 import AuthenticatedDashboardImage from '@/components/AuthenticatedDashboardImage.vue'
 import ShipmentProductImage from '@/components/ShipmentProductImage.vue'
 import ShipmentFiles from '@/components/ShipmentFiles.vue'
+import CustomerProductImage from '@/components/CustomerProductImage.vue'
 import ShipmentCustomerPicker from '@/components/ShipmentCustomerPicker.vue'
 import type { CustomerProduct } from '@/api/customers'
 import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import { runtimeConfig } from '@/config/runtime'
 
 const props = defineProps<{ kind: DashboardKind }>()
-const route = useRoute()
+const route = useRoute(), router=useRouter()
+const orderArrangeOpen=ref(false)
+watch(()=>[props.kind,route?.query.orderId,route?.query.arrange],()=>{orderArrangeOpen.value=props.kind==='pending-shipments'&&!!route?.query.orderId&&route?.query.arrange==='1'},{immediate:true})
+async function closeOrderArrange(){orderArrangeOpen.value=false;if(route?.query.arrange){const query={...route.query};delete query.arrange;await router.replace({query})}}
+async function orderArrangementSaved(){await closeOrderArrange();await load();success.value='已按客户订单新增待发货，发货进度将同步到订单。'}
 const formal = runtimeConfig.authMode === 'password'
 const items = ref<DashboardItem[]>([]); const products = ref<ProductDetailDto[]>([])
 const loading = ref(true); const saving = ref(false); const error = ref(''); const success = ref('')
 const page = ref(0); const totalPages = ref(0); const total = ref(0); const editing = ref<DashboardItem | null>(null)
 const filters = reactive({ keyword: '', status: props.kind === 'today-shipments' ? 'ACTIVE' : '', from: '', to: '' })
 const shipment = reactive<ShipmentInput>({ date: '', productId: '', quantity: 1, boxCount: 1, remark: '', latestShipTime: '' })
+const shipmentLines = ref<{product:CustomerProduct;quantity:number;boxCount:number;key:string;done:boolean;attempted:boolean;input?:ShipmentInput;error?:string}[]>([])
+const batchStarted=computed(()=>shipmentLines.value.some(line=>line.attempted))
+const saveProgress=ref('')
+function addShipmentProducts(values:CustomerProduct[]){
+  for(const product of values)if(!shipmentLines.value.some(line=>line.product.id===product.id))shipmentLines.value.push({product,quantity:1,boxCount:1,key:createRequestId(),done:false,attempted:false})
+}
 function selectCustomerProduct(value: CustomerProduct | undefined) {
   shipment.customerProductId = value?.id ?? ''; shipment.variantId = value?.variantId ?? ''; shipment.productId = value?.productId ?? ''
+  if(!editing.value){shipmentLines.value=[];if(value)addShipmentProducts([value])}
 }
 const pendingProduct = reactive<PendingProductInput>({ productName: '', expectedQuantity: 1, remark: '', expectedCompletionDate: '' })
 const correctionReason = ref(''); const imageId = ref(''); const imageFile = ref<File>(); const previewUrl = ref('')
@@ -45,8 +58,8 @@ const discardOpen = ref(false)
 const initialForm = ref('')
 const shipmentForm = ref<HTMLFormElement>()
 const continueButton = ref<HTMLButtonElement>()
-function formSnapshot() { return JSON.stringify([shipment, latestShipDate.value, correctionReason.value]) }
-function openNew() { reset(); error.value = ''; initialForm.value = formSnapshot(); formOpen.value = true }
+function formSnapshot() { return JSON.stringify([shipment, latestShipDate.value, correctionReason.value, shipmentLines.value]) }
+function openNew() { if(props.kind==='pending-shipments'&&route?.query.orderId){orderArrangeOpen.value=true;return} reset(); error.value = ''; initialForm.value = formSnapshot(); formOpen.value = true }
 async function requestClose() {
   if (saving.value) return
   if (isProduct.value || formSnapshot() === initialForm.value) { reset(); return }
@@ -127,6 +140,7 @@ function dateRowspan(index: number) {
 }
 function reset() {
   discardOpen.value = false
+  shipmentLines.value=[];saveProgress.value=''
   formOpen.value = false; latestShipDate.value = ''
   editing.value = null; imageId.value = ''; imageFile.value = undefined; previewUrl.value = ''; correctionReason.value = ''
   Object.assign(shipment, { date: '', productId: '', variantId: '', customerProductId: '', quantity: 1, boxCount: 1, remark: '', latestShipTime: '' })
@@ -179,16 +193,30 @@ async function save() {
       if (editing.value) await dashboardApi.updatePendingProduct(editing.value.id, input, editing.value.version)
       else await dashboardApi.createPendingProduct(input)
     } else {
-      if (!shipment.variantId || !shipment.customerProductId) { error.value = '请选择客户商品；历史记录需补选后保存。'; return }
+      if (editing.value ? !shipment.variantId || !shipment.customerProductId : !shipmentLines.value.length) { error.value = '请选择客户商品；历史记录需补选后保存。'; return }
       const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date())
       const shipDate = editing.value && 'shipDate' in editing.value ? editing.value.shipDate : today
       const input = { ...shipment, ...(props.kind === 'today-shipments' ? { date: shipDate, latestShipTime: `${shipDate}T23:59` } : { latestShipTime: `${latestShipDate.value}T23:59` }), imageId: uploadedId, remark: shipment.remark?.trim() || undefined }
       if (editing.value) await dashboardApi.updateShipment(props.kind as Exclude<DashboardKind, 'pending-products'>, editing.value.id, input, editing.value.version, correctionReason.value.trim() || undefined)
-      else await dashboardApi.createShipment(props.kind as Exclude<DashboardKind, 'pending-products'>, input)
+      else {
+        if(shipmentLines.value.some(line=>!Number.isFinite(line.quantity)||line.quantity<=0||!Number.isInteger(line.boxCount)||line.boxCount<1)){error.value='请填写每个商品的有效发货数量和箱数。';return}
+        let failures=0
+        for(const [index,line] of shipmentLines.value.entries()){
+          if(line.done)continue
+          saveProgress.value=`正在保存 ${index+1} / ${shipmentLines.value.length}`
+          line.attempted=true
+          line.input ??= {...input,productId:line.product.productId,variantId:line.product.variantId,customerProductId:line.product.id,quantity:line.quantity,boxCount:line.boxCount}
+          try{
+            await dashboardApi.createShipment(props.kind as Exclude<DashboardKind, 'pending-products'>,line.input,line.key)
+            line.done=true
+          }catch(e){failures++;line.error=e instanceof ApiError?e.message:'保存失败，请重试'}
+        }
+        if(failures){error.value=`已添加 ${shipmentLines.value.filter(line=>line.done).length} 项，${failures} 项保存失败。请点击保存重试，已成功项不会重复添加。`;return}
+      }
     }
     success.value = editing.value ? '记录已更新。' : '记录已创建。'; reset(); await load()
   } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '保存失败，请检查字段和图片。' }
-  finally { saving.value = false }
+  finally { saving.value = false;saveProgress.value='' }
 }
 async function archive(item: DashboardItem, confirmed = false) {
   if (saving.value) return
@@ -272,6 +300,13 @@ onMounted(async () => {
       </article>
     </template>
     <template v-else>
+      <OrderShipmentDialog
+        v-if="orderArrangeOpen && route?.query.orderId"
+        :key="String(route.query.orderId)"
+        :order-id="String(route.query.orderId)"
+        @close="closeOrderArrange"
+        @saved="orderArrangementSaved"
+      />
       <div class="page-actions">
         <RouterLink
           v-if="route?.query.orderId"
@@ -334,7 +369,7 @@ onMounted(async () => {
           v-show="!discardOpen"
           ref="shipmentForm"
           class="panel operation-form"
-          :class="{ 'operation-dialog__card operation-dialog__card--compact': !isProduct }"
+          :class="{ 'operation-dialog__card shipping-editor': !isProduct }"
           @submit.prevent="save"
         >
           <button
@@ -347,101 +382,188 @@ onMounted(async () => {
           >
             ×
           </button>
-          <h2>{{ editing ? '编辑' : '新增' }}{{ isProduct ? '待开发产品' : kind === 'today-shipments' ? '今日发货' : '待发货' }}</h2>
-          <template v-if="isProduct">
-            <label>产品名称<input
-              v-model="pendingProduct.productName"
-              required
-              maxlength="128"
-            ></label>
-            <label>预计数量（套）<input
-              v-model.number="pendingProduct.expectedQuantity"
-              required
-              type="number"
-              min="1"
-            ></label>
-            <label>预计完成日期<DatePicker
-              v-model="pendingProduct.expectedCompletionDate"
-              required
-              type="date"
-            /></label>
-          </template>
-          <template v-else>
-            <ShipmentCustomerPicker
-              :key="editing?.id ?? 'new'"
-              :initial="editing && 'customerProduct' in editing ? editing.customerProduct : undefined"
-              :product-name="editing?.productName ?? ''"
-              :editing="!!editing"
-              :disabled="saving || Boolean(editing && 'orderAllocation' in editing && editing.orderAllocation)"
-              @select="selectCustomerProduct"
+          <h2 class="shipping-editor-title">
+            {{ editing ? '编辑' : '新增' }}{{ isProduct ? '待开发产品' : kind === 'today-shipments' ? '今日发货' : '待发货' }}
+          </h2>
+          <div :class="isProduct ? 'shipping-editor-pass-through' : 'shipping-editor-body'">
+            <template v-if="isProduct">
+              <label>产品名称<input
+                v-model="pendingProduct.productName"
+                required
+                maxlength="128"
+              ></label>
+              <label>预计数量（套）<input
+                v-model.number="pendingProduct.expectedQuantity"
+                required
+                type="number"
+                min="1"
+              ></label>
+              <label>预计完成日期<DatePicker
+                v-model="pendingProduct.expectedCompletionDate"
+                required
+                type="date"
+              /></label>
+            </template>
+            <template v-else>
+              <ShipmentCustomerPicker
+                :key="editing?.id ?? 'new'"
+                compact
+                :multiple="!editing"
+                :existing="shipmentLines.map(line=>line.product.id)"
+                :initial="editing && 'customerProduct' in editing ? editing.customerProduct : undefined"
+                :product-name="editing?.productName ?? ''"
+                :editing="!!editing"
+                :disabled="saving || batchStarted || Boolean(editing && 'orderAllocation' in editing && editing.orderAllocation)"
+                @add="addShipmentProducts"
+                @select="selectCustomerProduct"
+              />
+              <div
+                v-if="!editing && shipmentLines.length"
+                class="shipping-lines"
+              >
+                <table class="data-table">
+                  <thead><tr><th>图片</th><th>商品 / 客户编码</th><th>发货数量（套）<em>*</em></th><th>箱数<em>*</em></th><th>操作</th></tr></thead><tbody>
+                    <tr
+                      v-for="(line,index) in shipmentLines"
+                      :key="line.product.id"
+                    >
+                      <td>
+                        <CustomerProductImage
+                          :product-id="line.product.productId"
+                          :variant-id="line.product.variantId"
+                          :alt="line.product.productName"
+                        />
+                      </td>
+                      <td>{{ line.product.productName }}<small>{{ line.product.customerProductCode || '未填写客户编码' }}</small></td>
+                      <td>
+                        <input
+                          v-model.number="line.quantity"
+                          :aria-label="`商品${index+1}发货数量`"
+                          type="number"
+                          required
+                          min="0.001"
+                          step="0.001"
+                          :disabled="saving || batchStarted"
+                        >
+                      </td>
+                      <td>
+                        <input
+                          v-model.number="line.boxCount"
+                          :aria-label="`商品${index+1}箱数`"
+                          type="number"
+                          required
+                          min="1"
+                          step="1"
+                          :disabled="saving || batchStarted"
+                        >
+                      </td>
+                      <td>
+                        <span
+                          v-if="line.done"
+                          class="shipping-line-done"
+                        >已添加</span><button
+                          v-else-if="!batchStarted"
+                          type="button"
+                          class="shipping-line-remove"
+                          :disabled="saving"
+                          @click="shipmentLines.splice(index,1)"
+                        >
+                          移除
+                        </button><span
+                          v-else
+                          :title="line.error"
+                        >待重试</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+                <small>共 {{ shipmentLines.length }} 项 · 日期和备注统一应用于本次商品</small>
+              </div>
+              <small v-if="editing && !shipment.variantId">历史记录未绑定客户商品，请明确选择；原标签不会自动归属到新客户商品。</small>
+              <section class="shipping-plan">
+                <h3>发货安排</h3><div class="shipping-plan-fields">
+                  <label
+                    v-if="kind === 'today-shipments'"
+                    class="shipping-date-readonly"
+                  >发货日期<span>{{ shipment.date || new Date().toLocaleDateString('zh-CN',{timeZone:'Asia/Shanghai'}) }} · {{ editing ? '原安排日期' : '按今日安排' }}</span></label>
+                  <label v-if="kind !== 'today-shipments'">{{ dateLabel }}<DatePicker
+                    v-model="shipment.date"
+                    :disabled="saving || batchStarted"
+                    required
+                    type="date"
+                  /></label>
+                  <label v-if="kind !== 'today-shipments'">最晚发货日期<DatePicker
+                    v-model="latestShipDate"
+                    :disabled="saving || batchStarted"
+                    required
+                    type="date"
+                    :min="shipment.date"
+                  /></label>
+                  <label v-if="editing">发货数量（{{ shipmentUnit(editing && 'quantityUnit' in editing ? editing.quantityUnit : 'SET') }}）<input
+                    v-model.number="shipment.quantity"
+                    required
+                    type="number"
+                    min="0.001"
+                    step="0.001"
+                  ></label>
+                  <label v-if="editing">箱数<input
+                    v-model.number="shipment.boxCount"
+                    required
+                    type="number"
+                    min="1"
+                  ></label>
+                  <label v-if="editing && kind === 'today-shipments'">更正原因<input
+                    v-model="correctionReason"
+                    maxlength="500"
+                  ></label>
+                </div>
+              </section>
+            </template>
+            <SingleFileUpload
+              v-if="isProduct"
+              deferred
+              title="产品图案"
+              accept=".png,.jpg,.jpeg,.webp"
+              :max-mb="5"
+              :disabled="saving"
+              :upload="chooseImage"
             />
-            <small v-if="editing && !shipment.variantId">历史记录未绑定客户商品，请明确选择；原标签不会自动归属到新客户商品。</small>
-            <label v-if="kind !== 'today-shipments'">{{ dateLabel }}<DatePicker
-              v-model="shipment.date"
-              required
-              type="date"
-            /></label>
-            <label v-if="kind !== 'today-shipments'">最晚发货日期<DatePicker
-              v-model="latestShipDate"
-              required
-              type="date"
-              :min="shipment.date"
-            /></label>
-            <label>发货数量（{{ shipmentUnit(editing && 'quantityUnit' in editing ? editing.quantityUnit : 'SET') }}）<input
-              v-model.number="shipment.quantity"
-              required
-              type="number"
-              min="0.001"
-              step="0.001"
-            ></label>
-            <label>箱数<input
-              v-model.number="shipment.boxCount"
-              required
-              type="number"
-              min="1"
-            ></label>
-            <label v-if="editing && kind === 'today-shipments'">更正原因<input
-              v-model="correctionReason"
+            <div
+              v-if="isProduct"
+              class="dashboard-image-preview"
+            >
+              <img
+                v-if="previewUrl"
+                :src="previewUrl"
+                alt="待上传产品图案"
+              ><AuthenticatedDashboardImage
+                v-else
+                :image-id="imageId || undefined"
+                alt="当前产品图案"
+              />
+            </div>
+            <label class="form-wide shipping-remark">备注<textarea
+              v-model="remarkModel"
+              :disabled="saving || batchStarted"
               maxlength="500"
-            ></label>
-          </template>
-          <SingleFileUpload
-            v-if="isProduct"
-            deferred
-            title="产品图案"
-            accept=".png,.jpg,.jpeg,.webp"
-            :max-mb="5"
-            :disabled="saving"
-            :upload="chooseImage"
-          />
-          <div class="dashboard-image-preview">
-            <ShipmentProductImage
-              v-if="!isProduct"
-              :product-id="shipment.productId"
-              :variant-id="shipment.variantId"
-              :product="products.find(item => item.id === shipment.productId)"
-              alt="所选产品图案"
-            />
-            <img
-              v-else-if="previewUrl"
-              :src="previewUrl"
-              alt="待上传产品图案"
-            ><AuthenticatedDashboardImage
-              v-else
-              :image-id="imageId || undefined"
-              alt="当前产品图案"
-            />
+              rows="2"
+              placeholder="选填，如包装要求、发货注意事项"
+            /></label>
+            <p
+              v-if="error && !isProduct"
+              class="data-state data-state--error form-wide"
+              role="alert"
+            >
+              {{ error }}
+            </p>
           </div>
-          <label class="form-wide">备注<input
-            v-model="remarkModel"
-            maxlength="500"
-          ></label>
           <div class="operation-form__actions ui-dialog-actions">
             <button
+              class="shipping-save"
               :disabled="saving"
               type="submit"
             >
-              {{ saving ? '保存中…' : '保存' }}
+              {{ saving ? saveProgress || '保存中…' : '保存' }}
             </button>
             <button
               v-if="editing || !isProduct"
@@ -453,13 +575,6 @@ onMounted(async () => {
               取消
             </button>
           </div>
-          <p
-            v-if="error && !isProduct"
-            class="data-state data-state--error form-wide"
-            role="alert"
-          >
-            {{ error }}
-          </p>
         </form>
       </div>
       <form
@@ -672,7 +787,7 @@ onMounted(async () => {
                         完成
                       </button><button
                         v-if="item.status === activeStatus || (kind === 'pending-shipments' && item.status === 'TRANSFERRED_TO_TODAY')"
-                        class="danger-button"
+                        class="danger-button shipping-delete-button"
                         type="button"
                         :disabled="saving"
                         @click="archive(item)"
@@ -969,3 +1084,13 @@ onMounted(async () => {
     </div>
   </section>
 </template>
+
+<style scoped>
+.shipping-editor-pass-through{display:contents}
+.shipping-maintenance .shipping-action-buttons .shipping-delete-button{background:#fff1f0!important;color:#b42318!important;border:1px solid #f1c6c2!important;box-shadow:none;border-radius:4px}.shipping-maintenance .shipping-action-buttons .shipping-delete-button:hover:not(:disabled){background:#ffe4e1!important;border-color:#df8f87!important}.shipping-maintenance .shipping-action-buttons .shipping-delete-button:disabled{opacity:.5;cursor:not-allowed}
+.shipping-editor.operation-form{display:flex;flex-direction:column;gap:0;padding:0;width:min(860px,calc(100vw - 24px));max-width:calc(100vw - 24px);max-height:calc(100dvh - 32px);overflow:hidden;border-radius:8px}.shipping-editor .shipping-editor-title{flex:none;margin:0;padding:14px 48px 14px 18px;border-bottom:1px solid var(--line);font-size:16px}.shipping-editor-body{overflow:auto;min-height:0;padding:16px 18px;display:grid;gap:16px;overscroll-behavior:contain}.shipping-plan{border:1px solid var(--line);padding:12px;border-radius:5px}.shipping-plan h3{margin:0 0 12px;font-size:14px}.shipping-plan-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px}.shipping-editor label{display:flex;flex-direction:column;gap:6px;min-width:0;font-size:13px}.shipping-editor input,.shipping-editor textarea{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:4px;padding:8px 10px;font:inherit}.shipping-editor input{height:40px}.shipping-editor textarea{min-height:64px;resize:vertical}.shipping-date-readonly span{height:40px;display:flex;align-items:center;border-radius:4px;background:#f7f9fc;padding:0 10px;color:#64748b;font-size:13px}.shipping-editor .operation-form__actions{flex:none;border-top:1px solid var(--line);padding:12px 18px;margin:0;display:flex;justify-content:flex-end;gap:8px}.shipping-editor .shipping-save{order:2;background:#21834a!important;color:white!important;min-width:88px}.shipping-editor .data-state--error{margin:0}.shipping-editor :deep(.shipment-customer-picker){grid-column:auto}.shipping-editor .shipping-remark{grid-column:auto}@media(max-width:600px){.shipping-editor-body{padding:12px}.shipping-plan-fields{grid-template-columns:1fr}.shipping-editor .shipping-editor-title{padding:12px 44px 12px 12px}}
+</style>
+
+<style scoped>
+.shipping-lines{min-width:0;overflow:auto}.shipping-lines table{min-width:620px;width:100%}.shipping-lines th{font-size:12px;white-space:nowrap}.shipping-lines td{font-size:13px;vertical-align:middle}.shipping-lines td:nth-child(3){width:140px}.shipping-lines td:nth-child(4){width:110px}.shipping-lines td:last-child{width:70px}.shipping-lines small{display:block;color:var(--muted);font-size:12px;margin-top:6px}.shipping-lines em{color:#c24141;font-style:normal;margin-left:3px}.shipping-line-done{color:#21834a}.shipping-lines .shipping-line-remove{background:#fff1f2;color:#b42335;border:1px solid #f1ccd1;border-radius:4px;padding:5px 10px;font-size:12px;min-height:28px}
+</style>

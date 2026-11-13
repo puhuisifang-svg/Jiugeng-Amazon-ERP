@@ -18,6 +18,25 @@ class MaterialRepository {
 
     MaterialRepository(JdbcClient jdbc) { this.jdbc = jdbc; }
 
+    List<String> unitOptions() {
+        var values=new java.util.TreeSet<String>(java.util.List.of("件","个","套","盒","包","卷","米","千克","克","PCS","SET","BOX","PACK","ROLL","M","KG"));
+        values.addAll(jdbc.sql("SELECT DISTINCT unit FROM auxiliary_material").query(String.class).list());
+        values.removeAll(jdbc.sql("SELECT name FROM material_unit_hidden").query(String.class).list());
+        return java.util.List.copyOf(values);
+    }
+    void restoreUnit(String name) { jdbc.sql("DELETE FROM material_unit_hidden WHERE name=:name").param("name",name).update(); }
+    void hideUnit(String name) {
+        jdbc.sql("INSERT INTO material_unit_hidden (name) SELECT :name WHERE NOT EXISTS (SELECT 1 FROM material_unit_hidden WHERE name=:name)").param("name",name).update();
+    }
+
+    List<String> typeOptions() {
+        return jdbc.sql("SELECT DISTINCT material_type FROM auxiliary_material WHERE material_type NOT IN (SELECT name FROM material_type_hidden) ORDER BY material_type").query(String.class).list();
+    }
+    void restoreType(String name) { jdbc.sql("DELETE FROM material_type_hidden WHERE name=:name").param("name",name).update(); }
+    void hideType(String name) {
+        jdbc.sql("INSERT INTO material_type_hidden (name) SELECT :name WHERE NOT EXISTS (SELECT 1 FROM material_type_hidden WHERE name=:name)").param("name",name).update();
+    }
+
     List<MaterialView> findAll() {
         return jdbc.sql("""
                 SELECT id, material_code, name, material_type, specification, unit, image_url, image_asset_id, remark,

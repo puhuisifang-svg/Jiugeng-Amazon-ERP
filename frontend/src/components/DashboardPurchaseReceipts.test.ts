@@ -6,7 +6,7 @@ const h = vi.hoisted(() => ({ orders: vi.fn(), order: vi.fn(), receive: vi.fn(),
 vi.mock('@/api/purchases', () => ({ purchaseApi: h }))
 vi.mock('@/state/session', () => ({ session: { canAccess: (caps: string[]) => caps.every(cap => h.permissions.includes(cap)) } }))
 vi.mock('vue-router', () => ({ onBeforeRouteLeave: h.guard, RouterLink: { props: ['to'], template: '<a :href="to"><slot /></a>' } }))
-const order = { id: 'po1', orderNo: 'SYN-PO-1', supplierName: '合成供应商', orderType: 'MATERIAL', status: 'SUBMITTED', createdAt: '2026-11-10', lines: [{ id: 'l1', itemCode: 'SYN-SKU', itemName: '测试辅料', unit: '件', orderedQuantity: 10, receivedQuantity: 4, remainingQuantity: 6 }] }
+const order = { id: 'po1', orderNo: 'SYN-PO-1', supplierName: '合成供应商', orderType: 'MATERIAL', status: 'SUBMITTED', createdAt: '2026-11-10', lines: [{ id: 'l1', itemCode: 'MAT-TEST', itemName: '测试辅料', unit: '件', orderedQuantity: 10, receivedQuantity: 4, remainingQuantity: 6 }] }
 beforeEach(() => {
   vi.clearAllMocks(); h.permissions = ['purchases.read', 'purchases.receive']
   h.orders.mockImplementation(async (status: string) => status === 'SUBMITTED' ? [order, { ...order, id: 'cancel', orderNo: '取消单', status: 'CANCELLED' }] : [])
@@ -24,10 +24,12 @@ it('only shows receivable orders, links purchase orders and filters the list', a
   expect(h.orders.mock.calls.map(args => args[0])).toEqual(['SUBMITTED', 'PARTIALLY_RECEIVED'])
   expect(w.text()).not.toContain('取消单'); expect(w.get('a').attributes('href')).toBe('/purchases/orders/po1')
   expect(w.emitted('count')?.[0]).toEqual([1])
+  expect(w.get('a').text()).toBe('测试辅料');expect(w.text()).not.toContain('SYN-PO-1');expect(w.text()).not.toContain('MAT-TEST')
   await w.get('input[type=search]').setValue('不存在'); expect(w.text()).toContain('没有匹配'); w.unmount()
 })
 it('requires actual quantities, rejects over receipt and refreshes after partial receipt', async () => {
   const w = await opened()
+  expect(w.get('dialog').text()).not.toContain('SYN-PO-1');expect(w.get('dialog').text()).not.toContain('MAT-TEST')
   const confirm = () => w.findAll('button').find(b => b.text() === '确认本次收货')!
   await confirm().trigger('click'); expect(h.receive).not.toHaveBeenCalled(); expect(w.text()).toContain('请至少填写')
   await w.get('input[type=number]').setValue('7'); await confirm().trigger('click'); expect(h.receive).not.toHaveBeenCalled()
@@ -68,7 +70,7 @@ it('keeps request errors visible and can reload after a failed list request', as
   const w = mount(DashboardPurchaseReceipts, { props: { visible: true } }); await flushPromises()
   expect(w.text()).toContain('加载失败')
   await w.setProps({ visible: false }); await w.setProps({ visible: true }); await flushPromises()
-  expect(w.text()).toContain('SYN-PO-1'); expect(w.text()).not.toContain('加载失败'); w.unmount()
+  expect(w.text()).toContain('测试辅料'); expect(w.text()).not.toContain('加载失败'); w.unmount()
 })
 
 it('loads count on mount even before the purchase tab is opened',async()=>{

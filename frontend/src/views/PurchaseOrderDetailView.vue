@@ -1,7 +1,11 @@
 <script setup lang="ts">
+import { purchaseLineAmount } from '@/ui/purchaseAmounts'
+import PurchaseItemImage from '@/components/PurchaseItemImage.vue'
 import { createRequestId } from '@/utils/requestId'
 
 import DatePicker from '@/components/DatePicker.vue'
+import PurchaseReceiptDialog from '@/components/PurchaseReceiptDialog.vue'
+import AccessDialog from '@/components/AccessDialog.vue'
 import { confirmAction } from '@/state/uiConfirmation'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
@@ -11,6 +15,7 @@ import { ApiError } from '@/api/client'
 import { purchaseApi, type PurchaseOrderDetail, type PurchaseStatus } from '@/api/purchases'
 import { session } from '@/state/session'
 
+const props=defineProps<{orderId?:string;embedded?:boolean}>()
 const route = useRoute(); const detail = ref<PurchaseOrderDetail>(); const loading = ref(true); const saving = ref(false); const error = ref(''); const success = ref(''); const showReceipt = ref(false); const remark = ref('')
 const quantities = reactive<Record<string, number | ''>>({})
 const receiptError = ref(''); const receivedAt = ref(''); const cancelReason = ref(''); const showCancel = ref(false)
@@ -25,7 +30,7 @@ function message(exception: unknown, fallback: string) { return exception instan
 let loadSequence = 0
 async function load() {
   const sequence = ++loadSequence; loading.value = true; error.value = ''
-  try { const result = await purchaseApi.detail(String(route.params.orderId)); if (sequence === loadSequence) detail.value = result }
+  try { const result = await purchaseApi.detail(String(props.orderId??route.params.orderId)); if (sequence === loadSequence) detail.value = result }
   catch (exception) { if (sequence === loadSequence) error.value = message(exception, '采购单详情加载失败，请刷新重试。') }
   finally { if (sequence === loadSequence) loading.value = false }
 }
@@ -76,17 +81,24 @@ async function receive() {
     } else { receiptUncertain.value = true; receiptError.value = '收货结果尚未确认，请保持本页并点击“重试本次收货”。将使用原请求号核对，不会重复入账。' }
   } finally { saving.value = false }
 }
-watch(() => route.params.orderId, () => { detail.value = undefined; showReceipt.value = false; showCancel.value = false; pendingReceipt.value = undefined; receiptUncertain.value = false; success.value = ''; void load() }, { immediate: true })
+watch(() => props.orderId??route.params.orderId, () => { detail.value = undefined; showReceipt.value = false; showCancel.value = false; pendingReceipt.value = undefined; receiptUncertain.value = false; success.value = ''; void load() }, { immediate: true })
 async function mayLeave() { return !saving.value && (!pendingReceipt.value || await confirmAction('本次收货结果未确认。离开后请先核对收货历史，勿直接重复登记。确定离开？')) }
 function beforeUnload(event: BeforeUnloadEvent) { if (saving.value || pendingReceipt.value) { event.preventDefault(); event.returnValue = '' } }
 onBeforeRouteLeave(mayLeave); onBeforeRouteUpdate(mayLeave)
 onMounted(() => window.addEventListener('beforeunload', beforeUnload))
 onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
+defineExpose({mayLeave})
 </script>
 
 <template>
-  <section class="page-stack purchase-page">
-    <header class="panel purchase-header">
+  <section
+    class="page-stack purchase-page"
+    :class="{'purchase-detail-embedded':embedded}"
+  >
+    <header
+      v-if="!embedded"
+      class="panel purchase-header"
+    >
       <div>
         <p class="eyebrow">
           PURCHASE ORDER
@@ -119,12 +131,12 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
     <template v-else-if="detail">
       <section class="panel purchase-summary">
         <dl>
-          <div><dt>状态</dt><dd>{{ statusLabels[detail.order.status] }}</dd></div><div><dt>采购类型</dt><dd>{{ detail.order.orderType === 'MANUAL' ? '日常物品采购' : detail.order.orderType === 'PRODUCT' ? '产品采购' : '辅料采购' }}</dd></div><div><dt>供应商</dt><dd>{{ detail.order.supplierName }}</dd></div><div><dt>采购金额</dt><dd>{{ detail.order.currency }} {{ detail.order.lines.reduce((sum,line) => sum + line.orderedQuantity * line.unitPrice, 0).toFixed(2) }}</dd></div><div><dt>创建时间</dt><dd>{{ new Date(detail.order.createdAt).toLocaleString() }}</dd></div><div><dt>预计到货日期</dt><dd>{{ detail.order.expectedDeliveryDate || '未约定' }}</dd></div><div><dt>物流公司</dt><dd>{{ detail.order.carrier || '未填写' }}</dd></div><div><dt>运单号</dt><dd>{{ detail.order.trackingNumber || '未填写' }}</dd></div><div><dt>收货信息</dt><dd>{{ detail.order.deliveryAddress || '未填写' }}</dd></div><div><dt>备注</dt><dd>{{ detail.order.remark || '—' }}</dd></div><div v-if="detail.order.status === 'CANCELLED'">
+          <div><dt>状态</dt><dd>{{ statusLabels[detail.order.status] }}</dd></div><div><dt>采购类型</dt><dd>{{ detail.order.orderType === 'MANUAL' ? '日常物品采购' : detail.order.orderType === 'PRODUCT' ? '产品采购' : '辅料采购' }}</dd></div><div><dt>供应商</dt><dd>{{ detail.order.supplierName }}</dd></div><div><dt>采购金额</dt><dd>{{ detail.order.currency }} {{ detail.order.lines.reduce((sum,line) => sum + purchaseLineAmount(line), 0).toFixed(2) }}</dd></div><div><dt>创建时间</dt><dd>{{ new Date(detail.order.createdAt).toLocaleString() }}</dd></div><div><dt>预计到货日期</dt><dd>{{ detail.order.expectedDeliveryDate || '未约定' }}</dd></div><div><dt>物流公司</dt><dd>{{ detail.order.carrier || '未填写' }}</dd></div><div><dt>运单号</dt><dd>{{ detail.order.trackingNumber || '未填写' }}</dd></div><div><dt>收货信息</dt><dd>{{ detail.order.deliveryAddress || '未填写' }}</dd></div><div><dt>备注</dt><dd>{{ detail.order.remark || '—' }}</dd></div><div v-if="detail.order.status === 'CANCELLED'">
             <dt>取消 / 关闭原因</dt><dd>{{ detail.order.cancellationReason || '历史单据未记录' }}</dd>
           </div>
         </dl><div class="purchase-detail-actions">
           <button
-            v-if="session.canAccess(['purchases.submit']) && detail.order.status === 'DRAFT'"
+            v-if="!embedded && session.canAccess(['purchases.submit']) && detail.order.status === 'DRAFT'"
             :disabled="saving"
             type="button"
             @click="submitOrder"
@@ -141,7 +153,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
             v-if="session.canAccess(['purchases.cancel']) && !['COMPLETED','CANCELLED'].includes(detail.order.status)"
             :disabled="saving || Boolean(pendingReceipt)"
             type="button"
-            class="secondary-button"
+            class="purchase-cancel-button"
             @click="showCancel = true; cancelReason = ''; error = ''"
           >
             {{ detail.order.status === 'PARTIALLY_RECEIVED' ? '关闭未收余量' : '取消采购单' }}
@@ -152,12 +164,18 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
         <h2>采购明细</h2><div class="table-scroll">
           <TableViewport>
             <table class="data-table">
-              <thead><tr><th>项目</th><th>单位</th><th>采购数量</th><th>已收</th><th>{{ detail.order.status === 'CANCELLED' ? '已关闭余量' : '待收' }}</th><th>单价</th><th>金额</th></tr></thead><tbody>
+              <thead><tr><th>图片</th><th>项目</th><th>单位</th><th>采购数量</th><th>已收</th><th>{{ detail.order.status === 'CANCELLED' ? '已关闭余量' : '待收' }}</th><th>不含税单价</th><th>是否含税 / 税率</th><th>金额</th></tr></thead><tbody>
                 <tr
                   v-for="line in detail.order.lines"
                   :key="line.id"
                 >
-                  <td><strong>{{ line.itemCode || line.specification || '手动物品' }}</strong><small>{{ line.itemName }}</small></td><td>{{ line.unit }}</td><td>{{ line.orderedQuantity }}</td><td>{{ line.receivedQuantity }}</td><td>{{ line.remainingQuantity }}</td><td>{{ detail.order.currency }} {{ line.unitPrice.toFixed(2) }}</td><td>{{ detail.order.currency }} {{ (line.orderedQuantity * line.unitPrice).toFixed(2) }}</td>
+                  <td>
+                    <PurchaseItemImage
+                      :image-asset-id="line.imageAssetId"
+                      :image-url="line.imageUrl"
+                      :alt="line.itemName"
+                    />
+                  </td><td><strong>{{ line.itemName }}</strong><small>{{ line.specification || '—' }}</small></td><td>{{ line.unit }}</td><td>{{ line.orderedQuantity }}</td><td>{{ line.receivedQuantity }}</td><td>{{ line.remainingQuantity }}</td><td>{{ detail.order.currency }} {{ line.unitPrice.toFixed(2) }}</td><td>{{ line.taxIncluded ? `是 / ${line.taxRate ?? 1}%` : '否' }}</td><td>{{ detail.order.currency }} {{ (purchaseLineAmount(line)).toFixed(2) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -179,7 +197,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
               v-for="receipt in detail.receipts"
               :key="receipt.id"
             >
-              <strong>{{ new Date(receipt.receivedAt).toLocaleString() }}</strong><span>{{ receipt.actorLoginName }} · {{ receipt.lines.map(line => `${line.itemCode} × ${line.quantity}`).join('；') }}</span><small>{{ receipt.remark || '无备注' }}</small>
+              <strong>{{ new Date(receipt.receivedAt).toLocaleString() }}</strong><span>{{ receipt.actorLoginName }} · {{ receipt.lines.map(line => `${line.itemName} × ${line.quantity}`).join('；') }}</span><small>{{ receipt.remark || '无备注' }}</small>
             </li>
           </ol>
         </article><article class="panel">
@@ -194,122 +212,89 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
         </article>
       </section>
     </template>
-    <div
+    <PurchaseReceiptDialog
       v-if="showReceipt && detail"
-      class="operation-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="receipt-title"
-      @keydown.esc="closeReceipt"
+      :order="detail.order"
+      :quantities="quantities"
+      :remark="remark"
+      :receipt-error="receiptError"
+      :locked="saving || receiptUncertain"
+      :saving="saving"
+      :pending="receiptUncertain"
+      @close="closeReceipt"
+      @submit="receive"
+      @quantity="(id,value)=>quantities[id]=value===''?'':Number(value)"
+      @remark="remark=$event"
     >
-      <form
-        class="panel operation-form operation-dialog__card operation-dialog__card--compact"
-        @submit.prevent="receive"
+      <label class="receipt-date">实际收货时间<DatePicker
+        v-model="receivedAt"
+        type="datetime-local"
+        step="1"
+        required
+        :disabled="saving || receiptUncertain"
+      /></label>
+    </PurchaseReceiptDialog>
+    <AccessDialog
+      v-if="showCancel && detail"
+      title="取消采购单 / 关闭未收余量"
+      :busy="saving"
+      @close="showCancel=false"
+    >
+      <p class="purchase-cancel-notice">
+        此操作不可撤回，单据将停止收货；已收货数量、历史记录和库存不会撤销。需要退货时请另行处理，不要用取消代替退货。
+      </p>
+      <p
+        v-if="error"
+        class="error-message"
+        role="alert"
       >
+        {{ error }}
+      </p>
+      <label class="purchase-cancel-reason">取消 / 关闭原因<textarea
+        v-model="cancelReason"
+        required
+        maxlength="500"
+        :disabled="saving"
+        placeholder="请填写取消原因"
+      /></label>
+      <template #footer>
         <button
           type="button"
-          class="operation-dialog__close"
-          aria-label="关闭"
+          class="secondary-button"
           :disabled="saving"
-          @click="closeReceipt"
+          @click="showCancel=false"
         >
-          ×
-        </button><h2 id="receipt-title">
-          登记收货 · {{ detail.order.orderNo }}
-        </h2><p class="form-wide purchase-form-hint">
-          只填写本次实际收到的数量；留空或 0 不入账。{{ detail.order.orderType === 'MATERIAL' ? '辅料收货将同步增加固定仓库存。' : '产品收货只记录到货数量，不生成成品库存。' }}
-        </p><p
-          v-if="receiptError"
-          class="form-wide error-message"
-          role="alert"
+          返回
+        </button><button
+          type="button"
+          class="purchase-cancel-button"
+          :disabled="saving || !cancelReason.trim()"
+          @click="cancelOrder"
         >
-          {{ receiptError }}
-        </p>
-        <label class="form-wide">实际收货时间<DatePicker
-          v-model="receivedAt"
-          type="datetime-local"
-          step="1"
-          required
-          :disabled="saving || receiptUncertain"
-        /></label>
-        <label
-          v-for="line in detail.order.lines.filter(item => item.remainingQuantity > 0)"
-          :key="line.id"
-          class="form-wide"
-        >{{ line.itemCode || line.specification || '手动物品' }} · 待收 {{ line.remainingQuantity }} {{ line.unit }}<input
-          v-model.number="quantities[line.id]"
-          :disabled="saving || receiptUncertain"
-          type="number"
-          min="0"
-          :max="line.remainingQuantity"
-          step="0.0001"
-        ></label><label class="form-wide">本次收货备注<textarea
-          v-model="remark"
-          :disabled="saving || receiptUncertain"
-          maxlength="500"
-        /></label><div class="operation-form__actions ui-dialog-actions">
-          <button
-            type="button"
-            class="secondary-button"
-            :disabled="saving"
-            @click="closeReceipt"
-          >
-            取消
-          </button><button
-            :disabled="saving"
-            type="submit"
-          >
-            {{ receiptUncertain ? '重试本次收货' : '确认本次收货' }}
-          </button>
-        </div>
-      </form>
-    </div>
-    <div
-      v-if="showCancel && detail"
-      class="operation-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="cancel-title"
-    >
-      <form
-        class="panel operation-form operation-dialog__card operation-dialog__card--compact"
-        @submit.prevent="cancelOrder"
-      >
-        <h2 id="cancel-title">
-          取消采购单 / 关闭未收余量
-        </h2>
-        <p class="form-wide purchase-form-hint">
-          此操作不可撤回，单据将停止收货；已收货数量、历史记录和库存不会撤销。需要退货时请另行处理，不要用取消代替退货。
-        </p>
-        <p
-          v-if="error"
-          class="form-wide error-message"
-          role="alert"
-        >
-          {{ error }}
-        </p>
-        <label class="form-wide">取消 / 关闭原因<textarea
-          v-model="cancelReason"
-          required
-          maxlength="500"
-          :disabled="saving"
-        /></label>
-        <div class="operation-form__actions ui-dialog-actions">
-          <button
-            type="button"
-            class="secondary-button"
-            :disabled="saving"
-            @click="showCancel = false"
-          >
-            返回
-          </button><button
-            type="submit"
-            :disabled="saving || !cancelReason.trim()"
-          >
-            确认关闭
-          </button>
-        </div>
-      </form>
-    </div>
+          {{ saving ? '处理中…' : '确认关闭' }}
+        </button>
+      </template>
+    </AccessDialog>
   </section>
 </template>
+
+<style scoped>
+.purchase-cancel-button{background:#fff1f0!important;color:#b42318!important;border:1px solid #f1c6c2!important;box-shadow:none;min-height:32px;padding:6px 12px;border-radius:4px;font-size:13px}.purchase-cancel-button:hover:not(:disabled){background:#ffe4e1!important;border-color:#df8f87!important}.purchase-cancel-button:disabled{opacity:.5;cursor:not-allowed}.purchase-cancel-notice{background:#fff8ed;border:1px solid #f1dec0;border-radius:4px;padding:10px 12px;font-size:13px;line-height:1.7;color:#8a581e}.purchase-cancel-reason{display:flex;flex-direction:column;gap:8px;font-size:13px}.purchase-cancel-reason textarea{min-height:96px;box-sizing:border-box;width:100%;border:1px solid var(--line);border-radius:4px;padding:8px 10px;font:inherit;resize:vertical}.receipt-date{white-space:nowrap;display:flex;align-items:center;gap:10px;margin-top:12px;font-size:13px}
+
+.purchase-detail-embedded .panel{border:1px solid var(--line);box-shadow:none;padding:12px;border-radius:6px;background:#fff}
+.purchase-detail-embedded .purchase-summary{display:flex;flex-direction:column;gap:10px}
+.purchase-detail-embedded .purchase-summary dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 18px;margin:0}
+.purchase-detail-embedded .purchase-summary dl>div{display:flex;flex-direction:row;align-items:baseline;gap:8px;min-width:0}
+.purchase-detail-embedded dt{color:var(--muted);font-size:12px;white-space:nowrap;font-weight:400}
+.purchase-detail-embedded dd{margin:0;padding:0;background:none;border:0;font-size:13px;overflow-wrap:anywhere}
+.purchase-detail-embedded .purchase-detail-actions{display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--line);padding-top:10px}
+.purchase-detail-embedded h2{font-size:14px;margin:0 0 10px}
+.purchase-detail-embedded .data-table{min-width:800px}
+.purchase-detail-embedded .purchase-detail-grid{display:grid;grid-template-columns:2fr 1fr;gap:12px}
+.purchase-detail-embedded .purchase-timeline{list-style:none;padding:0;margin:0;max-height:240px;overflow:auto}
+.purchase-detail-embedded .purchase-timeline li{display:grid;gap:5px;padding:10px 12px;background:#f7f9fc;border:1px solid var(--line);border-radius:4px;margin-bottom:8px}
+.purchase-detail-embedded .purchase-timeline strong{font-size:13px;color:#334155}
+.purchase-detail-embedded .purchase-timeline small{color:var(--muted)}
+@media(max-width:760px){.purchase-detail-embedded .purchase-summary dl{grid-template-columns:repeat(2,minmax(0,1fr))}.purchase-detail-embedded .purchase-detail-grid{grid-template-columns:1fr}}
+@media(max-width:480px){.purchase-detail-embedded .purchase-summary dl{grid-template-columns:1fr}}
+</style>

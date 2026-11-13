@@ -1,12 +1,14 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { purchaseApi, type PurchaseOrderDetail } from '@/api/purchases'
 import { session } from '@/state/session'
 import PurchaseOrderDetailView from './PurchaseOrderDetailView.vue'
 
 vi.mock('@/api/purchases', () => ({ purchaseApi: { detail: vi.fn(), submit: vi.fn(), cancel: vi.fn(), receive: vi.fn() } }))
 
+beforeEach(()=>{HTMLDialogElement.prototype.showModal=function(){this.open=true};HTMLDialogElement.prototype.close=function(){this.open=false}})
+async function submitReceipt(wrapper:ReturnType<typeof mount>){await wrapper.findAll('button').find(b=>['确认本次收货','重试本次收货'].includes(b.text()))!.trigger('click')}
 const wrappers: ReturnType<typeof mount>[] = []
 afterEach(() => { wrappers.splice(0).forEach(wrapper => wrapper.unmount()); vi.restoreAllMocks(); vi.clearAllMocks() })
 
@@ -26,22 +28,33 @@ describe('PurchaseOrderDetailView', () => {
     await wrapper.findAll('button').find(button => button.text() === '登记收货')!.trigger('click')
     expect((wrapper.get('input[type="number"]').element as HTMLInputElement).value).toBe('')
     await wrapper.get('input[type="number"]').setValue(2)
-    await wrapper.get('form').trigger('submit'); await flushPromises()
+    await submitReceipt(wrapper); await flushPromises()
     const original = JSON.parse(JSON.stringify(vi.mocked(purchaseApi.receive).mock.calls[0]?.[1]))
     expect(wrapper.text()).toContain('重试本次收货')
     expect(wrapper.get('input[type="number"]').attributes('disabled')).toBeDefined()
-    await wrapper.get('form').trigger('submit'); await flushPromises()
+    await submitReceipt(wrapper); await flushPromises()
     expect(purchaseApi.receive).toHaveBeenNthCalledWith(2, 'o1', original)
-    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    expect(wrapper.find('dialog').exists()).toBe(false)
+  })
+  it('uses the shared receipt table and fills remaining quantities without submitting', async()=>{
+    const wrapper=await receiptSetup()
+    expect(wrapper.get('.purchase-cancel-button').text()).toBe('关闭未收余量')
+    await wrapper.findAll('button').find(b=>b.text()==='登记收货')!.trigger('click')
+    expect(wrapper.get('dialog').attributes('aria-label')).toBe('确认采购收货')
+    expect(wrapper.get('dialog').text()).toContain('图片')
+    expect(wrapper.get('dialog').text()).not.toContain('MAT-1')
+    await wrapper.findAll('button').find(b=>b.text()==='全部接收')!.trigger('click')
+    expect(wrapper.get('input[type="number"]').element).toHaveProperty('value','6')
+    expect(purchaseApi.receive).not.toHaveBeenCalled()
   })
   it('validates empty and excessive receipts before sending and shows delivery details', async () => {
     const wrapper = await receiptSetup()
     expect(wrapper.text()).toContain('2026-11-20'); expect(wrapper.text()).toContain('测试仓')
     await wrapper.findAll('button').find(button => button.text() === '登记收货')!.trigger('click')
-    await wrapper.get('form').trigger('submit'); await flushPromises()
+    await submitReceipt(wrapper); await flushPromises()
     expect(wrapper.text()).toContain('至少填写一项')
     await wrapper.get('input[type="number"]').setValue(7)
-    await wrapper.get('form').trigger('submit'); await flushPromises()
+    await submitReceipt(wrapper); await flushPromises()
     expect(purchaseApi.receive).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('待收数量之间')
   })
@@ -51,7 +64,7 @@ describe('PurchaseOrderDetailView', () => {
     await wrapper.findAll('button').find(button => button.text() === '关闭未收余量')!.trigger('click')
     expect(wrapper.text()).toContain('库存不会撤销')
     await wrapper.get('textarea').setValue('供应商不再供货')
-    await wrapper.get('form').trigger('submit'); await flushPromises()
+    await wrapper.findAll('button').find(b=>b.text()==='确认关闭')!.trigger('click'); await flushPromises()
     expect(purchaseApi.cancel).toHaveBeenCalledWith('o1', 2, '供应商不再供货')
   })
   it('hides receipt and cancellation controls from read-only users', async () => {
@@ -69,6 +82,6 @@ describe('PurchaseOrderDetailView', () => {
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/purchases/orders/:orderId', component: PurchaseOrderDetailView }] })
     await router.push('/purchases/orders/o1'); await router.isReady()
     const wrapper = mount(PurchaseOrderDetailView, { global: { plugins: [router] } }); wrappers.push(wrapper); await flushPromises()
-    expect(wrapper.text()).toContain('PO-001'); expect(wrapper.text()).toContain('MAT-1'); expect(wrapper.text()).toContain('buyer'); expect(wrapper.text()).toContain('创建采购单')
+    expect(wrapper.text()).toContain('PO-001'); expect(wrapper.text()).toContain('纸箱 × 4'); expect(wrapper.text()).toContain('buyer'); expect(wrapper.text()).toContain('创建采购单')
   })
 })

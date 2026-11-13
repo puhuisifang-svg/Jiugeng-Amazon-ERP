@@ -29,3 +29,11 @@ it('shows load failures and can retry',async()=>{
  await w.findAll('button').find(b=>b.text()==='重试')!.trigger('click');await flushPromises()
  expect(w.find('[role=alert]').exists()).toBe(false);expect(w.text()).toContain('商品1');w.unmount()
 })
+it('keeps exactly one product across pages in shipment mode',async()=>{
+ const w=mount(CustomerOrderProductPicker,{props:{customerId:'c1',existing:[],single:true}});await flushPromises()
+ await w.get('input[type=radio]').setValue(true)
+ await w.get('button[aria-label="下一页"]').trigger('click');await flushPromises()
+ await w.get('input[type=radio]').setValue(true)
+ await w.findAll('button').find(b=>b.text()==='确认选择')!.trigger('click')
+ expect(w.emitted('confirm')?.[0]?.[0]).toEqual([product('2')]);w.unmount()
+})

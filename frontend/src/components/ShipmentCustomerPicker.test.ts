@@ -11,6 +11,27 @@ beforeEach(() => {
   api.products.mockImplementation(({ customerId }) => Promise.resolve({ items: [{ ...binding, id: customerId === 'c1' ? 'cp1' : 'cp2', customerId, productName: '合成SKU', skuCode: 'SKU-1' }], totalCount: 21 }))
 })
 describe('shipping customer picker', () => {
+  it('shows compact customer selection and confirms a product through the shared picker', async()=>{
+    const wrapper=mount(ShipmentCustomerPicker,{props:{compact:true},global:{stubs:{Teleport:true,CustomerProductImage:true,CustomerOrderProductPicker:{name:'CustomerOrderProductPicker',template:'<div class="product-dialog-stub" />'}}}});await flushPromises()
+    expect(wrapper.find('input[placeholder="搜索客户名称或账号"]').exists()).toBe(false)
+    await wrapper.findAll('button').find(b=>b.text()==='选择客户商品')!.trigger('click')
+    const picker=wrapper.findComponent({name:'CustomerOrderProductPicker'})
+    picker.vm.$emit('confirm',[{...binding,productName:'测试商品',variantId:'v1',productId:'p1'}]);await flushPromises()
+    expect(wrapper.text()).toContain('测试商品')
+    expect(wrapper.emitted('select')?.at(-1)?.[0]).toEqual(expect.objectContaining({id:'cp1'}))
+    expect(wrapper.find('.product-dialog-stub').exists()).toBe(false)
+    wrapper.unmount()
+  })
+  it('uses multi selection for new shipments and clears it when switching customers',async()=>{
+    const wrapper=mount(ShipmentCustomerPicker,{props:{compact:true,multiple:true,existing:['cp1']},global:{stubs:{Teleport:true,CustomerProductImage:true,CustomerOrderProductPicker:{name:'CustomerOrderProductPicker',props:['single','existing'],template:'<div />'}}}});await flushPromises()
+    await wrapper.findAll('button').find(b=>b.text()==='继续添加商品')!.trigger('click')
+    const picker=wrapper.findComponent({name:'CustomerOrderProductPicker'})
+    expect(picker.props('single')).toBe(false);expect(picker.props('existing')).toEqual(['cp1'])
+    picker.vm.$emit('confirm',[{...binding,id:'cp2'},{...binding,id:'cp3'}]);await flushPromises()
+    expect(wrapper.emitted('add')?.[0]?.[0]).toHaveLength(2)
+    wrapper.findComponent({name:'CustomerSearchSelect'}).vm.$emit('select',{id:'c2',name:'其他客户'});await flushPromises()
+    expect(wrapper.emitted('select')?.at(-1)?.[0]).toBeUndefined();wrapper.unmount()
+  })
   it('selects default customer and clears product when changing customer', async () => {
     const wrapper = mount(ShipmentCustomerPicker); await flushPromises()
     expect((wrapper.get('[aria-label="发货客户"]').element as HTMLSelectElement).value).toBe('c1')

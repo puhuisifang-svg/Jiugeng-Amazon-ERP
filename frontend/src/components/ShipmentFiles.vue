@@ -53,12 +53,12 @@ async function download(file: ShipmentDocument) {
     <SingleFileUpload
       v-if="editable"
       title="标签文件"
+      compact
       accept=".pdf,.png,.jpg,.jpeg,.txt,.zpl"
       :max-mb="10"
       :disabled="busy || loading"
       :upload="upload"
     />
-    <small v-if="editable">PDF / 图片 / TXT / ZPL，≤10 MB</small>
     <p
       v-if="error"
       class="shipment-file-error"
@@ -75,3 +75,7 @@ async function download(file: ShipmentDocument) {
     <SuccessToast :message="success" />
   </div>
 </template>
+
+<style scoped>
+.shipment-files{gap:5px;min-width:132px;max-width:180px}.shipment-files .shipment-file-link{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:3px 5px;border-radius:4px;font-size:12px;min-height:28px}
+</style>

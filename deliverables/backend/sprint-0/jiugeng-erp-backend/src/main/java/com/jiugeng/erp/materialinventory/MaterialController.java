@@ -28,6 +28,28 @@ class MaterialController {
 
     MaterialController(MaterialService service,CostService costs) { this.service = service;this.costs=costs; }
 
+    @GetMapping("/unit-options")
+    @PreAuthorize("hasAuthority('materials.read')")
+    List<String> unitOptions() { return service.unitOptions(); }
+
+    @PostMapping("/unit-options/remove")
+    @PreAuthorize("hasAuthority('materials.write')")
+    void removeUnit(@Valid @RequestBody UnitOptionRequest request, @AuthenticationPrincipal AuthenticatedActor actor) {
+        service.hideUnit(request.name(),actor);
+    }
+    record UnitOptionRequest(@NotBlank @Size(max=32) String name) {}
+
+    @GetMapping("/type-options")
+    @PreAuthorize("hasAuthority('materials.read')")
+    List<String> typeOptions() { return service.typeOptions(); }
+
+    @PostMapping("/type-options/remove")
+    @PreAuthorize("hasAuthority('materials.write')")
+    void removeType(@Valid @RequestBody TypeOptionRequest request, @AuthenticationPrincipal AuthenticatedActor actor) {
+        service.hideType(request.name(),actor);
+    }
+    record TypeOptionRequest(@NotBlank @Size(max=100) String name) {}
+
     @GetMapping
     @PreAuthorize("hasAuthority('materials.read')")
     List<MaterialView> materials() { return service.materials(); }

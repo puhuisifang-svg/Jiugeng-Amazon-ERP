@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import EditableSelect from '@/components/EditableSelect.vue'
+import { materialTypesApi } from '@/api/materialTypes'
 import { costsApi, type MaterialPrice } from '@/api/costs'
 import SingleFileUpload from '@/components/SingleFileUpload.vue'
 import { vSingleSelect } from '@/directives/singleSelect'
@@ -44,7 +46,7 @@ const uploading = ref(false); const imageError = ref('')
 const failedRemoteImages = ref<Set<string>>(new Set())
 type MaterialImagePreview = ({ alt: string; imageUrl: string } | { alt: string; imageAssetId: string }) & { kind?: 'material' | 'supplier-qr' }
 const imagePreview = ref<MaterialImagePreview | null>(null)
-const unitOptions = ['件', '个', '套', '盒', '包', '卷', '米', '千克', '克', 'PCS', 'SET', 'BOX', 'PACK', 'ROLL', 'M', 'KG']
+const unitOptions = ref<string[]>(['件','个','套'])
 const writable = computed(() => session.canAccess(['materials.write']))
 const formal = computed(() => runtimeConfig.authMode === 'password')
 const mockMode = computed(() => runtimeConfig.authMode === 'mock')
@@ -60,6 +62,15 @@ const rowActionsAvailable = computed(() => writable.value || inventoryWritable.v
 const activeMaterials = computed(() => items.value.filter(item => item.status === 'ACTIVE'))
 const selectedMaterial = computed(() => items.value.find(item => item.id === inventoryForm.materialId))
 const balanceByMaterial = computed(() => new Map(balances.value.map(item => [item.materialId ?? item.materialCode, item])))
+const selectableTypes=ref<string[]>([])
+async function removeUnit(name:string){
+  if(!await confirmAction(`从候选项中删除单位“${name}”？已有辅料资料不受影响。`))return
+  try{await materialTypesApi.removeUnit(name);unitOptions.value=unitOptions.value.filter(v=>v!==name)}catch{formError.value='单位删除失败，请重试。'}
+}
+async function removeType(name:string){
+  if(!await confirmAction(`从候选项中删除“${name}”？已有辅料的类型不受影响。`))return
+  try{await materialTypesApi.remove(name);selectableTypes.value=selectableTypes.value.filter(v=>v!==name)}catch{formError.value='类型删除失败，请重试。'}
+}
 const materialTypes = computed(() => [...new Set(items.value.map(item => item.materialType).filter(Boolean))].sort())
 const filteredItems = computed(() => {
   const keyword = filters.keyword.trim().toLowerCase()
@@ -104,6 +115,7 @@ function resetForm() {
 function resetFilters() { Object.assign(filters, { keyword: '', materialType: '', status: '', stock: '' }) }
 function openMaterialForm() { resetForm(); showInventoryForm.value = false; showMaterialForm.value = true; success.value = ''; error.value = '' }
 async function edit(item: MaterialDetailDto) {
+
   formError.value=''
   netPrice.value='';originalPrice.value=null;formPriceReady.value=!canReadPrice.value;supplierLinks.value=[]
 
@@ -141,6 +153,8 @@ async function load() {
   try {
     const materialResponse = await domainApi.materials()
     items.value = materialResponse.items
+    if(formal.value){selectableTypes.value=await materialTypesApi.list();unitOptions.value=await materialTypesApi.units()}
+    else selectableTypes.value=materialTypes.value
     await loadPrices()
     if (supplierAccess.value) {const all:SupplierDto[]=[];let p=0;while(true){const result=await domainApi.suppliers({status:'ACTIVE',size:100,page:p++});all.push(...result.items);if(!result.items.length||all.length>=result.totalCount)break}supplierOptions.value=all}
     if (inventoryReadable.value) {
@@ -320,7 +334,7 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
         </button>
         <button
           v-if="formal && session.canAccess(['purchases.read','purchases.write','suppliers.read'])"
-          class="secondary-button"
+          class="batch-purchase-button"
           type="button"
           :disabled="!canBatchPurchase || saving"
           title="选择启用的辅料后批量采购，每单最多 200 项"
@@ -374,20 +388,14 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
           required
           maxlength="200"
         ></label>
-        <label>辅料类型<input
+        <label>辅料类型<EditableSelect
           v-model="form.materialType"
-          list="material-type-history"
-          placeholder="选择历史类型或输入新类型"
+          :options="selectableTypes"
+          label="辅料类型"
           :required="formal"
-          maxlength="100"
-        ></label>
-        <datalist id="material-type-history">
-          <option
-            v-for="type in materialTypes"
-            :key="type"
-            :value="type"
-          />
-        </datalist>
+          :disabled="saving"
+          @remove="removeType"
+        /></label>
         <label v-if="canReadPrice">成本价（人民币 / {{ form.unit }}，不含税）<input
           v-model="netPrice"
           aria-label="辅料成本价"
@@ -401,15 +409,15 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
           v-model="form.specification"
           maxlength="500"
         ></label>
-        <label>单位<select
+        <label>单位<EditableSelect
           v-model="form.unit"
-          v-single-select
+          :options="unitOptions"
+          label="单位"
           required
-        ><option
-          v-for="unit in unitOptions"
-          :key="unit"
-          :value="unit"
-        >{{ unit }}</option></select></label>
+          :max-length="32"
+          :disabled="saving"
+          @remove="removeUnit"
+        /></label>
         <label>图片 HTTPS 地址<input
           v-model="form.imageUrl"
           maxlength="500"
@@ -935,6 +943,7 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
 </template>
 
 <style scoped>
+.batch-purchase-button{background:#168347;color:#fff;border:1px solid #168347}.batch-purchase-button:disabled{background:#e5e7eb;color:#94a3b8;border-color:#e5e7eb;cursor:not-allowed}
 .operation-form__actions { flex-wrap: wrap; }
 .material-form-error { flex: 1 1 100%; margin: 0; text-align: left; }
 .material-supplier-contact { display:flex;flex-wrap:wrap;gap:16px;color:var(--text-secondary,#64748b);font-size:12px; }
@@ -948,6 +957,7 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
 </style>
 
 <style scoped>
+.batch-purchase-button{background:#168347;color:#fff;border:1px solid #168347}.batch-purchase-button:disabled{background:#e5e7eb;color:#94a3b8;border-color:#e5e7eb;cursor:not-allowed}
 .operation-form__actions { flex-wrap: wrap; }
 .material-form-error { flex: 1 1 100%; margin: 0; text-align: left; }
 .material-supplier-contact { display:flex;flex-wrap:wrap;gap:16px;color:var(--text-secondary,#64748b);font-size:12px; }

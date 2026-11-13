@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+
+
 import { computed,onMounted,ref } from 'vue'
 import AccessDialog from './AccessDialog.vue'
 import SingleFileUpload from './SingleFileUpload.vue'
@@ -104,7 +107,7 @@ onMounted(()=>void load().catch(()=>{}))
               @click="download(file)"
             >
               {{ file.name }}
-            </button><small>{{ (file.size/1024).toFixed(1) }} KB · {{ new Date(file.createdAt).toLocaleString('zh-CN',{hour12:false}) }}</small>
+            </button><small>{{ (file.size/1024).toFixed(1) }} KB · {{ beijingDateTime(file.createdAt) }}</small>
           </div>
           <button
             :disabled="busy"

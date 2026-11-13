@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { beijingDateTimeInput, beijingInputToIso } from '@/utils/dateTime'
+
 import { createRequestId } from '@/utils/requestId'
 
 import { vSingleSelect } from '@/directives/singleSelect'
@@ -81,8 +83,7 @@ async function show(kind: typeof modalKind.value) {
   error.value = ''; results.value = []; modalKind.value = kind
   if (kind === 'columns') { draftColumns.value = [...columns.value]; columnSearch.value = '' }
   if (kind === 'snapshot') {
-    const date = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
-    observation.at = date.toISOString().slice(0, 19); observation.reason = ''; observation.quality = 'COMPLETE'
+    observation.at = beijingDateTimeInput(); observation.reason = ''; observation.quality = 'COMPLETE'
     observation.source = detail.value?.target.source === 'SYNTHETIC' ? 'SYNTHETIC' : 'MANUAL'
     for (const field of fieldNames) {
       const value = detail.value?.target.fields[field]
@@ -148,7 +149,7 @@ async function saveSnapshot() {
       if (!value && field !== 'bullets') throw new Error(`${fieldLabels[field]}为空，请明确选择“未知”。`)
       fields[field] = field === 'bullets' ? value.split('\n').filter(Boolean) : field === 'price' ? Number(value) : value
     }
-    const input = { version: detail.value.target.version, observedAt: new Date(observation.at).toISOString(), source: observation.source, quality: observation.quality, fields: fields as MonitorFields, reason: observation.reason }
+    const input = { version: detail.value.target.version, observedAt: beijingInputToIso(observation.at), source: observation.source, quality: observation.quality, fields: fields as MonitorFields, reason: observation.reason }
     snapshotRequest = requestKey(JSON.stringify({ id: detail.value.target.id, ...input }), snapshotRequest)
     const result = await monitoringApi.snapshot(detail.value.target.id, { ...input, requestId: snapshotRequest.id } as SnapshotInput)
     notice.value = `观测已保存：${statusLabels[result.decision] ?? result.decision}`
@@ -616,7 +617,7 @@ onMounted(async () => { await load(); try { columns.value = (await monitoringApi
           <label>来源<select
             v-model="observation.source"
             v-single-select
-          ><option value="MANUAL">人工观测</option><option value="SYNTHETIC">合成演示</option></select></label><label>观测时间（本地时区）<DatePicker
+          ><option value="MANUAL">人工观测</option><option value="SYNTHETIC">合成演示</option></select></label><label>观测时间（北京时间）<DatePicker
             v-model="observation.at"
             type="datetime-local"
             step="1"

@@ -1,9 +1,10 @@
+import { beijingDate } from '@/utils/dateTime'
 import type { PurchaseOrder, PurchaseLine } from '@/api/purchases'
 import { catalogApi } from '@/api/catalog'
 export interface ExportRow { date:string; line:PurchaseLine }
 export function purchaseExportRows(orders:PurchaseOrder[]):ExportRow[]{
   return [...orders].sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).flatMap(order=>{
-    const date=new Date(order.createdAt).toLocaleDateString('zh-CN',{timeZone:'Asia/Shanghai'})
+    const date=beijingDate(order.createdAt)
     return order.lines.map(line=>({date,line}))
   })
 }

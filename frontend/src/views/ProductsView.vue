@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+
+
 import { vSingleSelect } from '@/directives/singleSelect'
 import { catalogApi } from '@/api/catalog'
 import ProductName from '@/components/ProductName.vue'
@@ -451,7 +454,7 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
                       v-else-if="key === 'status'"
                       :class="['status-badge', `status-badge--${group.product.status.toLowerCase()}`]"
                     >{{ labelStatus(group.product.status) }}</span>
-                    <span v-else-if="key === 'updated'">{{ group.product.updatedAt ? new Date(group.product.updatedAt).toLocaleString('zh-CN') : '—' }}</span>
+                    <span v-else-if="key === 'updated'">{{ group.product.updatedAt ? beijingDateTime(group.product.updatedAt) : '—' }}</span>
                     <span
                       v-else-if="key === 'stock'"
                       class="stock-uninitialized"
@@ -580,7 +583,7 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
                         {{ row.variant.materials.length }} 个
                       </template>
                       <template v-else-if="key === 'updated'">
-                        {{ row.updatedAt ? new Date(row.updatedAt).toLocaleString('zh-CN') : '—' }}
+                        {{ row.updatedAt ? beijingDateTime(row.updatedAt) : '—' }}
                       </template>
                     </td>
                     <td class="sticky-action">

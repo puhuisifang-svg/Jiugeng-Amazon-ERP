@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+
+
 import { createRequestId } from '@/utils/requestId'
 
 import { vSingleSelect } from '@/directives/singleSelect'
@@ -242,7 +245,7 @@ watch(id, () => {
                       class="development-status"
                       :data-status="item.status"
                     >{{ labels[item.status] }}</span>
-                  </td><td>{{ new Date(item.updatedAt).toLocaleString('zh-CN') }}</td><td>
+                  </td><td>{{ beijingDateTime(item.updatedAt) }}</td><td>
                     <RouterLink
                       class="text-link"
                       :to="`/product-development/${item.id}`"
@@ -512,7 +515,7 @@ watch(id, () => {
             v-for="event in detail.history"
             :key="event.id"
           >
-            <strong>{{ actions[event.action] || event.action }}</strong><span>{{ event.actorDisplayName || event.actorLoginName }} · {{ new Date(event.occurredAt).toLocaleString() }}</span>
+            <strong>{{ actions[event.action] || event.action }}</strong><span>{{ event.actorDisplayName || event.actorLoginName }} · {{ beijingDateTime(event.occurredAt) }}</span>
           </li>
         </ol>
       </section>

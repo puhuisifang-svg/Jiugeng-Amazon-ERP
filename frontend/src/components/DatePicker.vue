@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { beijingDate } from '@/utils/dateTime'
+
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useAttrs } from 'vue'
 defineOptions({ inheritAttrs: false })
 const props = withDefaults(defineProps<{ modelValue?: string | null | undefined; end?: string | null | undefined; range?: boolean; type?: 'date' | 'datetime-local' | 'time'; startLabel?: string; endLabel?: string; disabled?: boolean; required?: boolean; min?: string; max?: string }>(), { modelValue: '', end: '', range: false, type: 'date', startLabel: '开始日期', endLabel: '结束日期', disabled: false, required: false, min: '', max: '' })
@@ -12,10 +14,10 @@ onMounted(() => {
 const trigger = ref<HTMLButtonElement>()
 const root = ref<HTMLElement>(), panel = ref<HTMLElement>(), first = ref<HTMLInputElement>(), last = ref<HTMLInputElement>()
 const open = ref(false), draft = ref(''), finish = ref(''), choosingEnd = ref(false), hover = ref('')
-const month = ref(new Date()), position = ref({ left: '0px', top: '0px', maxHeight: '500px' })
+const month = ref(new Date(beijingDate() + 'T12:00:00')), position = ref({ left: '0px', top: '0px', maxHeight: '500px' })
 const pad = (n: number) => String(n).padStart(2, '0')
 function day(d: Date) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` }
-const today = () => day(new Date())
+const today = () => beijingDate()
 const months = computed(() => Array.from({ length: props.range ? 2 : 1 }, (_, i) => new Date(month.value.getFullYear(), month.value.getMonth() + i, 1)))
 function cells(m: Date) { const start = new Date(m.getFullYear(), m.getMonth(), 1 - m.getDay()); return Array.from({ length: 42 }, (_, i) => { const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i); return { key: day(date), date: date.getDate(), other: date.getMonth() !== m.getMonth() } }) }
 function allowed(value: string) { return (!props.min || value >= props.min.slice(0, 10)) && (!props.max || value <= props.max.slice(0, 10)) }
@@ -30,7 +32,7 @@ function updatePosition() {
 async function show() {
   if (props.disabled || first.value?.matches(':disabled') || open.value) return
   draft.value = props.modelValue || ''; finish.value = props.end || ''; choosingEnd.value = false; hover.value = ''
-  const initial = props.modelValue ? new Date(props.modelValue.slice(0, 10) + 'T12:00:00') : new Date()
+  const initial = props.modelValue ? new Date(props.modelValue.slice(0, 10) + 'T12:00:00') : new Date(today() + 'T12:00:00')
   month.value = new Date(initial.getFullYear(), initial.getMonth(), 1)
   open.value = true; await nextTick(); panel.value?.showPopover?.(); updatePosition()
   panel.value?.querySelector<HTMLButtonElement>('[data-day]:not(:disabled)')?.focus()
@@ -60,7 +62,7 @@ function selected(value: string) { return value === draft.value.slice(0, 10) || 
 function between(value: string) { const a = draft.value.slice(0, 10), b = finish.value.slice(0, 10) || hover.value; return props.range && a && b && value >= (a < b ? a : b) && value <= (a < b ? b : a) }
 const presets = ['今天', '昨天', '最近7天', '最近30天', '本月', '上月', '最近6个月', '今年']
 function shortcut(index: number) {
-  const now = new Date(), a = new Date(now.getFullYear(), now.getMonth(), now.getDate()), b = new Date(a)
+  const a = new Date(today() + 'T12:00:00'), b = new Date(a)
   if (index === 1) { a.setDate(a.getDate() - 1); b.setDate(b.getDate() - 1) }
   if (index === 2 || index === 3) a.setDate(a.getDate() - (index === 2 ? 6 : 29))
   if (index === 4) a.setDate(1)

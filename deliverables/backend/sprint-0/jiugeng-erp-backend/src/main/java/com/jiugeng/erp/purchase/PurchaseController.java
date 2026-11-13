@@ -16,6 +16,11 @@ import org.springframework.web.bind.annotation.*;
 class PurchaseController {
     private final PurchaseService service;
     PurchaseController(PurchaseService service) { this.service = service; }
+    @GetMapping("/delivery-options") @PreAuthorize("hasAuthority('purchases.read')")
+    List<String> deliveryOptions(){return service.deliveryOptions();}
+    @PostMapping("/delivery-options/remove") @PreAuthorize("hasAuthority('purchases.write')")
+    void removeDeliveryOption(@RequestBody DeliveryOptionRequest request,@AuthenticationPrincipal AuthenticatedActor actor){service.removeDeliveryOption(request.name(),actor);}
+    record DeliveryOptionRequest(String name){}
     @GetMapping("/dashboard") @PreAuthorize("hasAuthority('purchases.read')") Dashboard dashboard(){return service.dashboard();}
     @GetMapping("/orders") @PreAuthorize("hasAuthority('purchases.read')") List<OrderView> orders(@RequestParam(required=false)Status status){return service.orders(status);}
     @GetMapping("/orders/{id}") @PreAuthorize("hasAuthority('purchases.read')") OrderView order(@PathVariable String id){return service.order(id);}
@@ -39,7 +44,7 @@ class PurchaseController {
     @PutMapping("/orders/{id}/logistics") @PreAuthorize("hasAuthority('purchases.write')") OrderView logistics(@PathVariable String id,@RequestBody LogisticsRequest request,@AuthenticationPrincipal AuthenticatedActor actor){return service.logistics(id,request.version(),request.carrier(),request.trackingNumber(),request.waybillImageId(),actor);}
     record LogisticsRequest(long version,String carrier,String trackingNumber,String waybillImageId){}
 
-    record LineRequest(String itemId,BigDecimal quantity,BigDecimal unitPrice,String itemName,String unit,String specification,String imageAssetId,boolean taxIncluded,BigDecimal taxRate){LineInput input(){return new LineInput(itemId,quantity,unitPrice,itemName,unit,specification,imageAssetId,taxIncluded,taxRate);}}
+    record LineRequest(String itemId,BigDecimal quantity,BigDecimal unitPrice,String itemName,String unit,String specification,String imageAssetId,boolean taxIncluded,BigDecimal taxRate,BigDecimal packageCount){LineInput input(){return new LineInput(itemId,quantity,unitPrice,itemName,unit,specification,imageAssetId,taxIncluded,taxRate,packageCount);}}
     record OrderRequest(OrderType orderType,String supplierId,String currency,String remark,Long version,List<LineRequest>lines,LocalDate expectedDeliveryDate,String deliveryAddress,String supplierName){OrderInput input(){return new OrderInput(orderType,supplierId,currency,remark,version,lines==null?null:lines.stream().map(line -> line == null ? null : line.input()).toList(),expectedDeliveryDate,deliveryAddress,supplierName);}}
     record VersionRequest(long version){}
     record CancelRequest(long version,String reason){}

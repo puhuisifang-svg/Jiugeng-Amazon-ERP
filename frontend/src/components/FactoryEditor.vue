@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vPhone } from '@/directives/phone'
 import { createRequestId } from '@/utils/requestId'
 
 import { computed,reactive,ref,watch } from 'vue'
@@ -184,6 +185,7 @@ async function submit(){if(busy.value||previewing.value)return;error.value='';bu
             maxlength="100"
           ></label><label>手机号<input
             v-model="form.phone"
+            v-phone="'mobile'"
             maxlength="100"
             inputmode="tel"
           ></label><label>开户行<input

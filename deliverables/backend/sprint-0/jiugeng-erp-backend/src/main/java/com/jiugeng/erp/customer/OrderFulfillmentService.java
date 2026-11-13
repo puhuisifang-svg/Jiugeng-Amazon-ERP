@@ -15,6 +15,7 @@ class OrderFulfillmentService implements OrderFulfillment {
     @Override @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public List<Allocation> reserve(String orderId,Request request,String key,AuthenticatedActor actor) {
         if(key==null||!key.matches("[A-Za-z0-9._:-]{1,128}"))throw invalid("请求标识无效");
+        if(!com.jiugeng.erp.ChinaPhone.contact(request.phone()))throw new CustomerException(400,"PHONE_INVALID",com.jiugeng.erp.ChinaPhone.MESSAGE);
         orders.lock(orderId);var order=orders.get(orderId);
         String hash;
         try {hash=HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(orders.json(request).getBytes(java.nio.charset.StandardCharsets.UTF_8)));}catch(Exception e){throw new IllegalStateException(e);}

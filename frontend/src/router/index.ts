@@ -25,6 +25,7 @@ export const appRoutes: RouteRecordRaw[] = [
     component: AdminLayout,
     redirect: '/home',
     children: [
+      { path: 'tools/pdf', name: 'pdf-tools', component: () => import('@/views/PdfToolsView.vue'), meta: { title: 'PDF编辑', group: '工具', capabilities: ['tools.pdf.use'], breadcrumbs: [{ title: '工具' }, { title: 'PDF编辑' }] } },
       { path: 'factory/employees', name: 'factory-employees', component: () => import('@/views/FactoryWorkbenchView.vue'), props: { kind: 'employees' }, meta: { title: '员工管理', group: '工厂管理', capabilities: ['factory.employees.read'], breadcrumbs: [{ title: '工厂' }, { title: '员工管理' }] } },
       { path: 'factory/rates', name: 'factory-rates', component: () => import('@/views/FactoryWorkbenchView.vue'), props: { kind: 'rates' }, meta: { title: '工价管理', group: '工厂管理', capabilities: ['factory.rates.read'], breadcrumbs: [{ title: '工厂' }, { title: '工价管理' }] } },
       { path: 'factory/reports', name: 'factory-reports', component: () => import('@/views/FactoryWorkbenchView.vue'), props: { kind: 'reports' }, meta: { title: '每日报工', group: '工厂管理', capabilities: ['factory.reports.read'], breadcrumbs: [{ title: '工厂' }, { title: '每日报工' }] } },

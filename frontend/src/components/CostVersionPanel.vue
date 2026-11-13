@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+
+
 import type { CostVersion } from '@/api/costs'
 defineProps<{ version: CostVersion }>()
 const labels: Record<string, string> = { DRAFT: '草稿', EFFECTIVE: '已生效', HISTORICAL: '历史版本' }
@@ -12,7 +15,7 @@ const basis = { PIECE: '每件', BOX: '每箱', BATCH: '每批' }
           class="cost-badge"
           :class="`cost-badge--${version.status.toLowerCase()}`"
         >{{ labels[version.status] }}</span>
-      </div><small>{{ version.publishedAt ?? version.createdAt }}</small>
+      </div><small>{{ beijingDateTime(version.publishedAt ?? version.createdAt) }}</small>
     </header>
     <div
       class="cost-metrics"

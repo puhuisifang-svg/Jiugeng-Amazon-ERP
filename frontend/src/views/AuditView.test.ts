@@ -19,3 +19,14 @@ describe('audit list details',()=>{
   expect(w.findAll('tbody tr')).toHaveLength(1);w.unmount()
  })
 })
+
+it('submits Beijing wall-clock filters as UTC and displays Beijing timestamps',async()=>{
+ const w=mount(AuditView);await flushPromises()
+ expect(w.text()).toContain('2026-10-30 18:00:00')
+ const dates=w.findAll('input[type="datetime-local"]')
+ await dates[0]!.setValue('2026-11-13T00:00')
+ await dates[1]!.setValue('2026-11-13T23:59')
+ await w.get('form').trigger('submit');await flushPromises()
+ expect(auditApi.events).toHaveBeenLastCalledWith(expect.objectContaining({from:'2026-11-12T16:00:00.000Z',to:'2026-11-13T15:59:00.000Z'}))
+ w.unmount()
+})

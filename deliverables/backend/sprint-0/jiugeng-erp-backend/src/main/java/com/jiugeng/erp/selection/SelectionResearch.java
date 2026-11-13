@@ -82,7 +82,7 @@ class SelectionResearch {
         require(in.name()!=null&&!in.name().isBlank(),"方案名称必填");text(in.name(),200);
         require("USD".equals(in.currency()),"首期售价币种为USD");number(in.price(),true);
         require(in.costs()!=null&&in.costs().size()==5,"采购、包装、头程、履约和其他费用均须明确录入，无需费用请明确填0");
-        require(in.rateDate()!=null&&!in.rateDate().isAfter(LocalDate.now())&&in.rateDate().getYear()>=2000,"汇率日期无效");
+        require(in.rateDate()!=null&&!in.rateDate().isAfter(LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")))&&in.rateDate().getYear()>=2000,"汇率日期无效");
         require(in.basis()!=null&&!in.basis().isBlank(),"费率与试算依据必填");text(in.basis(),2000);
         BigDecimal cost=BigDecimal.ZERO;
         for(Cost c:in.costs()){

@@ -10,7 +10,7 @@ import PurchasesView from './PurchasesView.vue'
 vi.mock('@/api/costs',()=>({costsApi:{price:vi.fn()}}))
 vi.mock('@/state/uiConfirmation', () => ({ confirmAction: vi.fn().mockResolvedValue(true) }))
 vi.mock('@/api/domain', () => ({ domainApi: { suppliers: vi.fn(), materialSupplierLinks: vi.fn() } }))
-vi.mock('@/api/purchases', () => ({ purchaseApi: { remove: vi.fn(), orders: vi.fn(), detail:vi.fn(), place: vi.fn(), updateAndPlace: vi.fn(), references: vi.fn() } }))
+vi.mock('@/api/purchases', () => ({ purchaseApi: { deliveryOptions:vi.fn(), removeDeliveryOption:vi.fn(), remove: vi.fn(), orders: vi.fn(), detail:vi.fn(), place: vi.fn(), updateAndPlace: vi.fn(), references: vi.fn() } }))
 const order: PurchaseOrder = {
   id: 'order-1', orderNo: 'PO-MATERIAL', orderType: 'MATERIAL', supplierId: 'supplier-1', supplierName: '测试供应商', status: 'DRAFT', currency: 'CNY', version: 1,
   lines: [{ id: 'line-1', lineNo: 1, itemId: 'material-1', itemCode: 'MAT-001', itemName: '纸箱', unit: 'PCS', orderedQuantity: 10, receivedQuantity: 0, remainingQuantity: 10, unitPrice: 3 }],
@@ -21,6 +21,8 @@ const wrappers: ReturnType<typeof mount>[] = []
 beforeEach(() => {
   HTMLDialogElement.prototype.showModal=function(){this.open=true};HTMLDialogElement.prototype.close=function(){this.open=false}
   vi.clearAllMocks()
+  vi.mocked(purchaseApi.deliveryOptions).mockResolvedValue(['工厂收货处'])
+  vi.mocked(purchaseApi.removeDeliveryOption).mockResolvedValue(undefined)
   vi.mocked(costsApi.price).mockResolvedValue({netPrice:'0.5',unit:'PCS',source:'MANUAL',referenceId:null,reason:'测试',version:0})
   vi.mocked(domainApi.materialSupplierLinks).mockResolvedValue([{supplierId:'supplier-1',primary:true}] as never)
   vi.spyOn(session, 'canAccess').mockReturnValue(true)
@@ -93,6 +95,7 @@ describe('purchase order workspace', () => {
   it('prefills every selected material and its cost for a common supplier', async () => {
     vi.mocked(purchaseApi.references).mockResolvedValue([item,{...item,id:'material-2',name:'胶带'}])
     const {wrapper}=await setup('?type=MATERIAL&materialIds=material-1,material-2')
+    expect(domainApi.suppliers).toHaveBeenCalledWith(expect.objectContaining({category:'MATERIAL'}))
     expect(domainApi.materialSupplierLinks).toHaveBeenCalledWith('material-2')
     expect(wrapper.get('[aria-label="采购项目 1"]').element).toHaveProperty('value','material-1')
     expect(wrapper.get('[aria-label="采购项目 2"]').element).toHaveProperty('value','material-2')
@@ -183,10 +186,10 @@ describe('purchase order workspace', () => {
     await wrapper.get('[aria-label="采购数量"]').setValue(4)
     await wrapper.get('[aria-label="采购单价"]').setValue(2.5)
     await wrapper.get('input[type="date"]').setValue('2026-11-01')
-    await wrapper.get('input[placeholder="收货地址、联系人或内部仓库说明"]').setValue('测试固定仓')
+    await wrapper.get('input[aria-label="收货信息"]').setValue('测试固定仓')
     expect(wrapper.text()).toContain('合计 CNY 10.00')
     await wrapper.get('form').trigger('submit'); await flushPromises()
-    expect(purchaseApi.place).toHaveBeenCalledWith(expect.objectContaining({ orderType: 'MATERIAL', expectedDeliveryDate: '2026-11-01', deliveryAddress: '测试固定仓', lines: [{ itemId: 'material-1', quantity: 4, unitPrice: 2.5, taxIncluded:false,taxRate:0 }] }))
+    expect(purchaseApi.place).toHaveBeenCalledWith(expect.objectContaining({ orderType: 'MATERIAL', expectedDeliveryDate: '2026-11-01', deliveryAddress: '测试固定仓', lines: [{ itemId: 'material-1', quantity: 4, unitPrice: 2.5, taxIncluded:false,taxRate:0,packageCount:null }] }))
   })
   it('ignores a stale supplier response and refuses invalid quantities', async () => {
     let resolveFirst!: (items: PurchaseReferenceItem[]) => void
@@ -248,4 +251,39 @@ it('creates manual daily supplies without catalog or supplier references',async(
  await wrapper.get('[aria-label="采购单价"]').setValue('8')
  await wrapper.get('form').trigger('submit');await flushPromises()
  expect(purchaseApi.place).toHaveBeenCalledWith(expect.objectContaining({orderType:'MANUAL',lines:[expect.objectContaining({itemName:'Synthetic bulb',unit:'个',specification:'12 W',quantity:3,unitPrice:8})]}))
+})
+
+it('requests only product-category suppliers for product purchases',async()=>{
+ const {wrapper}=await setup('?type=PRODUCT')
+ await wrapper.findAll('button').find(b=>b.text()==='新建产品采购单')!.trigger('click');await flushPromises()
+ expect(domainApi.suppliers).toHaveBeenCalledWith(expect.objectContaining({category:'PRODUCT'}))
+})
+
+it('reuses delivery history and saves independent line package counts', async () => {
+  vi.mocked(purchaseApi.orders).mockResolvedValue([{...order,deliveryAddress:' 工厂收货处 ',lines:[{...order.lines[0]!,packageCount:3}]},{...order,id:'other',deliveryAddress:'工厂收货处'}])
+  const {wrapper}=await setup('?type=MATERIAL')
+  await wrapper.findAll('button').find(b=>b.text()==='编辑')!.trigger('click');await flushPromises()
+  expect((wrapper.get('[aria-label="包裹数"]').element as HTMLInputElement).value).toBe('3')
+  await wrapper.get('[aria-label="收货信息"][role="combobox"]').trigger('click');await flushPromises()
+  expect(wrapper.findAll('[role="option"]').filter(o=>o.text().includes('工厂收货处'))).toHaveLength(1)
+  await wrapper.get('[role="option"]').trigger('click')
+  await wrapper.get('[aria-label="包裹数"]').setValue(7)
+  await wrapper.get('[aria-label="收货信息"][role="combobox"]').setValue('新的仓库地址')
+  await wrapper.get('form').trigger('submit');await flushPromises()
+  expect(purchaseApi.updateAndPlace).toHaveBeenCalledWith(order.id,expect.objectContaining({deliveryAddress:'新的仓库地址',lines:[expect.objectContaining({packageCount:7,quantity:10,unitPrice:3})]}))
+})
+
+it('deletes a delivery option without clearing the current order address and keeps errors in dialog', async () => {
+  vi.mocked(purchaseApi.orders).mockResolvedValue([{...order,deliveryAddress:'工厂收货处'}])
+  const {wrapper}=await setup('?type=MATERIAL')
+  await wrapper.findAll('button').find(b=>b.text()==='编辑')!.trigger('click');await flushPromises()
+  await wrapper.get('input[aria-label="收货信息"]').trigger('click');await flushPromises()
+  vi.mocked(purchaseApi.removeDeliveryOption).mockRejectedValueOnce(new Error('failed'))
+  await wrapper.get('[aria-label="删除收货信息 工厂收货处"]').trigger('click');await flushPromises()
+  expect(wrapper.get('form').text()).toContain('收货信息删除失败')
+  await wrapper.get('input[aria-label="收货信息"]').trigger('click');await flushPromises()
+  await wrapper.get('[aria-label="删除收货信息 工厂收货处"]').trigger('click');await flushPromises()
+  expect(purchaseApi.removeDeliveryOption).toHaveBeenLastCalledWith('工厂收货处')
+  expect((wrapper.get('input[aria-label="收货信息"]').element as HTMLInputElement).value).toBe('工厂收货处')
+  expect(wrapper.find('[aria-label="删除收货信息 工厂收货处"]').exists()).toBe(false)
 })

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+
+
 import {computed,ref,watch} from 'vue'
 import type {FactoryKind,FactoryRecord} from '@/api/factory'
 import {factoryMoney,factoryStates,paymentState,factoryProject} from '@/utils/factoryPresentation'
@@ -31,7 +34,7 @@ watch(()=>[props.record.id,props.section],()=>{page.value=1})
             <dt>开户行（员工当前资料）</dt><dd>{{ record.bankName||'未填写' }}</dd><dt>银行卡号（员工当前资料）</dt><dd>{{ record.bankAccount||'未填写' }}</dd><dt>计件工资</dt><dd>¥ {{ factoryMoney(record.base) }}</dd><dt>加项 / 减项</dt><dd>+{{ factoryMoney(record.plus) }} / −{{ factoryMoney(record.minus) }}</dd><dt>报工天数</dt><dd>{{ record.days||0 }} 天（不是考勤天数）</dd><dt>核算版本</dt><dd>{{ record.revision||0 }}{{ record.historical?' · 历史期初':'' }}</dd>
           </template>
         </template>
-        <dt>备注</dt><dd>{{ record.remark||'—' }}</dd><dt>最近维护</dt><dd>{{ record.updatedBy||'—' }} <small>{{ record.updatedAt?new Date(record.updatedAt).toLocaleString():'—' }}</small></dd>
+        <dt>备注</dt><dd>{{ record.remark||'—' }}</dd><dt>最近维护</dt><dd>{{ record.updatedBy||'—' }} <small>{{ record.updatedAt?beijingDateTime(record.updatedAt):'—' }}</small></dd>
       </dl>
       <p
         v-if="kind==='payroll'&&record.stale"

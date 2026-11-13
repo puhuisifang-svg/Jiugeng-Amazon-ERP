@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+
+
 import { vSingleSelect } from '@/directives/singleSelect'
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
@@ -107,7 +110,7 @@ onMounted(load)
                 :aria-label="`选择 ${item.asin}`"
                 :disabled="busy || item.status!=='PENDING_REVIEW'"
               >
-            </td><td>{{ item.storeName }}</td><td>{{ item.title }}<br>{{ item.asin }}</td><td>{{ new Date(item.detectedAt).toLocaleString('zh-CN',{timeZone:'America/Los_Angeles'}) }}</td><td>{{ item.sourceRunId ?? '—' }}</td><td>{{ labels[item.status] ?? item.status }}<br>{{ item.ignoreReason }}</td><td>
+            </td><td>{{ item.storeName }}</td><td>{{ item.title }}<br>{{ item.asin }}</td><td>{{ beijingDateTime(item.detectedAt) }}</td><td>{{ item.sourceRunId ?? '—' }}</td><td>{{ labels[item.status] ?? item.status }}<br>{{ item.ignoreReason }}</td><td>
               <RouterLink
                 v-if="item.candidateId"
                 :to="`/selection/candidates/${item.candidateId}`"

@@ -1,3 +1,4 @@
+import { beijingDate } from '@/utils/dateTime'
 import { createRequestId } from '@/utils/requestId'
 import { ApiError, SESSION_EXPIRED_EVENT, SESSION_TOKEN_KEY, apiRequest, assertSyntheticEnvelope } from './client'
 import type { CandidateDetailDto, InventoryBalanceDto, MaterialDto, ProductDto, SelectionCandidateDto, SyntheticList, WatchEventDto, WatchStoreDto } from './resources'
@@ -80,8 +81,9 @@ export interface ProductInput {
   variants: ProductVariantInput[]
 }
 export type SupplierStatus = 'ACTIVE' | 'DISABLED'
-export interface SupplierDto { id: string; name: string; contactPerson?: string; phone?: string; wechatId?: string; sourceUrl?: string; qrImageUrl?: string; qrImageId?: string; remark?: string; status: SupplierStatus; version: number; createdAt?: string; updatedAt?: string }
-export interface SupplierInput { name: string; contactPerson?: string | undefined; phone?: string | undefined; wechatId?: string | undefined; sourceUrl?: string | undefined; qrImageUrl?: string | undefined; qrImageId?: string | undefined; remark?: string | undefined; status: SupplierStatus; version?: number | undefined }
+export type SupplierCategory = 'MATERIAL' | 'PRODUCT'
+export interface SupplierDto { categories?: SupplierCategory[]; id: string; name: string; contactPerson?: string; phone?: string; wechatId?: string; sourceUrl?: string; qrImageUrl?: string; qrImageId?: string; remark?: string; status: SupplierStatus; version: number; createdAt?: string; updatedAt?: string }
+export interface SupplierInput { categories?: SupplierCategory[]; name: string; contactPerson?: string | undefined; phone?: string | undefined; wechatId?: string | undefined; sourceUrl?: string | undefined; qrImageUrl?: string | undefined; qrImageId?: string | undefined; remark?: string | undefined; status: SupplierStatus; version?: number | undefined }
 export interface SupplierLinkDto extends SupplierAssignmentDto { id: string; ownerId: string; supplierName: string; supplierStatus: SupplierStatus; updatedAt?: string }
 export interface PageDto<T> { items: T[]; totalCount: number; page: number; size: number }
 export type MaterialStatus = 'ACTIVE' | 'DISABLED'
@@ -244,7 +246,7 @@ async function exportSkus(filters: { productType?: string | undefined; field?: s
     throw new ApiError(response.status, problem?.code ?? 'REQUEST_FAILED', problem?.detail ?? `请求失败（${response.status}）`)
   }
   const url = URL.createObjectURL(await response.blob()); const anchor = document.createElement('a')
-  anchor.href = url; anchor.download = `产品SKU_${new Date().toISOString().slice(0, 10)}.xlsx`; anchor.click(); URL.revokeObjectURL(url)
+  anchor.href = url; anchor.download = `产品SKU_${beijingDate()}.xlsx`; anchor.click(); URL.revokeObjectURL(url)
 }
 
 type LegacyProductInput = { productCode: string; name: string; skuCodes: string[] }
@@ -324,11 +326,12 @@ export const domainApi = {
     return apiRequest<ProductDetailDto>(`/v1/products/${id}/disable`, { method: 'POST', body: JSON.stringify({ version: current.version }) })
   },
   batchUpdateSkus: (items: BatchVariantPatchInput[]) => apiRequest<ProductDetailDto[]>('/v1/products/skus/batch', { method: 'POST', body: JSON.stringify({ items }) }),
-  suppliers: async (filters: { q?: string; status?: SupplierStatus; page?: number; size?: number } = {}) => {
+  suppliers: async (filters: { q?: string; status?: SupplierStatus; category?: SupplierCategory; page?: number; size?: number } = {}) => {
     if (runtimeConfig.authMode === 'mock') return { items: [], totalCount: 0, page: 0, size: filters.size ?? 100 } as PageDto<SupplierDto>
     const search = new URLSearchParams()
     if (filters.q) search.set('q', filters.q)
     if (filters.status) search.set('status', filters.status)
+    if (filters.category) search.set('category', filters.category)
     search.set('page', String(filters.page ?? 0)); search.set('size', String(filters.size ?? 100))
     return apiRequest<PageDto<SupplierDto>>(`/v1/suppliers?${search}`)
   },

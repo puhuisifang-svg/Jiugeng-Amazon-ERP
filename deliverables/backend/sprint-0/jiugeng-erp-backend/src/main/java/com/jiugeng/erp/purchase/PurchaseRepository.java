@@ -16,10 +16,24 @@ class PurchaseRepository {
     private final JdbcClient jdbc;
     PurchaseRepository(JdbcClient jdbc) { this.jdbc = jdbc; }
 
+    List<String> deliveryOptions() {
+        return jdbc.sql("SELECT DISTINCT TRIM(delivery_address) AS name FROM purchase_order WHERE delivery_address IS NOT NULL AND TRIM(delivery_address) <> '' AND TRIM(delivery_address) NOT IN (SELECT name FROM purchase_delivery_hidden) ORDER BY name").query(String.class).list();
+    }
+    void hideDeliveryOption(String name) {
+        jdbc.sql("INSERT INTO purchase_delivery_hidden (name) SELECT :name WHERE NOT EXISTS (SELECT 1 FROM purchase_delivery_hidden WHERE name=:name)").param("name",name).update();
+    }
+
     SupplierRef activeSupplier(String id) {
         return jdbc.sql("SELECT id,name FROM supplier WHERE id=:id AND status='ACTIVE'").param("id", id)
                 .query((rs, row) -> new SupplierRef(rs.getString("id"), rs.getString("name"))).optional()
                 .orElseThrow(() -> new PurchaseException(409, "ACTIVE_SUPPLIER_REQUIRED", "采购单必须选择启用供应商"));
+    }
+
+    void requireSupplierCategory(String id,OrderType type) {
+        if(type==OrderType.MANUAL)return;
+        if(jdbc.sql("SELECT COUNT(*) FROM supplier WHERE id=:id AND categories LIKE :category")
+            .param("id",id).param("category","%"+type.name()+"%").query(Integer.class).single()==0)
+            throw new PurchaseException(409,"SUPPLIER_CATEGORY_MISMATCH","供应商分类不匹配，请先在供应商管理维护对应的产品或辅料分类");
     }
 
     ItemRef activeItem(OrderType type, String supplierId, String id) { return item(type,supplierId,id,false); }
@@ -43,6 +57,7 @@ class PurchaseRepository {
 
     List<ReferenceItem> referenceItems(OrderType type, String supplierId) {
         activeSupplier(supplierId);
+        requireSupplierCategory(supplierId,type);
         String sql = type == OrderType.PRODUCT ? """
                 SELECT v.id,v.sku_code AS code,v.variant_name AS name,'套' AS unit,v.main_image_asset_id AS image_asset_id,v.main_image_url AS image_url,
                        CASE WHEN link.primary_slot='PRIMARY' THEN TRUE ELSE FALSE END AS primary_supplier
@@ -92,11 +107,11 @@ class PurchaseRepository {
     void replaceLines(String orderId, List<ResolvedLine> lines) {
         jdbc.sql("DELETE FROM purchase_order_line WHERE order_id=:id").param("id", orderId).update();
         for (ResolvedLine line : lines) jdbc.sql("""
-                INSERT INTO purchase_order_line (id,order_id,line_no,item_id,item_code,item_name,unit,ordered_quantity,unit_price,specification,image_asset_id,tax_included,tax_rate)
-                VALUES (:id,:orderId,:lineNo,:itemId,:code,:name,:unit,:quantity,:price,:spec,:image,:taxIncluded,:taxRate)
+                INSERT INTO purchase_order_line (id,order_id,line_no,item_id,item_code,item_name,unit,ordered_quantity,unit_price,specification,image_asset_id,tax_included,tax_rate,package_count)
+                VALUES (:id,:orderId,:lineNo,:itemId,:code,:name,:unit,:quantity,:price,:spec,:image,:taxIncluded,:taxRate,:packageCount)
                 """).param("id", line.id()).param("orderId", orderId).param("lineNo", line.lineNo())
                 .param("itemId", line.item().id()).param("code", line.item().code()).param("name", line.item().name())
-                .param("unit", line.item().unit()).param("quantity", line.quantity()).param("price", line.unitPrice()).param("spec",line.specification()).param("image",line.imageAssetId()).param("taxIncluded",line.taxIncluded()).param("taxRate",line.taxRate()).update();
+                .param("unit", line.item().unit()).param("quantity", line.quantity()).param("price", line.unitPrice()).param("spec",line.specification()).param("image",line.imageAssetId()).param("taxIncluded",line.taxIncluded()).param("taxRate",line.taxRate()).param("packageCount",line.packageCount()).update();
     }
 
     int updateDraft(String id, OrderInput input, String actorId, long version) {
@@ -163,7 +178,7 @@ class PurchaseRepository {
                     BigDecimal received = rs.getBigDecimal("received_quantity");
                     return new LineView(rs.getString("id"), rs.getInt("line_no"), rs.getString("item_id"),
                             rs.getString("item_code"), rs.getString("item_name"), rs.getString("unit"), ordered,
-                            received, ordered.subtract(received), rs.getBigDecimal("unit_price"),rs.getString("resolved_image_asset_id"),rs.getString("image_url"),rs.getString("specification"),rs.getBoolean("tax_included"),rs.getBigDecimal("tax_rate"));
+                            received, ordered.subtract(received), rs.getBigDecimal("unit_price"),rs.getString("resolved_image_asset_id"),rs.getString("image_url"),rs.getString("specification"),rs.getBoolean("tax_included"),rs.getBigDecimal("tax_rate"),(Integer)rs.getObject("package_count"));
                 }).list();
     }
 
@@ -250,7 +265,7 @@ class PurchaseRepository {
 
     record SupplierRef(String id, String name) {}
     record ItemRef(String id, String code, String name, String unit) {}
-    record ResolvedLine(String id, int lineNo, ItemRef item, BigDecimal quantity, BigDecimal unitPrice, String specification, String imageAssetId, boolean taxIncluded, BigDecimal taxRate) {}
+    record ResolvedLine(String id, int lineNo, ItemRef item, BigDecimal quantity, BigDecimal unitPrice, String specification, String imageAssetId, boolean taxIncluded, BigDecimal taxRate, Integer packageCount) {}
     record ReceiptStored(String id, String orderId, String payloadHash) {}
     record ReceiptHead(String id,String orderId,String orderNo,String requestId,Instant receivedAt,String remark,
                        String actorLoginName,Instant createdAt) {}

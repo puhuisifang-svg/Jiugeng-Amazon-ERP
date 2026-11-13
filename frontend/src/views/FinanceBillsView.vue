@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime, beijingDate } from '@/utils/dateTime'
+
+
 import { vSingleSelect } from '@/directives/singleSelect'
 import FinanceAccountsManager from '@/components/FinanceAccountsManager.vue'
 import DatePicker from '@/components/DatePicker.vue'
@@ -14,7 +17,7 @@ import ListPagination from '@/components/ListPagination.vue'
 import SuccessToast from '@/components/SuccessToast.vue'
 import UnsavedChangesDialog from '@/components/UnsavedChangesDialog.vue'
 const dateString=(d:Date)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-const now=new Date(),today=dateString(now),monthStart=`${today.slice(0,7)}-01`
+const today=beijingDate(),monthStart=`${today.slice(0,7)}-01`
 const filter=reactive<BillFilter>({shopId:'',from:monthStart,to:today,direction:'',q:'',voided:'false'}),applied=ref<BillFilter>({...filter})
 const shops=ref<FinanceShop[]>([]),result=ref<BillPage>({items:[],totalCount:0,totals:[],accounts:[],months:[]}),page=ref(1),size=ref(20),tab=ref('bills'),loading=ref(false),busy=ref(false),error=ref(''),success=ref('')
 const writable=computed(()=>session.canAccess(['finance.write']))
@@ -26,7 +29,7 @@ let sequence=0
 async function load(){if(!applied.value.shopId){result.value={items:[],totalCount:0,totals:[],accounts:[],months:[]};return}const seq=++sequence;loading.value=true;error.value='';try{const r=await financeApi.list(applied.value,page.value-1,size.value);if(seq===sequence){result.value=r;if(page.value>1&&!r.items.length){page.value--;await load()}}}catch(e){if(seq===sequence)error.value=message(e)}finally{if(seq===sequence)loading.value=false}}
 async function loadShops(){shops.value=await financeApi.shops();if(!filter.shopId&&shops.value.length){filter.shopId=shops.value[0]!.id;applied.value={...filter}}}
 function search(){if(!filter.from||!filter.to||filter.from>filter.to){error.value='请选择有效日期范围';return}applied.value={...filter};result.value={items:[],totalCount:0,totals:[],accounts:[],months:[]};page.value=1;void load()}
-function previousMonth(){const current=new Date();filter.from=dateString(new Date(current.getFullYear(),current.getMonth()-1,1));filter.to=dateString(new Date(current.getFullYear(),current.getMonth(),0));search()}
+function previousMonth(){const current=new Date(beijingDate()+'T12:00:00');filter.from=dateString(new Date(current.getFullYear(),current.getMonth()-1,1));filter.to=dateString(new Date(current.getFullYear(),current.getMonth(),0));search()}
 function period(year=false){filter.from=year?`${today.slice(0,4)}-01-01`:monthStart;filter.to=today;search()}
 function changePage(v:number){if(v===page.value)return;page.value=v;void load()}
 function changeSize(v:number){size.value=v;page.value=1;void load()}
@@ -630,7 +633,7 @@ onBeforeUnmount(()=>{++sequence;window.removeEventListener('beforeunload',before
                 v-for="(h,i) in history"
                 :key="i"
               >
-                <strong>{{ actions[h.action]??'账单变更' }}</strong><span class="muted">{{ h.actor }} · {{ new Date(h.time).toLocaleString('zh-CN', { hour12: false }) }}</span><p>{{ changes(h) }}</p>
+                <strong>{{ actions[h.action]??'账单变更' }}</strong><span class="muted">{{ h.actor }} · {{ beijingDateTime(h.time) }}</span><p>{{ changes(h) }}</p>
               </li>
             </ol>
           </template>

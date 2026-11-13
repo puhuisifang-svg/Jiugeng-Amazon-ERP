@@ -53,7 +53,7 @@ public final class LaunchRules {
             c=c.add(number(row.path("amount"),"费用",false).multiply(rate));
         }
         require(categories.containsAll(List.of("采购","包装","头程","履约","其他")),"采购、包装、头程、履约、其他费用均须明确");
-        require(!text(d,"rateDate").isBlank()&&!date(text(d,"rateDate")).isAfter(LocalDate.now()),"汇率日期必须有效且不晚于今天");
+        require(!text(d,"rateDate").isBlank()&&!date(text(d,"rateDate")).isAfter(LocalDate.now(java.time.ZoneId.of("Asia/Shanghai"))),"汇率日期必须有效且不晚于今天");
         require(!text(d,"costBasis").isBlank(),"费率与试算依据必填");
         BigDecimal r=BigDecimal.ZERO;
         for(String name:List.of("commission","advertising","loss")){BigDecimal v=number(d.path(name),name,false);require(v.compareTo(BigDecimal.ONE)<=0,"费率应为0到1的小数");r=r.add(v);}
@@ -75,8 +75,8 @@ public final class LaunchRules {
                 for(String f:List.of("market","scope","method","evidence","reason","investigator","date"))if(text(r,f).isBlank())issues.add(label(type)+"调查缺少"+label(f));
                 if(!text(r,"market").equals(text(d,"market")))issues.add("调查市场与目标市场不一致："+label(type));
                 if(text(r,"conclusion").equals("LICENSED")&&(text(r,"licenseScope").isBlank()||text(r,"expires").isBlank()))issues.add("授权须有范围和期限");
-                if(!text(r,"expires").isBlank()&&date(text(r,"expires")).isBefore(LocalDate.now()))issues.add("授权已过期");
-                if(!text(r,"date").isBlank()&&date(text(r,"date")).isAfter(LocalDate.now()))issues.add("调查日期不能在未来");
+                if(!text(r,"expires").isBlank()&&date(text(r,"expires")).isBefore(LocalDate.now(java.time.ZoneId.of("Asia/Shanghai"))))issues.add("授权已过期");
+                if(!text(r,"date").isBlank()&&date(text(r,"date")).isAfter(LocalDate.now(java.time.ZoneId.of("Asia/Shanghai"))))issues.add("调查日期不能在未来");
             }
         }return issues;
     }

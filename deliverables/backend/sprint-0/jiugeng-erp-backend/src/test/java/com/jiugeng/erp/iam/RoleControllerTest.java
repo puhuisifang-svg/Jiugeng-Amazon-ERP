@@ -70,6 +70,24 @@ class RoleControllerTest {
         mvc.perform(post("/api/v1/users/"+userId+"/enable").header("Authorization",admin)).andExpect(status().isOk());
         login("rbac-user");
     }
+    @Test void pdfToolPermissionCanBeGrantedAndRevokedIndependently() throws Exception {
+        assertThat(PermissionCatalog.ALL.stream().filter(p->p.code().equals("tools.pdf.use")).findFirst().orElseThrow().assignable()).isTrue();
+        mvc.perform(get("/api/v1/auth/me").header("Authorization",admin)).andExpect(status().isOk())
+            .andExpect(jsonPath("$.capabilities[?(@ == 'tools.pdf.use')]").isNotEmpty());
+        var role=save(create("PDF工具测试"),List.of("products.read"));
+        assign(role.path("id").asText());
+        String token=login("rbac-user");
+        mvc.perform(get("/api/v1/auth/me").header("Authorization",token)).andExpect(status().isOk())
+            .andExpect(jsonPath("$.capabilities[?(@ == 'tools.pdf.use')]").isEmpty());
+        role=save(role,List.of("products.read","tools.pdf.use"));
+        token=login("rbac-user");
+        mvc.perform(get("/api/v1/auth/me").header("Authorization",token)).andExpect(status().isOk())
+            .andExpect(jsonPath("$.capabilities[?(@ == 'tools.pdf.use')]").isNotEmpty());
+        save(role,List.of("products.read"));
+        token=login("rbac-user");
+        mvc.perform(get("/api/v1/auth/me").header("Authorization",token)).andExpect(status().isOk())
+            .andExpect(jsonPath("$.capabilities[?(@ == 'tools.pdf.use')]").isEmpty());
+    }
     @Test void selfAuditRequiresExplicitRoleGrantAndCanBeRevoked() throws Exception {
         assertThat(PermissionCatalog.ALL.stream().filter(p->p.code().equals("audit.read.self")).findFirst().orElseThrow().assignable()).isTrue();
         var role=save(create("审计权限测试"),List.of("products.read"));
@@ -141,7 +159,7 @@ class RoleControllerTest {
             if(expected.contains("costs.write")) expected.add("costs.delete");
             if(expected.contains("finance.write")) expected.addAll(List.of("finance.void","finance.attachment.remove"));
             if(expected.contains("finance.read")) expected.add("finance.export");
-            if(role==IamTypes.Role.ADMIN) expected.addAll(List.of("forwarders.read","forwarders.write","forwarders.export","forwarders.delete","selection.review","development.review","factory.employees.read","factory.employees.write","factory.rates.read","factory.rates.write","factory.reports.read","factory.reports.write","factory.reports.review","factory.payroll.read","factory.payroll.write","factory.payroll.lock","factory.payroll.correct","factory.payroll.pay","factory.payroll.export","factory.expenses.read","factory.expenses.write","factory.expenses.remove"));
+            if(role==IamTypes.Role.ADMIN) expected.addAll(List.of("tools.pdf.use","forwarders.read","forwarders.write","forwarders.export","forwarders.delete","selection.review","development.review","factory.employees.read","factory.employees.write","factory.rates.read","factory.rates.write","factory.reports.read","factory.reports.write","factory.reports.review","factory.payroll.read","factory.payroll.write","factory.payroll.lock","factory.payroll.correct","factory.payroll.pay","factory.payroll.export","factory.expenses.read","factory.expenses.write","factory.expenses.remove"));
             assertThat(actual).as(role.name()).isEqualTo(expected);
         }
     }

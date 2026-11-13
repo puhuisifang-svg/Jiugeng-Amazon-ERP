@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+
+
 import SingleFileUpload from '@/components/SingleFileUpload.vue'
 import {ref,onMounted} from 'vue'
 import {apiRequest,getSessionToken} from '@/api/client'
@@ -33,7 +36,7 @@ onMounted(load)
           @click="download(f.id,f.name)"
         >
           {{ f.name }}
-        </button><small>{{ new Date(f.time).toLocaleString() }}</small>
+        </button><small>{{ beijingDateTime(f.time) }}</small>
       </li>
     </ul><SingleFileUpload
       v-if="writable"

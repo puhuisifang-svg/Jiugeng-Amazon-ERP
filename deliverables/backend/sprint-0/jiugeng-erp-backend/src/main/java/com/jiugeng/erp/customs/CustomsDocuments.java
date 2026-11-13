@@ -32,7 +32,7 @@ public class CustomsDocuments {
  private Map<String,String> clean(Map<String,String> values,Set<String> allowed){require(values!=null,"缺少表单资料");Map<String,String> result=new LinkedHashMap<>();for(String k:allowed){String v=text(values.get(k));require(v.length()<=((k.equals("declarationElements")||k.equals("elementFields"))?16000:k.equals("other")?8000:4000),"字段过长："+k);require(v.chars().noneMatch(c->Character.isISOControl(c)&&c!='\n'&&c!='\r'&&c!='\t'),"字段含无效字符");result.put(k,v);}return result;}
  Input validate(Input in){
   String no=text(in.documentNo());require(no.length()<=128,"请填写单据编号（最多128字）");require(Set.of("DRAFT","READY").contains(text(in.status())),"单据状态无效");
-  Map<String,String> f=clean(in.fields(),HEADERS);require(in.items()!=null&&in.items().size()<=100,"每票最多100项商品");
+  Map<String,String> f=clean(in.fields(),HEADERS);require(com.jiugeng.erp.ChinaPhone.contact(f.get("sellerPhone")),com.jiugeng.erp.ChinaPhone.MESSAGE);require(in.items()!=null&&in.items().size()<=100,"每票最多100项商品");
   for(String key:List.of("date","exportDate","declarationDate"))if(!f.get(key).isBlank())try{LocalDate d=LocalDate.parse(f.get(key));require(d.getYear()>=2000&&d.getYear()<=2100,"日期范围为2000至2100年");}catch(java.time.format.DateTimeParseException e){require(false,"日期格式不正确");}
   if("2".equals(f.get("ruleVersion"))){
    String prefix=f.get("sellerPrefix").toUpperCase(Locale.ROOT),fba=f.get("fbaNo").toUpperCase(Locale.ROOT);f.put("sellerPrefix",prefix);f.put("fbaNo",fba);

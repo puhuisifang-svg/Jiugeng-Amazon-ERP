@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+
+
 import { vSingleSelect } from '@/directives/singleSelect'
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
@@ -726,7 +729,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
                   v-for="event in history"
                   :key="event.id"
                 >
-                  <div><strong>{{ actions[event.action] ?? '其他操作' }}</strong><time>{{ event.occurredAt }}</time></div><p>{{ event.detail || '—' }}</p><small>操作人：{{ event.actorDisplayName }}</small>
+                  <div><strong>{{ actions[event.action] ?? '其他操作' }}</strong><time>{{ beijingDateTime(event.occurredAt) }}</time></div><p>{{ event.detail || '—' }}</p><small>操作人：{{ event.actorDisplayName }}</small>
                 </li>
               </ol><div
                 v-else

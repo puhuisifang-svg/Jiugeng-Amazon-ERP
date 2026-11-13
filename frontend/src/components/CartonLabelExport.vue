@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+
+
 import { createRequestId } from '@/utils/requestId'
 
 import { vSingleSelect } from '@/directives/singleSelect'
@@ -187,7 +190,7 @@ onBeforeUnmount(clearPreview)
               type="button"
               @click="download(item)"
             >
-              {{ new Date(item.createdAt).toLocaleString() }} · 整批 {{ item.pages }} 页 · 下载
+              {{ beijingDateTime(item.createdAt) }} · 整批 {{ item.pages }} 页 · 下载
             </button>
           </details>
         </article>

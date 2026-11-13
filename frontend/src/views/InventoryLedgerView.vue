@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+
 import { vSingleSelect } from '@/directives/singleSelect'
 import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, reactive, ref, watch } from 'vue'
@@ -119,7 +121,7 @@ onMounted(load)
           <table class="data-table inventory-ledger-table">
             <thead>
               <tr>
-                <th>时间</th><th>辅料</th><th>类型</th><th>变动</th><th>结存</th><th>原因</th><th>操作人</th><th v-if="writable">
+                <th>时间（北京时间）</th><th>辅料</th><th>类型</th><th>变动</th><th>结存</th><th>原因</th><th>操作人</th><th v-if="writable">
                   操作
                 </th>
               </tr>
@@ -128,7 +130,9 @@ onMounted(load)
                 v-for="item in pageEntries"
                 :key="item.id"
               >
-                <td>{{ item.occurredAt }}</td><td>{{ item.materialCode }}</td><td>{{ inventoryTransactionTypeLabel(item.type) }}</td><td>{{ item.signedQuantity ?? item.quantity }}</td><td>{{ item.balanceAfter ?? '—' }}</td><td>{{ item.reason }}</td><td>{{ item.actorLoginName ?? '—' }}</td><td v-if="writable">
+                <td class="ledger-time">
+                  {{ beijingDateTime(item.occurredAt) }}
+                </td><td>{{ item.materialCode }}</td><td>{{ inventoryTransactionTypeLabel(item.type) }}</td><td>{{ item.signedQuantity ?? item.quantity }}</td><td>{{ item.balanceAfter ?? '—' }}</td><td>{{ item.reason }}</td><td>{{ item.actorLoginName ?? '—' }}</td><td v-if="writable">
                   <button
                     v-if="item.type !== 'REVERSAL'"
                     :disabled="busy === item.id || isReversed(item)"
@@ -212,3 +216,7 @@ onMounted(load)
     </div>
   </section>
 </template>
+
+<style scoped>
+.ledger-time { white-space: nowrap; font-variant-numeric: tabular-nums; }
+</style>

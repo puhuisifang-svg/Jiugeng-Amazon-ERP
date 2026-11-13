@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+
+
 import SingleFileUpload from '@/components/SingleFileUpload.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
@@ -90,7 +93,7 @@ onMounted(load)
               <td class="document-name">
                 {{ file.fileName }}
               </td><td>{{ Math.max(1, Math.ceil(file.byteSize / 1024)) }} KB</td>
-              <td>{{ new Date(file.uploadedAt).toLocaleString('zh-CN') }}</td>
+              <td>{{ beijingDateTime(file.uploadedAt) }}</td>
               <td>
                 <button
                   type="button"

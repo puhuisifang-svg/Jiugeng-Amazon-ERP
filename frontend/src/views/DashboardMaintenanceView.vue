@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime, beijingDate, beijingDateTimeInput } from '@/utils/dateTime'
+
+
 import { createRequestId } from '@/utils/requestId'
 
 import OrderShipmentDialog from '@/components/OrderShipmentDialog.vue'
@@ -115,8 +118,8 @@ const title = computed(() => props.kind === 'today-shipments' ? '今日发货管
 const activeStatus = computed(() => props.kind === 'today-shipments' ? 'ACTIVE' : 'PENDING')
 const dateLabel = computed(() => props.kind === 'today-shipments' ? '发货日期' : '计划发货日期')
 const remarkModel = computed({ get: () => isProduct.value ? pendingProduct.remark : shipment.remark, set: value => { if (isProduct.value) pendingProduct.remark = value ?? ''; else shipment.remark = value ?? '' } })
-function localDateTime(value: string) { return value ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '—' }
-function localDate(value: string) { return value ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date(value)) : '—' }
+function localDateTime(value: string) { return value ? beijingDateTime(value) : '—' }
+function localDate(value: string) { return value ? beijingDate(value) : '—' }
 function historyChanges(event: DashboardHistoryEvent) {
   function snapshot(value: unknown): Record<string, unknown> {
     if (typeof value === 'string') { try { return JSON.parse(value) as Record<string, unknown> } catch { return {} } }
@@ -148,10 +151,10 @@ function reset() {
 }
 function edit(item: DashboardItem) {
   formOpen.value = true
-  if ('latestShipAt' in item) latestShipDate.value = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date(item.latestShipAt))
+  if ('latestShipAt' in item) latestShipDate.value = beijingDate(item.latestShipAt)
   editing.value = item; imageId.value = item.imageId ?? ''; imageFile.value = undefined; previewUrl.value = ''; error.value = ''; success.value = ''
   if ('expectedQuantity' in item) Object.assign(pendingProduct, { productName: item.productName, expectedQuantity: item.expectedQuantity, remark: item.remark ?? '', expectedCompletionDate: item.expectedCompletionDate })
-  else Object.assign(shipment, { date: 'shipDate' in item ? item.shipDate : item.plannedShipDate, productId: item.productId, variantId: item.variantId ?? '', customerProductId: item.customerProduct?.id ?? '', quantity: item.quantity, boxCount: item.boxCount, remark: item.remark ?? '', latestShipTime: item.latestShipAt.slice(0, 16) })
+  else Object.assign(shipment, { date: 'shipDate' in item ? item.shipDate : item.plannedShipDate, productId: item.productId, variantId: item.variantId ?? '', customerProductId: item.customerProduct?.id ?? '', quantity: item.quantity, boxCount: item.boxCount, remark: item.remark ?? '', latestShipTime: beijingDateTimeInput(item.latestShipAt).slice(0, 16) })
   initialForm.value = formSnapshot()
 }
 async function load() {
@@ -194,7 +197,7 @@ async function save() {
       else await dashboardApi.createPendingProduct(input)
     } else {
       if (editing.value ? !shipment.variantId || !shipment.customerProductId : !shipmentLines.value.length) { error.value = '请选择客户商品；历史记录需补选后保存。'; return }
-      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date())
+      const today = beijingDate()
       const shipDate = editing.value && 'shipDate' in editing.value ? editing.value.shipDate : today
       const input = { ...shipment, ...(props.kind === 'today-shipments' ? { date: shipDate, latestShipTime: `${shipDate}T23:59` } : { latestShipTime: `${latestShipDate.value}T23:59` }), imageId: uploadedId, remark: shipment.remark?.trim() || undefined }
       if (editing.value) await dashboardApi.updateShipment(props.kind as Exclude<DashboardKind, 'pending-products'>, editing.value.id, input, editing.value.version, correctionReason.value.trim() || undefined)
@@ -241,7 +244,7 @@ async function transfer(item: PendingShipment, confirmed = false) {
   if (saving.value) return
   if (!item.variantId || !item.customerProduct) { validationToastKey.value++; validationToast.value = '该历史记录尚未绑定客户商品，请先编辑补选。'; return }
   if (!confirmed) { todayTransferTarget.value = item; error.value = ''; return }
-  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date())
+  const today = beijingDate()
   const latestShipTime = `${today}T23:59`
   saving.value = true; success.value = ''; error.value = ''
   try { await dashboardApi.transferToToday(item.id, { quantity: item.quantity, boxCount: item.boxCount, remark: item.remark, latestShipTime, imageId: item.imageId, version: item.version }); todayTransferTarget.value = undefined; success.value = '已转入今日发货。'; await load() }
@@ -485,7 +488,7 @@ onMounted(async () => {
                   <label
                     v-if="kind === 'today-shipments'"
                     class="shipping-date-readonly"
-                  >发货日期<span>{{ shipment.date || new Date().toLocaleDateString('zh-CN',{timeZone:'Asia/Shanghai'}) }} · {{ editing ? '原安排日期' : '按今日安排' }}</span></label>
+                  >发货日期<span>{{ shipment.date || beijingDate() }} · {{ editing ? '原安排日期' : '按今日安排' }}</span></label>
                   <label v-if="kind !== 'today-shipments'">{{ dateLabel }}<DatePicker
                     v-model="shipment.date"
                     :disabled="saving || batchStarted"

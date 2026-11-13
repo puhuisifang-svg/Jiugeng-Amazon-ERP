@@ -19,6 +19,9 @@
     "quality": "pnpm run lint && pnpm run test && pnpm run build"
   },
   "dependencies": {
+    "jszip": "^3.10.2",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.5.438",
     "vue": "3.5.42",
     "vue-router": "5.3.1"
   },

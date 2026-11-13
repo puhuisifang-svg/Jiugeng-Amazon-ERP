@@ -32,6 +32,7 @@ class CustomerInvoiceTitles {
             && legacy.registeredPhone().isBlank() && legacy.bankName().isBlank() && legacy.bankAccount().isBlank() ? List.of() : List.of(legacy);
     }
     static String encode(List<InvoiceTitle> entries) {
+        for(var entry:entries)if(!com.jiugeng.erp.ChinaPhone.contact(entry.registeredPhone()))throw new CustomerException(400,"PHONE_INVALID",com.jiugeng.erp.ChinaPhone.MESSAGE);
         var normalized=entries.stream().map(t->new InvoiceTitle(clean(t.invoiceTitle()),clean(t.taxNumber()),
             clean(t.registeredAddress()),clean(t.registeredPhone()),clean(t.bankName()),clean(t.bankAccount()))).toList();
         var keys=new HashSet<List<String>>();

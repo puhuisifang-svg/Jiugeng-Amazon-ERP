@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+
+
 import { vSingleSelect } from '@/directives/singleSelect'
 import { computed, onMounted, ref } from 'vue'
 import { apiRequest } from '@/api/client'
@@ -33,7 +36,7 @@ onMounted(load)
 <template>
   <details class="panel compact-panel">
     <summary>自动监控：{{ state === 'CONFIGURED' ? '来源已配置' : '亚马逊前台采集尚未启用' }} · 任务与站内通知</summary>
-    <p>美国站 · America/Los_Angeles · 每日调度。目标为亚马逊公开商品页及店铺页。采集尚未启用时仅登记监控对象，不会自动产生数据。</p>
+    <p>美国站 · 时间统一显示为北京时间，调度按已保存计划执行。目标为亚马逊公开商品页及店铺页。采集尚未启用时仅登记监控对象，不会自动产生数据。</p>
     <p
       v-if="error"
       role="alert"
@@ -76,7 +79,7 @@ onMounted(load)
         v-for="s in schedules.filter(s => s.kind === kind)"
         :key="s.id"
       >
-        {{ targets.find(t => t.id === s.targetId)?.label || '监控对象' }} · {{ s.provider }} · {{ s.sourceStatus === 'READY' ? '已接入' : '待接入' }} · {{ s.enabled ? '已启用' : '暂停' }} · 下次 {{ s.nextAt }} <button
+        {{ targets.find(t => t.id === s.targetId)?.label || '监控对象' }} · {{ s.provider }} · {{ s.sourceStatus === 'READY' ? '已接入' : '待接入' }} · {{ s.enabled ? '已启用' : '暂停' }} · 下次 {{ beijingDateTime(s.nextAt) }} <button
           v-if="s.enabled"
           :disabled="busy"
           @click="configure(false, s)"
@@ -100,7 +103,7 @@ onMounted(load)
       v-for="n in notices"
       :key="n.id"
     >
-      {{ n.createdAt }} · {{ n.message }} <button
+      {{ beijingDateTime(n.createdAt) }} · {{ n.message }} <button
         v-if="!n.isRead"
         @click="read(n.id)"
       >

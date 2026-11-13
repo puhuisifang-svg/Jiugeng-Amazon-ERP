@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+
+
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { vSingleSelect } from '@/directives/singleSelect'
 import { session } from '@/state/session'
@@ -104,7 +107,7 @@ onMounted(load);onBeforeUnmount(()=>++sequence)
                   class="customs-status"
                   :class="r.status==='VOID'?'void':r.fileStatus==='COMPLETED'?'ready':'draft'"
                 >{{ r.status==='VOID'?labels.VOID:r.fileStatus==='COMPLETED'?'已完成':'文档待上传' }}</span>
-              </td><td>{{ new Date(r.updatedAt).toLocaleString('zh-CN',{hour12:false}) }}</td><td class="customs-doc-actions">
+              </td><td>{{ beijingDateTime(r.updatedAt) }}</td><td class="customs-doc-actions">
                 <button
                   type="button"
                   :disabled="busy"

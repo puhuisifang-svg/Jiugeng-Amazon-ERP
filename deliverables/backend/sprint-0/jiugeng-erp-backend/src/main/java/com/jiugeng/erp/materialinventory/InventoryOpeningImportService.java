@@ -171,7 +171,7 @@ class InventoryOpeningImportService implements InventoryOpeningImportGateway {
     private void date(List<Error> errors, ImportRow row, String raw) {
         try {
             LocalDate value = LocalDate.parse(raw);
-            if (value.isAfter(LocalDate.now())) throw new DateTimeParseException("future", raw, 0);
+            if (value.isAfter(LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")))) throw new DateTimeParseException("future", raw, 0);
         } catch (DateTimeParseException exception) {
             errors.add(error(row, "as_of_date", "OPENING_DATE_INVALID", "期初日期必须为 ISO 日期且不得晚于今天", raw));
         }

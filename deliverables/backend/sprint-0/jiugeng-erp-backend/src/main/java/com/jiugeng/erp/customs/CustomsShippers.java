@@ -20,6 +20,7 @@ class CustomsShippers {
  @PostMapping @PreAuthorize("hasAuthority('products.write')")
  Shipper add(@RequestBody Shipper in,@AuthenticationPrincipal AuthenticatedActor actor){
   String name=clean(in.name(),300),prefix=clean(in.prefix(),20).toUpperCase(Locale.ROOT),address=clean(in.address(),1000),phone=clean(in.phone(),100),fax=clean(in.fax(),100);
+  CustomsDocuments.require(com.jiugeng.erp.ChinaPhone.contact(phone),com.jiugeng.erp.ChinaPhone.MESSAGE);
   CustomsDocuments.require(!name.isBlank(),"请填写公司名称");CustomsDocuments.require(prefix.matches("[A-Z]{1,20}"),"公司简称请填写1至20位英文字母，如XMH");
   String id=UUID.randomUUID().toString();jdbc.sql("INSERT INTO customs_shipper(id,name,prefix,address,phone,fax) VALUES(:id,:name,:prefix,:address,:phone,:fax)").param("id",id).param("name",name).param("prefix",prefix).param("address",address).param("phone",phone).param("fax",fax).update();
   audit.record(new AuditTrail.BusinessOperation(actor.userId(),actor.loginName(),actor.displayName(),"CUSTOMS_SHIPPER_CREATE","CUSTOMS_SHIPPER",id,true,null,Map.of("created",true),"新增报关发货人"));return new Shipper(id,name,prefix,address,phone,fax);
@@ -27,6 +28,7 @@ class CustomsShippers {
  @PutMapping("/{id}") @PreAuthorize("hasAuthority('products.write')")
  Shipper update(@PathVariable String id,@RequestBody Shipper in,@AuthenticationPrincipal AuthenticatedActor actor){
   String name=clean(in.name(),300),prefix=clean(in.prefix(),20).toUpperCase(Locale.ROOT),address=clean(in.address(),1000),phone=clean(in.phone(),100),fax=clean(in.fax(),100);
+  CustomsDocuments.require(com.jiugeng.erp.ChinaPhone.contact(phone),com.jiugeng.erp.ChinaPhone.MESSAGE);
   CustomsDocuments.require(!name.isBlank(),"请填写公司名称");CustomsDocuments.require(prefix.matches("[A-Z]{1,20}"),"公司简称请填写1至20位英文字母，如XMH");
   int changed=jdbc.sql("UPDATE customs_shipper SET name=:name,prefix=:prefix,address=:address,phone=:phone,fax=:fax WHERE id=:id").param("id",id).param("name",name).param("prefix",prefix).param("address",address).param("phone",phone).param("fax",fax).update();
   if(changed==0)throw new ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND,"发货人不存在，请刷新后重试");

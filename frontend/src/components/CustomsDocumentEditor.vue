@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { vPhone } from '@/directives/phone'
+import { beijingDate } from '@/utils/dateTime'
+
 import PurchaseItemImage from './PurchaseItemImage.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
@@ -15,7 +18,7 @@ import { brokerFields, shipmentDefaults, type DocumentField, customsSheetFields,
 import { confirmAction } from '@/state/uiConfirmation'
 const props=defineProps<{document?:CustomsDocument|undefined;copy?:boolean;writable:boolean;exportable:boolean}>()
 const emit=defineEmits<{close:[];saved:[CustomsDocument]}>()
-const source=props.document,localDate=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+const source=props.document,localDate=()=>beijingDate()
 const form=ref<CustomsInput>({documentNo:props.copy?'':source?.documentNo??'',status:props.copy?'DRAFT':source?.status==='READY'?'READY':'DRAFT',fields:source?{...source.fields}:{date:localDate()},items:source?source.items.map(r=>({...r})):[],version:props.copy?undefined:source?.version})
 const autoFreight=!source||!!props.copy
 const savedId=ref(props.copy?undefined:source?.id),initial=ref(JSON.stringify(form.value)),tab=ref('declaration'),busy=ref(false),error=ref(''),notice=ref(''),dialog=ref<InstanceType<typeof AccessDialog>>()
@@ -236,7 +239,7 @@ onBeforeRouteLeave(()=>{if(busy.value)return false;if(itemDirty.value){itemDialo
   </AccessDialog>
   <CustomsWarehouseManager v-if="warehouseManager" :writable="!readOnly" :initial-code="form.fields.warehouse ?? ''" @saved="warehouseSaved" @close="warehouseManager=false" />
   <AccessDialog v-if="shipperOpen" :title="shipperEditing?'编辑境内发货人':'新增境内发货人'" :busy="shipperBusy" :dirty="JSON.stringify(shipperDraft)!==shipperInitial" @close="shipperOpen=false">
-    <form id="customs-shipper-form" class="access-form" @submit.prevent="addShipper"><p v-if="shipperError" role="alert" class="access-danger">{{ shipperError }}</p><label>公司名称<input v-model.trim="shipperDraft.name" required maxlength="300"></label><label>公司简称<input v-model.trim="shipperDraft.prefix" required pattern="[A-Za-z]{1,20}" maxlength="20" placeholder="例如 XMH，用于生成合同协议号"></label><label>公司地址<input v-model.trim="shipperDraft.address" maxlength="1000"></label><label>联系电话<input v-model.trim="shipperDraft.phone" maxlength="100"></label><label>传真（选填）<input v-model.trim="shipperDraft.fax" maxlength="100"></label></form><template #footer><button form="customs-shipper-form" type="submit" class="ui-button-primary" :disabled="shipperBusy">{{ shipperBusy?'保存中…':shipperEditing?'保存修改':'保存并选择' }}</button></template>
+    <form id="customs-shipper-form" class="access-form" @submit.prevent="addShipper"><p v-if="shipperError" role="alert" class="access-danger">{{ shipperError }}</p><label>公司名称<input v-model.trim="shipperDraft.name" required maxlength="300"></label><label>公司简称<input v-model.trim="shipperDraft.prefix" required pattern="[A-Za-z]{1,20}" maxlength="20" placeholder="例如 XMH，用于生成合同协议号"></label><label>公司地址<input v-model.trim="shipperDraft.address" maxlength="1000"></label><label>联系电话<input v-model.trim="shipperDraft.phone" v-phone maxlength="100"></label><label>传真（选填）<input v-model.trim="shipperDraft.fax" maxlength="100"></label></form><template #footer><button form="customs-shipper-form" type="submit" class="ui-button-primary" :disabled="shipperBusy">{{ shipperBusy?'保存中…':shipperEditing?'保存修改':'保存并选择' }}</button></template>
   </AccessDialog>
   <AccessDialog
     v-if="item"

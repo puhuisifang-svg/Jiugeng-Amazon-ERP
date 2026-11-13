@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vPhone } from '@/directives/phone'
 import { vSingleSelect } from '@/directives/singleSelect'
 import ListPagination from '@/components/ListPagination.vue'
 const listSize = ref(20)
@@ -278,6 +279,7 @@ onMounted(load)
             :key="key"
           >{{ label }}{{ key === 'invoiceTitle' ? ' *' : '' }}<input
             v-model="form[key]"
+            v-phone="key === 'registeredPhone' ? 'contact' : false"
             readonly
             :required="key === 'invoiceTitle'"
             :maxlength="max"

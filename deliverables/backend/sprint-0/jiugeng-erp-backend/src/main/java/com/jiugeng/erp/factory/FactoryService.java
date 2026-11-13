@@ -84,7 +84,7 @@ class FactoryService {
         var before=existing("expenses",in);check(before==null||!str(before,"status").equals("ARCHIVED"),"开销已删除");var d=before==null?new LinkedHashMap<String,Object>():new LinkedHashMap<>(before);
         if(action.equals("remove")){check(before!=null,"请选择开销");d.put("status","ARCHIVED");return save("expenses",before,d,"EXPENSE_REMOVE",text(in,"reason",500,false),a);}
         check(action.equals("save"),"开销操作无效");
-        d.put("name",text(in,"name",100,true));d.put("date",date(str(in,"date")).toString());check(!date(str(d,"date")).isAfter(LocalDate.now()),"开销日期不能晚于今天");
+        d.put("name",text(in,"name",100,true));d.put("date",date(str(in,"date")).toString());check(!date(str(d,"date")).isAfter(LocalDate.now(java.time.ZoneId.of("Asia/Shanghai"))),"开销日期不能晚于今天");
         var amount=money(in.get("amount"));check(amount.signum()>0,"开销金额必须大于0");d.put("amount",amount);
         d.put("remark",text(in,"remark",500,false));
         String payerId=text(in,"payerId",36,false);
@@ -101,6 +101,7 @@ class FactoryService {
     Map<String,Object> employee(String action,Map<String,Object>in,AuthenticatedActor a){
         if(action.equals("remove")){var old=existing("employees",in);check(old!=null,"请选择员工");check(!str(old,"status").equals("ARCHIVED"),"员工已删除");var removed=new LinkedHashMap<>(old);removed.put("status","ARCHIVED");return save("employees",old,removed,"EMPLOYEE_REMOVE",text(in,"reason",500,false),a);}
         check(action.equals("save"),"员工操作无效");var before=existing("employees",in);var d=before==null?new LinkedHashMap<String,Object>():new LinkedHashMap<>(before);
+        check(com.jiugeng.erp.ChinaPhone.mobile(str(in,"phone")),"请填写有效的中国大陆手机号");
         for(String k:List.of("name","team","phone","remark"))d.put(k,text(in,k,k.equals("remark")?500:100,k.equals("name")));
         if(in.containsKey("bankName"))d.put("bankName",text(in,"bankName",100,false));
         if(in.containsKey("bankAccount")){String account=text(in,"bankAccount",40,false).replaceAll("\\s","");check(account.isEmpty()||account.matches("[0-9]{1,32}"),"银行卡号请填写不超过32位的数字");d.put("bankAccount",account);}
@@ -148,7 +149,7 @@ class FactoryService {
             return save("reports",before,d,"REPORT_"+action.toUpperCase(Locale.ROOT),reason,a);
         }
         check(before==null||Set.of("DRAFT","PENDING").contains(str(before,"status")),"已核对报工须先撤回，已作废不可修改");
-        String emp=text(in,"employeeId",64,true),day=date(str(in,"date")).toString();check(!date(day).isAfter(LocalDate.now()),"不能记录未来日期报工");editableMonth(emp,day);var e=get("employees",emp);check(!str(e,"status").equals("ARCHIVED")||(before!=null&&str(before,"employeeId").equals(emp)),"员工已删除，不能新增报工");check(day.compareTo(str(e,"date"))>=0&&(str(e,"endDate").isEmpty()||day.compareTo(str(e,"endDate"))<=0),"工作日期不在员工任职范围内");
+        String emp=text(in,"employeeId",64,true),day=date(str(in,"date")).toString();check(!date(day).isAfter(LocalDate.now(java.time.ZoneId.of("Asia/Shanghai"))),"不能记录未来日期报工");editableMonth(emp,day);var e=get("employees",emp);check(!str(e,"status").equals("ARCHIVED")||(before!=null&&str(before,"employeeId").equals(emp)),"员工已删除，不能新增报工");check(day.compareTo(str(e,"date"))>=0&&(str(e,"endDate").isEmpty()||day.compareTo(str(e,"endDate"))<=0),"工作日期不在员工任职范围内");
         String status=text(in,"status",20,true);check(Set.of("DRAFT","PENDING","REVIEWED").contains(status),"报工状态无效");if(status.equals("REVIEWED"))permission("factory.reports.review");
         var inputLines=rows(in,"lines");check(!inputLines.isEmpty(),"请添加至少一条加工明细");var lines=new ArrayList<Map<String,Object>>();BigDecimal total=BigDecimal.ZERO;Set<String> seen=new HashSet<>();boolean duplicate=false, incomplete=false;
         for(var input:inputLines){Map<String,Object> r;boolean priced=true;String rateId=text(input,"rateId",64,true);get("rates",rateId);try{r=match(rateId,emp,day);}catch(ResponseStatusException ex){if(!status.equals("DRAFT"))throw ex;r=get("rates",rateId);priced=false;incomplete=true;}String group=rateGroup(r);if(!seen.add(group))duplicate=true;
@@ -190,7 +191,7 @@ class FactoryService {
                 case "correct" -> {check(state.equals("LOCKED"),"只能更正已锁定工资");reason=text(in,"reason",500,true);d.put("status","CORRECTING");d.put("correctionReason",reason);}
                 case "pay" -> {
                     boolean advance=Boolean.TRUE.equals(in.get("advance"));check(state.equals("LOCKED")||(advance&&state.equals("DRAFT")),"普通发放须先锁定工资；更正期间不能发放");var amount=money(in.get("amount"));check(amount.signum()>0,"发放金额必须大于0");if(state.equals("LOCKED"))check(amount.compareTo(dec(d.get("amount")).subtract(payments(d)))<=0,"发放金额超过待发余额");
-                    String day=date(str(in,"paymentDate")).toString();check(!date(day).isAfter(LocalDate.now()),"发放日期不能晚于今天");String method=text(in,"method",30,true);check(Set.of("现金","银行","其他").contains(method),"发放方式无效");var items=new ArrayList<>(rows(d,"payments"));check(items.size()<200,"本工资单发放记录已达上限");items.add(new LinkedHashMap<>(Map.of("id",UUID.randomUUID().toString(),"amount",amount,"date",day,"method",method,"advance",advance,"actor",a.displayName(),"remark",text(in,"remark",500,false),"voided",false)));d.put("payments",items);
+                    String day=date(str(in,"paymentDate")).toString();check(!date(day).isAfter(LocalDate.now(java.time.ZoneId.of("Asia/Shanghai"))),"发放日期不能晚于今天");String method=text(in,"method",30,true);check(Set.of("现金","银行","其他").contains(method),"发放方式无效");var items=new ArrayList<>(rows(d,"payments"));check(items.size()<200,"本工资单发放记录已达上限");items.add(new LinkedHashMap<>(Map.of("id",UUID.randomUUID().toString(),"amount",amount,"date",day,"method",method,"advance",advance,"actor",a.displayName(),"remark",text(in,"remark",500,false),"voided",false)));d.put("payments",items);
                 }
                 case "voidPayment" -> {reason=text(in,"reason",500,true);String id=text(in,"paymentId",64,true);var items=new ArrayList<Map<String,Object>>();boolean found=false;for(var pay:rows(d,"payments")){var copy=new LinkedHashMap<>(pay);if(str(copy,"id").equals(id)){check(!Boolean.TRUE.equals(copy.get("voided")),"该记录已作废");copy.put("voided",true);copy.put("voidReason",reason);copy.put("voidedBy",a.displayName());found=true;}items.add(copy);}check(found,"发放记录不存在");d.put("payments",items);}
                 default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"工资操作无效");

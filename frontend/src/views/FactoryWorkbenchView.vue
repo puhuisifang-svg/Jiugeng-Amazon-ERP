@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+
+
 import { createRequestId } from '@/utils/requestId'
 
 import {computed,ref,watch} from 'vue'
@@ -240,7 +243,7 @@ function print(){window.print()}
                   class="factory-badge"
                   :data-status="r.status"
                 >{{ factoryStates[r.status] }}</span>
-              </td><td>{{ r.updatedBy }}<small>{{ r.updatedAt?new Date(r.updatedAt).toLocaleString():'' }}</small></td>
+              </td><td>{{ r.updatedBy }}<small>{{ r.updatedAt?beijingDateTime(r.updatedAt):'' }}</small></td>
             </template>
             <template v-else>
               <td><strong>{{ r.employeeName }}</strong><small>{{ r.date }} · {{ r.number }}</small></td><td>{{ r.team||'—' }}</td><td>{{ r.bankName||'未填写' }}</td><td class="factory-bank-account">
@@ -386,7 +389,7 @@ function print(){window.print()}
                     v-for="h in history"
                     :key="h.id"
                   >
-                    <td>{{ new Date(h.time).toLocaleString() }}<small>{{ h.actor }}</small></td><td>{{ factoryActions[h.action]||h.action }}</td><td>{{ h.reason||'—' }}</td><td>
+                    <td>{{ beijingDateTime(h.time) }}<small>{{ h.actor }}</small></td><td>{{ factoryActions[h.action]||h.action }}</td><td>{{ h.reason||'—' }}</td><td>
                       <button
                         class="factory-link"
                         @click="snapshot=h.after"

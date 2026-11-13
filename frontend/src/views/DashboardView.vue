@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime, beijingDate } from '@/utils/dateTime'
+
+
 import DashboardPurchaseReceipts from '@/components/DashboardPurchaseReceipts.vue'
 import { createRequestId } from '@/utils/requestId'
 
@@ -86,7 +89,7 @@ async function confirmDispatch() {
 
 function number(value: number) { return new Intl.NumberFormat('zh-CN').format(value) }
 function shanghaiDateTime(value: string) {
-  return new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', dateStyle: 'short', timeStyle: 'short', hour12: false }).format(new Date(value))
+  return beijingDateTime(value)
 }
 function dateOf(item: DashboardItem) {
   if ('shipDate' in item) return item.shipDate
@@ -96,7 +99,7 @@ function dateOf(item: DashboardItem) {
 function quantityOf(item: DashboardItem) { return 'expectedQuantity' in item ? item.expectedQuantity : item.quantity }
 function isLate(item: DashboardItem, businessDate?: string) {
   if ('latestShipAt' in item && 'shipDate' in item) return Date.now() > new Date(item.latestShipAt).getTime()
-  return !!dateOf(item) && dateOf(item)! < (businessDate ?? new Date().toISOString().slice(0, 10))
+  return !!dateOf(item) && dateOf(item)! < (businessDate ?? beijingDate())
 }
 async function load(silent = false) {
   const sequence = ++loadSequence

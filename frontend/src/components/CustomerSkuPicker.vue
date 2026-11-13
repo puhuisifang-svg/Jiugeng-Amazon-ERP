@@ -4,7 +4,7 @@ import { domainApi, type SkuListItemDto } from '@/api/domain'
 import AccessDialog from './AccessDialog.vue'
 import ListPagination from './ListPagination.vue'
 import AuthenticatedCatalogImage from './AuthenticatedCatalogImage.vue'
-const props = withDefaults(defineProps<{ selectedId?: string; activeOnly?: boolean }>(), { activeOnly: true, selectedId: '' })
+const props = withDefaults(defineProps<{ selectedId?: string; activeOnly?: boolean; showCodes?: boolean }>(), { activeOnly: true, selectedId: '', showCodes: true })
 const emit = defineEmits<{ close: []; select: [sku: SkuListItemDto] }>()
 const query = ref(''), applied = ref(''), page = ref(1), size = ref(20), total = ref(0)
 const rows = ref<SkuListItemDto[]>([]), chosen = ref<SkuListItemDto>(), loading = ref(false), error = ref('')
@@ -38,7 +38,7 @@ onMounted(load)
         v-model="query"
         type="search"
         maxlength="128"
-        placeholder="SKU 编码、产品名称"
+        :placeholder="showCodes ? 'SKU 编码、产品名称' : '产品名称'"
         aria-label="筛选 SKU"
       ></label><button
         type="submit"
@@ -73,7 +73,7 @@ onMounted(load)
       class="sku-picker-table"
     >
       <table class="data-table">
-        <thead><tr><th>选择</th><th>图片</th><th>SKU 名称 / 编码</th><th>所属父体</th></tr></thead><tbody>
+        <thead><tr><th>选择</th><th>图片</th><th>{{ showCodes ? 'SKU 名称 / 编码' : 'SKU 名称' }}</th><th>所属父体</th></tr></thead><tbody>
           <tr
             v-for="row in rows"
             :key="row.variant.id"
@@ -84,7 +84,7 @@ onMounted(load)
                 type="radio"
                 name="customer-sku"
                 :checked="chosen?.variant.id === row.variant.id"
-                :aria-label="`选择 ${row.variant.skuCode}`"
+                :aria-label="`选择 ${showCodes ? row.variant.skuCode : row.variant.variantName}`"
                 @change="chosen = row"
               >
             </td><td>
@@ -99,7 +99,7 @@ onMounted(load)
                 :alt="row.variant.variantName"
                 referrerpolicy="no-referrer"
               >
-            </td><td>{{ row.variant.variantName }}<small>{{ row.variant.skuCode }}</small></td><td>{{ row.productName }}<small>{{ row.productCode }}</small></td>
+            </td><td>{{ row.variant.variantName }}<small v-if="showCodes">{{ row.variant.skuCode }}</small></td><td>{{ row.productName }}<small v-if="showCodes">{{ row.productCode }}</small></td>
           </tr>
           <tr v-if="!rows.length">
             <td colspan="4">
@@ -118,7 +118,7 @@ onMounted(load)
         @update:page="page = $event; load()"
         @update:page-size="resize"
       /><div class="sku-picker-footer ui-dialog-actions">
-        <span>{{ chosen ? `已选：${chosen.variant.skuCode}` : '尚未选择 SKU' }}</span><button
+        <span>{{ chosen ? `已选：${showCodes ? chosen.variant.skuCode : chosen.variant.variantName}` : '尚未选择 SKU' }}</span><button
           type="button"
           @click="emit('close')"
         >

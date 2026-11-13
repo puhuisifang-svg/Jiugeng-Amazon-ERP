@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDate } from '@/utils/dateTime'
+
+
 import { onMounted,onBeforeUnmount,ref } from 'vue'
 import type { PurchaseOrder } from '@/api/purchases'
 import { exportPages,purchaseExportRows,renderPurchasePage } from '@/ui/purchaseImageExport'
@@ -9,7 +12,7 @@ const rows=purchaseExportRows(props.orders);let alive=true
 async function generate(){
   try{await document.fonts.ready;for(const batch of exportPages(rows)){if(!alive)return;const result=await renderPurchasePage(batch,()=>completed.value++);if(!alive)return;pages.value.push(URL.createObjectURL(result.blob));warnings.value.push(...result.warnings)}}catch(e){error.value=e instanceof Error?e.message:'导出失败，请关闭重试'}finally{busy.value=false}
 }
-function download(){const url=pages.value[current.value];if(!url)return;const link=document.createElement('a');link.href=url;link.download=`采购清单-${new Date().toISOString().slice(0,10)}-${current.value+1}.png`;document.body.append(link);link.click();link.remove()}
+function download(){const url=pages.value[current.value];if(!url)return;const link=document.createElement('a');link.href=url;link.download=`采购清单-${beijingDate()}-${current.value+1}.png`;document.body.append(link);link.click();link.remove()}
 onMounted(generate);onBeforeUnmount(()=>{alive=false;pages.value.forEach(url=>URL.revokeObjectURL(url))})
 </script>
 <template>

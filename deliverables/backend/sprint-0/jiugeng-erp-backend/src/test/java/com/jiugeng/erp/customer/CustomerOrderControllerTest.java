@@ -131,11 +131,11 @@ class CustomerOrderControllerTest {
         value.put("version",version);var lines=mapper.createArrayNode();for(var line:order.path("lines")){var d=(com.fasterxml.jackson.databind.node.ObjectNode)line.path("details").deepCopy();d.put("id",line.path("id").asText());lines.add(d);}value.put("lines",lines);return value;
     }
     void confirm(String token,String id)throws Exception {send(token,BASE+"/"+id+"/transition",Map.of("version",0,"action","CONFIRM")).andExpect(status().isOk());}
-    Map<String,Object> arrange(String line,String qty) {return Map.of("version",1,"recipient","合成收货人","phone","SYN-PHONE","address","合成地址","items",List.of(Map.of("lineId",line,"quantity",qty,"boxCount",1,"plannedDate",date(),"latestDate",date(),"remark","")));}
+    Map<String,Object> arrange(String line,String qty) {return Map.of("version",1,"recipient","合成收货人","phone","13800138000","address","合成地址","items",List.of(Map.of("lineId",line,"quantity",qty,"boxCount",1,"plannedDate",date(),"latestDate",date(),"remark","")));}
     ResultActions arrange(String token,String id,Map<String,Object> value,String key)throws Exception {return mvc.perform(post(BASE+"/"+id+"/arrangements").header("Authorization",token).header("Idempotency-Key",key).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(value)));}
     Map<String,Object> input(String cp) {
         var line=Map.of("customerProductId",cp,"name","合成商品","specification","合成规格","unit","米","quantity","1.5","netUnitPrice","10","taxRate","1","deliveryDate",date(),"remark","");
-        return new HashMap<>(Map.ofEntries(Map.entry("customerId",cp),Map.entry("source","OFFLINE"),Map.entry("orderDate",date()),Map.entry("deliveryDate",date()),Map.entry("invoiceRequired",true),Map.entry("invoiceTitle","合成抬头"),Map.entry("taxNumber","SYN-TAX"),Map.entry("recipient","合成收货人"),Map.entry("phone","SYN-PHONE"),Map.entry("address","合成地址"),Map.entry("lines",List.of(line,line))));
+        return new HashMap<>(Map.ofEntries(Map.entry("customerId",cp),Map.entry("source","OFFLINE"),Map.entry("orderDate",date()),Map.entry("deliveryDate",date()),Map.entry("invoiceRequired",true),Map.entry("invoiceTitle","合成抬头"),Map.entry("taxNumber","SYN-TAX"),Map.entry("recipient","合成收货人"),Map.entry("phone","13800138000"),Map.entry("address","合成地址"),Map.entry("lines",List.of(line,line))));
     }
     String fixture() {
         String id=UUID.randomUUID().toString();

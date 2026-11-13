@@ -9,5 +9,6 @@ export const navigationDomains = [
   { title: '合规', icon: '✓', groups: ['报关管理'] },
   { title: '财务', icon: '¥', groups: ['财务管理'] },
   { title: '选品', icon: '☆', groups: ['选品管理'] },
+  { title: '工具', icon: '▧', groups: ['工具'] },
   { title: '设置', icon: '⚙', groups: ['系统管理'] },
 ]

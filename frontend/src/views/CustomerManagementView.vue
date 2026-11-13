@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vPhone } from '@/directives/phone'
 import AddressRecognition from '@/components/AddressRecognition.vue'
 import SingleFileUpload from '@/components/SingleFileUpload.vue'
 import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vue'
@@ -504,6 +505,7 @@ watch(() => [props.kind, routeCustomerId.value], () => {
               :key="key"
             >{{ label }}<input
               v-model="entry[key]"
+              v-phone="key === 'registeredPhone' ? 'contact' : false"
               :maxlength="max"
             ></label>
             <button
@@ -530,6 +532,7 @@ watch(() => [props.kind, routeCustomerId.value], () => {
             :disabled="saving"
           ></label><label>手机号<input
             v-model="customerForm.phone"
+            v-phone="'mobile'"
             type="tel"
             maxlength="32"
             :disabled="saving"
@@ -600,6 +603,7 @@ watch(() => [props.kind, routeCustomerId.value], () => {
             ></label>
             <label>联系电话<input
               v-model="entry.phone"
+              v-phone
               type="tel"
               maxlength="32"
             ></label>

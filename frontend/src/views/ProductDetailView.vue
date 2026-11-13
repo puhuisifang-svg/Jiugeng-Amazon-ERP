@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+
+
 import ProductName from '@/components/ProductName.vue'
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
@@ -160,7 +163,7 @@ watch([section, () => product.value?.id, () => product.value?.updatedAt, () => p
         <dl class="detail-fields">
           <div><dt>产品编码</dt><dd>{{ product.productCode }}</dd></div><div><dt>产品名称</dt><dd>{{ product.productName }}</dd></div>
           <div><dt>SKU数量</dt><dd>{{ product.variants.length }}</dd></div>
-          <div><dt>创建时间</dt><dd>{{ product.createdAt || '—' }}</dd></div><div><dt>更新时间</dt><dd>{{ product.updatedAt || '—' }}</dd></div>
+          <div><dt>创建时间</dt><dd>{{ beijingDateTime(product.createdAt) }}</dd></div><div><dt>更新时间</dt><dd>{{ beijingDateTime(product.updatedAt) }}</dd></div>
           <div class="detail-wide">
             <dt>产品描述</dt><dd>{{ product.description || '—' }}</dd>
           </div>
@@ -229,7 +232,7 @@ watch([section, () => product.value?.id, () => product.value?.updatedAt, () => p
                 v-for="item in history"
                 :key="item.id"
               >
-                <td>{{ item.occurredAt }}</td><td>{{ item.actorDisplayName || item.actorLoginName }}</td><td :title="item.action">
+                <td>{{ beijingDateTime(item.occurredAt) }}</td><td>{{ item.actorDisplayName || item.actorLoginName }}</td><td :title="item.action">
                   {{ productActionLabel(item.action) }}
                 </td><td class="history-detail">
                   {{ item.detail || '—' }}

@@ -76,6 +76,7 @@ class CustomerOrderService {
     }
     @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     View save(String id,Input input,AuthenticatedActor actor,String key) {
+        if(!com.jiugeng.erp.ChinaPhone.contact(input.phone()))throw invalid(com.jiugeng.erp.ChinaPhone.MESSAGE);
         View before=null;
         if(id!=null) { lock(id);before=get(id);if(input.version()==null||before.version()!=input.version())throw conflict("订单已更新，请刷新");
             if(!List.of("DRAFT","CONFIRMED").contains(before.status()))throw conflict("当前订单状态不可编辑");
@@ -131,7 +132,7 @@ class CustomerOrderService {
         var p=new HashMap<String,Object>();p.put("id",orderId);p.put("customer",input.customerId());p.put("name",customerName);p.put("source",input.source());
         p.put("external",text(input.externalNumber()).isEmpty()?null:text(input.externalNumber()));p.put("required",input.invoiceRequired());p.put("date",input.orderDate());p.put("delivery",input.deliveryDate());
         p.put("payload",json(input));p.put("title",json(title));p.put("net",net);p.put("tax",tax);p.put("total",net.add(tax));
-        p.put("number","CO-"+LocalDate.now().toString().replace("-","")+"-"+orderId.substring(0,8).toUpperCase(Locale.ROOT));
+        p.put("number","CO-"+LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")).toString().replace("-","")+"-"+orderId.substring(0,8).toUpperCase(Locale.ROOT));
         try {
             if(before==null)jdbc.sql("INSERT INTO customer_order(id,order_number,customer_id,customer_name,source,external_number,invoice_required,order_date,delivery_date,payload,invoice_title_snapshot,net_amount,tax_amount,total_amount) VALUES(:id,:number,:customer,:name,:source,:external,:required,:date,:delivery,:payload,:title,:net,:tax,:total)").params(p).update();
             else jdbc.sql("UPDATE customer_order SET customer_id=:customer,customer_name=:name,source=:source,external_number=:external,invoice_required=:required,order_date=:date,delivery_date=:delivery,payload=:payload,invoice_title_snapshot=:title,net_amount=:net,tax_amount=:tax,total_amount=:total,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=:id").params(p).update();

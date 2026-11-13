@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime, beijingDate } from '@/utils/dateTime'
+
+
 import { createRequestId } from '@/utils/requestId'
 
 import { vSingleSelect } from '@/directives/singleSelect'
@@ -23,7 +26,7 @@ async function load() { try { data.value = await researchApi.get(props.candidate
 async function open(kind: string) {
   mode.value = kind; error.value = ''
   if (kind === 'research') research.value = { ...initial(), ...JSON.parse(JSON.stringify(data.value?.research ?? {})), version: data.value?.version ?? 0 }
-  else estimate.value = { version: data.value?.version ?? 0, requestId: createRequestId(), name: '', price: null, currency: 'USD', costs: ['采购', '包装', '头程', '履约', '其他'].map(name => ({ name, amount: null, currency: 'USD', exchangeRate: 1, basis: '' })), commissionRate: null, advertisingRate: null, lossRate: null, rateDate: new Date().toISOString().slice(0, 10), basis: '' }
+  else estimate.value = { version: data.value?.version ?? 0, requestId: createRequestId(), name: '', price: null, currency: 'USD', costs: ['采购', '包装', '头程', '履约', '其他'].map(name => ({ name, amount: null, currency: 'USD', exchangeRate: 1, basis: '' })), commissionRate: null, advertisingRate: null, lossRate: null, rateDate: beijingDate(), basis: '' }
   savedDraft.value = JSON.stringify(kind === 'research' ? research.value : estimate.value)
   await nextTick(); dialog.value?.showModal()
 }
@@ -85,7 +88,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', leave))
       <p>售价 ${{ money(item.input.price) }} · 单位费用 ${{ money(item.result.unitCost) }} · 利润 ${{ money(item.result.profit) }} · 利润率 {{ money(item.result.margin * 100) }}% · 保本售价 {{ money(item.result.breakEven) }}</p>
       <p>售价降低10%：${{ money(item.result.lowPriceProfit) }}；成本增加10%：${{ money(item.result.highCostProfit) }}。{{ item.result.profit < 0 ? '当前方案为负利润，请审慎评估。' : '' }}</p>
       <details>
-        <summary>费用与来源依据 · {{ item.createdAt }}</summary><p>{{ item.input.basis }} · 汇率日期 {{ item.input.rateDate }}</p><p
+        <summary>费用与来源依据 · {{ beijingDateTime(item.createdAt) }}</summary><p>{{ item.input.basis }} · 汇率日期 {{ item.input.rateDate }}</p><p
           v-for="cost in item.input.costs"
           :key="cost.name"
         >

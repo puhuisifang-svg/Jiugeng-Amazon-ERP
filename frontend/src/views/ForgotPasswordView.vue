@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vPhone } from '@/directives/phone'
 import { vSingleSelect } from '@/directives/singleSelect'
 import SuccessToast from "@/components/SuccessToast.vue"
 import { ref } from 'vue'
@@ -75,7 +76,7 @@ async function resetPassword() {
           <option value="SMS">手机短信验证码</option>
         </select>
         <label for="recovery-destination">{{ channel === 'EMAIL' ? '邮箱' : '手机号' }}</label>
-        <input id="recovery-destination" v-model.trim="destination" :disabled="requested" maxlength="254" required>
+        <input id="recovery-destination" v-model.trim="destination" v-phone="channel === 'SMS' ? 'mobile' : false" :disabled="requested" maxlength="254" required>
         <template v-if="requested">
           <label for="verification-code">验证码</label>
           <input id="verification-code" v-model.trim="code" autocomplete="one-time-code" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required>

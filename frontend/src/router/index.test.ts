@@ -9,6 +9,12 @@ import { appRoutes, refreshAccessIfStale, defaultAccessiblePath } from './index'
 afterEach(() => vi.restoreAllMocks())
 
 describe('application routes', () => {
+  it('protects the PDF workspace with an assignable permission', () => {
+    const router = createRouter({ history: createMemoryHistory(), routes: appRoutes })
+    expect(router.resolve('/tools/pdf').meta).toMatchObject({ group: '工具', capabilities: ['tools.pdf.use'] })
+    expect(capabilitiesForRole('ADMIN')).toContain('tools.pdf.use')
+    expect(capabilitiesForRole('SELECTION')).not.toContain('tools.pdf.use')
+  })
   it('places standalone FBA warehouse addresses under FBA with the existing read access',()=>{
     const router=createRouter({history:createMemoryHistory(),routes:appRoutes})
     const meta=router.resolve('/fba/warehouses').meta
@@ -59,7 +65,7 @@ describe('application routes', () => {
     const shell = appRoutes.find((route) => route.path === '/')
     const groups = new Set(shell?.children?.map((route) => route.meta?.group).filter(Boolean))
 
-    expect(groups).toEqual(new Set(['FBA管理', '工厂管理', '财务管理', '工作台', '工作台维护', '产品管理', '发货管理', '客户管理', '订单管理', '报关管理', '选品管理', '系统管理']))
+    expect(groups).toEqual(new Set(['工具', 'FBA管理', '工厂管理', '财务管理', '工作台', '工作台维护', '产品管理', '发货管理', '客户管理', '订单管理', '报关管理', '选品管理', '系统管理']))
   })
 
   it('merges inventory into material management while preserving the legacy route guard', () => {

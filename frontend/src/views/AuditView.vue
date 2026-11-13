@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { beijingDateTime, beijingInputToIso } from '@/utils/dateTime'
+
 import { vSingleSelect } from '@/directives/singleSelect'
 import AuditEventDialog from '@/components/AuditEventDialog.vue'
 import DatePicker from '@/components/DatePicker.vue'
@@ -38,7 +40,7 @@ async function loadOptions() {
 }
 
 function asInstant(value: string) {
-  return value ? new Date(value).toISOString() : undefined
+  return value ? beijingInputToIso(value) : undefined
 }
 
 async function load(page = 0) {
@@ -78,7 +80,7 @@ function resetFilters() {
 }
 
 function formatTime(value: string) {
-  return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'medium' }).format(new Date(value))
+  return beijingDateTime(value)
 }
 
 onMounted(() => { void load(); if (runtimeConfig.authMode !== 'mock') void loadOptions() })

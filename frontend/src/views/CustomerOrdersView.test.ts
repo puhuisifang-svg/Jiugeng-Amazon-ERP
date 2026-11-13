@@ -49,3 +49,18 @@ it('renders thumbnails for every order item using its SKU reference',async()=>{
  const w=mount(CustomerOrdersView,{global:{stubs:{CustomerProductImage:true}}});await flushPromises()
  expect(w.findComponent({name:'CustomerProductImage'}).props()).toMatchObject({productId:'p1',variantId:'v1'});w.unmount()
 })
+
+ it('aligns customer product codes and quantities with each product in multi-line orders',async()=>{
+ const second={...order.lines[0]!,id:'l2',product:{...order.lines[0]!.product,customerProductCode:''},details:{...order.lines[0]!.details,name:'第二商品',quantity:3,unit:'件'}}
+ vi.mocked(ordersApi.list).mockResolvedValue({items:[{...order,lines:[order.lines[0]!,second]}],totalCount:1,page:0,size:20})
+ const w=mount(CustomerOrdersView);await flushPromises()
+ const rows=w.findAll('.order-main-table tbody tr')
+ expect(rows).toHaveLength(2)
+ expect(rows[0]!.get('.order-customer-code').text()).toBe('CLIENT-ORDER')
+ expect(rows[0]!.get('.order-product-quantity').text()).toBe('10.5 米')
+ expect(rows[1]!.get('.order-customer-code').text()).toBe('—')
+ expect(rows[1]!.get('.order-product-quantity').text()).toBe('3 件')
+ expect(rows[0]!.get('td').attributes('rowspan')).toBe('2')
+ expect(w.findAll('.order-main-table .table-actions')).toHaveLength(1)
+ w.unmount()
+ })

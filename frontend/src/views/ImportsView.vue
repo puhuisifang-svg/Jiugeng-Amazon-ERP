@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+
+
 import { vSingleSelect } from '@/directives/singleSelect'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
@@ -130,7 +133,7 @@ onMounted(load)
               v-for="item in batches"
               :key="item.id"
             >
-              <td>{{ new Date(item.createdAt).toLocaleString() }}</td><td>{{ labels[item.importType] }}</td><td>{{ item.status }}</td><td>{{ item.percent }}%</td><td>{{ item.errorCount }} / {{ item.warningCount }}</td><td>
+              <td>{{ beijingDateTime(item.createdAt) }}</td><td>{{ labels[item.importType] }}</td><td>{{ item.status }}</td><td>{{ item.percent }}%</td><td>{{ item.errorCount }} / {{ item.warningCount }}</td><td>
                 <RouterLink :to="`${props.importBasePath}/${item.id}`">
                   查看
                 </RouterLink>

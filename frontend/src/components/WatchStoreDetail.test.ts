@@ -35,7 +35,7 @@ describe('store product monitoring', () => {
   it('renders only today event products with the same product table, including empty days', async () => {
     vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date('2026-10-27T16:00:00Z'))
     const wrapper = await open(true)
-    await wrapper.setProps({newProducts:[{asin:'B000000002',title:'Today item',detectedAt:'2026-10-27T12:00:00Z'} as WatchEventDto]})
+    await wrapper.setProps({newProducts:[{asin:'B000000002',title:'Today item',detectedAt:'2026-10-27T16:00:00Z'} as WatchEventDto]})
     expect(wrapper.text()).toContain('今日上架')
     expect(wrapper.text()).toContain('Today item')
     expect(wrapper.text()).not.toContain('Test product')
@@ -73,11 +73,11 @@ describe('store product monitoring', () => {
     expect(buttons.every(b => b.attributes('disabled') !== undefined)).toBe(true)
     wrapper.unmount()
   })
-  it('shows four tabs and defaults new-product history to the Pacific current day',async()=>{
+  it('shows four tabs and defaults new-product history to the Beijing current day',async()=>{
     vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date('2026-10-27T12:00:00Z'))
     vi.mocked(apiRequest).mockResolvedValueOnce({automaticProducts:[]}).mockResolvedValueOnce([
       {asin:'B000000001',title:'Today item',detectedAt:'2026-10-27T08:00:00Z'},
-      {asin:'B000000002',title:'Yesterday item',detectedAt:'2026-10-27T06:59:00Z'}
+      {asin:'B000000002',title:'Yesterday item',detectedAt:'2026-10-26T15:59:00Z'}
     ])
     const w=await open(true);expect(w.findAll('.store-detail-tabs button').map(b=>b.text())).toEqual(['在线产品','疑似下架产品','上架记录','新品记录','店铺设置'])
     await w.findAll('.store-detail-tabs button').find(b=>b.text()==='上架记录')!.trigger('click')

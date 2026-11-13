@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime, beijingDate } from '@/utils/dateTime'
+
+
 import { createRequestId } from '@/utils/requestId'
 
 import { vSingleSelect } from '@/directives/singleSelect'
@@ -34,8 +37,8 @@ const filters=computed(()=>isRecord.value?applied.value:{q:q.value,from:from.val
 function search(){if(invalidRange.value)return;applied.value={q:q.value.trim(),from:from.value,to:to.value,judgement:judgement.value};page.value=1;chosen.value=[]}
 const chosen=ref<string[]>([]), from=ref(''), to=ref(''), version=ref(0)
 const draft=ref({name:'',owner:'',remark:'',enabled:true}), baseline=ref('')
-function day(value:string){return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Los_Angeles'}).format(new Date(value))}
-function date(value:string){return new Date(value).toLocaleString('zh-CN',{hour12:false})}
+function day(value:string){return beijingDate(value)}
+function date(value:string){return beijingDateTime(value)}
 const today=()=>day(new Date().toISOString())
 function todayRange(){from.value=today();to.value=today()}
 const online=computed(()=>detail.value?.automaticProducts.filter(p=>p.missingCount<2)??[])
@@ -200,7 +203,7 @@ async function markNovelty(event:WatchEventDto,action:string){
           </button>
         </p>
         <p class="store-hint">
-          {{ tab==='novelty'?'统一新品窗口60天，按首次发现日判断；无日期不自动认定新品，补采不会改变记录归属日期。':isRecord?'按美国太平洋时间统计首次发现，不代表实际首次上架；初次建档商品不计入今日上架。':tab==='missing'?'搜索未出现不等于下架；当前公开网页采集不会仅凭缺失判定下架。':'价格为美国站公开报价，“起”为其他卖家最低报价；缺失价格或评分不会填零。' }}
+          {{ tab==='novelty'?'统一新品窗口60天，按首次发现日判断；无日期不自动认定新品，补采不会改变记录归属日期。':isRecord?'按北京时间统计首次发现，不代表实际首次上架；初次建档商品不计入今日上架。':tab==='missing'?'搜索未出现不等于下架；当前公开网页采集不会仅凭缺失判定下架。':'价格为美国站公开报价，“起”为其他卖家最低报价；缺失价格或评分不会填零。' }}
         </p>
         <HorizontalTableViewport>
           <table

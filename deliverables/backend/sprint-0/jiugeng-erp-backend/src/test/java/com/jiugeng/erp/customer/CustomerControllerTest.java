@@ -40,11 +40,11 @@ class CustomerControllerTest {
 
     @Test void addressBookPreservesLegacyAndValidatesDefaultsAndVersions() throws Exception {
         String token=login("ADMIN");var input=customer("合成地址客户");
-        input.put("address","合成旧地址");input.put("contactPerson","合成联系人");input.put("phone","SYN-PHONE");
+        input.put("address","合成旧地址");input.put("contactPerson","合成联系人");input.put("phone","13800138000");
         var saved=body(write(token,"",null,input).andExpect(status().isOk()).andExpect(jsonPath("$.addresses[0].defaultAddress").value(true)));
         String id=saved.path("id").asText();input.put("version",0);
-        var a=Map.of("contactPerson","合成甲","phone","SYN-A","address","合成地址甲","defaultAddress",false);
-        var b=Map.of("contactPerson","合成乙","phone","SYN-B","address","合成地址乙","defaultAddress",true);
+        var a=Map.of("contactPerson","合成甲","phone","13800138001","address","合成地址甲","defaultAddress",false);
+        var b=Map.of("contactPerson","合成乙","phone","13800138002","address","合成地址乙","defaultAddress",true);
         input.put("addresses",List.of(a,b));
         write(token,"",id,input).andExpect(status().isOk()).andExpect(jsonPath("$.addresses.length()").value(2)).andExpect(jsonPath("$.address").value("合成地址乙"));
         write(token,"",id,input).andExpect(status().isConflict());
@@ -57,7 +57,7 @@ class CustomerControllerTest {
     @Test void billingDefaultCustomerAndNullablePrices() throws Exception {
         String token=login("ADMIN"); var input=customer("合成开票客户");
         input.put("invoiceTitle","合成开票抬头"); input.put("taxNumber","SYN-TAX-001");
-        input.put("registeredAddress","合成注册地址"); input.put("registeredPhone","SYN-PHONE");
+        input.put("registeredAddress","合成注册地址"); input.put("registeredPhone","13800138000");
         input.put("bankName","合成银行"); input.put("bankAccount","SYN-BANK-ACCOUNT"); input.put("defaultCustomer",true);
         var saved=body(write(token,"",null,input).andExpect(status().isOk()).andExpect(jsonPath("$.defaultCustomer").value(true))
             .andExpect(jsonPath("$.invoiceTitle").value("合成开票抬头")));
@@ -80,7 +80,7 @@ class CustomerControllerTest {
     @Test void customerCrudSearchAndVersionChecksPreserveContactPrivacyInAudit() throws Exception {
         String token=login("PRODUCT_MATERIAL");
         var input=customer("合成客户A");
-        input.put("account1688","synthetic-buyer"); input.put("phone","TEST-PHONE"); input.put("address","合成测试地址");
+        input.put("account1688","synthetic-buyer"); input.put("phone","13800138000"); input.put("address","合成测试地址");
         var created=body(write(token,"",null,input).andExpect(status().isOk()));
         String id=created.path("id").asText();
         mvc.perform(get("/api/v1/customers").param("q","synthetic-buyer").header("Authorization",token))
@@ -91,7 +91,7 @@ class CustomerControllerTest {
         input.put("version",1); input.put("status","ACTIVE");
         write(token,"",id,input).andExpect(status().isOk());
         String logs=jdbc.queryForObject("SELECT after_value FROM audit_event WHERE resource_id=? AND action='CUSTOMER_CREATE'",String.class,id);
-        assertThat(logs).doesNotContain("TEST-PHONE","合成测试地址","synthetic-buyer");
+        assertThat(logs).doesNotContain("13800138000","合成测试地址","synthetic-buyer");
     }
     @Test void differentCustomersCanQuoteSameSkuAndUpdatesKeepPriceAudit() throws Exception {
         String token=login("ADMIN"), a=createCustomer(token), b=createCustomer(token); String[] sku=sku();

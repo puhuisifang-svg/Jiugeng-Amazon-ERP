@@ -162,6 +162,10 @@ class SupplierControllerTest {
                                 Map.of("supplierId", first, "primary", true),
                                 Map.of("supplierId", second, "primary", true))))))
                 .andExpect(status().isBadRequest());
+        jdbc.update("UPDATE supplier SET categories='PRODUCT' WHERE id=?",first);
+        mvc.perform(put("/api/v1/suppliers/material/{id}", materialId).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON)
+            .content(json(Map.of("links",List.of(Map.of("supplierId",first,"primary",true))))))
+            .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SUPPLIER_CATEGORY_REQUIRED"));
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM auxiliary_material_supplier WHERE auxiliary_material_id=?",
                 Integer.class, materialId)).isEqualTo(2);
@@ -196,7 +200,7 @@ class SupplierControllerTest {
 
     @Test void dependencyListIncludesSkuAndHistoricalPurchaseAndRefreshesAfterUnlink() throws Exception {
         String token=createUserAndLogin("dependency-writer","PRODUCT_MATERIAL"), denied=createUserAndLogin("dependency-denied","SELECTION");
-        String id=createSupplier(token,"合成关联供应商","SYN-01"),p=UUID.randomUUID().toString(),v=UUID.randomUUID().toString(),order=UUID.randomUUID().toString();
+        String id=createSupplier(token,"合成关联供应商","13800138001"),p=UUID.randomUUID().toString(),v=UUID.randomUUID().toString(),order=UUID.randomUUID().toString();
         jdbc.update("INSERT INTO product(id,product_code,product_code_normalized,name_zh,status,created_by,updated_by) VALUES(?,?,?,'合成父体','ACTIVE','test','test')",p,p,p);
         jdbc.update("INSERT INTO product_variant(id,product_id,sku_code,sku_code_normalized,variant_name,status,attribute_signature) VALUES(?,?,?,?,'合成SKU','ACTIVE',?)",v,p,v,v,v);
         jdbc.update("INSERT INTO product_variant_supplier(id,variant_id,supplier_id,created_by,updated_by) VALUES(?,?,?,'test','test')",UUID.randomUUID().toString(),v,id);
@@ -215,6 +219,26 @@ class SupplierControllerTest {
         mvc.perform(delete("/api/v1/suppliers/{id}?version=0",id).header("Authorization",bearer(token))).andExpect(status().isConflict());
     }
 
+    @Test void supplierPhoneRejectsTextAndAcceptsLandlineAndOptionalPhone() throws Exception {
+        String token=createUserAndLogin("phone-format-owner","PRODUCT_MATERIAL");
+        for(String phone:List.of("中文","123","12345678901","138001380001"))
+            mvc.perform(post("/api/v1/suppliers").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(supplier("电话校验",phone,null,null)))).andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/suppliers").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(supplier("座机供应商","0592-1234567-12",null,null)))).andExpect(status().isOk());
+    }
+
+    @org.junit.jupiter.api.Test void categoriesAreMultiSelectRequiredAndFilterable() throws Exception {
+        String token=createUserAndLogin("category-owner","PRODUCT_MATERIAL");
+        var request=supplier("合成辅料供应商","13800138002",null,null);request.put("categories",List.of("MATERIAL"));
+        mvc.perform(post("/api/v1/suppliers").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(request)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.categories[0]").value("MATERIAL"));
+        mvc.perform(get("/api/v1/suppliers?category=PRODUCT").header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(0));
+        mvc.perform(get("/api/v1/suppliers?category=MATERIAL").header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(1));
+        request.put("categories",List.of());
+        mvc.perform(post("/api/v1/suppliers").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(request))).andExpect(status().isBadRequest());
+        request.put("categories",List.of("UNKNOWN"));
+        mvc.perform(post("/api/v1/suppliers").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(request))).andExpect(status().isBadRequest());
+    }
+
     private String createSupplier(String token, String name, String phone) throws Exception {
         String body = mvc.perform(post("/api/v1/suppliers").header("Authorization", bearer(token))
                         .contentType(MediaType.APPLICATION_JSON).content(json(supplier(name, phone, null, null))))
@@ -228,6 +252,7 @@ class SupplierControllerTest {
         value.put("phone", phone);
         value.put("sourceUrl", sourceUrl);
         value.put("status", "ACTIVE");
+        value.put("categories", List.of("MATERIAL", "PRODUCT"));
         value.put("version", version);
         return value;
     }

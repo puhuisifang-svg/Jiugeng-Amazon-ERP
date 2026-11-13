@@ -24,6 +24,23 @@ describe('InventoryLedgerView', () => {
     ], mockData: false })
   })
 
+  it('renders UTC and offset timestamps in Beijing time, including midnight and missing values', async () => {
+    ledger.mockResolvedValueOnce({ items: [
+      { id: 'a', occurredAt: '2026-10-15T08:00:00Z' },
+      { id: 'b', occurredAt: '2026-10-15T16:00:00Z' },
+      { id: 'c', occurredAt: '2026-10-16T00:00:00+08:00' },
+      { id: 'd', occurredAt: '' },
+      { id: 'e', occurredAt: 'invalid' },
+    ] })
+    const wrapper = mount(InventoryLedgerView, { global: { stubs: { RouterLink } } })
+    await flushPromises()
+    expect(wrapper.findAll('.ledger-time').map(cell => cell.text())).toEqual([
+      '2026-10-15 16:00:00', '2026-10-16 00:00:00', '2026-10-16 00:00:00', '—', '—',
+    ])
+    expect(wrapper.text()).toContain('时间（北京时间）')
+    wrapper.unmount()
+  })
+
   it('filters ledger entries by business keyword and transaction type', async () => {
     const wrapper = mount(InventoryLedgerView, { global: { stubs: { RouterLink } } })
     await flushPromises()

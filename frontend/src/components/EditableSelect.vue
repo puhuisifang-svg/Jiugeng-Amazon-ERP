@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, useId } from 'vue'
-const props=defineProps<{modelValue:string;options:string[];label:string;required?:boolean;disabled?:boolean;maxLength?:number}>()
+const props=withDefaults(defineProps<{modelValue:string;options:string[];label:string;required?:boolean;disabled?:boolean;maxLength?:number;removable?:boolean}>(), {removable:true,maxLength:100})
 const emit=defineEmits<{'update:modelValue':[string];remove:[string]}>()
 const root=ref<HTMLElement>(),panel=ref<HTMLElement>(),input=ref<HTMLInputElement>()
 const open=ref(false),filter=ref(''),active=ref(-1),position=ref<Record<string,string>>({}),id=useId()
@@ -70,6 +70,7 @@ onBeforeUnmount(close)
             @click.prevent="choose(option)"
           ><span>{{ option }}</span><span v-if="modelValue===option">✓</span></button>
           <button
+            v-if="removable !== false"
             type="button"
             class="editable-select-remove"
             :aria-label="`删除${label} ${option}`"

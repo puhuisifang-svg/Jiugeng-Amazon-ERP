@@ -33,11 +33,12 @@ describe('SuppliersView', () => {
   })
 
   it('keeps validation errors inside the dialog and clears them on reopening', async () => {
-    createSupplier.mockRejectedValueOnce(new ApiError(400, 'VALIDATION', '电话、微信号、1688 链接、微信二维码至少填写一项'))
+    createSupplier.mockRejectedValueOnce(new ApiError(400, 'VALIDATION', '电话、微信号、1688 链接、图片至少填写一项'))
     const wrapper=mount(SuppliersView);await flushPromises()
     await wrapper.get('.material-toolbar button').trigger('click')
     const dialog=wrapper.get('[aria-labelledby="supplier-dialog-title"]')
     await dialog.get('input[required]').setValue('合成供应商')
+    await dialog.get('input[value="MATERIAL"]').setValue(true)
     await dialog.get('form').trigger('submit');await flushPromises()
     expect(dialog.get('[role="alert"]').text()).toContain('至少填写一项')
     expect(wrapper.findAll('[role="alert"]')).toHaveLength(1)
@@ -75,13 +76,15 @@ describe('SuppliersView', () => {
     await form.get('input[required]').setValue('  包装供应商  ')
     await form.findAll('input')[1]!.setValue('张三')
     await form.get('input[autocomplete="off"]').setValue('packing_supplier')
-    await form.get('input[placeholder="https://example.com/wechat-qr.png"]').setValue('https://images.example.com/packing-qr.png')
+    expect(form.find('input[placeholder="https://example.com/wechat-qr.png"]').exists()).toBe(false)
+    await form.get('input[value="MATERIAL"]').setValue(true)
+    await form.get('input[value="PRODUCT"]').setValue(true)
     await form.trigger('submit')
     await flushPromises()
 
     expect(createSupplier).toHaveBeenCalledWith({
       name: '包装供应商', contactPerson: '张三', wechatId: 'packing_supplier',
-      qrImageUrl: 'https://images.example.com/packing-qr.png', status: 'ACTIVE',
+      categories: ['MATERIAL', 'PRODUCT'], status: 'ACTIVE',
     })
     expect(wrapper.get('[role="status"]').text()).toContain('供应商已创建')
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
@@ -107,4 +110,11 @@ describe('SuppliersView', () => {
     await w.get('[role="dialog"]').trigger('click'); expect(name.element).toHaveProperty('value', '未保存合成输入')
     expect(w.findAll('[role="dialog"] button').some(b => b.text() === '取消')).toBe(true); w.unmount()
   })
+})
+
+it('shows supplier remarks in the list', async () => {
+  suppliers.mockResolvedValue({items:[{id:'remark-supplier',name:'测试供应商',status:'ACTIVE',remark:'送货前请联系仓库'}],totalCount:1,page:0,size:100})
+  const wrapper=mount(SuppliersView);await flushPromises()
+  expect(wrapper.get('.supplier-remark').text()).toBe('送货前请联系仓库')
+  wrapper.unmount()
 })

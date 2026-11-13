@@ -2,6 +2,7 @@ import 'vue-router'
 
 export type AppRole = 'ADMIN' | 'PRODUCT_MATERIAL' | 'SELECTION' | 'CUSTOM'
 export type Capability =
+  | 'tools.pdf.use'
   | 'forwarders.read' | 'forwarders.write' | 'forwarders.export' | 'forwarders.delete'
   | 'factory.expenses.read' | 'factory.expenses.write' | 'factory.expenses.remove'
   | 'factory.employees.read' | 'factory.employees.write' | 'factory.rates.read' | 'factory.rates.write' | 'factory.reports.read' | 'factory.reports.write' | 'factory.reports.review' | 'factory.payroll.read' | 'factory.payroll.write' | 'factory.payroll.lock' | 'factory.payroll.correct' | 'factory.payroll.pay' | 'factory.payroll.export'

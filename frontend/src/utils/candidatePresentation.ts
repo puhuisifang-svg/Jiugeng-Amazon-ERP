@@ -1,3 +1,4 @@
+import { beijingDateTime } from '@/utils/dateTime'
 import { rows,type Document } from '@/api/launch'
 export const candidateStates=['NEW','EVALUATING','REVIEW','RETURNED','APPROVED','REJECTED']
 export const candidateTabs=[{key:'overview',title:'评估概览'},{key:'market',title:'市场与销售'},{key:'specs',title:'产品方案'},{key:'needs',title:'需求与改进'},{key:'cost',title:'成本与利润'},{key:'risk',title:'风险调查'},{key:'criteria',title:'评分与审核'},{key:'evidence',title:'证据资料'},{key:'history',title:'操作记录'}]
@@ -6,4 +7,4 @@ export function candidateScore(doc:Document){const list=rows(doc,'criteria');if(
 export function issueTab(issue:string){if(/风险|调查|授权|商标|版权|专利|类目/.test(issue))return 'risk';if(/需求|痛点|假设|验证计划/.test(issue))return 'needs';if(/开发要求|修改建议|验收|关联需求|改进/.test(issue))return 'needs';if(/规格/.test(issue))return 'specs';if(/销售数据/.test(issue))return 'market';if(/评分/.test(issue))return 'criteria';if(/费用|成本|汇率|费率|售价|佣金|广告|损耗|commission|advertising|loss/.test(issue))return 'cost';return 'overview'}
 export const riskLabels:Record<string,string>={PENDING:'待调查',DOUBT:'疑点待复核',REMEDIATE:'需整改',BLOCKED:'不可接受',CLEAR:'未发现明显风险',LICENSED:'授权已核对',NA:'不适用'}
 export function riskProgress(doc:Document){const list=rows(doc,'risks');return ['TRADEMARK','COPYRIGHT','DESIGN','PATENT','COMPLIANCE'].filter(type=>{const matching=list.filter(r=>r.type===type);return matching.length>0&&matching.every(r=>['CLEAR','LICENSED','NA'].includes(String(r.conclusion))&&['market','scope','method','evidence','reason','investigator','date'].every(k=>String(r[k]??'').trim()))}).length}
-export const formatDate=(v:unknown)=>typeof v==='string'&&v?new Date(v).toLocaleString('zh-CN',{hour12:false}):'—'
+export const formatDate=(v:unknown)=>typeof v==='string'&&v?beijingDateTime(v):'—'

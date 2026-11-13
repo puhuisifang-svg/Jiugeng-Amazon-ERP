@@ -22,7 +22,7 @@ class CustomsWarehouses {
  private Warehouse validate(Warehouse in){
   CustomsDocuments.require(in!=null,"缺少仓库资料");String code=clean(in.code(),20).toUpperCase(Locale.ROOT),country=clean(in.country(),2).toUpperCase(Locale.ROOT),address=clean(in.address()==null?null:in.address().replaceAll("\\R", " "),1000),date=clean(in.verifiedOn(),10),source=clean(in.source(),1000);
   CustomsDocuments.require(code.matches("[A-Z0-9][A-Z0-9-]{1,19}"),"仓库编码须为2至20位字母、数字或短横线");CustomsDocuments.require(country.equals("US"),"当前仅支持美国仓库");CustomsDocuments.require(!address.isBlank(),"请填写完整收货地址");CustomsDocuments.require(!source.isBlank(),"请填写地址来源");
-  if(!date.isBlank())try{LocalDate d=LocalDate.parse(date);CustomsDocuments.require(d.getYear()>=2000&&!d.isAfter(LocalDate.now()),"核对日期不能晚于今天");}catch(java.time.format.DateTimeParseException e){throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"核对日期格式不正确");}
+  if(!date.isBlank())try{LocalDate d=LocalDate.parse(date);CustomsDocuments.require(d.getYear()>=2000&&!d.isAfter(LocalDate.now(java.time.ZoneId.of("Asia/Shanghai"))),"核对日期不能晚于今天");}catch(java.time.format.DateTimeParseException e){throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"核对日期格式不正确");}
   return new Warehouse(code,country,clean(in.region(),100),clean(in.city(),100),clean(in.postalCode(),20),address,source,date,in.version());
  }
  private void record(AuthenticatedActor actor,String action,Warehouse w){audit.record(new AuditTrail.BusinessOperation(actor.userId(),actor.loginName(),actor.displayName(),action,"CUSTOMS_WAREHOUSE",w.code(),true,null,Map.of("code",w.code(),"version",w.version()),"维护报关仓库地址"));}

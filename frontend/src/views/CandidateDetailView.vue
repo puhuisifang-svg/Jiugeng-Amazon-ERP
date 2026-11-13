@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+
+
 import SelectionResearchPanel from '@/components/SelectionResearchPanel.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
 import { computed, onMounted, ref } from 'vue'
@@ -191,7 +194,7 @@ onMounted(load)
           <p v-if="evidenceItem.description">
             {{ evidenceItem.description }}
           </p>
-          <small>{{ evidenceItem.addedByName }} · {{ evidenceItem.addedByRole }} · {{ evidenceItem.createdAt }}</small>
+          <small>{{ evidenceItem.addedByName }} · {{ evidenceItem.addedByRole }} · {{ beijingDateTime(evidenceItem.createdAt) }}</small>
         </article>
         <p
           v-if="!(detail.evidence ?? []).length"
@@ -210,7 +213,7 @@ onMounted(load)
           class="panel compact-panel"
         >
           <p>{{ note.content }}</p>
-          <small>{{ note.authorName }} · {{ note.authorRole }} · {{ note.createdAt }}</small>
+          <small>{{ note.authorName }} · {{ note.authorRole }} · {{ beijingDateTime(note.createdAt) }}</small>
         </article>
         <p
           v-if="!detail.notes.length"

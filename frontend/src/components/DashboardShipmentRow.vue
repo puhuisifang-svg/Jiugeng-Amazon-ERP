@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { beijingDate } from '@/utils/dateTime'
+
 import { shipmentUnit } from '@/ui/shipmentUnits'
 import { RouterLink } from 'vue-router'
 import ProductName from './ProductName.vue'
@@ -16,7 +18,7 @@ watch(() => props.item.productId, async (id, _old, cleanup) => {
   try { const result = await domainApi.product(id); if (active) product.value = result }
   catch { if (active) error.value = '产品详情加载失败，请刷新重试。' }
 }, { immediate: true })
-function date(value: string) { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date(value)) }
+function date(value: string) { return beijingDate(value) }
 </script>
 <template>
   <tr :class="{ 'shipment-row--selected': selected }">

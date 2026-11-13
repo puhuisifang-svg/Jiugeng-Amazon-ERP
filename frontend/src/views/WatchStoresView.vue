@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime, beijingDate } from '@/utils/dateTime'
+
+
 import { vSingleSelect } from '@/directives/singleSelect'
 import MonitoringPencil from '@/components/MonitoringPencil.vue'
 import { useAnchoredPopover } from '@/composables/useAnchoredPopover'
@@ -55,11 +58,11 @@ void noveltyCollection
 const remarkDialog=ref<HTMLDialogElement>(), remarkStore=ref<WatchStoreDto>(), remarkDraft=ref(''), remarkError=ref(''), remarkBusy=ref(false), remarkUnsaved=ref(false)
 const snapshots = ref<Record<string,string>>({})
 watch([query,status,owner,pageSize],()=>{page.value=1;selected.value=[]})
-function time(value?: string) { return value ? new Date(value).toLocaleString('zh-CN',{hour12:false}) : '—' }
-const today = () => new Intl.DateTimeFormat('en-CA',{timeZone:'America/Los_Angeles'}).format(new Date())
+function time(value?: string) { return value ? beijingDateTime(value) : '—' }
+const today = () => beijingDate()
 const todayEvents = computed(() => {
- const groups = new Map<string,WatchEventDto[]>(), formatter=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Los_Angeles'}), date=today()
- for(const event of events.value){if(event.storeId&&formatter.format(new Date(event.detectedAt))===date){const group=groups.get(event.storeId)??[];group.push(event);groups.set(event.storeId,group)}}
+ const groups = new Map<string,WatchEventDto[]>(), date=today()
+ for(const event of events.value){if(event.storeId&&beijingDate(event.detectedAt)===date){const group=groups.get(event.storeId)??[];group.push(event);groups.set(event.storeId,group)}}
  return groups
 })
 function newProducts(id: string) { return todayEvents.value.get(id)??[] }

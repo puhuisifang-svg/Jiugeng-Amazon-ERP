@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime, beijingDate } from '@/utils/dateTime'
+
+
 import DatePicker from '@/components/DatePicker.vue'
 import { shipmentUnit, shipmentQuantitySummary } from '@/ui/shipmentUnits'
 import ProductName from '@/components/ProductName.vue'
@@ -10,13 +13,13 @@ import { dashboardApi, type ShipmentStatistics } from '@/api/dashboard'
 import { ApiError } from '@/api/client'
 import TableViewport from '@/components/TableViewport.vue'
 import SuccessToast from '@/components/SuccessToast.vue'
-const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date())
+const today = beijingDate()
 const route = useRoute()
 const filters = reactive({ from: `${today.slice(0, 7)}-01`, to: today, keyword: '' })
 const applied = ref({ ...filters }); const page = ref(0); const result = ref<ShipmentStatistics>(); const loading = ref(false)
 const error = ref(''); const errorKey = ref(0); let sequence = 0
 const number = (value: number) => value.toLocaleString('zh-CN')
-const time = (value: string) => new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })
+const time = (value: string) => beijingDateTime(value)
 async function load(search = false) {
   if (search) {
     const days = (Date.parse(filters.to) - Date.parse(filters.from)) / 86400000

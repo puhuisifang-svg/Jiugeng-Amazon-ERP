@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vPhone } from '@/directives/phone'
 import { onMounted, ref } from 'vue'
 import { ordersApi, type CustomerOrder, type ArrangementItem } from '@/api/orders'
 import { session } from '@/state/session'
@@ -55,6 +56,7 @@ onMounted(load)
         maxlength="100"
       ></label><label>联系电话<input
         v-model="phone"
+        v-phone
         :disabled="saving || submitted"
         required
         maxlength="32"

@@ -156,7 +156,7 @@ async function load() {
     if(formal.value){selectableTypes.value=await materialTypesApi.list();unitOptions.value=await materialTypesApi.units()}
     else selectableTypes.value=materialTypes.value
     await loadPrices()
-    if (supplierAccess.value) {const all:SupplierDto[]=[];let p=0;while(true){const result=await domainApi.suppliers({status:'ACTIVE',size:100,page:p++});all.push(...result.items);if(!result.items.length||all.length>=result.totalCount)break}supplierOptions.value=all}
+    if (supplierAccess.value) {const all:SupplierDto[]=[];let p=0;while(true){const result=await domainApi.suppliers({status:'ACTIVE',category:'MATERIAL',size:100,page:p++});all.push(...result.items);if(!result.items.length||all.length>=result.totalCount)break}supplierOptions.value=all}
     if (inventoryReadable.value) {
       try {
         balances.value = (await domainApi.balances()).items

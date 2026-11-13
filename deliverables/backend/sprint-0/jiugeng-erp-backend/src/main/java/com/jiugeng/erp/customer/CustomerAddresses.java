@@ -22,6 +22,7 @@ final class CustomerAddresses {
     static List<Address> normalize(List<Address> entries) {
         if(entries.stream().filter(Address::defaultAddress).count()>1)
             throw new CustomerException(400,"CUSTOMER_ADDRESS_INVALID","只能设置一个默认收货地址");
+        for(var entry:entries)if(!com.jiugeng.erp.ChinaPhone.contact(entry.phone()))throw new CustomerException(400,"PHONE_INVALID",com.jiugeng.erp.ChinaPhone.MESSAGE);
         var result=new ArrayList<Address>();
         boolean hasDefault=entries.stream().anyMatch(Address::defaultAddress);
         for(var a:entries) result.add(new Address(clean(a.contactPerson()),clean(a.phone()),clean(a.address()),a.defaultAddress()||(!hasDefault&&result.isEmpty())));

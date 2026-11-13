@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+
+
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { forwardersApi, carrierNames, type ForwarderDocument, type ForwarderSummary } from '@/api/forwarders'
 import { session } from '@/state/session'
@@ -92,7 +95,7 @@ onMounted(load);onBeforeUnmount(()=>++sequence)
                   class="forwarder-status"
                   :class="{ready:r.status==='READY'}"
                 >{{ r.status==='READY'?'已核对':'草稿' }}</span>
-              </td><td>{{ new Date(r.updatedAt).toLocaleString('zh-CN',{hour12:false}) }}</td><td class="forwarder-actions">
+              </td><td>{{ beijingDateTime(r.updatedAt) }}</td><td class="forwarder-actions">
                 <button
                   :disabled="busy"
                   @click="open(r)"

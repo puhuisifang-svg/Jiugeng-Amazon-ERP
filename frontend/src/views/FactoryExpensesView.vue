@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+
+
 import { vSingleSelect } from '@/directives/singleSelect'
 import { computed, onMounted, onBeforeUnmount, reactive, ref } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
@@ -319,7 +322,7 @@ onBeforeUnmount(()=>{sequence++;window.removeEventListener('beforeunload',before
                 v-for="event in events"
                 :key="event.id"
               >
-                <td>{{ new Date(event.time).toLocaleString() }}</td><td>{{ event.actor }}</td><td>{{ event.action==='EXPENSE_SAVE'?'保存开销':event.action==='EXPENSE_REMOVE'?'删除开销':event.action }}</td><td>{{ factoryMoney(event.after.amount) }}</td>
+                <td>{{ beijingDateTime(event.time) }}</td><td>{{ event.actor }}</td><td>{{ event.action==='EXPENSE_SAVE'?'保存开销':event.action==='EXPENSE_REMOVE'?'删除开销':event.action }}</td><td>{{ factoryMoney(event.after.amount) }}</td>
               </tr>
             </tbody>
           </table>

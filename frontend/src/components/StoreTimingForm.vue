@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+
+
 import { vSingleSelect } from '@/directives/singleSelect'
 import DatePicker from '@/components/DatePicker.vue'
 import { computed, ref, watch } from 'vue'
@@ -66,7 +69,7 @@ defineExpose({dirty,busy,loading,save})
         </div>
       </fieldset>
       <div class="store-schedule-summary">
-        <span>下次计划</span><strong>{{ new Date(draft.nextAt).toLocaleString('zh-CN',{timeZone:draft.timeZone,hour12:false}) }}</strong><small>{{ draft.timeZone==='Asia/Shanghai'?'北京时间':'美国太平洋时间' }} · 保存后重新计算</small>
+        <span>下次计划（北京时间）</span><strong>{{ beijingDateTime(draft.nextAt) }}</strong><small>计划时区：{{ draft.timeZone==='Asia/Shanghai'?'北京时间':'美国太平洋时间' }} · 保存后重新计算</small>
       </div>
       <p class="store-hint">
         店铺暂停时不采集；到达计划时间后进入队列，实际开始时间取决于前序任务。

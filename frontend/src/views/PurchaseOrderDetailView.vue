@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime, beijingDateTimeInput, beijingInputToIso } from '@/utils/dateTime'
+
+
 import { purchaseLineAmount } from '@/ui/purchaseAmounts'
 import PurchaseItemImage from '@/components/PurchaseItemImage.vue'
 import { createRequestId } from '@/utils/requestId'
@@ -53,7 +56,7 @@ function openReceipt() {
   if (!detail.value || saving.value) return
   if (!pendingReceipt.value) {
     Object.keys(quantities).forEach(key => delete quantities[key]); remark.value = ''; receiptError.value = ''
-    const now = new Date(); receivedAt.value = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 19)
+    receivedAt.value = beijingDateTimeInput()
   }
   showReceipt.value = true
 }
@@ -67,7 +70,7 @@ async function receive() {
     if (available.some(line => quantities[line.id] !== undefined && quantities[line.id] !== '' && (!Number.isFinite(Number(quantities[line.id])) || Number(quantities[line.id]) < 0 || Number(quantities[line.id]) > line.remainingQuantity))) { receiptError.value = '实收数量必须在 0 与待收数量之间。'; return }
     const lines = available.filter(line => Number(quantities[line.id]) > 0).map(line => ({ orderLineId: line.id, quantity: Number(quantities[line.id]) }))
     if (!lines.length) { receiptError.value = '请至少填写一项本次实收数量。'; return }
-    const date = new Date(receivedAt.value)
+    const date = new Date(beijingInputToIso(receivedAt.value))
     if (!Number.isFinite(date.getTime()) || date.getTime() > Date.now() + 300000) { receiptError.value = '请填写有效且不在未来的实际收货时间。'; return }
     pendingReceipt.value = { requestId: createRequestId(), receivedAt: date.toISOString(), ...(remark.value ? { remark: remark.value } : {}), lines }
   }
@@ -131,7 +134,7 @@ defineExpose({mayLeave})
     <template v-else-if="detail">
       <section class="panel purchase-summary">
         <dl>
-          <div><dt>状态</dt><dd>{{ statusLabels[detail.order.status] }}</dd></div><div><dt>采购类型</dt><dd>{{ detail.order.orderType === 'MANUAL' ? '日常物品采购' : detail.order.orderType === 'PRODUCT' ? '产品采购' : '辅料采购' }}</dd></div><div><dt>供应商</dt><dd>{{ detail.order.supplierName }}</dd></div><div><dt>采购金额</dt><dd>{{ detail.order.currency }} {{ detail.order.lines.reduce((sum,line) => sum + purchaseLineAmount(line), 0).toFixed(2) }}</dd></div><div><dt>创建时间</dt><dd>{{ new Date(detail.order.createdAt).toLocaleString() }}</dd></div><div><dt>预计到货日期</dt><dd>{{ detail.order.expectedDeliveryDate || '未约定' }}</dd></div><div><dt>物流公司</dt><dd>{{ detail.order.carrier || '未填写' }}</dd></div><div><dt>运单号</dt><dd>{{ detail.order.trackingNumber || '未填写' }}</dd></div><div><dt>收货信息</dt><dd>{{ detail.order.deliveryAddress || '未填写' }}</dd></div><div><dt>备注</dt><dd>{{ detail.order.remark || '—' }}</dd></div><div v-if="detail.order.status === 'CANCELLED'">
+          <div><dt>状态</dt><dd>{{ statusLabels[detail.order.status] }}</dd></div><div><dt>采购类型</dt><dd>{{ detail.order.orderType === 'MANUAL' ? '日常物品采购' : detail.order.orderType === 'PRODUCT' ? '产品采购' : '辅料采购' }}</dd></div><div><dt>供应商</dt><dd>{{ detail.order.supplierName }}</dd></div><div><dt>采购金额</dt><dd>{{ detail.order.currency }} {{ detail.order.lines.reduce((sum,line) => sum + purchaseLineAmount(line), 0).toFixed(2) }}</dd></div><div><dt>创建时间</dt><dd>{{ beijingDateTime(detail.order.createdAt) }}</dd></div><div><dt>预计到货日期</dt><dd>{{ detail.order.expectedDeliveryDate || '未约定' }}</dd></div><div><dt>物流公司</dt><dd>{{ detail.order.carrier || '未填写' }}</dd></div><div><dt>运单号</dt><dd>{{ detail.order.trackingNumber || '未填写' }}</dd></div><div><dt>收货信息</dt><dd>{{ detail.order.deliveryAddress || '未填写' }}</dd></div><div><dt>备注</dt><dd>{{ detail.order.remark || '—' }}</dd></div><div v-if="detail.order.status === 'CANCELLED'">
             <dt>取消 / 关闭原因</dt><dd>{{ detail.order.cancellationReason || '历史单据未记录' }}</dd>
           </div>
         </dl><div class="purchase-detail-actions">
@@ -164,7 +167,7 @@ defineExpose({mayLeave})
         <h2>采购明细</h2><div class="table-scroll">
           <TableViewport>
             <table class="data-table">
-              <thead><tr><th>图片</th><th>项目</th><th>单位</th><th>采购数量</th><th>已收</th><th>{{ detail.order.status === 'CANCELLED' ? '已关闭余量' : '待收' }}</th><th>不含税单价</th><th>是否含税 / 税率</th><th>金额</th></tr></thead><tbody>
+              <thead><tr><th>图片</th><th>项目</th><th>单位</th><th>采购数量</th><th>包裹数</th><th>已收</th><th>{{ detail.order.status === 'CANCELLED' ? '已关闭余量' : '待收' }}</th><th>不含税单价</th><th>是否含税 / 税率</th><th>金额</th></tr></thead><tbody>
                 <tr
                   v-for="line in detail.order.lines"
                   :key="line.id"
@@ -175,7 +178,7 @@ defineExpose({mayLeave})
                       :image-url="line.imageUrl"
                       :alt="line.itemName"
                     />
-                  </td><td><strong>{{ line.itemName }}</strong><small>{{ line.specification || '—' }}</small></td><td>{{ line.unit }}</td><td>{{ line.orderedQuantity }}</td><td>{{ line.receivedQuantity }}</td><td>{{ line.remainingQuantity }}</td><td>{{ detail.order.currency }} {{ line.unitPrice.toFixed(2) }}</td><td>{{ line.taxIncluded ? `是 / ${line.taxRate ?? 1}%` : '否' }}</td><td>{{ detail.order.currency }} {{ (purchaseLineAmount(line)).toFixed(2) }}</td>
+                  </td><td><strong>{{ line.itemName }}</strong><small>{{ line.specification || '—' }}</small></td><td>{{ line.unit }}</td><td>{{ line.orderedQuantity }}</td><td>{{ line.packageCount ?? '—' }}</td><td>{{ line.receivedQuantity }}</td><td>{{ line.remainingQuantity }}</td><td>{{ detail.order.currency }} {{ line.unitPrice.toFixed(2) }}</td><td>{{ line.taxIncluded ? `是 / ${line.taxRate ?? 1}%` : '否' }}</td><td>{{ detail.order.currency }} {{ (purchaseLineAmount(line)).toFixed(2) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -197,7 +200,7 @@ defineExpose({mayLeave})
               v-for="receipt in detail.receipts"
               :key="receipt.id"
             >
-              <strong>{{ new Date(receipt.receivedAt).toLocaleString() }}</strong><span>{{ receipt.actorLoginName }} · {{ receipt.lines.map(line => `${line.itemName} × ${line.quantity}`).join('；') }}</span><small>{{ receipt.remark || '无备注' }}</small>
+              <strong>{{ beijingDateTime(receipt.receivedAt) }}</strong><span>{{ receipt.actorLoginName }} · {{ receipt.lines.map(line => `${line.itemName} × ${line.quantity}`).join('；') }}</span><small>{{ receipt.remark || '无备注' }}</small>
             </li>
           </ol>
         </article><article class="panel">
@@ -206,7 +209,7 @@ defineExpose({mayLeave})
               v-for="event in detail.history"
               :key="event.id"
             >
-              <strong>{{ actionLabels[event.action] || event.action }}</strong><span>{{ event.actorDisplayName || event.actorLoginName }}</span><small>{{ new Date(event.occurredAt).toLocaleString() }}</small>
+              <strong>{{ actionLabels[event.action] || event.action }}</strong><span>{{ event.actorDisplayName || event.actorLoginName }}</span><small>{{ beijingDateTime(event.occurredAt) }}</small>
             </li>
           </ol>
         </article>

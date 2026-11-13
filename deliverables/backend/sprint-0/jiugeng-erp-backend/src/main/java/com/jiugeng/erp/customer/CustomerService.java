@@ -64,6 +64,8 @@ class CustomerService implements CustomerProductLookup {
     }
     @Transactional
     CustomerView saveCustomer(String id,CustomerInput input,AuthenticatedActor actor) {
+        if(!com.jiugeng.erp.ChinaPhone.mobile(input.phone()))throw new CustomerException(400,"PHONE_INVALID","请填写有效的中国大陆手机号");
+        if(!com.jiugeng.erp.ChinaPhone.contact(input.registeredPhone()))throw new CustomerException(400,"PHONE_INVALID",com.jiugeng.erp.ChinaPhone.MESSAGE);
         var addresses=input.addresses()==null?null:CustomerAddresses.normalize(input.addresses());
         String encodedTitles=input.invoiceTitles()==null?null:CustomerInvoiceTitles.encode(input.invoiceTitles());
         String oldDefault=jdbc.sql("SELECT COALESCE(default_customer_id,'') FROM customer_preferences WHERE id=1 FOR UPDATE").query(String.class).single();

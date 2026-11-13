@@ -340,3 +340,10 @@ describe('MaterialsView merged material management', () => {
     expect(row.findAll('button').some(button => button.text() === '停用')).toBe(true)
   })
 })
+
+it('requests only enabled material suppliers for the assignment control',async()=>{
+ const wrapper=mount(MaterialsView,{global});await flushPromises()
+ await wrapper.get('.material-toolbar button').trigger('click');await flushPromises()
+ expect(domainApi.suppliers).toHaveBeenCalledWith(expect.objectContaining({status:'ACTIVE',category:'MATERIAL'}))
+ wrapper.unmount()
+})

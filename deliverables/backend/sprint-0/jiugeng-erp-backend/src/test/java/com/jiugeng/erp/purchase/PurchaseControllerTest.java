@@ -35,7 +35,7 @@ class PurchaseControllerTest {
     @BeforeEach void setup() {
         cleanupPurchases();
         supplierId=UUID.randomUUID().toString(); materialId=UUID.randomUUID().toString(); variantId=UUID.randomUUID().toString();
-        jdbc.update("INSERT INTO supplier(id,name,phone,status,created_by,updated_by) VALUES(?,?,'10086','ACTIVE','test','test')",supplierId,"采购供应商");
+        jdbc.update("INSERT INTO supplier(id,name,phone,status,categories,created_by,updated_by) VALUES(?,?,'10086','ACTIVE','MATERIAL,PRODUCT','test','test')",supplierId,"采购供应商");
         String suffix=materialId.substring(0,8).toUpperCase(); String materialCode="PUR-MAT-"+suffix;
         jdbc.update("INSERT INTO auxiliary_material(id,material_code,material_code_normalized,name,material_type,unit,status,created_by,updated_by) VALUES(?,?,?,?, '包装','PCS','ACTIVE','test','test')",materialId,materialCode,materialCode,"采购辅料");
         String productId=UUID.randomUUID().toString();
@@ -46,6 +46,41 @@ class PurchaseControllerTest {
         jdbc.update("INSERT INTO auxiliary_material_supplier(id,auxiliary_material_id,supplier_id,primary_slot,created_by,updated_by) VALUES(?,?,?,'PRIMARY','test','test')",UUID.randomUUID().toString(),materialId,supplierId);
     }
     @AfterEach void cleanup(){cleanupPurchases();}
+
+    @Test void deletingDeliveryHistoryPreservesOrdersAndStaysDeleted() throws Exception {
+        String token=login("dh-"+UUID.randomUUID().toString().substring(0,8),"PRODUCT_MATERIAL");
+        JsonNode order=createOrder(token,"MATERIAL",materialId,"10","2");
+        String id=order.get("id").asText();
+        jdbc.update("UPDATE purchase_order SET delivery_address=? WHERE id=?"," 测试历史收货处 ",id);
+        mvc.perform(get("/api/v1/purchases/delivery-options").header("Authorization",bearer(token)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$[0]").value("测试历史收货处"));
+        for(int n=0;n<2;n++) mvc.perform(post("/api/v1/purchases/delivery-options/remove").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("name","测试历史收货处")))).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/purchases/delivery-options").header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$").isEmpty());
+        mvc.perform(get("/api/v1/purchases/orders/{id}",id).header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.deliveryAddress").value(" 测试历史收货处 "));
+        mvc.perform(post("/api/v1/purchases/delivery-options/remove").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("name"," ")))).andExpect(status().isBadRequest());
+        String viewer=login("delivery-viewer","SELECTION");
+        mvc.perform(post("/api/v1/purchases/delivery-options/remove").header("Authorization",bearer(viewer)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("name","测试历史收货处")))).andExpect(status().isForbidden());
+    }
+
+    @Test void packageCountsPersistAndRejectFractionalNegativeOrOverflowValues() throws Exception {
+        String token=login("package-buyer","PRODUCT_MATERIAL");
+        for (String type : List.of("PRODUCT","MATERIAL","MANUAL")) {
+            Map<String,Object> line=new java.util.LinkedHashMap<>(Map.of("itemId",type.equals("PRODUCT")?variantId:materialId,"itemName","测试物品","unit","个","quantity",10,"unitPrice",2,"packageCount",3));
+            Map<String,Object> payload=new java.util.LinkedHashMap<>(Map.of("orderType",type,"supplierId",supplierId,"currency","CNY","deliveryAddress","测试仓库","lines",List.of(line)));
+            JsonNode created=objectMapper.readTree(mvc.perform(post("/api/v1/purchases/orders/place").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(payload)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.lines[0].packageCount").value(3)).andReturn().getResponse().getContentAsString());
+            String id=created.get("id").asText();
+            payload.put("version",created.get("version").asLong());line.put("packageCount",7);
+            mvc.perform(put("/api/v1/purchases/orders/{id}/place",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(payload)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.lines[0].packageCount").value(7));
+            mvc.perform(get("/api/v1/purchases/orders/{id}/detail",id).header("Authorization",bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.order.lines[0].packageCount").value(7));
+            for (Object invalid : List.of(-1,new java.math.BigDecimal("1.5"),2147483648L)) {
+                line.put("packageCount",invalid);
+                mvc.perform(post("/api/v1/purchases/orders/place").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(payload))).andExpect(status().isBadRequest());
+            }
+        }
+    }
 
     @Test void materialReceiptPostsInventoryInSameWorkflowAndIsIdempotent() throws Exception {
         String token=login("buyer","PRODUCT_MATERIAL");
@@ -106,7 +141,7 @@ class PurchaseControllerTest {
     @Test void orderCannotUseAnItemThatIsNotLinkedToItsSupplier() throws Exception {
         String token=login("supplier-link-buyer","PRODUCT_MATERIAL");
         String otherSupplier=UUID.randomUUID().toString();
-        jdbc.update("INSERT INTO supplier(id,name,phone,status,created_by,updated_by) VALUES(?,?,'10010','ACTIVE','test','test')",otherSupplier,"无关联供应商");
+        jdbc.update("INSERT INTO supplier(id,name,phone,status,categories,created_by,updated_by) VALUES(?,?,'10010','ACTIVE','MATERIAL,PRODUCT','test','test')",otherSupplier,"无关联供应商");
         mvc.perform(get("/api/v1/purchases/references").param("orderType","MATERIAL").param("supplierId",otherSupplier)
                 .header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$").isEmpty());
         Map<String,Object> request=Map.of("orderType","MATERIAL","supplierId",otherSupplier,"currency","CNY",
@@ -117,7 +152,7 @@ class PurchaseControllerTest {
     }
 
     @Test void deliveryDetailsSurviveDraftUpdatesAndCancellationRequiresReason() throws Exception {
-        String token=login("delivery-buyer","PRODUCT_MATERIAL");
+        String token=login("history-delete-buyer","PRODUCT_MATERIAL");
         JsonNode order=createOrder(token,"MATERIAL",materialId,"10","2"); String id=order.get("id").asText();
         var input=Map.of("orderType","MATERIAL","supplierId",supplierId,"currency","CNY","version",0,
                 "expectedDeliveryDate","2026-11-20","deliveryAddress","验收固定仓",
@@ -289,12 +324,25 @@ class PurchaseControllerTest {
         mvc.perform(get("/api/v1/purchases/orders/{id}",id).header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("COMPLETED")).andExpect(jsonPath("$.lines[0].specification").value("12 W"));
     }
 
+    @Test void supplierCategoriesPreventCrossTypePurchases() throws Exception {
+        String token=login("category-buyer","PRODUCT_MATERIAL");
+        jdbc.update("UPDATE supplier SET categories='MATERIAL' WHERE id=?",supplierId);
+        mvc.perform(get("/api/v1/purchases/references").param("orderType","PRODUCT").param("supplierId",supplierId).header("Authorization",bearer(token)))
+            .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SUPPLIER_CATEGORY_MISMATCH"));
+        var input=Map.of("orderType","PRODUCT","supplierId",supplierId,"currency","CNY","lines",List.of(Map.of("itemId",variantId,"quantity",1,"unitPrice",1)));
+        mvc.perform(post("/api/v1/purchases/orders/place").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input)))
+            .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SUPPLIER_CATEGORY_MISMATCH"));
+        mvc.perform(get("/api/v1/purchases/references").param("orderType","MATERIAL").param("supplierId",supplierId).header("Authorization",bearer(token))).andExpect(status().isOk());
+        jdbc.update("UPDATE supplier SET categories='MATERIAL,PRODUCT' WHERE id=?",supplierId);
+        mvc.perform(post("/api/v1/purchases/orders/place").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input))).andExpect(status().isOk());
+    }
+
     private JsonNode createOrder(String token,String type,String itemId,String quantity,String price)throws Exception{
         Map<String,Object> request=Map.of("orderType",type,"supplierId",supplierId,"currency","CNY","lines",List.of(Map.of("itemId",itemId,"quantity",quantity,"unitPrice",price)));
         String body=mvc.perform(post("/api/v1/purchases/orders").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(request)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("DRAFT")).andReturn().getResponse().getContentAsString();return objectMapper.readTree(body);
     }
     private String login(String name,String role)throws Exception{String uid=UUID.randomUUID().toString();var encoder=new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder();jdbc.update("INSERT INTO iam_user(id,login_name,display_name,password_hash,role,status,must_change_password) VALUES(?,?,?,?,?,'ENABLED',FALSE)",uid,name,name,encoder.encode(PASSWORD),role);jdbc.update("INSERT INTO iam_user_role(user_id,role_id) SELECT id,role FROM iam_user WHERE id=?",uid);String body=mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(json(Map.of("loginName",name,"password",PASSWORD)))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();return objectMapper.readTree(body).get("token").asText();}
-    private void cleanupPurchases(){jdbc.update("DELETE FROM purchase_receipt_line");jdbc.update("DELETE FROM purchase_receipt");jdbc.update("DELETE FROM purchase_order_line");jdbc.update("DELETE FROM purchase_order");}
+    private void cleanupPurchases(){jdbc.update("DELETE FROM purchase_delivery_hidden");jdbc.update("DELETE FROM purchase_receipt_line");jdbc.update("DELETE FROM purchase_receipt");jdbc.update("DELETE FROM purchase_order_line");jdbc.update("DELETE FROM purchase_order");}
     private String json(Object value)throws Exception{return objectMapper.writeValueAsString(value);}private String bearer(String token){return "Bearer "+token;}
 }

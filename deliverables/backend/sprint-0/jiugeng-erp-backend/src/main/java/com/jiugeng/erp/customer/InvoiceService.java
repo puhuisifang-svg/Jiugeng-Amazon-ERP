@@ -63,6 +63,7 @@ class InvoiceService {
     }
     @Transactional
     View save(String id,Input input,AuthenticatedActor actor) {
+        if(!com.jiugeng.erp.ChinaPhone.contact(input.registeredPhone()))throw new CustomerException(400,"PHONE_INVALID",com.jiugeng.erp.ChinaPhone.MESSAGE);
         View before=id==null?null:get(id);
         if(before!=null && !before.details().customerProductId().equals(input.customerProductId()))
             throw new CustomerException(400,"INVOICE_CUSTOMER_IMMUTABLE","已建档发票不能更换客户商品，请另行新增");

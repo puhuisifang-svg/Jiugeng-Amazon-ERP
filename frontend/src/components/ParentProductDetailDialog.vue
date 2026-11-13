@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+
+
 import { onMounted, ref, watch } from 'vue'
 import { domainApi, type ProductDetailDto, type ProductHistoryDto, type ProductVariantDto, type SkuListItemDto } from '@/api/domain'
 import { productActionLabel } from '@/utils/productHistory'
@@ -65,7 +68,7 @@ function status(value: string) { return ({ ACTIVE: '启用', DISABLED: '停用',
             alt="父体图片"
           /><div>
             <h3>{{ product.productName }}</h3><p>父体编码：{{ product.productCode }}</p><p>产品状态：{{ status(product.status) }}</p><p>说明：{{ product.description || '—' }}</p><p class="access-muted">
-              创建时间：{{ product.createdAt || '—' }} · 更新时间：{{ product.updatedAt || '—' }}
+              创建时间：{{ beijingDateTime(product.createdAt) }} · 更新时间：{{ beijingDateTime(product.updatedAt) }}
             </p>
           </div>
         </div>
@@ -139,7 +142,7 @@ function status(value: string) { return ({ ACTIVE: '启用', DISABLED: '停用',
                 v-for="item in history"
                 :key="item.id"
               >
-                <td>{{ item.occurredAt }}</td><td>{{ item.actorDisplayName || item.actorLoginName }}</td><td>{{ productActionLabel(item.action) }}</td><td>{{ item.detail || '—' }}</td>
+                <td>{{ beijingDateTime(item.occurredAt) }}</td><td>{{ item.actorDisplayName || item.actorLoginName }}</td><td>{{ productActionLabel(item.action) }}</td><td>{{ item.detail || '—' }}</td>
               </tr><tr v-if="!history.length">
                 <td colspan="4">
                   暂无变更记录

@@ -1,7 +1,7 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import DatePicker from './DatePicker.vue'
-beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 9, 30, 12)) })
+beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-30T04:00:00Z')) })
 afterEach(() => vi.useRealTimers())
 const open = async (w: ReturnType<typeof mount>) => { await w.get('button[aria-label="打开日期选择器"]').trigger('click'); await flushPromises() }
 describe('shared date picker', () => {
@@ -71,4 +71,14 @@ describe('shared date picker', () => {
     expect(w.get('input').attributes('required')).toBeDefined(); expect(w.get('input').attributes('id')).toBe('delivery')
     await w.get('input').setValue('2028-02-29'); expect(w.emitted('update:modelValue')).toEqual([['2028-02-29']]); w.unmount()
   })
+})
+
+it('uses Beijing today across a UTC month boundary for range shortcuts', async () => {
+  vi.setSystemTime(new Date('2026-10-31T16:01:00Z'))
+  const w = mount(DatePicker, { props: { range: true, type: 'datetime-local' } })
+  await open(w)
+  await w.findAll('button').find(b => b.text() === '今天')!.trigger('click')
+  expect(w.emitted('update:modelValue')?.[0]).toEqual(['2026-11-01T00:00'])
+  expect(w.emitted('update:end')?.[0]).toEqual(['2026-11-01T23:59:59'])
+  w.unmount()
 })

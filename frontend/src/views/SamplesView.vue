@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+import { vSingleSelect } from '@/directives/singleSelect'
+
+
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { samplesApi, type SampleLocation } from '@/api/samples'
@@ -62,7 +66,10 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
         maxlength="200"
         placeholder="品名、SKU 或库位编码"
       ></label>
-      <label>所属父体<select v-model="parent"><option value="">全部父体</option><option
+      <label>所属父体<select
+        v-model="parent"
+        v-single-select
+      ><option value="">全部父体</option><option
         v-for="p in parents"
         :key="p.id"
         :value="p.id"
@@ -113,7 +120,7 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
     </p>
     <TableViewport>
       <table class="data-table ui-action-table sample-table">
-        <thead><tr><th>图片</th><th>品名 / SKU 编码</th><th>所属产品</th><th>库位编码</th><th>存放照片</th><th>更新时间</th><th>操作</th></tr></thead><tbody>
+        <thead><tr><th>图片</th><th>品名</th><th>所属产品</th><th>库位编码</th><th>存放照片</th><th>备注</th><th>更新时间</th><th>操作</th></tr></thead><tbody>
           <tr
             v-for="row in rows"
             :key="row.id"
@@ -131,7 +138,7 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
                 :alt="row.skuName"
               />
             </td><td>
-              <strong>{{ row.skuName }}</strong><small class="muted">{{ row.skuCode || '无编码' }}</small><small
+              <strong>{{ row.skuName }}</strong><small
                 v-if="row.specification"
                 class="muted"
               >{{ row.specification }}</small>
@@ -144,7 +151,9 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
                 v-else
                 class="muted"
               >未上传</span>
-            </td><td>{{ new Date(row.updatedAt).toLocaleString('zh-CN',{hour12:false}) }}</td><td>
+            </td><td class="sample-remark">
+              {{ row.remark || '—' }}
+            </td><td>{{ beijingDateTime(row.updatedAt) }}</td><td>
               <template v-if="writable || session.canAccess(['samples.remove'])">
                 <button
                   v-if="session.canAccess(['samples.write'])"
@@ -171,7 +180,7 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
           </tr>
           <tr v-if="!rows.length">
             <td
-              colspan="7"
+              colspan="8"
               class="data-state"
             >
               {{ loading?'正在加载…':'暂无样品库位记录' }}
@@ -257,18 +266,21 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
               :disabled="blocked"
               placeholder="输入未建立 SKU 的产品名称"
             ></label>
-            <label>样品编码<input
-              v-model="sampleCode"
-              maxlength="64"
-              :disabled="blocked"
-              placeholder="选填，如供应商货号"
-            ></label>
           </div>
           <div
             v-if="editing && !manual"
-            class="selected-sku"
+            class="selected-sku selected-sku-preview"
           >
-            <strong>{{ editing.skuName }}</strong><span>{{ editing.skuCode }}</span>
+            <ShipmentProductImage
+              v-if="editing.productId && editing.variantId"
+              :product-id="editing.productId"
+              :variant-id="editing.variantId"
+              :alt="editing.skuName"
+            />
+            <div class="selected-sku-info">
+              <strong>{{ editing.skuName }}</strong>
+              <span class="muted">父体：{{ editing.productName || '—' }}</span>
+            </div>
           </div>
           <template v-else-if="!editing && !manual">
             <button
@@ -279,8 +291,27 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
             >
               {{ selected ? '更换 SKU' : '选择产品 SKU' }}
             </button>
-            <p class="selected-sku">
-              已选：{{ selected ? `${selected.variant.variantName} / ${selected.variant.skuCode}` : '尚未选择 SKU' }}
+            <div
+              v-if="selected"
+              class="selected-sku selected-sku-preview"
+            >
+              <PurchaseItemImage
+                :key="selected.variant.id ?? selected.variant.skuCode"
+                :image-asset-id="selected.variant.imageAssetId"
+                :image-url="selected.variant.imageUrl"
+                :alt="selected.variant.variantName"
+              />
+              <div class="selected-sku-info">
+                <small class="muted">已选产品</small>
+                <strong>{{ selected.variant.variantName }}</strong>
+                <span class="muted">父体：{{ selected.productName }}</span>
+              </div>
+            </div>
+            <p
+              v-else
+              class="selected-sku muted"
+            >
+              尚未选择 SKU
             </p>
           </template>
           <label class="location-field">库位编码 <span class="muted">必填</span><input
@@ -387,6 +418,7 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
       v-if="skuPickerOpen"
       :selected-id="selected?.variant.id ?? ''"
       :active-only="false"
+      :show-codes="false"
       @close="skuPickerOpen = false"
       @select="selected = $event; skuPickerOpen = false"
     />
@@ -399,7 +431,7 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
 </template>
 <style scoped>
 .sample-location-code { color: #dc2626; }
-.sample-manual-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.sample-manual-fields label{display:grid;gap:6px}.sample-source{margin-bottom:12px}.sample-storage-editor{margin-top:16px;display:grid;gap:10px}.sample-storage-preview{display:flex;align-items:center;gap:12px}.required{color:#b42318}@media(max-width:600px){.sample-manual-fields{grid-template-columns:1fr}}
+.sample-manual-fields{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}.sample-manual-fields label{display:grid;gap:6px}.sample-source{margin-bottom:12px}.sample-storage-editor{margin-top:16px;display:grid;gap:10px}.sample-storage-preview{display:flex;align-items:center;gap:12px}.required{color:#b42318}@media(max-width:600px){.sample-manual-fields{grid-template-columns:1fr}}
 #app .samples-ui .sample-sku-picker-button{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:6px 14px;background:#2864c5;color:white;border:1px solid #2864c5;border-radius:5px;font-size:13px;cursor:pointer}.sample-sku-picker-button:disabled{opacity:.5}
 
 .samples-ui .filter-panel label{flex:0 1 360px;min-width:220px}.sample-table{min-width:800px;width:100%}.sample-table small,.sku-options small{display:block}.sample-table .text-action{background:transparent;border:0;color:var(--accent);padding:0 8px;min-height:32px;height:32px;cursor:pointer}.sample-table .text-action.danger{color:#b42318}.sample-table th:last-child,.sample-table td:last-child{width:128px;min-width:128px}
@@ -407,4 +439,14 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
 .sample-dialog form{display:flex;flex-direction:column;max-height:calc(100dvh - 32px);min-width:0}.sample-dialog header,.sample-dialog footer{display:flex;align-items:center;gap:8px;padding:16px;flex-shrink:0}.sample-dialog header{justify-content:space-between;border-bottom:1px solid var(--line)}.sample-dialog footer button{min-height:40px;padding:0 18px;border:1px solid var(--line);border-radius:6px;cursor:pointer}.sample-dialog footer .primary-action{background:var(--accent);color:white;border-color:var(--accent)}.sample-dialog footer button:disabled{opacity:.6;cursor:default}.sample-dialog h2{margin:0;font-size:18px}.sample-dialog footer{justify-content:flex-end;border-top:1px solid var(--line)}.sample-dialog-body{overflow:auto;padding:16px;min-height:0}
 .sku-search{display:flex;align-items:end;gap:8px}.sku-search label{flex:1;min-width:0;display:grid;gap:4px}.sample-dialog input:not([type=radio]){width:100%;min-width:0;box-sizing:border-box;height:40px;border:1px solid var(--line);border-radius:6px;padding:0 10px}.sku-options{overflow:auto;max-height:260px;margin-top:8px}.sku-options table{width:100%;min-width:480px}.sku-options input[type=radio]{width:24px;height:24px}.sku-pages{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}.sku-pages button{min-height:32px}.selected-sku{display:flex;flex-wrap:wrap;gap:8px;background:#f5f7fa;padding:10px;border-radius:6px}.location-field{display:block;margin-top:12px}.location-field input{display:block;margin-top:6px}
 @media(max-width:600px){.samples-ui .filter-panel label{flex:1 1 100%;min-width:0}.sample-dialog{width:calc(100vw - 16px);max-width:calc(100vw - 16px)}}
+</style>
+
+<style scoped>
+.selected-sku-preview{align-items:center;flex-wrap:nowrap;margin-top:8px}
+.selected-sku-preview :deep(.image-button),.selected-sku-preview :deep(.catalog-image-empty){flex:none}
+.selected-sku-info{display:grid;gap:4px;min-width:0;overflow-wrap:anywhere}
+</style>
+
+<style scoped>
+.sample-remark{min-width:160px;max-width:300px;white-space:pre-wrap;overflow-wrap:anywhere}
 </style>

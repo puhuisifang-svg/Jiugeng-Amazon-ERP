@@ -3,6 +3,7 @@ import type { AppRole, Capability } from '@/router/meta'
 const ROLE_CAPABILITIES: Record<AppRole, Capability[]> = {
   CUSTOM: [],
   ADMIN: [
+    'tools.pdf.use',
     'customers.read', 'customers.write',
     'system.users.manage', 'products.read', 'products.write', 'materials.read', 'materials.write',
     'inventory.read', 'inventory.write', 'selection.read', 'selection.write', 'watch.read', 'watch.write',

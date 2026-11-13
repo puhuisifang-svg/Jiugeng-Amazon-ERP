@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+
+
 import ProductImagePreview from './ProductImagePreview.vue'
 import { session } from '@/state/session'
 import { computed, ref, watch } from 'vue'
@@ -12,7 +15,7 @@ watch(()=>props.target.id,()=>{tab.value='overview'})
 const labels:Record<string,string>={title:'标题',brand:'品牌',imageUrl:'商品主图',bullets:'五点描述',price:'价格',currency:'币种',availability:'可售状态',rating:'星级评分',ratingCount:'评分数',smallCategoryRank:'小类目排名',largeCategoryRank:'大类目排名',listedAt:'亚马逊首次可用日期',dimensions:'产品尺寸',weight:'重量'}
 const decisions:Record<string,string>={PENDING:'等待首次采集',BASELINE:'首次建档',SOURCE_BASELINE:'来源切换',CHANGED:'发现变化',UNCHANGED:'无变化',PARTIAL:'部分观测',FAILED:'更新失败',OUT_OF_ORDER:'旧观测未采纳'}
 const groups=[{title:'商品资料',fields:['brand','listedAt','dimensions','weight']},{title:'类目排名',fields:['smallCategoryRank','largeCategoryRank']}]
-const time=(value:string|null)=>value?new Date(value).toLocaleString('zh-CN',{hour12:false}):'—'
+const time=(value:string|null)=>value?beijingDateTime(value):'—'
 const value=(item:unknown)=>item===undefined?'未观测':item===null?'未知':Array.isArray(item)?item.join('\n')||'明确为空':item==='AVAILABLE'?'可售':item==='UNAVAILABLE'?'不可售':String(item)
 const source=(name:string|null)=>name==='EXTERNAL:amazon-public-us'?'亚马逊前台':name==='MANUAL'?'人工观测':name==='SYNTHETIC'?'合成演示':name?.startsWith('EXTERNAL:')?'外部观测':'暂无数据'
 const fields=computed(()=>props.target.fields as Record<string,unknown>)

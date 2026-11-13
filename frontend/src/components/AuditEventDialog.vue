@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+
 import { computed } from 'vue'
 import type { AuditEvent } from '@/api/audit'
 import AccessDialog from './AccessDialog.vue'
@@ -23,7 +25,7 @@ const rows = computed(() => {
 })
 const changedCount = computed(() => rows.value.filter(r => r.changed).length)
 function valueText(value: unknown) { return value === undefined || value === null ? '未记录' : value === '' ? '（空）' : typeof value === 'boolean' ? value ? '是' : '否' : typeof value === 'object' ? JSON.stringify(value,null,2) : String(value) }
-const time = computed(() => new Intl.DateTimeFormat('zh-CN', {dateStyle:'medium',timeStyle:'medium'}).format(new Date(props.event.occurredAt)))
+const time = computed(() => beijingDateTime(props.event.occurredAt))
 </script>
 <template>
   <!-- eslint-disable vue/max-attributes-per-line, vue/singleline-html-element-content-newline -->

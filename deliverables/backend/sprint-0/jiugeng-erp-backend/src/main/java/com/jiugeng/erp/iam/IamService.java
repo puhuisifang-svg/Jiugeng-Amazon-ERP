@@ -34,7 +34,7 @@ class IamService {
     private static final java.util.regex.Pattern EMAIL_PATTERN =
             java.util.regex.Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
     private static final java.util.regex.Pattern PHONE_PATTERN =
-            java.util.regex.Pattern.compile("^(?:\\+[1-9]\\d{7,14}|1\\d{10})$");
+            java.util.regex.Pattern.compile("^(?:\\+86|0086)?1[3-9]\\d{9}$");
     private static final java.util.regex.Pattern PASSWORD_LETTER = java.util.regex.Pattern.compile("[A-Za-z]");
     private static final java.util.regex.Pattern PASSWORD_DIGIT = java.util.regex.Pattern.compile("\\d");
     private static final Duration RESET_CODE_DURATION = Duration.ofMinutes(10);

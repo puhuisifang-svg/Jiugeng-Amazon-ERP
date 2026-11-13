@@ -339,6 +339,7 @@ class ProductControllerTest {
                 VALUES (?, 'MAT-AGG', 'MAT-AGG', '聚合辅料', 'PACKAGING', '个', 'ACTIVE', 'test', 'test')
                 """, materialId);
 
+        jdbc.update("UPDATE supplier SET categories='PRODUCT' WHERE id=?",supplierId);
         Map<String, Object> aggregate = product("PROD-AGG", "聚合产品", "SKU-AGG", "蓝色");
         @SuppressWarnings("unchecked")
         Map<String, Object> variant = (Map<String, Object>) ((List<?>) aggregate.get("variants")).getFirst();
@@ -352,6 +353,13 @@ class ProductControllerTest {
                 .andExpect(jsonPath("$.variants[0].suppliers[0].supplierId").value(supplierId))
                 .andExpect(jsonPath("$.variants[0].materials[0].materialId").value(materialId));
 
+        jdbc.update("UPDATE supplier SET categories='MATERIAL' WHERE id=?",supplierId);
+        var wrongCategory=product("PROD-CATEGORY", "分类校验产品", "SKU-CATEGORY", "蓝色");
+        @SuppressWarnings("unchecked") var wrongVariant=(Map<String,Object>)((List<?>)wrongCategory.get("variants")).getFirst();
+        wrongVariant.put("suppliers",List.of(Map.of("supplierId",supplierId,"primary",true)));
+        mvc.perform(post("/api/v1/products").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(wrongCategory)))
+            .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SUPPLIER_CATEGORY_REQUIRED"));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product WHERE product_code_normalized='PROD-CATEGORY'",Integer.class)).isZero();
         Map<String, Object> invalid = product("PROD-ROLLBACK", "回滚产品", "SKU-ROLLBACK", "白色");
         @SuppressWarnings("unchecked")
         Map<String, Object> invalidVariant = (Map<String, Object>) ((List<?>) invalid.get("variants")).getFirst();

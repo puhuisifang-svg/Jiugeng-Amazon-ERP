@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+
+
 import CustomerProductImage from '@/components/CustomerProductImage.vue'
 import { createRequestId } from '@/utils/requestId'
 
@@ -129,56 +132,103 @@ watch(() => route.params.id, load); onMounted(load)
       </div>
       <TableViewport>
         <table class="data-table order-main-table">
-          <thead><tr><th>客户订单号</th><th>客户</th><th>商品</th><th>下单日期</th><th>交期</th><th>含税总价 RMB</th><th>状态 / 发货进度</th><th>开票</th><th>备注</th><th>操作</th></tr></thead><tbody>
-            <tr
+          <thead><tr><th>客户订单号</th><th>客户</th><th>商品</th><th>客户编码</th><th>商品数量</th><th>下单日期</th><th>交期</th><th>含税总价 RMB</th><th>状态 / 发货进度</th><th>开票</th><th>备注</th><th>操作</th></tr></thead><tbody>
+            <template
               v-for="o in rows"
               :key="o.id"
             >
-              <td>
-                <RouterLink :to="`/orders/customers/${o.id}`">
-                  {{ o.details.externalNumber || o.details.contractNumber || '未填写' }}
-                </RouterLink>
-              </td><td>{{ o.customerName }}</td><td>
-                <div
-                  v-for="line in o.lines"
-                  :key="line.id"
-                  class="order-list-product"
+              <tr
+                v-for="(line, lineIndex) in o.lines"
+                :key="line.id"
+              >
+                <td
+                  v-if="lineIndex === 0"
+                  :rowspan="o.lines.length"
                 >
-                  <CustomerProductImage
-                    v-if="line.product?.productId && line.product?.variantId"
-                    :product-id="line.product.productId"
-                    :variant-id="line.product.variantId"
-                    :alt="line.details.name"
-                  />
-                  <span
-                    v-else
-                    class="order-list-image-empty"
-                  >暂无图片</span>
-                  <div>
-                    <ProductName
-                      :text="line.details.name"
-                      :styles="line.namePresentation?.styles"
-                      :highlighted="line.namePresentation?.highlighted"
-                    /><small>{{ line.skuCode || '—' }}</small>
+                  <RouterLink :to="`/orders/customers/${o.id}`">
+                    {{ o.details.externalNumber || o.details.contractNumber || '未填写' }}
+                  </RouterLink>
+                </td><td
+                  v-if="lineIndex === 0"
+                  :rowspan="o.lines.length"
+                >
+                  {{ o.customerName }}
+                </td><td>
+                  <div
+                    class="order-list-product"
+                  >
+                    <CustomerProductImage
+                      v-if="line.product?.productId && line.product?.variantId"
+                      :product-id="line.product.productId"
+                      :variant-id="line.product.variantId"
+                      :alt="line.details.name"
+                    />
+                    <span
+                      v-else
+                      class="order-list-image-empty"
+                    >暂无图片</span>
+                    <div>
+                      <ProductName
+                        :text="line.details.name"
+                        :styles="line.namePresentation?.styles"
+                        :highlighted="line.namePresentation?.highlighted"
+                      /><small>{{ line.skuCode || '—' }}</small>
+                    </div>
                   </div>
-                </div><small>共 {{ o.lines.length }} 项</small>
-              </td><td>{{ o.details.orderDate }}</td><td class="order-delivery-date">
-                {{ o.details.deliveryDate }}
-              </td><td class="order-money">
-                {{ o.totalAmount }}
-              </td><td><span :class="['order-status', `order-status--${o.status.toLowerCase()}`]">{{ labels[o.status] }}</span><small>发完 {{ o.lines.filter(l => Number(l.shippedQuantity) >= Number(l.details.quantity)).length }}/{{ o.lines.length }} 项</small><small v-if="o.lines.some(l=>Number(l.shippedQuantity)>0) && o.lines.some(l=>Number(l.shippedQuantity)<Number(l.details.quantity))">部分发货</small></td><td>{{ !o.details.invoiceRequired ? '无需开票' : o.invoiced ? '已开票' : o.invoiceId ? '待开票' : '待生成' }}</td><td>{{ o.details.remark || '—' }}</td><td class="table-actions">
-                <RouterLink :to="`/orders/customers/${o.id}`">
-                  详情
-                </RouterLink><button
-                  v-if="canArrange && ['DRAFT','CONFIRMED'].includes(o.status)"
-                  :disabled="saving || o.status !== 'CONFIRMED' || !o.lines.some(l=>Number(l.details.quantity)>Number(l.allocatedQuantity)+Number(l.shippedQuantity))"
-                  :title="o.status==='DRAFT' ? '请先在详情中确认订单' : '按订单剩余数量新增待发货'"
-                  @click="arrange(o)"
+                </td><td class="order-customer-code">
+                  {{ line.product?.customerProductCode || '—' }}
+                </td><td class="order-product-quantity">
+                  {{ line.details.quantity }} {{ line.details.unit }}
+                </td><td
+                  v-if="lineIndex === 0"
+                  :rowspan="o.lines.length"
                 >
-                  新增待发货
-                </button>
-              </td>
-            </tr>
+                  {{ o.details.orderDate }}
+                </td><td
+                  v-if="lineIndex === 0"
+                  :rowspan="o.lines.length"
+                  class="order-delivery-date"
+                >
+                  {{ o.details.deliveryDate }}
+                </td><td
+                  v-if="lineIndex === 0"
+                  :rowspan="o.lines.length"
+                  class="order-money"
+                >
+                  {{ o.totalAmount }}
+                </td><td
+                  v-if="lineIndex === 0"
+                  :rowspan="o.lines.length"
+                >
+                  <span :class="['order-status', `order-status--${o.status.toLowerCase()}`]">{{ labels[o.status] }}</span><small>发完 {{ o.lines.filter(l => Number(l.shippedQuantity) >= Number(l.details.quantity)).length }}/{{ o.lines.length }} 项</small><small v-if="o.lines.some(l=>Number(l.shippedQuantity)>0) && o.lines.some(l=>Number(l.shippedQuantity)<Number(l.details.quantity))">部分发货</small>
+                </td><td
+                  v-if="lineIndex === 0"
+                  :rowspan="o.lines.length"
+                >
+                  {{ !o.details.invoiceRequired ? '无需开票' : o.invoiced ? '已开票' : o.invoiceId ? '待开票' : '待生成' }}
+                </td><td
+                  v-if="lineIndex === 0"
+                  :rowspan="o.lines.length"
+                >
+                  {{ o.details.remark || '—' }}
+                </td><td
+                  v-if="lineIndex === 0"
+                  :rowspan="o.lines.length"
+                  class="table-actions"
+                >
+                  <RouterLink :to="`/orders/customers/${o.id}`">
+                    详情
+                  </RouterLink><button
+                    v-if="canArrange && ['DRAFT','CONFIRMED'].includes(o.status)"
+                    :disabled="saving || o.status !== 'CONFIRMED' || !o.lines.some(l=>Number(l.details.quantity)>Number(l.allocatedQuantity)+Number(l.shippedQuantity))"
+                    :title="o.status==='DRAFT' ? '请先在详情中确认订单' : '按订单剩余数量新增待发货'"
+                    @click="arrange(o)"
+                  >
+                    新增待发货
+                  </button>
+                </td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </TableViewport>
@@ -322,7 +372,7 @@ watch(() => route.params.id, load); onMounted(load)
         v-for="h in history"
         :key="h.id"
       >
-        {{ h.occurredAt }} · {{ h.actorDisplayName || h.actorLoginName }} · {{ h.detail }}
+        {{ beijingDateTime(h.occurredAt) }} · {{ h.actorDisplayName || h.actorLoginName }} · {{ h.detail }}
         <small
           v-for="(change,index) in orderHistoryChanges(h)"
           :key="index"
@@ -412,9 +462,9 @@ watch(() => route.params.id, load); onMounted(load)
   </section>
 </template>
 <style scoped>
-.order-delivery-date{color:#dc2626;font-weight:600;white-space:nowrap}.order-list-product{display:flex;align-items:center;gap:10px;min-width:240px;max-width:420px;white-space:normal;margin-bottom:8px}.order-list-product>div{min-width:0;overflow-wrap:anywhere}.order-list-image-empty{flex:none;width:64px;text-align:center;color:var(--muted);font-size:12px}
+.order-customer-code{min-width:120px;overflow-wrap:anywhere}.order-product-quantity{min-width:100px;white-space:nowrap;font-variant-numeric:tabular-nums}.order-delivery-date{color:#dc2626;font-weight:600;white-space:nowrap}.order-list-product{display:flex;align-items:center;gap:10px;min-width:240px;max-width:420px;white-space:normal;margin-bottom:8px}.order-list-product>div{min-width:0;overflow-wrap:anywhere}.order-list-image-empty{flex:none;width:64px;text-align:center;color:var(--muted);font-size:12px}
 .customer-orders{min-width:0;grid-template-columns:minmax(0,1fr)}.customer-orders small{display:block;color:#68758c;font-size:12px}.data-table{min-width:1100px}.order-information{padding:12px}.order-information p{white-space:pre-wrap;overflow-wrap:anywhere}.order-batch{border-top:1px solid #e2e7ee;padding:12px 0}.order-arrange{box-sizing:border-box;width:min(1200px,100%);max-width:100%;min-width:0;margin:0;max-height:calc(100dvh - 32px);overflow:auto}.order-scroll{overflow:auto;min-width:0}.order-scroll input{min-width:90px}.order-scroll input[type=checkbox]{min-width:0}
-.order-main-table th:last-child,.order-main-table td:last-child{position:sticky;right:0;min-width:128px;background:#fff;box-shadow:-2px 0 4px #18263b0d}.order-main-table th:last-child{z-index:3;background:#f7f8fa}.customer-orders>.filter-panel{display:flex;flex-wrap:wrap;align-items:center}.customer-orders>.filter-panel label{flex:0 1 auto}.customer-orders>.filter-panel input{width:150px}.customer-orders>.filter-panel input:not([type=date]){width:210px}.customer-orders>.filter-panel select{width:110px}
+.order-main-table th:last-child,.order-main-table td.table-actions{position:sticky;right:0;min-width:128px;background:#fff;box-shadow:-2px 0 4px #18263b0d}.order-main-table th:last-child{z-index:3;background:#f7f8fa}.customer-orders>.filter-panel{display:flex;flex-wrap:wrap;align-items:center}.customer-orders>.filter-panel label{flex:0 1 auto}.customer-orders>.filter-panel input{width:150px}.customer-orders>.filter-panel input:not([type=date]){width:210px}.customer-orders>.filter-panel select{width:110px}
 .order-information{min-height:0}.order-information h2{font-size:17px;margin:0 0 10px}.order-information p{margin:8px 0}.customer-orders>.material-toolbar{justify-content:flex-start;gap:8px}.order-arrange .form-footer{grid-column:1 / -1;position:sticky;bottom:-24px;background:#fff;padding:12px 0;z-index:2}
 </style>
 

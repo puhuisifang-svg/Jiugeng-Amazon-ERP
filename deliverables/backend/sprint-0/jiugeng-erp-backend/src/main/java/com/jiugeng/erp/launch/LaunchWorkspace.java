@@ -136,7 +136,7 @@ public class LaunchWorkspace {
     private void stageReady(View v){
         JsonNode d=v.document();require(v.proposal().isEmpty(),"请先处理待审核变更");
         if(v.stage()==0){require(!d.path("requirements").isEmpty()&&!d.path("specs").isEmpty(),"请完善方案及开发要求");for(JsonNode r:d.path("requirements"))for(String f:List.of("proposal","standard","owner"))require(!text(r,f).isBlank(),"要求须有内容、验收标准、负责人");}
-        if(v.stage()>=1){JsonNode quote=selected(d,"quotes","selectedQuote");for(String f:List.of("supplier","amount","currency","basis","validUntil","specVersion"))require(!text(quote,f).isBlank(),"选定报价需完整且有有效期/方案版本");require(text(quote,"specVersion").equals(text(d,"specVersion")),"报价与当前方案版本不一致");require(!date(text(quote,"validUntil")).isBefore(LocalDate.now()),"报价已过期，请确认后另存报价");require(!d.path("samples").isEmpty(),"请登记收到的样品及验证记录");}
+        if(v.stage()>=1){JsonNode quote=selected(d,"quotes","selectedQuote");for(String f:List.of("supplier","amount","currency","basis","validUntil","specVersion"))require(!text(quote,f).isBlank(),"选定报价需完整且有有效期/方案版本");require(text(quote,"specVersion").equals(text(d,"specVersion")),"报价与当前方案版本不一致");require(!date(text(quote,"validUntil")).isBefore(LocalDate.now(java.time.ZoneId.of("Asia/Shanghai"))),"报价已过期，请确认后另存报价");require(!d.path("samples").isEmpty(),"请登记收到的样品及验证记录");}
         if(v.stage()>=2){JsonNode sample=selected(d,"samples","selectedSample");require(!text(sample,"receivedDate").isBlank()&&!text(sample,"tester").isBlank(),"最终样品需实际到样日和测试人");require(text(sample,"result").equals("PASS")&&!text(sample,"evidence").isBlank(),"最终样品须通过且有证据");
             require(text(sample,"specVersion").equals(text(d,"specVersion")),"样品与当前方案版本不一致，请复测");
             require(!d.path("requirements").isEmpty(),"开发要求不能为空");

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDateTime } from '@/utils/dateTime'
+
+
 import ProductName from './ProductName.vue'
 import { profileFields, profileElements } from '@/api/customs'
 import { computed, ref, watch } from 'vue'
@@ -215,7 +218,7 @@ watch(() => props.detailRow, async row => {
                   v-for="event in detailHistory"
                   :key="event.id"
                 >
-                  <td>{{ event.occurredAt }}</td><td>{{ event.actorDisplayName || event.actorLoginName }}</td><td :title="event.action">
+                  <td>{{ beijingDateTime(event.occurredAt) }}</td><td>{{ event.actorDisplayName || event.actorLoginName }}</td><td :title="event.action">
                     {{ productActionLabel(event.action) }}
                   </td><td>{{ event.detail || '—' }}</td>
                 </tr>

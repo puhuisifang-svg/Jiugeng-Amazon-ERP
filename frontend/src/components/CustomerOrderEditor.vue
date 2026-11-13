@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { vPhone } from '@/directives/phone'
+import { beijingDate } from '@/utils/dateTime'
+
 import CustomerProductImage from './CustomerProductImage.vue'
 import { vSingleSelect } from '@/directives/singleSelect'
 import CustomerOrderProductPicker from './CustomerOrderProductPicker.vue'
@@ -11,7 +14,7 @@ import type { CustomerOrder, OrderInput } from '@/api/orders'
 import { invoiceAmounts } from '@/ui/invoiceAmounts'
 const props = defineProps<{ initial?: CustomerOrder | undefined; busy: boolean; error: string }>()
 const emit = defineEmits<{ save: [input: OrderInput]; close: [] }>()
-const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai' }).format(new Date())
+const today = beijingDate()
 const form = reactive<OrderInput>(props.initial ? { ...JSON.parse(JSON.stringify(props.initial.details)), lines: props.initial.lines.map(l => ({ ...l.details, id: l.id })), version: props.initial.version } : { customerId: '', source: 'OFFLINE', externalNumber: '', contractNumber: '', orderDate: today, deliveryDate: today, invoiceRequired: false, invoiceTitle: '', taxNumber: '', recipient: '', phone: '', address: '', remark: '', lines: [] })
 const initialSnapshot = ref(JSON.stringify(form)), discard = ref(false), localError = ref(''), selecting = ref(false)
 const customers = ref<Customer[]>([]), chosen = ref<Customer>(), pickerOpen=ref(false)
@@ -168,6 +171,7 @@ onMounted(async () => {
             maxlength="100"
           ></label><label>联系电话<input
             v-model="form.phone"
+            v-phone
             maxlength="32"
           ></label><label class="shipping-address">收货地址<input
             v-model="form.address"

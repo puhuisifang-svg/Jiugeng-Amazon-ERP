@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { beijingDate } from '@/utils/dateTime'
+
+
 import PurchaseExportDialog from '@/components/PurchaseExportDialog.vue'
 import { purchaseLineAmount } from '@/ui/purchaseAmounts'
 import { costsApi } from '@/api/costs'
@@ -10,6 +13,7 @@ import { catalogApi } from '@/api/catalog'
 import PurchaseItemImage from '@/components/PurchaseItemImage.vue'
 import PurchaseLogisticsDialog from '@/components/PurchaseLogisticsDialog.vue'
 import { vSingleSelect } from '@/directives/singleSelect'
+import EditableSelect from '@/components/EditableSelect.vue'
 import DatePicker from '@/components/DatePicker.vue'
 import ListPagination from '@/components/ListPagination.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
@@ -26,6 +30,19 @@ const detailId=ref('')
 const detailView=ref<InstanceType<typeof PurchaseOrderDetailView>>()
 async function closeDetail(){if(await detailView.value?.mayLeave()!==false){detailId.value='';await load()}}
 const orders = ref<PurchaseOrder[]>([])
+const deliveryOptions = ref<string[]>([])
+const removingDelivery = ref(false)
+async function loadDeliveryOptions() {
+  try { deliveryOptions.value = await purchaseApi.deliveryOptions() }
+  catch (exception) { formError.value = message(exception,'历史收货信息加载失败，可直接输入，或重新打开弹窗重试。') }
+}
+async function removeDeliveryOption(name:string) {
+  if(removingDelivery.value || !await confirmAction(`从历史选项中删除“${name}”？已有采购单及当前填写内容不受影响。`))return
+  removingDelivery.value=true;formError.value=''
+  try { await purchaseApi.removeDeliveryOption(name);deliveryOptions.value=deliveryOptions.value.filter(value=>value!==name) }
+  catch(exception) { formError.value=message(exception,'收货信息删除失败，请重试。') }
+  finally { removingDelivery.value=false }
+}
 const selectedIds=ref<string[]>([]),exportOrders=ref<PurchaseOrder[]>([])
 const selectedOrders=computed(()=>filtered.value.filter(order=>selectedIds.value.includes(order.id)))
 const allPageSelected=computed(()=>visibleOrders.value.length>0&&visibleOrders.value.every(o=>selectedIds.value.includes(o.id)))
@@ -61,7 +78,7 @@ const typeLabels = { PRODUCT: '产品采购', MATERIAL: '辅料采购', MANUAL: 
 const uploading = ref(false), uploadTarget = ref<number>()
 async function uploadItem(file:File,index:number){uploading.value=true;try{const image=await catalogApi.uploadImage('PURCHASE_ITEM',file);if(form.lines[index])form.lines[index]!.imageAssetId=image.id;uploadTarget.value=undefined}catch(e){formError.value=message(e,'图片上传失败');throw e}finally{uploading.value=false}}
 function moveType(step:number){const types:PurchaseOrderType[]=['PRODUCT','MATERIAL','MANUAL'];void changeType(types[(types.indexOf(type.value)+step+3)%3]!)}
-const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai' }).format(new Date())
+const today = beijingDate()
 const overdue = (order: PurchaseOrder) => ['SUBMITTED', 'PARTIALLY_RECEIVED'].includes(order.status) && !!order.expectedDeliveryDate && order.expectedDeliveryDate < today
 const typedOrders = computed(() => orders.value.filter(order => order.orderType === type.value))
 const filtered = computed(() => typedOrders.value.filter(order => {
@@ -93,7 +110,7 @@ async function loadSuppliers() {
   try {
     const result: SupplierDto[] = []; let currentPage = 0
     while (true) {
-      const response = await domainApi.suppliers({ status: 'ACTIVE', size: 100, page: currentPage++ })
+      const response = await domainApi.suppliers({ status: 'ACTIVE', ...(form.orderType === 'MANUAL' ? {} : { category: form.orderType }), size: 100, page: currentPage++ })
       result.push(...response.items)
       if (!response.items.length || result.length >= response.totalCount) break
     }
@@ -158,14 +175,14 @@ async function selectItem(line:PurchaseOrderInput['lines'][number]){
   finally{priceLoads.value--}
 }
 function defaultDeliveryDate(){
-  const day=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai'}).format(new Date())
+  const day=beijingDate()
   const date=new Date(day+'T00:00:00Z');date.setUTCDate(date.getUTCDate()+2)
   return date.toISOString().slice(0,10)
 }
 async function openCreate() {
   requestedMaterials.value=[]; editing.value = undefined; formError.value = ''; references.value = []; referenceSequence++
   Object.assign(form, { orderType: type.value, supplierId: '', supplierName: '', currency: 'CNY', remark: '', version: undefined, expectedDeliveryDate: defaultDeliveryDate(), deliveryAddress: '', lines: [{ itemId: '', quantity: 1, unitPrice: 0, taxIncluded:false, taxRate:1 }] })
-  showOrderForm.value = true; if(type.value!=='MANUAL')await loadSuppliers()
+  showOrderForm.value = true; await Promise.all([loadDeliveryOptions(),type.value!=='MANUAL'?loadSuppliers():Promise.resolve()])
 }
 async function createFromMaterials(ids:string[]) {
   if(!writable.value || !session.canAccess(['materials.read','suppliers.read']))return
@@ -190,8 +207,8 @@ watch(()=>[route.query.materialId,route.query.materialIds], async ([id,batch])=>
 },{immediate:true})
 async function openEdit(order: PurchaseOrder) {
   editing.value = order; formError.value = ''; showOrderForm.value = true
-  Object.assign(form, { orderType: order.orderType, supplierId: order.supplierId, supplierName: order.supplierName, currency: order.currency, remark: order.remark ?? '', version: order.version, expectedDeliveryDate: order.expectedDeliveryDate ?? '', deliveryAddress: order.deliveryAddress ?? '', lines: order.lines.map(line => ({ itemId: line.itemId, quantity: line.orderedQuantity, unitPrice: line.unitPrice, taxIncluded:line.taxIncluded??false,taxRate:line.taxIncluded?(line.taxRate??1):1, itemName:line.itemName, unit:line.unit, specification:line.specification??'', imageAssetId:line.imageAssetId })) })
-  if(order.orderType!=='MANUAL')await Promise.all([loadSuppliers(), loadReferences(false)])
+  Object.assign(form, { orderType: order.orderType, supplierId: order.supplierId, supplierName: order.supplierName, currency: order.currency, remark: order.remark ?? '', version: order.version, expectedDeliveryDate: order.expectedDeliveryDate ?? '', deliveryAddress: order.deliveryAddress ?? '', lines: order.lines.map(line => ({ itemId: line.itemId, quantity: line.orderedQuantity, packageCount:line.packageCount??null, unitPrice: line.unitPrice, taxIncluded:line.taxIncluded??false,taxRate:line.taxIncluded?(line.taxRate??1):1, itemName:line.itemName, unit:line.unit, specification:line.specification??'', imageAssetId:line.imageAssetId })) })
+  await Promise.all([loadDeliveryOptions(),...(order.orderType!=='MANUAL'?[loadSuppliers(),loadReferences(false)]:[])])
 }
 function addLine() { if (form.lines.length < 200) form.lines.push({ itemId: '', quantity: 1, unitPrice: 0, taxIncluded:false, taxRate:1 }) }
 function validNumber(value: number, positive: boolean) { return Number.isFinite(Number(value)) && (positive ? Number(value) > 0 : Number(value) >= 0) && /^\d+(\.\d{1,4})?$/.test(String(value)) }
@@ -203,9 +220,10 @@ async function saveOrder() {
   if(form.orderType==='MANUAL' && form.lines.some(line=>!line.itemName?.trim()||!line.unit?.trim())){formError.value='请填写物品名称及单位。';return}
   if (form.orderType !== 'MANUAL' && new Set(form.lines.map(line => line.itemId)).size !== form.lines.length) { formError.value = '采购项目不可重复，请合并相同项目的数量。'; return }
   if (form.lines.some(line => !validNumber(line.quantity, true) || !validNumber(line.unitPrice, false))) { formError.value = '数量必须大于 0，单价不可为负数，最多支持四位小数。'; return }
+  if(form.lines.some(line => line.packageCount != null && String(line.packageCount) !== '' && (!Number.isInteger(Number(line.packageCount)) || Number(line.packageCount)<0 || Number(line.packageCount)>2147483647))){formError.value='包裹数须为 0 至 2147483647 的整数。';return}
   saving.value = true
   try {
-    const payload = { ...form, expectedDeliveryDate: form.expectedDeliveryDate || null, lines: form.lines.map(line => ({ ...line,taxIncluded:line.taxIncluded??false,taxRate:line.taxIncluded?(line.taxRate??1):0 })) }
+    const payload = { ...form, expectedDeliveryDate: form.expectedDeliveryDate || null, lines: form.lines.map(line => ({ ...line,packageCount:line.packageCount==null||String(line.packageCount)===''?null:Number(line.packageCount),taxIncluded:line.taxIncluded??false,taxRate:line.taxIncluded?(line.taxRate??1):0 })) }
     if (editing.value) await purchaseApi.updateAndPlace(editing.value.id, payload); else await purchaseApi.place(payload)
     success.value = editing.value ? '采购单已更新并确认下单，等待收货。' : '采购单已创建并确认下单，等待收货。'
     saving.value = false; closeForm(); await load()
@@ -363,7 +381,7 @@ onMounted(load)
                     @click="detailId=order.id"
                   >
                     <strong>{{ purchaseName(order) }}</strong>
-                  </button><small>{{ order.supplierName }}</small><small>{{ new Date(order.createdAt).toLocaleDateString() }} 创建</small>
+                  </button><small>{{ order.supplierName }}</small><small>{{ beijingDate(order.createdAt) }} 创建</small>
                 </td>
                 <td>
                   <div
@@ -524,19 +542,20 @@ onMounted(load)
             min="2000-01-01"
             max="9999-12-31"
           /></label>
-          <label>收货信息<input
-            v-model="form.deliveryAddress"
-            maxlength="500"
-            placeholder="收货地址、联系人或内部仓库说明"
-          ></label>
+          <label>收货信息<EditableSelect
+            :model-value="form.deliveryAddress ?? ''"
+            :options="deliveryOptions"
+            label="收货信息"
+            :max-length="500"
+            :disabled="removingDelivery"
+            @remove="removeDeliveryOption"
+            @update:model-value="form.deliveryAddress = $event"
+          /></label>
           <p
             v-if="form.orderType!=='MANUAL' && form.supplierId && !referenceLoading && !references.length"
             class="form-wide empty-inline"
           >
             该供应商尚未关联启用的{{ form.orderType === 'PRODUCT' ? 'SKU' : '辅料' }}，请先到对应档案维护供货关系。
-          </p>
-          <p class="form-wide muted">
-            单价填写不含税价格；选“是”后，金额 = 数量 × 单价 ×（1 + 税率），按行保留两位小数。
           </p>
           <div class="form-wide table-scroll">
             <TableViewport>
@@ -548,7 +567,7 @@ onMounted(load)
                   <tr>
                     <th>
                       图片
-                    </th><th>采购项目</th><th>数量</th><th>单位</th><th>不含税单价</th><th>是否含税</th><th v-if="showTaxRate">
+                    </th><th>采购项目</th><th>数量</th><th>单位</th><th>包裹数</th><th>不含税单价</th><th>是否含税</th><th v-if="showTaxRate">
                       税率（%）
                     </th><th>金额</th><th>操作</th>
                   </tr>
@@ -649,6 +668,17 @@ onMounted(load)
                       ><template v-else>
                         {{ references.find(item => item.id === line.itemId)?.unit || '—' }}
                       </template>
+                    </td>
+                    <td>
+                      <input
+                        v-model.number="line.packageCount"
+                        type="number"
+                        min="0"
+                        max="2147483647"
+                        step="1"
+                        aria-label="包裹数"
+                        placeholder="选填"
+                      >
                     </td>
                     <td>
                       <input

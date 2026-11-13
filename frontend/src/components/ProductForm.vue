@@ -68,7 +68,7 @@ async function loadReferences() {
         const all: SupplierDto[] = []
         let page = 0
         while (true) {
-          const response = await domainApi.suppliers({ page, size: 100 })
+          const response = await domainApi.suppliers({ page, size: 100, status: 'ACTIVE', category: 'PRODUCT' })
           all.push(...response.items)
           if (!response.items.length || all.length >= response.totalCount) break
           page++

@@ -7,7 +7,7 @@ import { downloadPdf, ensurePrintable, imagesToPdf, loadPdf, MAX_PDF_BYTES, MM, 
 
 type Tab = 'split' | 'images' | 'edit' | 'fba'
 type ImageItem = PdfImage & { id: number; name: string; url: string }
-type Layer = { id: number; page: number; kind: 'text' | 'image' | 'highlight' | 'rectangle'; x: number; y: number; width: number; height: number; text: string; color: string; fontSize: number; url?: string }
+type Layer = { id: number; page: number; kind: 'text' | 'image' | 'highlight' | 'rectangle'; x: number; y: number; width: number; height: number; text: string; color: string; fontSize: number; filled?: boolean; url?: string }
 const tabs: { id: Tab; title: string; description: string }[] = [
   { id: 'split', title: '拆分PDF', description: '按范围拆分，或提取指定页面' },
   { id: 'images', title: '图片转PDF', description: '支持JPG、PNG，多张图片按顺序合并' },
@@ -20,7 +20,7 @@ function createTabState() {
   return {
     source: shallowRef<Uint8Array>(), result: shallowRef<Uint8Array>(), name: ref(''), pageCount: ref(0), page: ref(0),
     message: ref(''), error: ref(''), ranges: ref(''), splitMode: ref('ranges'),
-    margin: ref(2), imageMargin: ref(5), paper: ref<'a4' | 'square' | 'original'>('a4'), landscape: ref(false),
+    margin: ref(2), imageMargin: ref(2), paper: ref<'a4' | 'square' | 'original'>('a4'), landscape: ref(false),
     images: ref<ImageItem[]>([]), layers: ref<Layer[]>([]), selectedId: ref<number>(), dimensions: ref({ width: 595, height: 842 }),
   }
 }
@@ -32,6 +32,15 @@ const source = activeRef(s => s.source), result = activeRef(s => s.result), name
 const busy = ref(false), message = activeRef(s => s.message), error = activeRef(s => s.error), ranges = activeRef(s => s.ranges), splitMode = activeRef(s => s.splitMode)
 const margin = activeRef(s => s.margin), imageMargin = activeRef(s => s.imageMargin), paper = activeRef(s => s.paper), landscape = activeRef(s => s.landscape)
 const images = activeRef<ImageItem[]>(s => s.images), layers = activeRef<Layer[]>(s => s.layers), selectedId = activeRef(s => s.selectedId), dimensions = activeRef(s => s.dimensions)
+const thumbnailPage = ref(0)
+const extraction = computed(() => tab.value === 'split' && splitMode.value === 'merge')
+const selectedPages = computed(() => { try { return [...new Set(pageGroups(ranges.value, pageCount.value).flat())].sort((a,b) => a-b) } catch { return [] } })
+const thumbnailPages = computed(() => Array.from({ length: Math.min(12, Math.max(0, pageCount.value - thumbnailPage.value * 12)) }, (_, i) => thumbnailPage.value * 12 + i))
+function togglePage(index: number) {
+  const pages = new Set(selectedPages.value)
+  if (pages.has(index)) pages.delete(index); else pages.add(index)
+  ranges.value = [...pages].sort((a,b) => a-b).map(i => i+1).join(',')
+}
 const stage = ref<HTMLElement>(), stageWidth = ref(600)
 let sequence = 0, observer: ResizeObserver | undefined
 const selected = computed(() => layers.value.find(l => l.id === selectedId.value))
@@ -40,14 +49,14 @@ const preview = computed(() => result.value || source.value)
 const title = computed(() => tabs.find(t => t.id === tab.value)!)
 const baseName = computed(() => name.value.replace(/\.pdf$/i, '') || '图片')
 const canExport = computed(() => !busy.value && (tab.value === 'images' ? images.value.length > 0 : !!source.value))
-const outputLabel = computed(() => ({ split: '拆分并下载', images: '生成PDF', edit: '保存并下载', fba: '转换并下载' })[tab.value])
+const outputLabel = computed(() => extraction.value ? '合并所选页面并下载' : ({ split: '拆分并下载', images: '生成PDF', edit: '保存并下载', fba: '转换并下载' })[tab.value])
 function resetResult() { result.value = undefined; message.value = ''; error.value = '' }
 for (const state of Object.values(states)) {
   watch([state.margin, state.imageMargin, state.paper, state.landscape, state.ranges, state.splitMode], () => {
     state.result.value = undefined; state.message.value = ''; state.error.value = ''
   }, { flush: 'sync' })
 }
-watch(tab, () => { endDrag?.() })
+watch([tab, page], () => { endDrag?.() })
 watch(stage, element => {
   observer?.disconnect()
   if (element) { observer = new ResizeObserver(() => { stageWidth.value = element.clientWidth }); observer.observe(element); stageWidth.value = element.clientWidth }
@@ -87,7 +96,7 @@ async function acceptFiles(files: File[]) {
       const bytes = new Uint8Array(await file.arrayBuffer()), doc = await loadPdf(bytes)
       ensurePrintable(doc)
       source.value = bytes; pageCount.value = doc.getPageCount(); page.value = 0; name.value = file.name
-      ranges.value = `1-${pageCount.value}`; clearLayers()
+      ranges.value = `1-${pageCount.value}`; thumbnailPage.value = 0; clearLayers()
       if (tab.value === 'fba') result.value = await squareLabels(bytes, margin.value)
     }
   })
@@ -99,7 +108,7 @@ function removeImage(index: number) { URL.revokeObjectURL(images.value[index]!.u
 function clearLayers() { layers.value.forEach(l => { if (l.url) URL.revokeObjectURL(l.url) }); layers.value = []; selectedId.value = undefined }
 function addLayer(kind: Layer['kind']) {
   resetResult()
-  const layer: Layer = { id: ++sequence, page: page.value, kind, x: .1, y: .1, width: .35, height: .09, text: '请输入文字', color: kind === 'highlight' ? '#facc15' : '#111827', fontSize: 16 }
+  const layer: Layer = { id: ++sequence, page: page.value, kind, x: .1, y: .1, width: .35, height: .09, text: '请输入文字', color: kind === 'highlight' ? '#facc15' : kind === 'rectangle' ? '#ffffff' : '#111827', filled: true, fontSize: 16 }
   layers.value.push(layer); selectedId.value = layer.id
   return layer
 }
@@ -114,7 +123,7 @@ async function addOverlay(event: Event) {
 }
 function removeLayer() { const l = selected.value; if (l?.url) URL.revokeObjectURL(l.url); layers.value = layers.value.filter(i => i.id !== selectedId.value); selectedId.value = undefined; resetResult() }
 function layerStyle(l: Layer) {
-  return { left: `${l.x * 100}%`, top: `${l.y * 100}%`, width: l.kind === 'text' ? undefined : `${l.width * 100}%`, height: l.kind === 'text' ? undefined : `${l.height * 100}%`, fontSize: `${l.fontSize * stageWidth.value / dimensions.value.width}px`, color: l.color, background: l.kind === 'highlight' ? `${l.color}66` : undefined, borderColor: l.kind === 'rectangle' ? l.color : undefined }
+  return { left: `${l.x * 100}%`, top: `${l.y * 100}%`, width: l.kind === 'text' ? undefined : `${l.width * 100}%`, height: l.kind === 'text' ? undefined : `${l.height * 100}%`, fontSize: `${l.fontSize * stageWidth.value / dimensions.value.width}px`, color: l.color, background: l.kind === 'highlight' ? `${l.color}66` : l.kind === 'rectangle' && l.filled ? l.color : undefined, borderColor: l.kind === 'rectangle' ? l.color : undefined }
 }
 let endDrag: (() => void) | undefined
 function drag(event: PointerEvent, layer: Layer) {
@@ -123,6 +132,26 @@ function drag(event: PointerEvent, layer: Layer) {
   const rect = stage.value!.getBoundingClientRect(), target = (event.currentTarget as HTMLElement).getBoundingClientRect()
   const startX = event.clientX, startY = event.clientY, x = layer.x, y = layer.y
   const move = (e: PointerEvent) => { layer.x = Math.max(0, Math.min(1 - target.width / rect.width, x + (e.clientX - startX) / rect.width)); layer.y = Math.max(0, Math.min(1 - target.height / rect.height, y + (e.clientY - startY) / rect.height)) }
+  const end = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end); endDrag = undefined }
+  endDrag = end; window.addEventListener('pointermove', move); window.addEventListener('pointerup', end); window.addEventListener('pointercancel', end)
+}
+type Corner = 'nw' | 'ne' | 'sw' | 'se'
+const resizeCorners: { corner: Corner; label: string }[] = [{ corner: 'nw', label: '左上' }, { corner: 'ne', label: '右上' }, { corner: 'sw', label: '左下' }, { corner: 'se', label: '右下' }]
+function resizeLayer(event: PointerEvent, layer: Layer, corner: Corner) {
+  if (busy.value || event.button !== 0 || !stage.value) return
+  event.preventDefault(); endDrag?.(); selectedId.value = layer.id; resetResult()
+  const rect = stage.value.getBoundingClientRect()
+  if (!rect.width || !rect.height) return
+  const startX = event.clientX, startY = event.clientY
+  const left = layer.x, top = layer.y, right = left + layer.width, bottom = top + layer.height
+  const move = (e: PointerEvent) => {
+    const dx = (e.clientX - startX) / rect.width, dy = (e.clientY - startY) / rect.height
+    const x = corner.includes('w') ? Math.max(0, Math.min(right - .02, left + dx)) : left
+    const y = corner.includes('n') ? Math.max(0, Math.min(bottom - .02, top + dy)) : top
+    const r = corner.includes('e') ? Math.min(1, Math.max(left + .02, right + dx)) : right
+    const b = corner.includes('s') ? Math.min(1, Math.max(top + .02, bottom + dy)) : bottom
+    Object.assign(layer, { x, y, width: r - x, height: b - y })
+  }
   const end = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end); endDrag = undefined }
   endDrag = end; window.addEventListener('pointermove', move); window.addEventListener('pointerup', end); window.addEventListener('pointercancel', end)
 }
@@ -143,6 +172,7 @@ async function renderLayers() {
       } else if (l.kind === 'image' && l.url) {
         const img = new Image(); img.src = l.url; await img.decode(); ctx.drawImage(img, l.x * w, l.y * h, l.width * w, l.height * h)
       } else if (l.kind === 'highlight') { ctx.globalAlpha = .4; ctx.fillRect(l.x * w, l.y * h, l.width * w, l.height * h) }
+      else if (l.filled) { ctx.fillRect(l.x * w, l.y * h, l.width * w, l.height * h) }
       else { ctx.lineWidth = 1; ctx.strokeRect(l.x * w + .5, l.y * h + .5, l.width * w - 1, l.height * h - 1) }
       ctx.restore()
     }
@@ -155,7 +185,7 @@ async function exportFile() {
   await run(async () => {
     if (tab.value === 'split') {
       let groups = splitMode.value === 'each' ? Array.from({ length: pageCount.value }, (_, i) => [i]) : pageGroups(ranges.value, pageCount.value)
-      if (splitMode.value === 'merge') groups = [groups.flat()]
+      if (splitMode.value === 'merge') groups = [[...new Set(groups.flat())].sort((a,b) => a-b)]
       const outputs = await splitPdf(source.value!, groups)
       if (outputs.length === 1) downloadPdf(outputs[0]!, `${baseName.value}-提取.pdf`)
       else {
@@ -357,7 +387,7 @@ onBeforeUnmount(() => { observer?.disconnect(); endDrag?.(); window.removeEventL
             </button>
           </div>
           <p class="pdf-hint">
-            拖动新增内容调整位置。支持中英文；新增内容以高清图层保存，原有文字不可直接改写。
+            拖动内容调整位置，拖动矩形四角调整大小。支持中英文；新增内容以高清图层保存，原有文字不可直接改写。
           </p>
           <fieldset
             v-if="selected"
@@ -380,6 +410,10 @@ onBeforeUnmount(() => { observer?.disconnect(); endDrag?.(); window.removeEventL
               v-model="selected.color"
               type="color"
             ></label>
+            <label v-if="selected.kind === 'rectangle'">样式<select
+              v-model="selected.filled"
+              v-single-select
+            ><option :value="true">实心填充</option><option :value="false">空心边框</option></select></label>
             <template v-if="selected.kind !== 'text'">
               <label>宽度<input
                 v-model.number="selected.width"
@@ -461,6 +495,59 @@ onBeforeUnmount(() => { observer?.disconnect(); endDrag?.(); window.removeEventL
             <b>JPG / PNG → PDF</b><span>点击选择或拖入图片，也可直接粘贴截图</span>
           </button>
         </template>
+        <template v-else-if="source && extraction">
+          <div class="pdf-pagebar">
+            <strong>已选 {{ selectedPages.length }} / {{ pageCount }} 页</strong>
+            <button
+              :disabled="busy"
+              @click="ranges = `1-${pageCount}`"
+            >
+              全选
+            </button>
+            <button
+              :disabled="busy"
+              @click="ranges = ''"
+            >
+              清空
+            </button>
+            <span>点击页面选择，按原文档顺序合并</span>
+          </div>
+          <div class="pdf-thumbnail-grid">
+            <button
+              v-for="index in thumbnailPages"
+              :key="index"
+              type="button"
+              class="pdf-thumbnail"
+              :class="{ checked: selectedPages.includes(index) }"
+              :aria-pressed="selectedPages.includes(index)"
+              :aria-label="`选择第${index+1}页`"
+              :disabled="busy"
+              @click="togglePage(index)"
+            >
+              <span class="page-check">{{ selectedPages.includes(index) ? '✓' : '' }}</span>
+              <PdfPagePreview
+                :bytes="source"
+                :page="index"
+              />
+              <span>第 {{ index + 1 }} 页</span>
+            </button>
+          </div>
+          <div class="pdf-pagebar">
+            <button
+              :disabled="thumbnailPage === 0 || busy"
+              @click="thumbnailPage--"
+            >
+              上一组
+            </button>
+            <span>{{ thumbnailPage + 1 }} / {{ Math.ceil(pageCount / 12) }}</span>
+            <button
+              :disabled="(thumbnailPage+1)*12 >= pageCount || busy"
+              @click="thumbnailPage++"
+            >
+              下一组
+            </button>
+          </div>
+        </template>
         <template v-else-if="preview">
           <div class="pdf-pagebar">
             <button
@@ -523,6 +610,17 @@ onBeforeUnmount(() => { observer?.disconnect(); endDrag?.(); window.removeEventL
                     ><template v-if="layer.kind === 'text'">
                       {{ layer.text }}
                     </template>
+                    <template v-if="layer.kind === 'rectangle' && selectedId === layer.id">
+                      <span
+                        v-for="handle in resizeCorners"
+                        :key="handle.corner"
+                        class="pdf-resize-handle"
+                        :class="handle.corner"
+                        :aria-label="`${handle.label}缩放手柄`"
+                        :title="`拖动${handle.label}调整大小`"
+                        @pointerdown.stop="resizeLayer($event, layer, handle.corner)"
+                      />
+                    </template>
                   </div>
                 </template>
               </PdfPagePreview>
@@ -544,6 +642,12 @@ onBeforeUnmount(() => { observer?.disconnect(); endDrag?.(); window.removeEventL
   </section>
 </template>
 <style scoped>
+.pdf-thumbnail-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:16px; padding:20px; max-height:calc(100vh - 310px); overflow:auto; }
+.pdf-tools .pdf-thumbnail { position:relative; display:flex; flex-direction:column; align-items:center; gap:12px; min-width:0; padding:20px 16px 12px; border:2px solid transparent; border-radius:8px; background:white; color:#526078; }
+.pdf-tools .pdf-thumbnail.checked { border-color:#36a776; background:#f4fcf8; }
+.pdf-thumbnail :deep(.pdf-preview) { pointer-events:none; }
+.page-check { position:absolute; z-index:1; top:4px; left:4px; width:22px; height:22px; border:1px solid #bcc7d4; border-radius:50%; background:white; line-height:20px; }
+.checked .page-check { background:#36a776; border-color:#36a776; color:white; }
 .pdf-tools { display:flex; flex-direction:column; gap:8px; color:#26364d; font-size:13px; }
 .pdf-tabs { display:flex; align-items:center; gap:22px; padding:0 16px; background:#fff; border:1px solid #e4e9f0; border-radius:8px; flex-wrap:wrap; }
 .pdf-tabs button { border:0; border-bottom:2px solid transparent; border-radius:0; background:none; color:#64748b; min-height:42px; padding:0 2px; font-size:14px; }
@@ -572,7 +676,10 @@ onBeforeUnmount(() => { observer?.disconnect(); endDrag?.(); window.removeEventL
 .pdf-paper-area { overflow:auto; max-height:calc(100vh - 255px); min-height:360px; padding:24px; }.pdf-stage { max-width:620px; width:100%; margin:auto; position:relative; }.pdf-stage.square { max-width:560px; }
 .pdf-edit-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
 .layer-settings { display:flex; flex-direction:column; gap:12px; margin:0; padding:12px; border:1px solid #e0e7f0; border-radius:6px; min-width:0; }.layer-settings legend { color:#697e99; font-size:12px; padding:0 4px; }
-.pdf-layer { position:absolute; cursor:move; touch-action:none; box-sizing:border-box; line-height:1.3; font-family:"PingFang SC","Microsoft YaHei",sans-serif; user-select:none; }.pdf-layer.text { white-space:pre; }.pdf-layer.selected { outline:1px dashed #2580ed; outline-offset:3px; }.pdf-layer.rectangle { border:1px solid; }.pdf-layer img { display:block; width:100%; height:100%; pointer-events:none; }
+.pdf-layer { position:absolute; cursor:move; touch-action:none; box-sizing:border-box; line-height:1.3; font-family:"PingFang SC","Microsoft YaHei",sans-serif; user-select:none; }.pdf-resize-handle { position:absolute; width:24px; height:24px; touch-action:none; z-index:2; }
+.pdf-resize-handle::after { content:''; position:absolute; inset:8px; background:#fff; border:1px solid #2580ed; box-sizing:border-box; }
+.pdf-resize-handle.nw { left:-12px; top:-12px; cursor:nwse-resize; }.pdf-resize-handle.ne { right:-12px; top:-12px; cursor:nesw-resize; }.pdf-resize-handle.sw { left:-12px; bottom:-12px; cursor:nesw-resize; }.pdf-resize-handle.se { right:-12px; bottom:-12px; cursor:nwse-resize; }
+.pdf-layer.text { white-space:pre; }.pdf-layer.selected { outline:1px dashed #2580ed; outline-offset:3px; }.pdf-layer.rectangle { border:1px solid; }.pdf-layer img { display:block; width:100%; height:100%; pointer-events:none; }
 .pdf-image-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:14px; padding:20px; max-height:calc(100vh - 220px); overflow:auto; }.pdf-image-card { padding:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; min-width:0; }.pdf-image-card img { width:100%; height:170px; object-fit:contain; background:#f8fafc; }.pdf-image-card p { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }.pdf-image-card>div { display:flex; gap:5px; }.pdf-tools .pdf-danger { color:#dc5454; }
 .pdf-error,.pdf-success { margin:0; padding:9px 14px; border-radius:6px; line-height:1.5; }.pdf-error { color:#bb3939; background:#fff1f1; }.pdf-success { color:#218056; background:#edf9f2; }.hidden-input { display:none; }
 @media(max-width:850px) { .pdf-workspace { grid-template-columns:1fr; }.pdf-settings { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }.pdf-tabs { gap:14px; }.pdf-tabs>span { display:none; }.pdf-paper-area { max-height:none; }.pdf-empty { min-height:300px; } }

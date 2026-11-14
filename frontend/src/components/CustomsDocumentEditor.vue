@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProductParentFilter from './ProductParentFilter.vue'
 import { vPhone } from '@/directives/phone'
 import { beijingDate } from '@/utils/dateTime'
 
@@ -116,7 +117,8 @@ function keepItem(){if(!item.value)return;if(!item.value.sku?.trim()||!item.valu
 async function removeItem(index:number){if(await confirmAction('从本票单据移除这项商品？产品资料不会删除。'))form.value.items.splice(index,1)}
 const picker=ref(false),query=ref(''),pickerPage=ref(1),pickerSize=ref(10),pickerRows=ref<CustomsRow[]>([]),pickerTotal=ref(0),pickerLoading=ref(false),pickerError=ref(''),selected=ref<CustomsRow[]>([])
 let request=0
-async function loadPicker(){const seq=++request;pickerLoading.value=true;pickerError.value='';try{const r=await customsApi.list(query.value,'',pickerPage.value-1,pickerSize.value);if(seq===request){pickerRows.value=r.items;pickerTotal.value=r.totalCount}}catch(e){if(seq===request)pickerError.value=message(e)}finally{if(seq===request)pickerLoading.value=false}}
+const pickerParent=ref('')
+async function loadPicker(){const seq=++request;pickerLoading.value=true;pickerError.value='';try{const r=await customsApi.list(query.value,'',pickerPage.value-1,pickerSize.value,pickerParent.value);if(seq===request){pickerRows.value=r.items;pickerTotal.value=r.totalCount}}catch(e){if(seq===request)pickerError.value=message(e)}finally{if(seq===request)pickerLoading.value=false}}
 function openPicker(){picker.value=true;selected.value=[];query.value='';pickerPage.value=1;void loadPicker()}
 function select(row:CustomsRow){selected.value=selected.value.some(r=>r.variantId===row.variantId)?selected.value.filter(r=>r.variantId!==row.variantId):[...selected.value,row]}
 function addSelected(){for(const row of selected.value){const c=row.customs;form.value.items.push({...blankItem(),variantId:row.variantId,sku:row.skuCode,name:c?.nameZh??'',nameEn:c?.nameEn??'',hsCode:c?.chinaCode??'',...itemDefaults,unit:'件',...(c?{...profileElements(c),elementsVersion:c.elementFields?'2':'1',elementFields:JSON.stringify(c.elementFields??[]),schemaCode:c.schemaCode??'',measurementUnit:c.measurementUnit??'',declarationElements:serializeElements(profileElements(c),profileFields(c))}:{} ),...Object.fromEntries(sharedItemFields.filter(f=>f.key in sharedDraft.value).map(f=>[f.key,sharedDraft.value[f.key]]))})}picker.value=false}
@@ -320,6 +322,7 @@ onBeforeRouteLeave(()=>{if(busy.value)return false;if(itemDirty.value){itemDialo
       class="customs-picker-filter"
       @submit.prevent="pickerPage=1;loadPicker()"
     >
+      <ProductParentFilter v-model="pickerParent" @update:model-value="pickerPage=1;loadPicker()" />
       <input
         v-model="query"
         placeholder="搜索 SKU、产品名称或商品编号"

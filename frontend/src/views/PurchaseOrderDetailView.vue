@@ -18,7 +18,8 @@ import { ApiError } from '@/api/client'
 import { purchaseApi, type PurchaseOrderDetail, type PurchaseStatus } from '@/api/purchases'
 import { session } from '@/state/session'
 
-const props=defineProps<{orderId?:string;embedded?:boolean}>()
+const props=defineProps<{orderId?:string;embedded?:boolean;action?:'receive'|'cancel'}>()
+const emit = defineEmits<{close:[];completed:[]}>()
 const route = useRoute(); const detail = ref<PurchaseOrderDetail>(); const loading = ref(true); const saving = ref(false); const error = ref(''); const success = ref(''); const showReceipt = ref(false); const remark = ref('')
 const quantities = reactive<Record<string, number | ''>>({})
 const receiptError = ref(''); const receivedAt = ref(''); const cancelReason = ref(''); const showCancel = ref(false)
@@ -48,7 +49,7 @@ async function cancelOrder() {
   if (!detail.value || saving.value) return
   if (!cancelReason.value.trim()) { error.value = '请填写取消 / 关闭原因。'; return }
   saving.value = true; error.value = ''; success.value = ''
-  try { await purchaseApi.cancel(detail.value.order.id, detail.value.order.version, cancelReason.value.trim()); showCancel.value = false; success.value = '未收余量已关闭；已有收货和库存保持不变。'; await load() }
+  try { await purchaseApi.cancel(detail.value.order.id, detail.value.order.version, cancelReason.value.trim()); showCancel.value = false; success.value = '未收余量已关闭；已有收货和库存保持不变。'; if(props.action) emit('completed'); else await load() }
   catch (exception) { error.value = message(exception, '取消结果未确认，请刷新单据检查状态。') }
   finally { saving.value = false }
 }
@@ -60,7 +61,8 @@ function openReceipt() {
   }
   showReceipt.value = true
 }
-function closeReceipt() { if (!saving.value) showReceipt.value = false }
+async function closeReceipt() { if (await mayLeave()) { showReceipt.value = false; if(props.action) emit('close') } }
+function closeCancel() { if(!saving.value) { showCancel.value=false; if(props.action) emit('close') } }
 async function receive() {
   if (!detail.value || saving.value) return
   success.value = ''
@@ -77,14 +79,23 @@ async function receive() {
   saving.value = true
   try {
     await purchaseApi.receive(detail.value.order.id, pendingReceipt.value)
-    pendingReceipt.value = undefined; receiptUncertain.value = false; showReceipt.value = false; success.value = '本次收货已入账。'; await load()
+    pendingReceipt.value = undefined; receiptUncertain.value = false; showReceipt.value = false; success.value = '本次收货已入账。'; if(props.action) emit('completed'); else await load()
   } catch (exception) {
     if (exception instanceof ApiError && exception.status >= 400 && exception.status < 500) {
       pendingReceipt.value = undefined; receiptUncertain.value = false; receiptError.value = exception.message
     } else { receiptUncertain.value = true; receiptError.value = '收货结果尚未确认，请保持本页并点击“重试本次收货”。将使用原请求号核对，不会重复入账。' }
   } finally { saving.value = false }
 }
-watch(() => props.orderId??route.params.orderId, () => { detail.value = undefined; showReceipt.value = false; showCancel.value = false; pendingReceipt.value = undefined; receiptUncertain.value = false; success.value = ''; void load() }, { immediate: true })
+function openRequestedAction() {
+  if(!detail.value || !props.action) return
+  if(props.action==='receive' && receivable.value && ['SUBMITTED','PARTIALLY_RECEIVED'].includes(detail.value.order.status)) openReceipt()
+  else if(props.action==='cancel' && session.canAccess(['purchases.cancel']) && !['COMPLETED','CANCELLED'].includes(detail.value.order.status)) {cancelReason.value='';showCancel.value=true}
+  else error.value='单据状态或权限已变化，请关闭并刷新列表。'
+}
+watch(() => props.orderId??route.params.orderId, async () => {
+  detail.value = undefined; showReceipt.value = false; showCancel.value = false; pendingReceipt.value = undefined; receiptUncertain.value = false; success.value = ''
+  await load(); openRequestedAction()
+}, { immediate: true })
 async function mayLeave() { return !saving.value && (!pendingReceipt.value || await confirmAction('本次收货结果未确认。离开后请先核对收货历史，勿直接重复登记。确定离开？')) }
 function beforeUnload(event: BeforeUnloadEvent) { if (saving.value || pendingReceipt.value) { event.preventDefault(); event.returnValue = '' } }
 onBeforeRouteLeave(mayLeave); onBeforeRouteUpdate(mayLeave)
@@ -98,123 +109,126 @@ defineExpose({mayLeave})
     class="page-stack purchase-page"
     :class="{'purchase-detail-embedded':embedded}"
   >
-    <header
-      v-if="!embedded"
-      class="panel purchase-header"
-    >
-      <div>
-        <p class="eyebrow">
-          PURCHASE ORDER
-        </p><h1>{{ detail?.order.orderNo || '采购单详情' }}</h1><p>采购单、收货记录与操作历史统一展示。</p>
-      </div><div class="purchase-detail-actions">
-        <button
-          type="button"
-          class="secondary-button"
-          :disabled="saving || loading"
-          @click="load"
-        >
-          刷新单据
-        </button><RouterLink
-          class="secondary-action"
-          :to="returnPath"
-        >
-          返回采购管理
-        </RouterLink>
-      </div>
-    </header>
-    <p
-      v-if="error"
-      class="error-message"
-      role="alert"
-    >
-      {{ error }}
-    </p><SuccessToast :message="success" /><p v-if="loading">
-      正在加载…
-    </p>
-    <template v-else-if="detail">
-      <section class="panel purchase-summary">
-        <dl>
-          <div><dt>状态</dt><dd>{{ statusLabels[detail.order.status] }}</dd></div><div><dt>采购类型</dt><dd>{{ detail.order.orderType === 'MANUAL' ? '日常物品采购' : detail.order.orderType === 'PRODUCT' ? '产品采购' : '辅料采购' }}</dd></div><div><dt>供应商</dt><dd>{{ detail.order.supplierName }}</dd></div><div><dt>采购金额</dt><dd>{{ detail.order.currency }} {{ detail.order.lines.reduce((sum,line) => sum + purchaseLineAmount(line), 0).toFixed(2) }}</dd></div><div><dt>创建时间</dt><dd>{{ beijingDateTime(detail.order.createdAt) }}</dd></div><div><dt>预计到货日期</dt><dd>{{ detail.order.expectedDeliveryDate || '未约定' }}</dd></div><div><dt>物流公司</dt><dd>{{ detail.order.carrier || '未填写' }}</dd></div><div><dt>运单号</dt><dd>{{ detail.order.trackingNumber || '未填写' }}</dd></div><div><dt>收货信息</dt><dd>{{ detail.order.deliveryAddress || '未填写' }}</dd></div><div><dt>备注</dt><dd>{{ detail.order.remark || '—' }}</dd></div><div v-if="detail.order.status === 'CANCELLED'">
-            <dt>取消 / 关闭原因</dt><dd>{{ detail.order.cancellationReason || '历史单据未记录' }}</dd>
-          </div>
-        </dl><div class="purchase-detail-actions">
+    <template v-if="!action">
+      <header
+        v-if="!embedded"
+        class="panel purchase-header"
+      >
+        <div>
+          <p class="eyebrow">
+            PURCHASE ORDER
+          </p><h1>{{ detail?.order.orderNo || '采购单详情' }}</h1><p>采购单、收货记录与操作历史统一展示。</p>
+        </div><div class="purchase-detail-actions">
           <button
-            v-if="!embedded && session.canAccess(['purchases.submit']) && detail.order.status === 'DRAFT'"
-            :disabled="saving"
             type="button"
-            @click="submitOrder"
+            class="secondary-button"
+            :disabled="saving || loading"
+            @click="load"
           >
-            确认下单
-          </button><button
-            v-if="receivable && ['SUBMITTED','PARTIALLY_RECEIVED'].includes(detail.order.status)"
-            :disabled="saving"
-            type="button"
-            @click="openReceipt"
+            刷新单据
+          </button><RouterLink
+            class="secondary-action"
+            :to="returnPath"
           >
-            登记收货
-          </button><button
-            v-if="session.canAccess(['purchases.cancel']) && !['COMPLETED','CANCELLED'].includes(detail.order.status)"
-            :disabled="saving || Boolean(pendingReceipt)"
-            type="button"
-            class="purchase-cancel-button"
-            @click="showCancel = true; cancelReason = ''; error = ''"
-          >
-            {{ detail.order.status === 'PARTIALLY_RECEIVED' ? '关闭未收余量' : '取消采购单' }}
-          </button>
+            返回采购管理
+          </RouterLink>
         </div>
-      </section>
-      <section class="panel">
-        <h2>采购明细</h2><div class="table-scroll">
-          <TableViewport>
-            <table class="data-table">
-              <thead><tr><th>图片</th><th>项目</th><th>单位</th><th>采购数量</th><th>包裹数</th><th>已收</th><th>{{ detail.order.status === 'CANCELLED' ? '已关闭余量' : '待收' }}</th><th>不含税单价</th><th>是否含税 / 税率</th><th>金额</th></tr></thead><tbody>
-                <tr
-                  v-for="line in detail.order.lines"
-                  :key="line.id"
-                >
-                  <td>
-                    <PurchaseItemImage
-                      :image-asset-id="line.imageAssetId"
-                      :image-url="line.imageUrl"
-                      :alt="line.itemName"
-                    />
-                  </td><td><strong>{{ line.itemName }}</strong><small>{{ line.specification || '—' }}</small></td><td>{{ line.unit }}</td><td>{{ line.orderedQuantity }}</td><td>{{ line.packageCount ?? '—' }}</td><td>{{ line.receivedQuantity }}</td><td>{{ line.remainingQuantity }}</td><td>{{ detail.order.currency }} {{ line.unitPrice.toFixed(2) }}</td><td>{{ line.taxIncluded ? `是 / ${line.taxRate ?? 1}%` : '否' }}</td><td>{{ detail.order.currency }} {{ (purchaseLineAmount(line)).toFixed(2) }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </TableViewport>
-        </div>
-      </section>
-      <section class="purchase-detail-grid">
-        <article class="panel">
-          <h2>收货记录</h2><div
-            v-if="!detail.receipts.length"
-            class="empty-state empty-state--compact"
-          >
-            <p>尚未收货。</p>
-          </div><ol
-            v-else
-            class="purchase-timeline"
-          >
-            <li
-              v-for="receipt in detail.receipts"
-              :key="receipt.id"
+      </header>
+      <p
+        v-if="error"
+        class="error-message"
+        role="alert"
+      >
+        {{ error }}
+      </p><SuccessToast :message="success" /><p v-if="loading">
+        正在加载…
+      </p>
+      <template v-else-if="detail">
+        <section class="panel purchase-summary">
+          <dl>
+            <div><dt>状态</dt><dd>{{ statusLabels[detail.order.status] }}</dd></div><div><dt>采购类型</dt><dd>{{ detail.order.orderType === 'MANUAL' ? '日常物品采购' : detail.order.orderType === 'PRODUCT' ? '产品采购' : '辅料采购' }}</dd></div><div><dt>供应商</dt><dd>{{ detail.order.supplierName }}</dd></div><div><dt>采购金额</dt><dd>{{ detail.order.currency }} {{ detail.order.lines.reduce((sum,line) => sum + purchaseLineAmount(line), 0).toFixed(2) }}</dd></div><div><dt>创建时间</dt><dd>{{ beijingDateTime(detail.order.createdAt) }}</dd></div><div><dt>预计到货日期</dt><dd>{{ detail.order.expectedDeliveryDate || '未约定' }}</dd></div><div><dt>物流公司</dt><dd>{{ detail.order.carrier || '未填写' }}</dd></div><div><dt>运单号</dt><dd>{{ detail.order.trackingNumber || '未填写' }}</dd></div><div><dt>收货信息</dt><dd>{{ detail.order.deliveryAddress || '未填写' }}</dd></div><div><dt>备注</dt><dd>{{ detail.order.remark || '—' }}</dd></div><div v-if="detail.order.status === 'CANCELLED'">
+              <dt>取消 / 关闭原因</dt><dd>{{ detail.order.cancellationReason || '历史单据未记录' }}</dd>
+            </div>
+          </dl><div class="purchase-detail-actions">
+            <button
+              v-if="!embedded && session.canAccess(['purchases.submit']) && detail.order.status === 'DRAFT'"
+              :disabled="saving"
+              type="button"
+              @click="submitOrder"
             >
-              <strong>{{ beijingDateTime(receipt.receivedAt) }}</strong><span>{{ receipt.actorLoginName }} · {{ receipt.lines.map(line => `${line.itemName} × ${line.quantity}`).join('；') }}</span><small>{{ receipt.remark || '无备注' }}</small>
-            </li>
-          </ol>
-        </article><article class="panel">
-          <h2>操作历史</h2><ol class="purchase-timeline">
-            <li
-              v-for="event in detail.history"
-              :key="event.id"
+              确认下单
+            </button>
+          </div>
+        </section>
+        <section class="panel">
+          <h2>采购明细</h2><div class="table-scroll">
+            <TableViewport>
+              <table class="data-table">
+                <thead><tr><th>图片</th><th>项目</th><th>单位</th><th>采购数量</th><th>包裹数</th><th>已收</th><th>{{ detail.order.status === 'CANCELLED' ? '已关闭余量' : '待收' }}</th><th>不含税单价</th><th>是否含税 / 税率</th><th>金额</th></tr></thead><tbody>
+                  <tr
+                    v-for="line in detail.order.lines"
+                    :key="line.id"
+                  >
+                    <td>
+                      <PurchaseItemImage
+                        :image-asset-id="line.imageAssetId"
+                        :image-url="line.imageUrl"
+                        :alt="line.itemName"
+                      />
+                    </td><td><strong>{{ line.itemName }}</strong><small>{{ line.specification || '—' }}</small></td><td>{{ line.unit }}</td><td>{{ line.orderedQuantity }}</td><td>{{ line.packageCount ?? '—' }}</td><td>{{ line.receivedQuantity }}</td><td>{{ line.remainingQuantity }}</td><td>{{ detail.order.currency }} {{ line.unitPrice.toFixed(2) }}</td><td>{{ line.taxIncluded ? `是 / ${line.taxRate ?? 1}%` : '否' }}</td><td>{{ detail.order.currency }} {{ (purchaseLineAmount(line)).toFixed(2) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </TableViewport>
+          </div>
+        </section>
+        <section class="purchase-detail-grid">
+          <article class="panel">
+            <h2>收货记录</h2><div
+              v-if="!detail.receipts.length"
+              class="empty-state empty-state--compact"
             >
-              <strong>{{ actionLabels[event.action] || event.action }}</strong><span>{{ event.actorDisplayName || event.actorLoginName }}</span><small>{{ beijingDateTime(event.occurredAt) }}</small>
-            </li>
-          </ol>
-        </article>
-      </section>
+              <p>尚未收货。</p>
+            </div><ol
+              v-else
+              class="purchase-timeline"
+            >
+              <li
+                v-for="receipt in detail.receipts"
+                :key="receipt.id"
+              >
+                <strong>{{ beijingDateTime(receipt.receivedAt) }}</strong><span>{{ receipt.actorLoginName }} · {{ receipt.lines.map(line => `${line.itemName} × ${line.quantity}`).join('；') }}</span><small>{{ receipt.remark || '无备注' }}</small>
+              </li>
+            </ol>
+          </article><article class="panel">
+            <h2>操作历史</h2><ol class="purchase-timeline">
+              <li
+                v-for="event in detail.history"
+                :key="event.id"
+              >
+                <strong>{{ actionLabels[event.action] || event.action }}</strong><span>{{ event.actorDisplayName || event.actorLoginName }}</span><small>{{ beijingDateTime(event.occurredAt) }}</small>
+              </li>
+            </ol>
+          </article>
+        </section>
+      </template>
     </template>
+    <AccessDialog
+      v-if="action && !showReceipt && !showCancel"
+      title="采购操作"
+      :busy="loading || saving"
+      @close="emit('close')"
+    >
+      <p role="status">
+        {{ loading ? '正在读取采购单…' : error }}
+      </p><button
+        v-if="!loading"
+        type="button"
+        @click="emit('close')"
+      >
+        关闭并刷新列表
+      </button>
+    </AccessDialog>
     <PurchaseReceiptDialog
       v-if="showReceipt && detail"
       :order="detail.order"
@@ -241,7 +255,7 @@ defineExpose({mayLeave})
       v-if="showCancel && detail"
       title="取消采购单 / 关闭未收余量"
       :busy="saving"
-      @close="showCancel=false"
+      @close="closeCancel"
     >
       <p class="purchase-cancel-notice">
         此操作不可撤回，单据将停止收货；已收货数量、历史记录和库存不会撤销。需要退货时请另行处理，不要用取消代替退货。
@@ -265,7 +279,7 @@ defineExpose({mayLeave})
           type="button"
           class="secondary-button"
           :disabled="saving"
-          @click="showCancel=false"
+          @click="closeCancel"
         >
           返回
         </button><button

@@ -10,3 +10,12 @@ it('encodes query and versioned profiles, normalizes empty weights, and surfaces
   fetch.mockResolvedValueOnce({ ok: false, status: 409, json: async () => ({ detail: '请刷新资料' }) })
   await expect(customsApi.save('v', blankCustoms())).rejects.toThrow('请刷新资料')
 })
+
+it('filters all matching customs pages by exact parent before calculating pagination', async()=>{
+  const first=Array.from({length:100},(_,i)=>({productId:i===99?'p1':'p2',variantId:String(i)}))
+  const fetch=vi.fn().mockResolvedValueOnce({ok:true,json:async()=>({items:first,totalCount:101})}).mockResolvedValueOnce({ok:true,json:async()=>({items:[{productId:'p1',variantId:'100'}],totalCount:101})})
+  vi.stubGlobal('fetch',fetch)
+  const result=await customsApi.list('','',1,1,'p1')
+  expect(result).toEqual({items:[{productId:'p1',variantId:'100'}],totalCount:2})
+  expect(fetch).toHaveBeenCalledTimes(2)
+})

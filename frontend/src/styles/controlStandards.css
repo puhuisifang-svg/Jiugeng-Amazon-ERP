@@ -81,3 +81,11 @@
 #app .ui-image-remove{justify-self:start;align-self:start;display:inline-flex;align-items:center;justify-content:center;min-height:32px;padding:5px 12px;border:1px solid #f1c5c1;background:#fff7f6;color:#b42318;border-radius:5px;font-size:13px;font-weight:400;cursor:pointer;flex:none}
 #app .ui-image-remove:hover:not(:disabled){background:#feecea}
 #app .ui-image-remove:disabled{opacity:.5;cursor:not-allowed}
+
+/* Explicit Tab focus also covers Safari's programmatic-focus heuristic and teleported dialogs. */
+body :is(dialog[open], [role="dialog"][aria-modal="true"]) [data-modal-keyboard-focus]:focus,
+body :is(dialog[open], [role="dialog"][aria-modal="true"]) :is(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 1px solid #c3c7ce !important;
+  outline-offset: 2px !important;
+  box-shadow: none !important;
+}

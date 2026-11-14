@@ -10,7 +10,7 @@ import PurchasesView from './PurchasesView.vue'
 vi.mock('@/api/costs',()=>({costsApi:{price:vi.fn()}}))
 vi.mock('@/state/uiConfirmation', () => ({ confirmAction: vi.fn().mockResolvedValue(true) }))
 vi.mock('@/api/domain', () => ({ domainApi: { suppliers: vi.fn(), materialSupplierLinks: vi.fn() } }))
-vi.mock('@/api/purchases', () => ({ purchaseApi: { deliveryOptions:vi.fn(), removeDeliveryOption:vi.fn(), remove: vi.fn(), orders: vi.fn(), detail:vi.fn(), place: vi.fn(), updateAndPlace: vi.fn(), references: vi.fn() } }))
+vi.mock('@/api/purchases', () => ({ purchaseApi: { deliveryOptions:vi.fn(), removeDeliveryOption:vi.fn(), remove: vi.fn(), orders: vi.fn(), detail:vi.fn(), receive:vi.fn(), cancel:vi.fn(), place: vi.fn(), updateAndPlace: vi.fn(), references: vi.fn() } }))
 const order: PurchaseOrder = {
   id: 'order-1', orderNo: 'PO-MATERIAL', orderType: 'MATERIAL', supplierId: 'supplier-1', supplierName: '测试供应商', status: 'DRAFT', currency: 'CNY', version: 1,
   lines: [{ id: 'line-1', lineNo: 1, itemId: 'material-1', itemCode: 'MAT-001', itemName: '纸箱', unit: 'PCS', orderedQuantity: 10, receivedQuantity: 0, remainingQuantity: 10, unitPrice: 3 }],
@@ -286,4 +286,47 @@ it('deletes a delivery option without clearing the current order address and kee
   expect(purchaseApi.removeDeliveryOption).toHaveBeenLastCalledWith('工厂收货处')
   expect((wrapper.get('input[aria-label="收货信息"]').element as HTMLInputElement).value).toBe('工厂收货处')
   expect(wrapper.find('[aria-label="删除收货信息 工厂收货处"]').exists()).toBe(false)
+})
+
+it('shows a compact empty row with table headers and no empty illustration', async () => {
+  vi.mocked(purchaseApi.orders).mockResolvedValue([])
+  const { wrapper } = await setup()
+  expect(wrapper.get('tbody').text()).toBe('暂无采购记录')
+  expect(wrapper.get('thead').text()).toContain('商品')
+  expect(wrapper.find('.empty-state').exists()).toBe(false)
+})
+
+it('places selection actions above the table and processes receipts one order at a time', async () => {
+  const first={...order,status:'SUBMITTED' as const}, second={...first,id:'order-next'}
+  vi.mocked(purchaseApi.orders).mockResolvedValue([first,second])
+  vi.mocked(purchaseApi.detail).mockImplementation(async id=>({order:id===first.id?first:second,receipts:[],history:[]}))
+  vi.mocked(purchaseApi.receive).mockResolvedValue({} as never)
+  const {wrapper}=await setup('?type=MATERIAL')
+  const receive=wrapper.get('.purchase-list-actions').findAll('button').find(b=>b.text()==='登记收货')!
+  expect(receive.attributes('disabled')).toBeDefined()
+  await wrapper.get('[aria-label="全选当前页采购单"]').setValue(true)
+  expect(receive.attributes('disabled')).toBeUndefined()
+  await receive.trigger('click');await flushPromises()
+  expect(wrapper.get('dialog').text()).toContain('本次实收')
+  await wrapper.findAll('button').find(b=>b.text()==='全部接收')!.trigger('click')
+  await wrapper.findAll('button').find(b=>b.text()==='确认本次收货')!.trigger('click');await flushPromises()
+  expect(purchaseApi.receive).toHaveBeenCalledTimes(1)
+  expect(purchaseApi.receive).toHaveBeenCalledWith(first.id,expect.any(Object))
+  expect(purchaseApi.detail).toHaveBeenLastCalledWith(second.id)
+})
+it('keeps receipt disabled for a selection containing completed orders', async () => {
+  vi.mocked(purchaseApi.orders).mockResolvedValue([{...order,status:'COMPLETED'}])
+  const {wrapper}=await setup('?type=MATERIAL')
+  await wrapper.get('[aria-label="全选当前页采购单"]').setValue(true)
+  expect(wrapper.get('.purchase-list-actions').findAll('button').find(b=>b.text()==='登记收货')!.attributes('disabled')).toBeDefined()
+  expect(wrapper.findAll('.table-actions button').some(b=>b.text()==='取消')).toBe(false)
+})
+it('opens cancellation from the list using a freshly loaded order version', async () => {
+  vi.mocked(purchaseApi.detail).mockResolvedValue({order:{...order,version:8},receipts:[],history:[]})
+  vi.mocked(purchaseApi.cancel).mockResolvedValue({} as never)
+  const {wrapper}=await setup('?type=MATERIAL')
+  await wrapper.findAll('.table-actions button').find(b=>b.text()==='取消')!.trigger('click');await flushPromises()
+  await wrapper.get('textarea').setValue('不再采购')
+  await wrapper.findAll('button').find(b=>b.text()==='确认关闭')!.trigger('click');await flushPromises()
+  expect(purchaseApi.cancel).toHaveBeenCalledWith(order.id,8,'不再采购')
 })

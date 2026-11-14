@@ -2,7 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, expect, it, vi } from 'vitest'
 import CustomerSkuPicker from './CustomerSkuPicker.vue'
 import { domainApi } from '@/api/domain'
-vi.mock('@/api/domain', () => ({ domainApi: { skus: vi.fn() } }))
+vi.mock('@/api/domain', () => ({ domainApi: { skus: vi.fn(), products:vi.fn().mockResolvedValue({items:[{id:'p1',productName:'父体'}]}) } }))
 const sku = { productId: 'p1', productName: '父体', productCode: 'P1', variant: { id: 'v1', skuCode: 'S1', variantName: '子体' } }
 beforeEach(() => {
   vi.clearAllMocks()
@@ -40,5 +40,16 @@ it('hides SKU and parent codes in sample selection without losing the selected i
   expect(wrapper.get('.sku-picker-footer').text()).not.toContain('S1')
   await wrapper.findAll('button').find(b => b.text() === '确认选择')!.trigger('click')
   expect(wrapper.emitted('select')?.[0]).toEqual([sku])
+  wrapper.unmount()
+})
+
+it('filters by parent on the server and preserves multi-selection across pages', async()=>{
+  const wrapper=mount(CustomerSkuPicker,{props:{multiple:true}});await flushPromises()
+  await wrapper.get('input[type=checkbox]').setValue(true)
+  await wrapper.get('select[aria-label="所属父体筛选"]').setValue('p1');await flushPromises()
+  expect(domainApi.skus).toHaveBeenLastCalledWith(expect.objectContaining({productId:'p1',page:0}))
+  expect(wrapper.get('input[type=checkbox]').element).toHaveProperty('checked',true)
+  await wrapper.findAll('button').find(b=>b.text()==='确认选择')!.trigger('click')
+  expect(wrapper.emitted('confirm')?.[0]).toEqual([[sku]])
   wrapper.unmount()
 })

@@ -45,6 +45,14 @@ async function removeDeliveryOption(name:string) {
 }
 const selectedIds=ref<string[]>([]),exportOrders=ref<PurchaseOrder[]>([])
 const selectedOrders=computed(()=>filtered.value.filter(order=>selectedIds.value.includes(order.id)))
+const actionQueue=ref<string[]>([]), listAction=ref<'receive'|'cancel'>('receive')
+const canReceive=computed(()=>session.canAccess(['purchases.receive']))
+const canCancel=computed(()=>session.canAccess(['purchases.cancel']))
+const receiveSelectionValid=computed(()=>selectedOrders.value.length>0 && selectedOrders.value.every(order=>['SUBMITTED','PARTIALLY_RECEIVED'].includes(order.status) && order.lines.some(line=>line.remainingQuantity>0)))
+function startReceipts(){if(!canReceive.value || !receiveSelectionValid.value || actionQueue.value.length)return;listAction.value='receive';actionQueue.value=selectedOrders.value.map(order=>order.id)}
+function startCancel(order:PurchaseOrder){if(!canCancel.value || ['COMPLETED','CANCELLED'].includes(order.status) || actionQueue.value.length)return;listAction.value='cancel';actionQueue.value=[order.id]}
+async function actionCompleted(){const id=actionQueue.value.shift();selectedIds.value=selectedIds.value.filter(value=>value!==id);success.value=listAction.value==='receive'?'本次收货已入账。':'采购单已取消，已有收货记录与库存保留。';await load()}
+async function closeAction(){actionQueue.value=[];await load()}
 const allPageSelected=computed(()=>visibleOrders.value.length>0&&visibleOrders.value.every(o=>selectedIds.value.includes(o.id)))
 function togglePage(checked:boolean){const ids=visibleOrders.value.map(o=>o.id);selectedIds.value=checked?[...new Set([...selectedIds.value,...ids])]:selectedIds.value.filter(id=>!ids.includes(id))}
 const suppliers = ref<SupplierDto[]>([]); const references = ref<PurchaseReferenceItem[]>([])
@@ -245,12 +253,6 @@ onMounted(load)
       </div>
       <div class="purchase-header-actions">
         <button
-          type="button"
-          :disabled="!selectedOrders.length"
-          @click="exportOrders=[...selectedOrders]"
-        >
-          导出图片{{ selectedOrders.length ? `（${selectedOrders.length}）` : '' }}
-        </button><button
           v-if="writable"
           class="primary-link"
           type="button"
@@ -326,6 +328,26 @@ onMounted(load)
       :aria-labelledby="`tab-${type}`"
       :aria-busy="loading"
     >
+      <div class="purchase-list-actions">
+        <button
+          v-if="canReceive"
+          type="button"
+          class="purchase-batch-action"
+          :disabled="!receiveSelectionValid || loading || !!actionQueue.length"
+          :title="selectedOrders.length && !receiveSelectionValid ? '请选择待收货或部分收货的采购单' : '按所选采购单逐单登记收货'"
+          @click="startReceipts"
+        >
+          登记收货
+        </button>
+        <button
+          type="button"
+          class="purchase-batch-action"
+          :disabled="!selectedOrders.length || loading"
+          @click="exportOrders=[...selectedOrders]"
+        >
+          导出图片{{ selectedOrders.length ? `（${selectedOrders.length}）` : '' }}
+        </button>
+      </div>
       <p class="purchase-list-note">
         {{ type === 'MANUAL' ? '直接录入未建档的日常物品，支持图片及分批收货，不计入产品或辅料库存。' : type === 'PRODUCT' ? '产品按 SKU 采购，收货登记到货数量；暂不生成成品库存。' : '辅料按档案单位采购，登记收货后同步增加固定仓库存。' }} 收货与历史记录在采购单详情查看。
       </p>
@@ -335,12 +357,6 @@ onMounted(load)
       >
         正在加载采购单…
       </p>
-      <div
-        v-else-if="!filtered.length"
-        class="empty-state"
-      >
-        <span class="empty-state__icon">单</span><h2>暂无符合条件的{{ typeLabels[type] }}单</h2><p>可调整筛选条件，或先维护供应商供货关系后新建采购单。</p>
-      </div>
       <div
         v-else
         class="table-scroll"
@@ -361,6 +377,14 @@ onMounted(load)
               </tr>
             </thead>
             <tbody>
+              <tr v-if="!filtered.length">
+                <td
+                  colspan="11"
+                  class="muted"
+                >
+                  暂无采购记录
+                </td>
+              </tr>
               <tr
                 v-for="order in visibleOrders"
                 :key="order.id"
@@ -453,6 +477,14 @@ onMounted(load)
                     @click="openEdit(order)"
                   >
                     编辑
+                  </button><button
+                    v-if="canCancel && !['COMPLETED','CANCELLED'].includes(order.status)"
+                    type="button"
+                    class="danger-link"
+                    :disabled="!!actionQueue.length"
+                    @click="startCancel(order)"
+                  >
+                    取消
                   </button><button
                     v-if="removable"
                     type="button"
@@ -804,6 +836,15 @@ onMounted(load)
       </button>
     </template>
   </AccessDialog>
+  <PurchaseOrderDetailView
+    v-if="actionQueue[0]"
+    :key="actionQueue[0]"
+    :order-id="actionQueue[0]"
+    :action="listAction"
+    embedded
+    @completed="actionCompleted"
+    @close="closeAction"
+  />
   <PurchaseLogisticsDialog
     v-if="logisticsOrder"
     :order="logisticsOrder"
@@ -814,6 +855,10 @@ onMounted(load)
 </template>
 
 <style scoped>
+.purchase-list-actions{display:flex;align-items:center;gap:8px;padding:8px 16px;flex-wrap:wrap}
+.purchase-list-actions .purchase-batch-action{min-height:32px;padding:5px 14px;border-radius:4px;border:1px solid #b7dbc5;background:#edf7f1;color:#21834a;font-size:13px;cursor:pointer}
+.purchase-list-actions .purchase-batch-action:disabled{background:#f1f2f4;border-color:#e0e3e8;color:#98a2b3;cursor:not-allowed;opacity:1}
+
 .purchase-name-link{color:#2864c5!important;border:0;background:transparent!important;padding:0;text-align:left;cursor:pointer;}
 .purchase-delivery-date { color: #dc2626; }
 .manual-image-cell { min-width:110px; max-width:130px; white-space:normal; }.manual-image-cell > button { display:block; margin:5px 0; }.manual-purchase-lines { min-width:850px; }.manual-purchase-lines td:nth-child(2) { min-width:230px; }.manual-purchase-lines td:nth-child(2) input { display:block; width:100%; max-width:none; }.manual-purchase-lines td:nth-child(4) input { width:70px; }.purchase-edit-lines td input + input { margin-top:6px; }

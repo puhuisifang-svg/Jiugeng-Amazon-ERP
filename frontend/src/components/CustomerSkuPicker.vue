@@ -1,18 +1,22 @@
 <script setup lang="ts">
+import ProductParentFilter from './ProductParentFilter.vue'
 import { onMounted, ref } from 'vue'
 import { domainApi, type SkuListItemDto } from '@/api/domain'
 import AccessDialog from './AccessDialog.vue'
 import ListPagination from './ListPagination.vue'
 import AuthenticatedCatalogImage from './AuthenticatedCatalogImage.vue'
-const props = withDefaults(defineProps<{ selectedId?: string; activeOnly?: boolean; showCodes?: boolean }>(), { activeOnly: true, selectedId: '', showCodes: true })
-const emit = defineEmits<{ close: []; select: [sku: SkuListItemDto] }>()
+const props = withDefaults(defineProps<{ selectedId?: string; activeOnly?: boolean; showCodes?: boolean; multiple?:boolean; existingIds?:string[] }>(), { activeOnly: true, selectedId: '', showCodes: true, multiple:false, existingIds:()=>[] })
+const emit = defineEmits<{ close: []; select: [sku: SkuListItemDto]; confirm:[skus:SkuListItemDto[]] }>()
 const query = ref(''), applied = ref(''), page = ref(1), size = ref(20), total = ref(0)
 const rows = ref<SkuListItemDto[]>([]), chosen = ref<SkuListItemDto>(), loading = ref(false), error = ref('')
+const parent=ref(''), selected=ref<SkuListItemDto[]>([])
+function toggle(row:SkuListItemDto, checked:boolean){if(!props.multiple){chosen.value=row;return}selected.value=selected.value.filter(v=>v.variant.id!==row.variant.id);if(checked)selected.value.push(row)}
+function confirm(){if(props.multiple)emit('confirm',selected.value);else if(chosen.value)emit('select',chosen.value)}
 let sequence = 0
 async function load() {
   const request = ++sequence; loading.value = true; error.value = ''; rows.value = []
   try {
-    const result = await domainApi.skus({ q: applied.value, exact: false, ...(props.activeOnly ? { status: 'ACTIVE' as const, productStatus: 'ACTIVE' as const } : {}), page: page.value - 1, size: size.value })
+    const result = await domainApi.skus({ q: applied.value, productId:parent.value, exact: false, ...(props.activeOnly ? { status: 'ACTIVE' as const, productStatus: 'ACTIVE' as const } : {}), page: page.value - 1, size: size.value })
     if (request !== sequence) return
     rows.value = result.items; total.value = result.totalCount
     if (!chosen.value) chosen.value = rows.value.find(item => item.variant.id === props.selectedId)
@@ -34,6 +38,10 @@ onMounted(load)
       class="sku-picker-filter"
       @submit.prevent="search"
     >
+      <ProductParentFilter
+        v-model="parent"
+        @update:model-value="page=1;load()"
+      />
       <label>关键词<input
         v-model="query"
         type="search"
@@ -49,7 +57,7 @@ onMounted(load)
       </button>
     </form>
     <p class="access-muted">
-      {{ activeOnly ? '仅展示启用的产品及 SKU，' : '' }}一次选择一个 SKU。
+      {{ activeOnly ? '仅展示启用的产品及 SKU，' : '' }}{{ multiple ? '支持跨页勾选多个 SKU。' : '一次选择一个 SKU。' }}
     </p>
     <p
       v-if="error"
@@ -77,15 +85,16 @@ onMounted(load)
           <tr
             v-for="row in rows"
             :key="row.variant.id"
-            :class="{ selected: chosen?.variant.id === row.variant.id }"
+            :class="{ selected: multiple ? selected.some(v=>v.variant.id===row.variant.id) : chosen?.variant.id === row.variant.id }"
           >
             <td>
               <input
-                type="radio"
+                :type="multiple ? 'checkbox' : 'radio'"
                 name="customer-sku"
-                :checked="chosen?.variant.id === row.variant.id"
+                :checked="multiple ? selected.some(v=>v.variant.id===row.variant.id)||existingIds?.includes(row.variant.id!) : chosen?.variant.id === row.variant.id"
+                :disabled="multiple && existingIds?.includes(row.variant.id!)"
                 :aria-label="`选择 ${showCodes ? row.variant.skuCode : row.variant.variantName}`"
-                @change="chosen = row"
+                @change="toggle(row,($event.target as HTMLInputElement).checked)"
               >
             </td><td>
               <AuthenticatedCatalogImage
@@ -118,7 +127,7 @@ onMounted(load)
         @update:page="page = $event; load()"
         @update:page-size="resize"
       /><div class="sku-picker-footer ui-dialog-actions">
-        <span>{{ chosen ? `已选：${showCodes ? chosen.variant.skuCode : chosen.variant.variantName}` : '尚未选择 SKU' }}</span><button
+        <span>{{ multiple ? `已选 ${selected.length} 项` : chosen ? `已选：${showCodes ? chosen.variant.skuCode : chosen.variant.variantName}` : '尚未选择 SKU' }}</span><button
           type="button"
           @click="emit('close')"
         >
@@ -126,8 +135,8 @@ onMounted(load)
         </button><button
           class="primary-button"
           type="button"
-          :disabled="!chosen || loading || !!error"
-          @click="chosen && emit('select', chosen)"
+          :disabled="(multiple ? !selected.length : !chosen) || loading || !!error"
+          @click="confirm"
         >
           确认选择
         </button>

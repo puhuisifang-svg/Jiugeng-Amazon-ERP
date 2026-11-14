@@ -58,10 +58,12 @@ function removeAddress(index:number) {
 }
 const wechatPreview=ref<string>()
 async function uploadWechat(file:File){if(saving.value)return false;saving.value=true;formError.value='';try{customerForm.wechatImageId=(await catalogApi.uploadImage('CUSTOMER_WECHAT',file)).id}catch(e){formError.value=message(e);return false}finally{saving.value=false}}
-const snapshot = () => JSON.stringify(isProduct.value ? productForm : customerForm)
+const snapshot = () => JSON.stringify(isProduct.value ? {form:productForm,rows:batchProducts.value} : customerForm)
 const routeCustomerId = computed(() => typeof route.query.customerId === 'string' ? route.query.customerId : '')
 const customerFilter = ref(''), customerOptions = ref<Customer[]>([]), customersLoading = ref(false), customersError = ref('')
 const selectedSku = ref<SkuListItemDto>(), skuPickerOpen = ref(false)
+const batchProducts=ref<{sku:SkuListItemDto;form:CustomerProductInput}[]>([]), batchSaved=ref(0)
+function addSkus(rows:SkuListItemDto[]){for(const sku of rows){if(!sku.variant.id||batchProducts.value.some(r=>r.sku.variant.id===sku.variant.id))continue;batchProducts.value.push({sku,form:{...blankProduct(),productId:sku.productId,variantId:sku.variant.id}})}skuPickerOpen.value=false}
 const activeCustomers = computed(() => customerOptions.value.filter(item => item.status === 'ACTIVE'))
 const currentCustomer = computed(() => customerOptions.value.find(item => item.id === customerFilter.value))
 let loadSequence = 0, directorySequence = 0
@@ -82,7 +84,7 @@ async function loadCustomers() {
   finally { if (sequence === directorySequence) customersLoading.value = false }
 }
 function changeCustomer() { productRows.value = []; total.value = 0; page.value = 0; query.value = ''; status.value = ''; void load() }
-function pickSku(row: SkuListItemDto) { selectedSku.value = row; productForm.productId = row.productId; productForm.variantId = row.variant.id ?? ''; skuPickerOpen.value = false }
+function pickSku(row: SkuListItemDto) { selectedSku.value = row; productForm.productId = row.productId; productForm.variantId = row.variant.id ?? ''; addSkus([row]); skuPickerOpen.value = false }
 function message(exception: unknown) { return exception instanceof Error ? exception.message : '请求失败，请重试。' }
 async function load() {
   const sequence = ++loadSequence; loading.value = true; error.value = ''
@@ -104,7 +106,7 @@ function turnPage(delta: number) { page.value += delta; void load() }
 async function open(item?: Customer | CustomerProduct) {
   editingId.value = item?.id; discard.value = false; formError.value = ''; success.value = ''
   Object.assign(customerForm, blankCustomer()); Object.assign(productForm, blankProduct())
-  selectedSku.value = undefined; selectionSummary.value = ''; skuPickerOpen.value = false
+  batchProducts.value=[];batchSaved.value=0;selectedSku.value = undefined; selectionSummary.value = ''; skuPickerOpen.value = false
   if (isProduct.value && !item) productForm.customerId = activeCustomers.value.find(customer => customer.defaultCustomer)?.id ?? ''
   if (item && 'customerId' in item) {
     Object.assign(productForm, { customerId: item.customerId, productId: item.productId, variantId: item.variantId,
@@ -137,11 +139,15 @@ onBeforeRouteLeave(guardNavigation); onBeforeRouteUpdate(guardNavigation)
 async function save() {
   if (saving.value || discard.value) return
   formError.value = ''; success.value = ''
-  if (isProduct.value && (!productForm.customerId || !productForm.variantId)) { formError.value = '请选择客户及具体 SKU。'; return }
+  if (isProduct.value && (!productForm.customerId || (editingId.value ? !productForm.variantId : !batchProducts.value.length))) { formError.value = '请选择客户及具体 SKU。'; return }
   if (isProduct.value && productForm.supplyPrice !== '' && productForm.supplyPrice != null && !/^\d{1,12}(\.\d{1,2})?$/.test(String(productForm.supplyPrice))) { formError.value = '供货价须为非负金额，最多两位小数。'; return }
+  if(isProduct.value && !editingId.value && batchProducts.value.some(row=>!row.form.priceUnit.trim() || (row.form.supplyPrice!=='' && row.form.supplyPrice!=null && !/^\d{1,12}(\.\d{1,2})?$/.test(String(row.form.supplyPrice))))){formError.value='请填写每项计价单位；供货价须为非负金额，最多两位小数。';return}
   saving.value = true
   try {
-    if (isProduct.value) await customersApi.saveProduct(editingId.value, { ...productForm, supplyPrice: productForm.supplyPrice === '' ? null : productForm.supplyPrice })
+    if(isProduct.value && !editingId.value){
+      while(batchProducts.value.length){const row=batchProducts.value[0]!;try{await customersApi.saveProduct(undefined,{...row.form,customerId:productForm.customerId,supplyPrice:row.form.supplyPrice===''?null:row.form.supplyPrice});batchProducts.value.shift();batchSaved.value++}catch(e){throw new Error(`已保存 ${batchSaved.value} 项，${row.sku.variant.variantName} 保存失败：${message(e)}。已保存项已从待保存列表移除，请处理剩余项。`,{cause:e})}}
+    }
+    else if (isProduct.value) await customersApi.saveProduct(editingId.value, { ...productForm, supplyPrice: productForm.supplyPrice === '' ? null : productForm.supplyPrice })
     else {
       const invoiceTitles = (customerForm.invoiceTitles ?? []).filter(t => Object.values(t).some(v => v.trim()))
       if (invoiceTitles.some(t => !t.invoiceTitle.trim())) { formError.value = '请填写每组开票信息的抬头，或移除不用的信息。'; return }
@@ -436,6 +442,7 @@ watch(() => [props.kind, routeCustomerId.value], () => {
       v-if="opened"
       ref="dialog"
       class="customer-dialog"
+      :class="{'customer-dialog--batch':isProduct && !editingId}"
       :aria-label="discard ? '放弃未保存的修改？' : `${editingId ? '编辑' : '新增'}${title}`"
       @cancel.prevent="escape"
     >
@@ -658,61 +665,127 @@ watch(() => [props.kind, routeCustomerId.value], () => {
               v-single-select
               aria-label="选择客户"
               required
-              :disabled="saving || customersLoading"
+              :disabled="saving || customersLoading || batchSaved>0"
             ><option value="">请选择启用客户</option><option
               v-for="customer in activeCustomers"
               :key="customer.id"
               :value="customer.id"
             >{{ customer.name }}{{ customer.defaultCustomer ? '（默认）' : '' }}</option></select></label>
             <div class="form-wide customer-sku-selection">
-              <label>产品 SKU *</label><div
-                v-if="selectedSku"
-                class="customer-selection"
-              >
-                {{ selectedSku.variant.variantName }}<small>SKU：{{ selectedSku.variant.skuCode }}</small>
-              </div><button
+              <button
                 type="button"
                 class="primary-button"
                 :disabled="saving"
                 @click="skuPickerOpen = true"
               >
-                {{ selectedSku ? '更换 SKU' : '选择产品 SKU' }}
+                选择产品 SKU（可多选）
               </button>
             </div>
+            <div class="form-wide customer-batch-products">
+              <table class="data-table">
+                <thead><tr><th>图片</th><th>商品 / 父体</th><th>供货价（人民币）</th><th>单位 *</th><th>客户产品编码</th><th>产品特殊需求</th><th>操作</th></tr></thead><tbody>
+                  <tr
+                    v-for="(row,index) in batchProducts"
+                    :key="row.sku.variant.id"
+                  >
+                    <td>
+                      <ShipmentProductImage
+                        :product-id="row.sku.productId"
+                        :variant-id="row.sku.variant.id"
+                        :alt="row.sku.variant.variantName"
+                      />
+                    </td>
+                    <td>{{ row.sku.variant.variantName }}<small>父体：{{ row.sku.productName }}</small></td>
+                    <td>
+                      <input
+                        v-model="row.form.supplyPrice"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        :disabled="saving"
+                        :aria-label="`商品${index+1}供货价`"
+                        placeholder="可留空"
+                      >
+                    </td>
+                    <td>
+                      <input
+                        v-model="row.form.priceUnit"
+                        required
+                        maxlength="16"
+                        :disabled="saving"
+                        :aria-label="`商品${index+1}计价单位`"
+                      >
+                    </td>
+                    <td>
+                      <input
+                        v-model="row.form.customerProductCode"
+                        maxlength="128"
+                        :disabled="saving"
+                        :aria-label="`商品${index+1}客户产品编码`"
+                      >
+                    </td>
+                    <td>
+                      <input
+                        v-model="row.form.requirements"
+                        maxlength="2000"
+                        :disabled="saving"
+                        :aria-label="`商品${index+1}特殊需求`"
+                      >
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        :disabled="saving"
+                        class="customer-batch-remove"
+                        @click="batchProducts.splice(index,1)"
+                      >
+                        移除
+                      </button>
+                    </td>
+                  </tr><tr v-if="!batchProducts.length">
+                    <td colspan="7">
+                      请选择产品 SKU，可一次添加多项
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </template>
-          <label>供货价（人民币，可留空）<input
-            v-model="productForm.supplyPrice"
-            type="number"
-            min="0"
-            max="999999999999.99"
-            step="0.01"
-            :disabled="saving"
-            placeholder="0.00"
-          ></label>
-          <label>计价单位 *<input
-            v-model="productForm.priceUnit"
-            required
-            maxlength="16"
-            :disabled="saving"
-            placeholder="如：件、套、箱"
-          ></label>
-          <label>客户产品编码<input
-            v-model="productForm.customerProductCode"
-            maxlength="128"
-            :disabled="saving"
-            placeholder="客户内部的产品编号"
-          ></label>
-          <label>状态<select
-            v-model="productForm.status"
-            v-single-select
-            :disabled="saving"
-          ><option value="ACTIVE">启用</option><option value="DISABLED">停用</option></select></label>
-          <label class="form-wide">产品特殊需求<input
-            v-model="productForm.requirements"
-            maxlength="2000"
-            :disabled="saving"
-            placeholder="如包装、颜色、贴标、配件要求；税费及运费约定也可注明"
-          ></label>
+          <template v-if="editingId">
+            <label>供货价（人民币，可留空）<input
+              v-model="productForm.supplyPrice"
+              type="number"
+              min="0"
+              max="999999999999.99"
+              step="0.01"
+              :disabled="saving"
+              placeholder="0.00"
+            ></label>
+            <label>计价单位 *<input
+              v-model="productForm.priceUnit"
+              required
+              maxlength="16"
+              :disabled="saving"
+              placeholder="如：件、套、箱"
+            ></label>
+            <label>客户产品编码<input
+              v-model="productForm.customerProductCode"
+              maxlength="128"
+              :disabled="saving"
+              placeholder="客户内部的产品编号"
+            ></label>
+            <label>状态<select
+              v-model="productForm.status"
+              v-single-select
+              :disabled="saving"
+            ><option value="ACTIVE">启用</option><option value="DISABLED">停用</option></select></label>
+            <label class="form-wide">产品特殊需求<input
+              v-model="productForm.requirements"
+              maxlength="2000"
+              :disabled="saving"
+              placeholder="如包装、颜色、贴标、配件要求；税费及运费约定也可注明"
+            ></label>
+          </template>
           <p class="form-wide customer-help">
             每个客户与 SKU 维护一条当前报价；不同客户可设置不同供货价。报价不自动生成订单。
           </p>
@@ -744,6 +817,9 @@ watch(() => [props.kind, routeCustomerId.value], () => {
     <CustomerSkuPicker
       v-if="skuPickerOpen"
       :selected-id="productForm.variantId"
+      :multiple="!editingId"
+      :existing-ids="batchProducts.map(row=>row.sku.variant.id!)"
+      @confirm="addSkus"
       @close="skuPickerOpen = false"
       @select="pickSku"
     />
@@ -798,4 +874,13 @@ small { display: block; margin-top: 6px; color: #68758c; }
 
 <style scoped>
 .customer-wechat-upload{display:grid;gap:8px;min-width:0}.customer-wechat-preview{display:flex;align-items:center;gap:12px}.customer-wechat-preview :deep(img){width:64px;height:64px;object-fit:contain}.customer-wechat-full{max-width:100%;max-height:65vh;object-fit:contain}.customer-wechat-link{display:block;background:transparent;color:#2673c9;padding:4px 0}
+</style>
+
+<style scoped>
+.customer-dialog.customer-dialog--batch{width:min(1200px,calc(100vw - 24px))}.customer-batch-products{overflow:auto;max-height:55vh;min-height:200px}.customer-batch-products table{width:100%;min-width:1000px}.customer-batch-products th{white-space:nowrap}.customer-batch-products td:nth-child(2){min-width:180px;white-space:normal}.customer-batch-products td:nth-child(3){width:120px}.customer-batch-products td:nth-child(4){width:80px}.customer-batch-products small{display:block;color:var(--muted);margin-top:5px;font-size:12px}.customer-batch-products input{width:100%;min-width:70px;box-sizing:border-box}.customer-batch-products thead{position:sticky;top:0;background:#f8fafc;z-index:1}
+</style>
+
+<style scoped>
+.customer-dialog:focus{outline:none}
+.customer-batch-products .customer-batch-remove{background:#fff1f2!important;color:#b42335!important;border:1px solid #f1ccd1;border-radius:4px;padding:5px 10px;font-size:12px;min-height:28px}
 </style>

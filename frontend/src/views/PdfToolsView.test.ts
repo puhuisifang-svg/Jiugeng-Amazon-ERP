@@ -76,4 +76,52 @@ describe('PDF tools workspace', () => {
     expect(w.get('.pdf-layer').text()).toBe('保留的标注')
   })
 
+  it('selects thumbnail pages, clears selection and resets it when replacing the PDF', async () => {
+    const w = setup(); await selectPdf(w)
+    await w.get('.pdf-settings select').setValue('merge')
+    expect(w.findAll('.pdf-thumbnail')).toHaveLength(2)
+    expect(w.get('.primary').text()).toContain('合并所选页面')
+    await w.get('[aria-label="选择第1页"]').trigger('click')
+    expect(w.get('[aria-label="选择第1页"]').attributes('aria-pressed')).toBe('false')
+    expect((w.get('input[placeholder="例如：1-3,5,7-9"]').element as HTMLInputElement).value).toBe('2')
+    await w.findAll('button').find(b => b.text() === '清空')!.trigger('click')
+    await w.get('.primary').trigger('click'); await flushPromises()
+    expect(w.get('[role=alert]').text()).toContain('请输入页码')
+    await selectPdf(w, 'Replacement.pdf')
+    expect(w.findAll('.pdf-thumbnail.checked')).toHaveLength(2)
+  })
+  it('defaults image margins to two millimetres and rectangles to white fill with an outline option', async () => {
+    const w = setup()
+    await w.findAll('.pdf-tabs button')[1]!.trigger('click')
+    expect((w.get('input[type=number]').element as HTMLInputElement).value).toBe('2')
+    await w.findAll('.pdf-tabs button')[2]!.trigger('click'); await selectPdf(w)
+    await w.findAll('.pdf-edit-actions button')[3]!.trigger('click')
+    expect((w.get('input[type=color]').element as HTMLInputElement).value).toBe('#ffffff')
+    expect((w.get('.pdf-layer.rectangle').element as HTMLElement).style.background).toBe('rgb(255, 255, 255)')
+    await w.get('.layer-settings select').setValue('false')
+    expect((w.get('.pdf-layer.rectangle').element as HTMLElement).style.background).toBe('')
+  })
+
+  it('resizes rectangles from corners without moving the opposite corner and clamps to the page', async () => {
+    const w = setup(); await w.findAll('.pdf-tabs button')[2]!.trigger('click'); await selectPdf(w)
+    await w.findAll('.pdf-edit-actions button')[3]!.trigger('click')
+    vi.spyOn(w.get('.pdf-stage').element, 'getBoundingClientRect').mockReturnValue({ width: 600, height: 800 } as DOMRect)
+    const pointer = (target: EventTarget, type: string, x: number, y: number) => {
+      const e = new Event(type, { bubbles: true }); Object.assign(e, { button: 0, clientX: x, clientY: y }); target.dispatchEvent(e)
+    }
+    pointer(w.get('.pdf-resize-handle.se').element, 'pointerdown', 270, 152)
+    pointer(window, 'pointermove', 330, 232); pointer(window, 'pointerup', 330, 232); await w.vm.$nextTick()
+    const layer = w.get('.pdf-layer').element as HTMLElement
+    expect(parseFloat(layer.style.left)).toBeCloseTo(10)
+    expect(parseFloat(layer.style.width)).toBeCloseTo(45)
+    expect(parseFloat(layer.style.height)).toBeCloseTo(19)
+    pointer(w.get('.pdf-resize-handle.nw').element, 'pointerdown', 60, 80)
+    pointer(window, 'pointermove', -600, -800); pointer(window, 'pointerup', -600, -800); await w.vm.$nextTick()
+    expect(parseFloat(layer.style.left)).toBe(0)
+    expect(parseFloat(layer.style.top)).toBe(0)
+    expect(parseFloat(layer.style.width)).toBeCloseTo(55)
+    pointer(window, 'pointermove', 400, 400); await w.vm.$nextTick()
+    expect(parseFloat(layer.style.width)).toBeCloseTo(55)
+  })
+
 })

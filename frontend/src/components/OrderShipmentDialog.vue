@@ -164,6 +164,7 @@ onMounted(load)
     v-else
     class="operation-dialog"
     role="dialog"
+    aria-modal="true"
     aria-label="安排待发货"
   >
     <section class="panel order-arrange">

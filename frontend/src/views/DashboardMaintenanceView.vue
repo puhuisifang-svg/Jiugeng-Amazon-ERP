@@ -1097,3 +1097,13 @@ onMounted(async () => {
 <style scoped>
 .shipping-lines{min-width:0;overflow:auto}.shipping-lines table{min-width:620px;width:100%}.shipping-lines th{font-size:12px;white-space:nowrap}.shipping-lines td{font-size:13px;vertical-align:middle}.shipping-lines td:nth-child(3){width:140px}.shipping-lines td:nth-child(4){width:110px}.shipping-lines td:last-child{width:70px}.shipping-lines small{display:block;color:var(--muted);font-size:12px;margin-top:6px}.shipping-lines em{color:#c24141;font-style:normal;margin-left:3px}.shipping-line-done{color:#21834a}.shipping-lines .shipping-line-remove{background:#fff1f2;color:#b42335;border:1px solid #f1ccd1;border-radius:4px;padding:5px 10px;font-size:12px;min-height:28px}
 </style>
+
+<style scoped>
+.shipping-maintenance .shipping-editor.operation-form{width:min(1120px,calc(100vw - 24px))}
+.shipping-editor .shipping-editor-body{display:flex;flex-direction:column;gap:14px}
+.shipping-editor .shipping-editor-body>*{flex:none}
+.shipping-editor .shipping-lines{min-height:180px;max-height:none;overflow-x:auto;overflow-y:visible}
+.shipping-maintenance .shipping-editor .shipping-lines .data-table{min-width:760px;width:100%}
+.shipping-editor .shipping-lines td:nth-child(2){min-width:240px;white-space:normal}
+.shipping-editor .shipping-lines input{min-width:90px}
+</style>

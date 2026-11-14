@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { sampleSpecification } from '@/utils/sampleSpecification'
 import { beijingDateTime } from '@/utils/dateTime'
 import { vSingleSelect } from '@/directives/singleSelect'
 
@@ -36,6 +37,13 @@ async function load(){if(runtimeConfig.authMode!=='password'){error.value='æ ·å“
 function search(){applied.value=query.value;appliedParent.value=parent.value;page.value=1;void load()}
 function reset(){query.value='';parent.value='';search()}
 async function edit(row?:SampleLocation){editing.value=row;manual.value=!!row&&!row.variantId;sampleName.value=row?.skuName??'';sampleCode.value=row?.skuCode??'';specification.value=row?.specification??'';remark.value=row?.remark??'';storageImageId.value=row?.storageImageId??null;sampleImageId.value=row?.sampleImageId??null;location.value=row?.locationCode??'';selected.value=undefined;formError.value='';skuPickerOpen.value=false;open.value=true;initial.value=snapshot();await nextTick();dialog.value?.showModal();if(row)locationInput.value?.focus();else{dialog.value?.querySelector<HTMLInputElement>('input')?.focus()}}
+function chooseSku(sku:SkuListItemDto){
+ if(selected.value?.variant.id!==sku.variant.id)specification.value=sampleSpecification(sku.variant)
+ selected.value=sku;skuPickerOpen.value=false
+}
+function preventEnterSave(event:KeyboardEvent){
+ if(event.key==='Enter' && event.target instanceof HTMLInputElement && !event.isComposing)event.preventDefault()
+}
 function close(){skuPickerOpen.value=false;dialog.value?.close();open.value=false;discard.value=false}
 function requestClose(){if(blocked.value)return;if(dirty.value){discard.value=true;return}close()}
 async function save(){
@@ -206,6 +214,7 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
       <form
         v-if="open"
         @submit.prevent="save"
+        @keydown="preventEnterSave"
       >
         <header>
           <h2 id="sample-editor-title">
@@ -420,7 +429,7 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
       :active-only="false"
       :show-codes="false"
       @close="skuPickerOpen = false"
-      @select="selected = $event; skuPickerOpen = false"
+      @select="chooseSku"
     />
     <UnsavedChangesDialog
       v-if="discard"

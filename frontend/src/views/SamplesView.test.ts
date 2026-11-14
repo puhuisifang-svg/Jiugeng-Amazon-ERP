@@ -68,3 +68,24 @@ it('removes the manual code input while preserving existing saved codes on edit'
  expect(h.update).toHaveBeenCalledWith('s1',expect.objectContaining({sampleCode:'LEGACY'}))
  w.unmount()
 })
+
+it('blocks Enter in sample inputs and carries editable SKU specifications',async()=>{
+ const w=view();await flushPromises();await button(w,'新增样品').trigger('click');await button(w,'选择产品 SKU').trigger('click');await flushPromises()
+ const sku={productId:'p1',productName:'Synthetic product',variant:{id:'v1',variantName:'Synthetic SKU',itemLengthCm:30,itemWidthCm:20,itemHeightCm:5,packageWeightGrams:120}}
+ w.findComponent({name:'CustomerSkuPicker'}).vm.$emit('select',sku);await flushPromises()
+ const spec=w.get('input[placeholder="选填，如颜色、尺寸"]')
+ expect((spec.element as HTMLInputElement).value).toBe('产品：长 30 cm × 宽 20 cm × 高 5 cm；包装重量：120 g')
+ await spec.setValue('自定义规格');await w.get('.location-field input').setValue('A-02')
+ for(const input of w.findAll('dialog input')){
+  const event=new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true});input.element.dispatchEvent(event);expect(event.defaultPrevented).toBe(true)
+ }
+ expect(h.create).not.toHaveBeenCalled()
+ await button(w,'更换 SKU').trigger('click');await flushPromises();w.findComponent({name:'CustomerSkuPicker'}).vm.$emit('select',sku);await flushPromises()
+ expect((spec.element as HTMLInputElement).value).toBe('自定义规格')
+ await w.get('dialog form').trigger('submit');await flushPromises();expect(h.create).toHaveBeenCalledWith(expect.objectContaining({specification:'自定义规格'}));w.unmount()
+})
+it('keeps saved sample specifications when editing',async()=>{
+ h.list.mockResolvedValue({items:[{...row,specification:'已有样品说明'}],totalCount:1})
+ const w=view();await flushPromises();await button(w,'编辑').trigger('click');await flushPromises()
+ expect((w.get('input[placeholder="选填，如颜色、尺寸"]').element as HTMLInputElement).value).toBe('已有样品说明');w.unmount()
+})

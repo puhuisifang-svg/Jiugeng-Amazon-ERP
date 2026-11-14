@@ -16,7 +16,18 @@ export function customsInput(value: CustomsProfile): CustomsProfile {
 }
 export interface CustomsRow { imageAssetId?:string|null;imageUrl?:string|null; productId: string; productCode: string; productName: string; variantId: string; skuCode: string; skuName: string; productStatus: string; skuStatus: string; customs: CustomsProfile | null }
 export const customsApi = {
-  list: (q: string, state: string, page: number, size = 20) => apiRequest<{ items: CustomsRow[]; totalCount: number }>(`/v1/product-customs?${new URLSearchParams({ q, state, page: String(page), size: String(size) })}`),
+  list: async (q: string, state: string, page: number, size = 20, productId = '') => {
+    const fetchPage = (index:number,limit:number) => apiRequest<{items:CustomsRow[];totalCount:number}>(`/v1/product-customs?${new URLSearchParams({q,state,page:String(index),size:String(limit)})}`)
+    if(!productId)return fetchPage(page,size)
+    // The legacy customs endpoint has no parent filter. Filter its complete result before pagination.
+    const matches:CustomsRow[]=[]
+    for(let index=0;;index++){
+      const result=await fetchPage(index,100)
+      matches.push(...result.items.filter(row=>row.productId===productId))
+      if(!result.items.length || (index+1)*100>=result.totalCount)break
+    }
+    return {items:matches.slice(page*size,(page+1)*size),totalCount:matches.length}
+  },
   save: (id: string, value: CustomsProfile) => apiRequest<CustomsProfile>(`/v1/product-customs/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(customsInput(value)) }),
 }
 

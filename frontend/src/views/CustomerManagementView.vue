@@ -49,7 +49,9 @@ const dialog = ref<HTMLDialogElement>(), continueButton = ref<HTMLButtonElement>
 const selectionSummary = ref(''), initial = ref('')
 const blankTitle = (): InvoiceTitle => ({ invoiceTitle: '', taxNumber: '', registeredAddress: '', registeredPhone: '', bankName: '', bankAccount: '' })
 const titleFields = [['invoiceTitle', '开票抬头', 200], ['taxNumber', '纳税人识别号', 64], ['registeredAddress', '注册地址', 500], ['registeredPhone', '注册电话', 32], ['bankName', '开户银行', 200], ['bankAccount', '银行账号', 64]] as const
-const blankCustomer = (): CustomerInput => ({ wechatImageId: '', addresses: [], invoiceTitles: [blankTitle()], name: '', account1688: '', contactPerson: '', phone: '', wechatId: '', invoiceTitle: '', taxNumber: '', registeredAddress: '', registeredPhone: '', bankName: '', bankAccount: '', defaultCustomer: false, address: '', remark: '', status: 'ACTIVE', version: undefined })
+const blankExportProfile=()=>({name:'',prefix:'',address:'',phone:'',fax:''})
+const exportNameInput=ref<HTMLInputElement>()
+const blankCustomer = (): CustomerInput => ({ exportEnabled:false,exportProfile:blankExportProfile(),wechatImageId: '', addresses: [], invoiceTitles: [blankTitle()], name: '', account1688: '', contactPerson: '', phone: '', wechatId: '', invoiceTitle: '', taxNumber: '', registeredAddress: '', registeredPhone: '', bankName: '', bankAccount: '', defaultCustomer: false, address: '', remark: '', status: 'ACTIVE', version: undefined })
 const blankProduct = (): CustomerProductInput => ({ customerId: '', productId: '', variantId: '', supplyPrice: '', priceUnit: '件', customerProductCode: '', requirements: '', status: 'ACTIVE', version: undefined })
 const customerForm = reactive(blankCustomer()), productForm = reactive(blankProduct())
 function removeAddress(index:number) {
@@ -114,7 +116,7 @@ async function open(item?: Customer | CustomerProduct) {
       requirements: item.requirements, status: item.status, version: item.version })
     selectionSummary.value = `${item.customerName} · ${item.productName} · SKU：${item.skuCode}`
   } else if (item) {
-    Object.assign(customerForm, { wechatImageId: item.wechatImageId ?? '', addresses: customerAddresses(item), invoiceTitles: item.invoiceTitles?.map(t => ({ ...t })) ?? [{ ...blankTitle(), invoiceTitle: item.invoiceTitle ?? '', taxNumber: item.taxNumber ?? '', registeredAddress: item.registeredAddress ?? '', registeredPhone: item.registeredPhone ?? '', bankName: item.bankName ?? '', bankAccount: item.bankAccount ?? '' }], name: item.name, account1688: item.account1688, contactPerson: item.contactPerson,
+    Object.assign(customerForm, { exportEnabled:item.exportEnabled??false,exportProfile:{...blankExportProfile(),...item.exportProfile},wechatImageId: item.wechatImageId ?? '', addresses: customerAddresses(item), invoiceTitles: item.invoiceTitles?.map(t => ({ ...t })) ?? [{ ...blankTitle(), invoiceTitle: item.invoiceTitle ?? '', taxNumber: item.taxNumber ?? '', registeredAddress: item.registeredAddress ?? '', registeredPhone: item.registeredPhone ?? '', bankName: item.bankName ?? '', bankAccount: item.bankAccount ?? '' }], name: item.name, account1688: item.account1688, contactPerson: item.contactPerson,
       phone: item.phone, wechatId: item.wechatId, invoiceTitle: item.invoiceTitle ?? '', taxNumber: item.taxNumber ?? '', registeredAddress: item.registeredAddress ?? '', registeredPhone: item.registeredPhone ?? '', bankName: item.bankName ?? '', bankAccount: item.bankAccount ?? '', defaultCustomer: item.defaultCustomer ?? false, address: item.address, remark: item.remark, status: item.status, version: item.version })
   }
   initial.value = snapshot(); opened.value = true
@@ -162,6 +164,11 @@ watch(() => [props.kind, routeCustomerId.value], () => {
   query.value = ''; status.value = ''; page.value = 0; customerRows.value = []; productRows.value = []; total.value = 0
   success.value = ''; loadSequence++; directorySequence++; customerFilter.value = ''; if (isProduct.value) void loadCustomers(); else void load()
 }, { immediate: true })
+watch(()=>[props.kind,route.query.editCustomer,route.query.section],async()=>{
+ if(isProduct.value||typeof route.query.editCustomer!=='string'||!writable.value)return
+ try{await open(await customersApi.get(route.query.editCustomer));await nextTick();exportNameInput.value?.scrollIntoView({block:'center'});exportNameInput.value?.focus()}
+ catch(e){error.value=message(e)}
+},{immediate:true})
 </script>
 
 <template>
@@ -643,6 +650,58 @@ watch(() => [props.kind, routeCustomerId.value], () => {
           >
             添加收货地址
           </button>
+          <section class="form-wide customer-export-section">
+            <div class="customer-export-heading">
+              <h3>境内发货人信息</h3><label class="customer-export-toggle"><span>是否境外出口</span><button
+                type="button"
+                role="switch"
+                :aria-checked="customerForm.exportEnabled"
+                aria-label="是否境外出口"
+                :class="{'is-on':customerForm.exportEnabled}"
+                :disabled="saving"
+                @click="customerForm.exportEnabled=!customerForm.exportEnabled"
+              ><span />{{ customerForm.exportEnabled?'是':'否' }}</button></label>
+            </div>
+            <div
+              v-if="customerForm.exportEnabled && customerForm.exportProfile"
+              class="customer-export-fields"
+            >
+              <label>公司名称 <span class="required">*</span><input
+                ref="exportNameInput"
+                v-model.trim="customerForm.exportProfile.name"
+                required
+                maxlength="300"
+                :disabled="saving"
+                aria-label="出口公司名称"
+              ></label>
+              <label>公司简称 <span class="required">*</span><input
+                v-model.trim="customerForm.exportProfile.prefix"
+                required
+                pattern="[A-Za-z]{1,20}"
+                maxlength="20"
+                :disabled="saving"
+                placeholder="例如 XMH，用于生成单据编号"
+              ></label>
+              <label class="form-wide">公司地址 <span class="required">*</span><input
+                v-model.trim="customerForm.exportProfile.address"
+                required
+                maxlength="1000"
+                :disabled="saving"
+              ></label>
+              <label>联系电话 <span class="required">*</span><input
+                v-model.trim="customerForm.exportProfile.phone"
+                v-phone
+                required
+                maxlength="100"
+                :disabled="saving"
+              ></label>
+              <label>传真（选填）<input
+                v-model.trim="customerForm.exportProfile.fax"
+                maxlength="100"
+                :disabled="saving"
+              ></label>
+            </div>
+          </section>
           <label class="form-wide">备注<input
             v-model="customerForm.remark"
             maxlength="500"
@@ -883,4 +942,8 @@ small { display: block; margin-top: 6px; color: #68758c; }
 <style scoped>
 .customer-dialog:focus{outline:none}
 .customer-batch-products .customer-batch-remove{background:#fff1f2!important;color:#b42335!important;border:1px solid #f1ccd1;border-radius:4px;padding:5px 10px;font-size:12px;min-height:28px}
+</style>
+
+<style scoped>
+.customer-export-section{border-top:1px solid var(--line);padding-top:12px}.customer-export-heading{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:12px}.customer-export-heading h3{margin:0;font-size:14px}.customer-export-heading .customer-export-toggle{display:flex;align-items:center;gap:10px;font-size:13px}.customer-export-toggle button{display:flex;align-items:center;gap:5px;border:0;border-radius:16px;background:#98a2b3;color:white;padding:4px 8px;min-height:28px;min-width:54px;font-size:12px}.customer-export-toggle button.is-on{background:#2675d8}.customer-export-toggle button>span{width:16px;height:16px;border-radius:50%;background:white}.customer-export-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.customer-export-fields label{display:block;font-size:13px}.customer-export-fields input{margin-top:6px}.customer-export-fields .required{color:#b42318}@media(max-width:640px){.customer-export-fields{grid-template-columns:1fr}}
 </style>

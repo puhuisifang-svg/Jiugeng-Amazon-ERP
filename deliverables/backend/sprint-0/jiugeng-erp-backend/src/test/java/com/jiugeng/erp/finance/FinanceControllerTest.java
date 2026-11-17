@@ -17,6 +17,20 @@ import org.springframework.mock.web.MockMultipartFile;
 class FinanceControllerTest {
  @Autowired MockMvc mvc;@Autowired JdbcTemplate jdbc;@Autowired ObjectMapper json;
  @AfterEach void clean(){jdbc.update("DELETE FROM finance_attachment");jdbc.update("DELETE FROM finance_bill");jdbc.update("DELETE FROM finance_customer_account");jdbc.update("DELETE FROM finance_account");jdbc.update("DELETE FROM finance_shop");}
+ @Test void removesLegacyShopDataWithoutDeletingCustomerBills()throws Exception{
+  String token=user("ADMIN"),customer=shop(token),bill=create(token,customer,"EXPENSE","2.50","2026-01-01");
+  jdbc.update("INSERT INTO finance_shop(id,name,name_key) VALUES('legacy-cleanup','Synthetic legacy','synthetic-legacy')");
+  jdbc.update("INSERT INTO finance_bill(id,shop_id,bill_date,direction,category,detail,account_name,amount) VALUES('legacy-bill','legacy-cleanup','2026-01-01','EXPENSE','','Synthetic','','1')");
+  jdbc.update("INSERT INTO finance_attachment(id,bill_id,file_name,media_type,file_data,byte_size) VALUES('legacy-file','legacy-bill','synthetic.txt','text/plain',?,1)",new byte[]{1});
+  jdbc.update("INSERT INTO finance_account(id,shop_id,name,name_key) VALUES('legacy-account','legacy-cleanup','Synthetic','synthetic')");
+  var resource=new org.springframework.core.io.ClassPathResource("db/migration/V96__remove_legacy_finance_shops.sql");
+  try(var connection=Objects.requireNonNull(jdbc.getDataSource()).getConnection()){
+   org.springframework.jdbc.datasource.init.ScriptUtils.executeSqlScript(connection,resource);
+  }
+  for(String table:List.of("finance_shop","finance_account","finance_attachment"))assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM "+table,Integer.class)).isZero();
+  assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM finance_bill WHERE id=?",Integer.class,bill)).isEqualTo(1);
+  assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM finance_bill WHERE customer_id IS NULL",Integer.class)).isZero();
+ }
  @Test void isolatesCustomersAndCalculatesExactFilteredTotalsAndMonthlyAccounts()throws Exception{
   String token=user("ADMIN"),a=shop(token),b=shop(token);
   create(token,a,"INCOME","0.10","2026-01-01");create(token,a,"INCOME","0.20","2026-01-31");create(token,a,"EXPENSE","0.15","2026-02-01");create(token,b,"INCOME","999.00","2026-01-01");

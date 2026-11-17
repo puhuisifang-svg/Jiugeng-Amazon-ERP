@@ -9,7 +9,10 @@ export function customerAddresses(customer?: CustomerInput): CustomerAddress[] {
   if (customer?.addresses) return customer.addresses.map(a => ({ ...a }))
   return customer?.address ? [{ contactPerson: customer.contactPerson, phone: customer.phone, address: customer.address, defaultAddress: true }] : []
 }
+export interface ExportProfile { name:string;prefix:string;address:string;phone:string;fax:string }
 export interface CustomerInput {
+  exportEnabled?:boolean
+  exportProfile?:ExportProfile
   wechatImageId?: string | null
   addresses?: CustomerAddress[]
   invoiceTitles?: InvoiceTitle[]
@@ -35,6 +38,7 @@ function query(filters: Filters) {
   return params.toString()
 }
 export const customersApi = {
+  get:(id:string)=>apiRequest<Customer>(`/v1/customers/${encodeURIComponent(id)}`),
   defaultCustomer: () => apiRequest<Customer | null>('/v1/customers/default'),
   list: (filters: Filters = {}) => apiRequest<CustomerPage<Customer>>(`/v1/customers?${query(filters)}`),
   products: (filters: Filters = {}) => apiRequest<CustomerPage<CustomerProduct>>(`/v1/customers/products?${query(filters)}`),

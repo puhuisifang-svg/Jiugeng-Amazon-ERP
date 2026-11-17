@@ -35,9 +35,12 @@ class ProductCustomsService {
         catch(JsonProcessingException e) { throw new IllegalStateException("Cannot encode customs profile",e); }
     }
     @Transactional(readOnly=true)
-    Page list(String q,String state,int page,int size) {
+    Page list(String q,String state,int page,int size) { return list(q,state,page,size,"",""); }
+    @Transactional(readOnly=true)
+    Page list(String q,String state,int page,int size,String customerId,String productId) {
+        if(!customerId.isBlank()&&jdbc.sql("SELECT COUNT(*) FROM customer WHERE id=:id AND export_enabled=TRUE AND status='ACTIVE'").param("id",customerId).query(Long.class).single()==0)throw new ProductException(400,"EXPORT_CUSTOMER_INVALID","请先选择已开启境外出口的境内发货人");
         // State is kept in the profile, not duplicated in another master record.
-        var values=jdbc.sql(SELECT+" WHERE p.deleted_at IS NULL AND v.deleted_at IS NULL ORDER BY v.sku_code_normalized").query((r,n)->new Row(r.getString("product_id"),r.getString("product_code"),
+        var values=jdbc.sql(SELECT+" WHERE p.deleted_at IS NULL AND v.deleted_at IS NULL AND (:parent='' OR p.id=:parent) AND (:customer='' OR EXISTS(SELECT 1 FROM customer_product cp WHERE cp.variant_id=v.id AND cp.customer_id=:customer AND cp.status='ACTIVE' AND cp.deleted_at IS NULL)) ORDER BY v.sku_code_normalized").param("customer",customerId).param("parent",productId).query((r,n)->new Row(r.getString("product_id"),r.getString("product_code"),
             r.getString("product_name"),r.getString("id"),r.getString("sku_code"),r.getString("variant_name"),r.getString("product_status"),
             r.getString("lifecycle_status"),decode(r.getString("customs_data"),r.getLong("customs_version")),r.getString("main_image_asset_id"),r.getString("main_image_url"))).list();
         String term=q.trim().toLowerCase(Locale.ROOT);

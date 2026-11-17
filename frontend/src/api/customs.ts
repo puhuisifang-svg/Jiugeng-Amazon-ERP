@@ -16,6 +16,7 @@ export function customsInput(value: CustomsProfile): CustomsProfile {
 }
 export interface CustomsRow { imageAssetId?:string|null;imageUrl?:string|null; productId: string; productCode: string; productName: string; variantId: string; skuCode: string; skuName: string; productStatus: string; skuStatus: string; customs: CustomsProfile | null }
 export const customsApi = {
+  customerList:(customerId:string,q:string,page:number,size:number,productId='')=>apiRequest<{items:CustomsRow[];totalCount:number}>(`/v1/product-customs?${new URLSearchParams({customerId,q,page:String(page),size:String(size),productId})}`),
   list: async (q: string, state: string, page: number, size = 20, productId = '') => {
     const fetchPage = (index:number,limit:number) => apiRequest<{items:CustomsRow[];totalCount:number}>(`/v1/product-customs?${new URLSearchParams({q,state,page:String(index),size:String(limit)})}`)
     if(!productId)return fetchPage(page,size)

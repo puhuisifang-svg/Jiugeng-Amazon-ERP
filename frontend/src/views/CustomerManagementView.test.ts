@@ -1,11 +1,11 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ list: vi.fn(), products: vi.fn(), save: vi.fn(), saveProduct: vi.fn(), deleteProduct: vi.fn(), skus: vi.fn(), canAccess: vi.fn(), leave: vi.fn() }))
+const mocks = vi.hoisted(() => ({ routeQuery:{} as Record<string,string>,get:vi.fn(),list: vi.fn(), products: vi.fn(), save: vi.fn(), saveProduct: vi.fn(), deleteProduct: vi.fn(), skus: vi.fn(), canAccess: vi.fn(), leave: vi.fn() }))
 vi.mock('@/api/customers', async (importOriginal) => ({ ...await importOriginal<typeof import('@/api/customers')>(), customersApi: mocks }))
 vi.mock('@/api/domain', () => ({ domainApi: { skus: mocks.skus } }))
 vi.mock('@/state/session', () => ({ session: { canAccess: mocks.canAccess } }))
-vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }), onBeforeRouteLeave: mocks.leave, onBeforeRouteUpdate: vi.fn(), RouterLink: { template: '<a><slot /></a>' } }))
+vi.mock('vue-router', () => ({ useRoute: () => ({ query: mocks.routeQuery }), onBeforeRouteLeave: mocks.leave, onBeforeRouteUpdate: vi.fn(), RouterLink: { template: '<a><slot /></a>' } }))
 import CustomerManagementView from './CustomerManagementView.vue'
 
 const customer = { defaultCustomer: true, id: 'c1', name: '合成客户', account1688: 'synthetic-buyer', contactPerson: '', phone: '', wechatId: '', address: '', remark: '', status: 'ACTIVE', version: 2 }
@@ -16,7 +16,7 @@ function render(kind: 'info' | 'products' = 'info') {
 }
 function page<T>(items: T[], totalCount = items.length) { return { items, totalCount, page: 0, size: 20 } }
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.clearAllMocks();mocks.routeQuery={}
   mocks.canAccess.mockReturnValue(true)
   mocks.list.mockResolvedValue(page([customer])); mocks.products.mockResolvedValue(page([product])); mocks.skus.mockResolvedValue(page([sku]))
   mocks.save.mockResolvedValue(customer); mocks.saveProduct.mockResolvedValue(product)
@@ -25,6 +25,13 @@ beforeEach(() => {
 })
 
 describe('客户管理', () => {
+  it('enables export fields and deep-links to the company-name input',async()=>{
+    const input={...customer,exportEnabled:true,exportProfile:{name:'合成出口公司',prefix:'SYN',address:'合成地址',phone:'',fax:''}};
+    mocks.get.mockResolvedValue(input);mocks.routeQuery={editCustomer:'c1',section:'export'};HTMLElement.prototype.scrollIntoView=vi.fn();
+    const w=render();await flushPromises();expect(mocks.get).toHaveBeenCalledWith('c1');expect((w.get('[aria-label="出口公司名称"]').element as HTMLInputElement).value).toBe('合成出口公司');expect(w.get('[aria-label="出口公司名称"]').attributes('required')).toBeDefined();
+    await w.get('[role="switch"]').trigger('click');expect(w.find('[aria-label="出口公司名称"]').exists()).toBe(false);await w.get('[role="switch"]').trigger('click');expect((w.get('[aria-label="出口公司名称"]').element as HTMLInputElement).value).toBe('合成出口公司');w.unmount()
+  })
+
   it('scopes every product query to the selected customer and defaults new records', async () => {
     mocks.list.mockResolvedValue(page([customer, { ...customer, id: 'c2', name: '第二客户', defaultCustomer: false }]))
     const wrapper = render('products'); await flushPromises()

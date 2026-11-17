@@ -53,7 +53,8 @@ class CustomerService implements CustomerProductLookup {
         var params=new HashMap<String,Object>(); String term=q.trim().toLowerCase(Locale.ROOT);
         params.put("q",term); params.put("term","%"+term+"%"); params.put("status",status==null?"":status.name()); return params;
     }
-    private CustomerView getCustomer(String id) {
+    @Transactional(readOnly=true)
+    CustomerView getCustomer(String id) {
         return jdbc.sql("SELECT *, (id=(SELECT default_customer_id FROM customer_preferences WHERE id=1)) default_customer FROM customer WHERE id=:id").param("id",id).query(this::customer).optional()
             .orElseThrow(()->new CustomerException(404,"CUSTOMER_NOT_FOUND","客户不存在"));
     }
@@ -74,6 +75,15 @@ class CustomerService implements CustomerProductLookup {
             throw new CustomerException(409,"DEFAULT_CUSTOMER_DISABLED","默认客户不能停用，请先将其他启用客户设为默认");
         if(Boolean.FALSE.equals(input.defaultCustomer()) && Objects.equals(id,oldDefault))
             throw new CustomerException(409,"DEFAULT_CUSTOMER_REQUIRED","请通过设置其他默认客户进行切换");
+
+        boolean exportEnabled=input.exportEnabled()==null?(before!=null&&before.exportEnabled()):input.exportEnabled();
+        ExportProfile profile=input.exportProfile()!=null?input.exportProfile():before!=null?before.exportProfile():new ExportProfile("","","","","");
+        String prefix=text(profile.prefix()).toUpperCase(Locale.ROOT),company=text(profile.name());
+        if(exportEnabled&&(company.isBlank()||!prefix.matches("[A-Z]{1,20}")))throw new CustomerException(400,"EXPORT_PROFILE_REQUIRED","境外出口客户须填写公司名称及1至20位英文字母的公司简称");
+        if(exportEnabled&&(text(profile.address()).isBlank()||text(profile.phone()).isBlank()))throw new CustomerException(400,"EXPORT_PROFILE_REQUIRED","境外出口客户须填写公司地址和联系电话");
+        if(!com.jiugeng.erp.ChinaPhone.contact(profile.phone()))throw new CustomerException(400,"PHONE_INVALID",com.jiugeng.erp.ChinaPhone.MESSAGE);
+        for(String value:List.of(company,prefix,text(profile.address()),text(profile.phone()),text(profile.fax())))
+            if(value.chars().anyMatch(Character::isISOControl))throw new CustomerException(400,"EXPORT_PROFILE_INVALID","境内发货人信息不能包含控制字符");
 
         if(create) id=UUID.randomUUID().toString();
         var params=new HashMap<String,Object>(); params.put("id",id); params.put("actor",actor.userId());
@@ -116,6 +126,8 @@ class CustomerService implements CustomerProductLookup {
         catch(CatalogImageGateway.AttachmentException e) { throw new CustomerException(e.status(),e.code(),e.getMessage()); }
         if(before!=null)images.releaseReplaced(before.wechatImageId(),image,"CUSTOMER",id);
         jdbc.sql("UPDATE customer SET wechat_image_id=:image WHERE id=:id").param("image",image,java.sql.Types.VARCHAR).param("id",id).update();
+        jdbc.sql("UPDATE customer SET export_enabled=:enabled,export_company_name=:name,export_company_prefix=:prefix,export_company_address=:address,export_company_phone=:phone,export_company_fax=:fax WHERE id=:id")
+            .param("id",id).param("enabled",exportEnabled).param("name",company).param("prefix",prefix).param("address",text(profile.address())).param("phone",text(profile.phone())).param("fax",text(profile.fax())).update();
         var after=getCustomer(id);
         // Contact details and free text never enter audit logs.
         audit(actor,create?"CUSTOMER_CREATE":"CUSTOMER_UPDATE","CUSTOMER",id,
@@ -194,7 +206,7 @@ class CustomerService implements CustomerProductLookup {
         String result=text(value); if(result.isBlank()) throw new CustomerException(400,"CUSTOMER_FIELD_INVALID",label+"不能为空"); return result;
     }
     private CustomerException conflict() { return new CustomerException(409,"CUSTOMER_VERSION_CONFLICT","记录已被其他用户修改，请刷新后重新编辑"); }
-    private Map<String,?> customerAudit(CustomerView v) { return Map.of("status",v.status(),"version",v.version(),"defaultCustomer",v.defaultCustomer()); }
+    private Map<String,?> customerAudit(CustomerView v) { return Map.of("status",v.status(),"version",v.version(),"defaultCustomer",v.defaultCustomer(),"exportEnabled",v.exportEnabled()); }
     private Map<String,?> productAudit(ProductView v) {
         return Map.of("customerId",v.customerId(),"variantId",v.variantId(),"supplyPrice",v.supplyPrice()==null?"未定价":v.supplyPrice(),"priceUnit",v.priceUnit(),
             "status",v.status(),"version",v.version());
@@ -205,7 +217,7 @@ class CustomerService implements CustomerProductLookup {
     private CustomerView customer(ResultSet r,int row) throws SQLException {
         return new CustomerView(r.getString("id"),r.getString("name"),r.getString("account_1688"),r.getString("contact_person"),
             r.getString("phone"),r.getString("wechat_id"),r.getString("address"),r.getString("remark"),Status.valueOf(r.getString("status")),
-            r.getLong("version"),r.getTimestamp("updated_at").toInstant(),r.getString("invoice_title"),r.getString("tax_number"),r.getString("registered_address"),r.getString("registered_phone"),r.getString("bank_name"),r.getString("bank_account"),r.getBoolean("default_customer"),CustomerInvoiceTitles.read(r),CustomerAddresses.read(r),r.getString("wechat_image_id"));
+            r.getLong("version"),r.getTimestamp("updated_at").toInstant(),r.getString("invoice_title"),r.getString("tax_number"),r.getString("registered_address"),r.getString("registered_phone"),r.getString("bank_name"),r.getString("bank_account"),r.getBoolean("default_customer"),CustomerInvoiceTitles.read(r),CustomerAddresses.read(r),r.getString("wechat_image_id"),r.getBoolean("export_enabled"),new ExportProfile(r.getString("export_company_name"),r.getString("export_company_prefix"),r.getString("export_company_address"),r.getString("export_company_phone"),r.getString("export_company_fax")));
     }
     private ProductView product(ResultSet r,int row) throws SQLException {
         return new ProductView(r.getString("id"),r.getString("customer_id"),r.getString("customer_name"),Status.valueOf(r.getString("customer_status")),

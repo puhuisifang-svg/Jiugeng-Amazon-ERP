@@ -191,6 +191,41 @@ class CustomerControllerTest {
         mvc.perform(multipart(base+a+"/labels").file(file).header("Authorization",token)).andExpect(status().isNotFound());
     }
 
+    @Test void exportProfileValidatesRequiredFieldsAndPreservesDataWhenDisabled() throws Exception {
+        String token=login("ADMIN");var input=customer("合成出口客户");input.put("exportEnabled",true);
+        write(token,"",null,input).andExpect(status().isBadRequest());
+        input.put("exportProfile",Map.of("name","合成出口公司","prefix","syn","address","合成地址","phone","13800138000","fax",""));
+        var validProfile=input.get("exportProfile");
+        input.put("exportProfile",Map.of("name","Synthetic","prefix","SYN","phone","13800138000"));write(token,"",null,input).andExpect(status().isBadRequest());
+        input.put("exportProfile",Map.of("name","Synthetic","prefix","SYN","address","Synthetic address"));write(token,"",null,input).andExpect(status().isBadRequest());
+        input.put("exportProfile",validProfile);
+        var saved=body(write(token,"",null,input).andExpect(status().isOk()).andExpect(jsonPath("$.exportProfile.prefix").value("SYN")));
+        String id=saved.path("id").asText();
+        mvc.perform(get("/api/v1/customers/"+id).header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.exportEnabled").value(true));
+        mvc.perform(get("/api/v1/customs-shippers").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$[?(@.id=='"+id+"')].name").value("合成出口公司"));
+        input.put("version",0);input.put("exportEnabled",false);write(token,"",id,input).andExpect(status().isOk()).andExpect(jsonPath("$.exportProfile.name").value("合成出口公司"));
+        mvc.perform(get("/api/v1/customs-shippers").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$[?(@.id=='"+id+"')]").isEmpty());
+        write(token,"",id,input).andExpect(status().isConflict());
+        input.put("version",1);input.put("exportEnabled",true);input.put("exportProfile",Map.of("name","合成出口公司","prefix","bad1"));write(token,"",id,input).andExpect(status().isBadRequest());
+        input.put("exportProfile",Map.of("name","合成出口公司","prefix","SYN","phone","中文电话"));write(token,"",id,input).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/customers/"+id).header("Authorization",login("SELECTION"))).andExpect(status().isForbidden());
+    }
+    @Test void customsSkuLookupFiltersCustomerParentAndDeletedQuotesBeforePagination() throws Exception {
+        String token=login("ADMIN"),a=createCustomer(token),b=createCustomer(token);String[] first=sku(),second=sku();
+        jdbc.update("UPDATE customer SET export_enabled=TRUE,export_company_name=name,export_company_prefix='SYN' WHERE id IN (?,?)",a,b);
+        String quoteId=body(write(token,"/products",null,quote(a,first,"1")).andExpect(status().isOk())).path("id").asText();
+        write(token,"/products",null,quote(b,second,"2")).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/product-customs").param("customerId",a).header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(1)).andExpect(jsonPath("$.items[0].variantId").value(first[1]));
+        mvc.perform(get("/api/v1/product-customs").param("customerId",a).param("productId",second[0]).header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(0));
+        var fields=Map.of("customerId",a,"shipperId",a,"seller","合成出口公司");
+        var item=Map.of("variantId",first[1],"sku","SYN-A","name","合成商品");
+        mvc.perform(post("/api/v1/customs-documents").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(Map.of("documentNo","SYN-CUSTOMER-A","status","DRAFT","fields",fields,"items",List.of(item))))).andExpect(status().isOk());
+        var wrong=Map.of("variantId",second[1],"sku","SYN-B","name","合成商品");
+        mvc.perform(post("/api/v1/customs-documents").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(Map.of("documentNo","SYN-CUSTOMER-B","status","DRAFT","fields",fields,"items",List.of(wrong))))).andExpect(status().isBadRequest());
+        jdbc.update("UPDATE customer_product SET deleted_at=CURRENT_TIMESTAMP WHERE id=?",quoteId);
+        mvc.perform(get("/api/v1/product-customs").param("customerId",a).header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(0));
+    }
+
     private String createCustomer(String token) throws Exception { return body(write(token,"",null,customer("合成客户"+UUID.randomUUID())).andExpect(status().isOk())).path("id").asText(); }
     private Map<String,Object> customer(String name) { return new HashMap<>(Map.of("name",name,"status","ACTIVE")); }
     private Map<String,Object> quote(String customer,String[] sku,String price) {

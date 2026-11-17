@@ -19,11 +19,13 @@ import org.apache.poi.ss.usermodel.CellType;
 class CustomsDocumentTest {
  @org.junit.jupiter.api.io.TempDir java.nio.file.Path exportDirectory;
  @Autowired MockMvc mvc;@Autowired JdbcTemplate jdbc;@Autowired ObjectMapper json;@Autowired CustomsWorkbook exporter;
+ static String testCustomer;
+ @BeforeEach void customerFixture(){testCustomer=UUID.randomUUID().toString();jdbc.update("INSERT INTO customer(id,name,created_by,updated_by,export_enabled,export_company_name,export_company_prefix) VALUES(?,?,?, ?,TRUE,'Synthetic Seller','SYN')",testCustomer,"Synthetic export customer",testCustomer,testCustomer);}
  @AfterEach void clean(){jdbc.update("DELETE FROM customs_document");}
- static Map<String,String> fields(){var f=new HashMap<String,String>();for(String k:CustomsDocuments.HEADERS)f.put(k,"");f.putAll(Map.of("contractNo","SYN-CONTRACT","invoiceNo","SYN-INVOICE","date","2026-11-03","seller","Synthetic Seller","sellerAddress","Synthetic seller address","buyer","Synthetic Buyer","buyerAddress","Synthetic buyer address","producer","Synthetic producer","destination","United States","currency","USD"));f.put("terms","FOB");f.put("packaging","Cartons");f.put("signPlace","Synthetic City");return f;}
+ static Map<String,String> fields(){var f=new HashMap<String,String>();for(String k:CustomsDocuments.HEADERS)f.put(k,"");f.putAll(Map.of("contractNo","SYN-CONTRACT","invoiceNo","SYN-INVOICE","date","2026-11-03","seller","Synthetic Seller","sellerAddress","Synthetic seller address","buyer","Synthetic Buyer","buyerAddress","Synthetic buyer address","producer","Synthetic producer","destination","United States","currency","USD"));f.put("customerId",testCustomer);f.put("shipperId",testCustomer);f.put("terms","FOB");f.put("packaging","Cartons");f.put("signPlace","Synthetic City");return f;}
  static Map<String,String> item(String sku){var r=new HashMap<String,String>();for(String k:CustomsDocuments.ITEM_FIELDS)r.put(k,"");r.putAll(Map.of("sku",sku,"name","Synthetic item","hsCode","1234567890","unit","PCS","quantity","3","price","1.235","cartons","2","grossWeight","5","netWeight","4","origin","China"));r.put("declarationElements","品牌类型：合成测试\n规格：合成规格");r.put("quantity2","4");r.put("unit2","kg");return r;}
  CustomsDocuments.Input input(int n){return new CustomsDocuments.Input("SYN-"+UUID.randomUUID(),"DRAFT",fields(),java.util.stream.IntStream.range(0,n).mapToObj(i->item("SYN-"+i)).toList(),null);}
- String create(String token,CustomsDocuments.Input in)throws Exception{return json.readTree(mvc.perform(post("/api/v1/customs-documents").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(in))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("id").asText();}
+ String create(String token,CustomsDocuments.Input in)throws Exception{if(!in.fields().containsKey("customerId")){var fields=new HashMap<>(in.fields());fields.put("customerId",testCustomer);fields.put("shipperId",testCustomer);in=new CustomsDocuments.Input(in.documentNo(),in.status(),fields,in.items(),in.version());}return json.readTree(mvc.perform(post("/api/v1/customs-documents").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(in))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("id").asText();}
  @Test void exportsMissingDefaultsForOldAndNewDocumentsAcrossSkuCounts()throws Exception{
   for(int count:new int[]{1,2,3,12}){
    var in=input(count);for(var row:in.items()){row.put("quantity2","");row.put("unit2","");}
@@ -173,24 +175,25 @@ class CustomsDocumentTest {
   try(var w=new XSSFWorkbook(new ByteArrayInputStream(bytes))){var c=w.getSheet("报关单");assertThat(c.getRow(11).getCell(4).getNumericCellValue()).isEqualTo(4);assertThat(c.getRow(11).getCell(5).getNumericCellValue()).isEqualTo(10);assertThat(c.getRow(11).getCell(6).getNumericCellValue()).isEqualTo(8);assertThat(w.getSheet("装箱单").getRow(18).getCell(7).getNumericCellValue()).isEqualTo(10);}
   f.put("grossWeight","1");mvc.perform(post("/api/v1/customs-documents").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(in))).andExpect(status().isBadRequest());
  }
- @Test void shipperDirectoryPersistsAndRejectsDuplicatesAndUnauthorizedWrites()throws Exception{
-  String admin=user("ADMIN"),reader=user("SELECTION");String name="Synthetic "+UUID.randomUUID();String body=json.writeValueAsString(Map.of("name",name,"prefix","syn","address","Synthetic address","phone","","fax",""));
-  mvc.perform(post("/api/v1/customs-shippers").header("Authorization",reader).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
-  mvc.perform(post("/api/v1/customs-shippers").header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isOk()).andExpect(jsonPath("$.prefix").value("SYN"));
-  mvc.perform(post("/api/v1/customs-shippers").header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isConflict());
-  mvc.perform(get("/api/v1/customs-shippers").header("Authorization",admin)).andExpect(status().isOk()).andExpect(jsonPath("$[?(@.name=='"+name+"')].address").value("Synthetic address"));
+ @Test void shipperDirectoryUsesOnlyEnabledCustomersAndRejectsOldCreationRoute()throws Exception{
+  String admin=user("ADMIN");
+  mvc.perform(get("/api/v1/customs-shippers").header("Authorization",admin)).andExpect(status().isOk()).andExpect(jsonPath("$[?(@.id=='"+testCustomer+"')].name").value("Synthetic Seller"));
+  jdbc.update("UPDATE customer SET export_enabled=FALSE WHERE id=?",testCustomer);
+  mvc.perform(get("/api/v1/customs-shippers").header("Authorization",admin)).andExpect(status().isOk()).andExpect(jsonPath("$[?(@.id=='"+testCustomer+"')]").isEmpty());
+  mvc.perform(post("/api/v1/customs-shippers").header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isMethodNotAllowed());
  }
- @Test void editsShipperDirectoryWithoutChangingSavedDocumentSnapshots()throws Exception{
-  String admin=user("ADMIN"),reader=user("SELECTION"),name="Synthetic "+UUID.randomUUID();
-  String body=json.writeValueAsString(Map.of("name",name,"prefix","syn","address","Synthetic address"));
-  String id=json.readTree(mvc.perform(post("/api/v1/customs-shippers").header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(body)).andReturn().getResponse().getContentAsString()).path("id").asText();
-  var f=fields();f.put("seller",name);f.put("shipperId",id);String doc=create(admin,new CustomsDocuments.Input("SYN-SNAPSHOT","DRAFT",f,List.of(),null));
-  String edited=json.writeValueAsString(Map.of("name",name+" Edited","prefix","new","address","Updated address"));
-  mvc.perform(put("/api/v1/customs-shippers/"+id).header("Authorization",reader).contentType(MediaType.APPLICATION_JSON).content(edited)).andExpect(status().isForbidden());
-  mvc.perform(put("/api/v1/customs-shippers/"+id).header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(edited)).andExpect(status().isOk()).andExpect(jsonPath("$.name").value(name+" Edited")).andExpect(jsonPath("$.prefix").value("NEW"));
-  mvc.perform(get("/api/v1/customs-documents/"+doc).header("Authorization",admin)).andExpect(jsonPath("$.fields.seller").value(name));
-  mvc.perform(put("/api/v1/customs-shippers/"+id).header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"\",\"prefix\":\"bad!\"}")).andExpect(status().isBadRequest());
-  mvc.perform(put("/api/v1/customs-shippers/missing").header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(edited)).andExpect(status().isNotFound());
+ @Test void changingCustomerProfileDoesNotChangeExistingDocumentSnapshots()throws Exception{
+  String admin=user("ADMIN"),doc=create(admin,input(0));jdbc.update("UPDATE customer SET export_company_name='Changed Company' WHERE id=?",testCustomer);
+  mvc.perform(get("/api/v1/customs-documents/"+doc).header("Authorization",admin)).andExpect(status().isOk()).andExpect(jsonPath("$.fields.seller").value("Synthetic Seller"));
+ }
+ @Test void requiresEnabledCustomerAndRejectsCrossCustomerSku()throws Exception{
+  String admin=user("ADMIN");var in=input(1);in.items().getFirst().put("variantId",UUID.randomUUID().toString());
+  mvc.perform(post("/api/v1/customs-documents").header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(in))).andExpect(status().isBadRequest());
+  in.items().getFirst().put("variantId","");in.fields().put("customerId","");
+  mvc.perform(post("/api/v1/customs-documents").header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(in))).andExpect(status().isBadRequest());
+  in.fields().put("customerId",testCustomer);jdbc.update("UPDATE customer SET export_enabled=FALSE WHERE id=?",testCustomer);
+  mvc.perform(post("/api/v1/customs-documents").header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(in))).andExpect(status().isBadRequest());
+  mvc.perform(get("/api/v1/product-customs").param("customerId",testCustomer).header("Authorization",admin)).andExpect(status().isBadRequest());
  }
  @Test void preservesTemplateLogoLayoutAndPerSkuElementBlocks()throws Exception{
   String token=user("ADMIN");var first=item("SYN-BLACK");var second=item("SYN-GRAY");

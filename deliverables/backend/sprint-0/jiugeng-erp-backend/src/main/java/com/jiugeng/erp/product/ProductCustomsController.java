@@ -16,7 +16,7 @@ class ProductCustomsController {
     ProductCustomsService.Page list(@RequestParam(defaultValue="") @Size(max=128) String q,
         @RequestParam(defaultValue="") @Pattern(regexp="^$|MISSING|DRAFT|REVIEWED") String state,
         @RequestParam(defaultValue="0") @Min(0) @Max(100000) int page,
-        @RequestParam(defaultValue="20") @Min(1) @Max(100) int size) { return service.list(q,state,page,size); }
+        @RequestParam(defaultValue="20") @Min(1) @Max(100) int size, @RequestParam(defaultValue="") @Size(max=36) String customerId, @RequestParam(defaultValue="") @Size(max=36) String productId) { return service.list(q,state,page,size,customerId,productId); }
     @PutMapping("/{variantId}") @PreAuthorize("hasAuthority('products.write')")
     CustomsProfile save(@PathVariable String variantId,@Valid @RequestBody CustomsProfile input,@AuthenticationPrincipal AuthenticatedActor actor) {
         return service.save(variantId,input,actor);

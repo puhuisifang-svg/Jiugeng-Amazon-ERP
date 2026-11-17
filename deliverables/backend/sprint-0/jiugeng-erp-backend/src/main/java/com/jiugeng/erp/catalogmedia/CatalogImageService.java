@@ -21,13 +21,13 @@ class CatalogImageService implements CatalogImageGateway {
             @Value("${app.catalog.image-orphan-hours:24}")long orphanHours){this.repository=repository;this.store=store;this.audit=audit;this.orphanHours=orphanHours;}
     @Transactional
     Receipt upload(Purpose purpose,String fileName,byte[] bytes,AuthenticatedActor actor)throws IOException{
-        String name=text(fileName,255);var stored=store.store(bytes);String id=UUID.randomUUID().toString();
+        String name=text(fileName,255);var stored=store.store(bytes,purpose==Purpose.PRODUCT_MAIN||purpose==Purpose.SKU_MAIN);String id=UUID.randomUUID().toString();
         var asset=new CatalogImageRepository.Asset(id,purpose,"PENDING",stored.originalKey(),stored.thumbnailKey(),name,
                 stored.sourceMediaType(),stored.storedMediaType(),stored.sourceSize(),stored.sha256(),stored.width(),stored.height(),actor.userId(),null,null,Instant.now());
         try{repository.insert(asset);}catch(RuntimeException e){delete(stored.originalKey());delete(stored.thumbnailKey());throw e;}
         audit.record(new AuditTrail.BusinessOperation(actor.userId(),actor.loginName(),actor.displayName(),"CATALOG_IMAGE_UPLOAD","CATALOG_IMAGE",id,true,null,
                 Map.of("id",id,"purpose",purpose,"byteSize",stored.sourceSize(),"sha256",stored.sha256()),"上传受控目录图片"));
-        return new Receipt(id,purpose,name,stored.storedMediaType(),stored.sourceSize(),stored.width(),stored.height(),stored.sha256());}
+        return new Receipt(id,purpose,name,stored.storedMediaType(),stored.sourceSize(),stored.width(),stored.height(),stored.sha256(),java.util.Base64.getEncoder().encodeToString(stored.thumbnailBytes()));}
     @Transactional(readOnly=true)
     Content read(String id,boolean thumbnail,AuthenticatedActor actor,boolean productsRead,boolean materialsRead,boolean suppliersRead,boolean samplesRead,boolean customersRead,boolean purchasesRead)throws IOException{
         var image=asset(id);if("PENDING".equals(image.status())&&!image.uploadedBy().equals(actor.userId()))throw missing();
@@ -46,6 +46,6 @@ class CatalogImageService implements CatalogImageGateway {
     private CatalogImageException missing(){return new CatalogImageException(404,"CATALOG_IMAGE_NOT_FOUND","图片不存在");}
     private String text(String value,int max){String result=value==null?null:value.trim();if(result==null||result.isEmpty()||result.length()>max)throw new CatalogImageException(400,"CATALOG_IMAGE_FILE_NAME_INVALID","文件名不正确");return result;}
     private void delete(String key){try{store.delete(key);}catch(IOException ignored){}}
-    record Receipt(String id,Purpose purpose,String fileName,String mediaType,long byteSize,int width,int height,String sha256){}
+    record Receipt(String id,Purpose purpose,String fileName,String mediaType,long byteSize,int width,int height,String sha256,String thumbnailBase64){}
     record Content(byte[] bytes,String mediaType){}
 }

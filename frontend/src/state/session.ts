@@ -1,3 +1,4 @@
+import { IMAGE_SESSION_CHANGED } from '@/utils/catalogImageCache'
 import { computed, reactive } from 'vue'
 
 import { loadCurrentUser, login, logout as logoutRemote, type AppUser, type LoginInput } from '@/api/auth'
@@ -20,6 +21,7 @@ function restoreUser(): AppUser | null {
 const state = reactive<{ user: AppUser | null }>({ user: restoreUser() })
 
 function persist(user: AppUser, token?: string, persistent?: boolean) {
+  if (token || state.user?.id !== user.id || state.user?.authorizationVersion !== user.authorizationVersion || JSON.stringify(state.user?.capabilities) !== JSON.stringify(user.capabilities)) window.dispatchEvent(new Event(IMAGE_SESSION_CHANGED))
   state.user = user
   const usePersistentStorage = persistent ?? Boolean(window.localStorage.getItem(SESSION_TOKEN_KEY))
   const storage = usePersistentStorage ? window.localStorage : window.sessionStorage
@@ -30,6 +32,7 @@ function persist(user: AppUser, token?: string, persistent?: boolean) {
 }
 
 function clear() {
+  window.dispatchEvent(new Event(IMAGE_SESSION_CHANGED))
   state.user = null
   window.localStorage.removeItem(STORAGE_KEY)
   window.sessionStorage.removeItem(STORAGE_KEY)

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { UploadProgress } from '@/utils/imageUpload'
 import ProductMaterialPicker from './ProductMaterialPicker.vue'
 import SingleFileUpload from '@/components/SingleFileUpload.vue'
 import { vSingleSelect } from '@/directives/singleSelect'
@@ -19,7 +20,7 @@ const props = defineProps<{ initial?: ProductInput; busy?: boolean; submitLabel:
 const emit = defineEmits<{ submit: [value: ProductInput]; cancel: [] }>()
 const suppliers = ref<SupplierDto[]>([]); const materials = ref<MaterialDetailDto[]>([])
 const balances = ref<InventoryBalanceViewDto[]>([]); const inventoryFailed = ref(false)
-const referenceError = ref(''); const loadingReferences = ref(false); const imageError = ref(''); const uploading = ref<number | null>(null)
+const referenceError = ref(''); const loadingReferences = ref(false); const imageError = ref(''); const uploading = ref(new Set<number>())
 const activeTabs = ref<Record<number, 'basic' | 'purchase' | 'specs' | 'materials' | 'customs'>>({})
 function activeTab(index: number) { return activeTabs.value[index] ?? 'basic' }
 function setTab(index: number, value: 'basic' | 'purchase' | 'specs' | 'materials' | 'customs') { if (value === 'customs' && !model.variants[index]!.customs) model.variants[index]!.customs = blankCustoms(); activeTabs.value[index] = value }
@@ -27,7 +28,7 @@ const supplierAccess = computed(() => session.canAccess(['suppliers.read']))
 function blankVariant(): ProductVariantInput { return { skuCode: '', variantName: '', nameHighlighted: false, status: 'ACTIVE', suppliers: [], materials: [] } }
 const model = reactive<ProductInput>(JSON.parse(JSON.stringify(props.initial ?? { productCode: '', productName: '', status: 'ACTIVE', variants: [blankVariant()] })))
 function addVariant() { model.variants.push(blankVariant()) }
-function removeVariant(index: number) { if (model.variants.length > 1) model.variants.splice(index, 1) }
+function removeVariant(index: number) { if (!uploading.value.size && model.variants.length > 1) model.variants.splice(index, 1) }
 function supplierName(id: string) { return suppliers.value.find(item => item.id === id)?.name ?? id }
 function materialName(id: string) { const item = materials.value.find(value => value.id === id); return item ? `${item.materialCode} · ${item.name}` : id }
 function stockLabel(material: MaterialDetailDto) { if (!session.canAccess(['inventory.read'])) return '无查看权限'; if (inventoryFailed.value) return '暂不可用'; const balance = balances.value.find(item => item.materialId === material.id); return balance ? `库存 ${balance.quantity} ${balance.unit}` : '库存未初始化' }
@@ -44,13 +45,19 @@ function addMaterials(ids: string[]) {
 }
 function makePrimary(variant: ProductVariantInput, id: string) { variant.suppliers.forEach(item => { item.primary = item.supplierId === id }) }
 function useImageUrl(variant: ProductVariantInput) { if (variant.imageUrl?.trim()) variant.imageAssetId = undefined }
-async function uploadImage(variant: ProductVariantInput, index: number, file: File) { if (props.busy || uploading.value !== null) return false; uploading.value = index; imageError.value = ''; try { variant.imageAssetId = (await catalogApi.uploadImage('SKU_MAIN', file)).id; variant.imageUrl = undefined } catch (error) { imageError.value = error instanceof Error ? error.message : '图片上传失败。' ; return false } finally { uploading.value = null } }
-async function uploadParentImage(file: File) {
-  if (!file || props.busy || uploading.value !== null) return
-  uploading.value = -1; imageError.value = ''
-  try { model.imageAssetId = (await catalogApi.uploadImage('PRODUCT_MAIN', file)).id }
-  catch (error) { imageError.value = error instanceof Error ? error.message : '父体图片上传失败。' ; return false }
-  finally { uploading.value = null }
+async function uploadImage(variant: ProductVariantInput, index: number, file: File, progress?: UploadProgress) {
+  if (props.busy || uploading.value.has(index)) return false
+  uploading.value.add(index); imageError.value = ''
+  try { variant.imageAssetId = (await catalogApi.uploadImage('SKU_MAIN', file, progress)).id; variant.imageUrl = undefined }
+  catch (error) { imageError.value = error instanceof Error ? error.message : '图片上传失败。'; return false }
+  finally { uploading.value.delete(index) }
+}
+async function uploadParentImage(file: File, progress?: UploadProgress) {
+  if (!file || props.busy || uploading.value.has(-1)) return false
+  uploading.value.add(-1); imageError.value = ''
+  try { model.imageAssetId = (await catalogApi.uploadImage('PRODUCT_MAIN', file, progress)).id }
+  catch (error) { imageError.value = error instanceof Error ? error.message : '父体图片上传失败。'; return false }
+  finally { uploading.value.delete(-1) }
 }
 async function loadReferences() {
   if (runtimeConfig.authMode !== 'password') return
@@ -87,7 +94,7 @@ function copyFormValue<T>(value: T): T {
   return value
 }
 async function submit(event: Event) {
-  if (props.busy || uploading.value !== null) return
+  if (props.busy || uploading.value.size > 0) return
   const form = event.target as HTMLFormElement
   const invalid = form.querySelector<HTMLInputElement>(':invalid')
   if (invalid) {
@@ -138,7 +145,7 @@ onMounted(loadReferences)
         <h2>产品基础信息</h2>
         <fieldset
           class="form-wide catalog-image-editor parent-image-editor"
-          :disabled="busy || uploading !== null"
+          :disabled="busy || uploading.has(-1)"
         >
           <legend>父体图片</legend>
           <AuthenticatedCatalogImage
@@ -157,7 +164,7 @@ onMounted(loadReferences)
             title="父体图片"
             accept=".png,.jpg,.jpeg,.webp"
             :max-mb="5"
-            :disabled="busy || uploading !== null"
+            :disabled="busy || uploading.has(-1)"
             :upload="uploadParentImage"
           />
           <button
@@ -219,7 +226,7 @@ onMounted(loadReferences)
               v-if="!focusVariantId"
               type="button"
               class="danger-link"
-              :disabled="model.variants.length === 1"
+              :disabled="model.variants.length === 1 || uploading.size > 0"
               @click="removeVariant(variantIndex)"
             >
               移除 SKU
@@ -314,14 +321,14 @@ onMounted(loadReferences)
                   title="SKU 主图"
                   accept=".png,.jpg,.jpeg,.webp"
                   :max-mb="5"
-                  :disabled="busy || uploading !== null"
-                  :upload="(file) => uploadImage(variant, variantIndex, file)"
+                  :disabled="busy || uploading.has(variantIndex)"
+                  :upload="(file, progress) => uploadImage(variant, variantIndex, file, progress)"
                 />
                 <button
                   v-if="variant.imageAssetId || variant.imageUrl"
                   type="button"
                   class="ui-image-remove"
-                  :disabled="busy || uploading !== null"
+                  :disabled="busy || uploading.size > 0"
                   @click="variant.imageAssetId = undefined; variant.imageUrl = undefined"
                 >
                   移除图片
@@ -544,7 +551,7 @@ onMounted(loadReferences)
           取消
         </button><button
           type="submit"
-          :disabled="busy || uploading !== null"
+          :disabled="busy || uploading.size > 0"
         >
           {{ busy ? '保存中…' : submitLabel }}
         </button>

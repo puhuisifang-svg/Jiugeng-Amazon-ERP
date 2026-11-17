@@ -43,7 +43,7 @@ describe('ProductForm', () => {
     const file = new File(['synthetic'], 'synthetic.png', { type: 'image/png' })
     Object.defineProperty(field.element, 'files', { value: [file], configurable: true })
     await field.trigger('change')
-    expect(spy).toHaveBeenCalledWith('PRODUCT_MAIN', file)
+    expect(spy).toHaveBeenCalledWith('PRODUCT_MAIN', file, expect.any(Function))
     await wrapper.get('form').trigger('submit'); expect(wrapper.emitted('submit')).toBeUndefined()
     done({ id: 'new-parent' } as Awaited<ReturnType<typeof catalogApi.uploadImage>>); await flushPromises()
     await wrapper.get('form').trigger('submit')

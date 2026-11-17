@@ -56,4 +56,16 @@ describe('browser PDF tools', () => {
     expect(() => ensurePrintable(doc)).toThrow('交互表单')
     await expect(splitPdf(await doc.save(), [[0]])).rejects.toThrow('交互表单')
   })
+  it('fits detected content on every rotated page while preserving vector resources', async () => {
+    const crops = Array.from({length:4}, () => ({x:0,y:200,width:306,height:232}))
+    const doc = await PDFDocument.load(await squareLabels(await fixture(), 2, crops))
+    expect(doc.getPageCount()).toBe(4)
+    for (const page of doc.getPages()) {
+      expect(page.getWidth()).toBeCloseTo(100*MM)
+      expect(page.node.Resources()?.toString()).toContain('/EmbeddedPdfPage')
+    }
+    // Invalid bounds must safely retain the original page.
+    expect((await PDFDocument.load(await squareLabels(await fixture(), 2, [{x:999,y:999,width:1,height:1}]))).getPageCount()).toBe(4)
+  })
+
 })

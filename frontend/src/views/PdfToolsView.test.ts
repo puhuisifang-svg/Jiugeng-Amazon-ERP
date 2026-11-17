@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PDFDocument } from 'pdf-lib'
 import PdfToolsView from './PdfToolsView.vue'
 vi.mock('@/components/PdfPagePreview.vue', () => ({ default: { props: ['bytes','page'], template: '<div class="preview-stub"><slot /></div>' } }))
+vi.mock('@/utils/labelContentBounds', () => ({ labelContentBounds: vi.fn(async () => undefined) }))
 vi.mock('@/directives/singleSelect', () => ({ vSingleSelect: {} }))
 const wrappers: ReturnType<typeof mount>[] = []
 function setup() { const w = mount(PdfToolsView); wrappers.push(w); return w }

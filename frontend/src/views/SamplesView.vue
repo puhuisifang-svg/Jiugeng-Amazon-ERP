@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SampleLabelDialog from '@/components/SampleLabelDialog.vue'
 import { sampleSpecification } from '@/utils/sampleSpecification'
 import { beijingDateTime } from '@/utils/dateTime'
 import { vSingleSelect } from '@/directives/singleSelect'
@@ -22,6 +23,7 @@ import UnsavedChangesDialog from '@/components/UnsavedChangesDialog.vue'
 import { runtimeConfig } from '@/config/runtime'
 const writable=computed(()=>runtimeConfig.authMode==='password'&&session.canAccess(['samples.write']))
 const rows=ref<SampleLocation[]>([]),query=ref(''),applied=ref(''),page=ref(1),size=ref(20),total=ref(0),loading=ref(false),error=ref(''),success=ref('')
+const printSample=ref<SampleLocation>()
 const dialog=ref<HTMLDialogElement>(),locationInput=ref<HTMLInputElement>(),open=ref(false),busy=ref(false),editing=ref<SampleLocation>(),location=ref(''),selected=ref<SkuListItemDto>(),initial=ref(''),formError=ref(''),discard=ref(false)
 const skuPickerOpen=ref(false)
 const parents=ref<{id:string;name:string}[]>([]),parent=ref(''),appliedParent=ref(''),parentError=ref('')
@@ -162,6 +164,14 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
             </td><td class="sample-remark">
               {{ row.remark || '—' }}
             </td><td>{{ beijingDateTime(row.updatedAt) }}</td><td>
+              <button
+                type="button"
+                class="text-action"
+                :disabled="blocked"
+                @click="printSample = row"
+              >
+                标签打印
+              </button>
               <template v-if="writable || session.canAccess(['samples.remove'])">
                 <button
                   v-if="session.canAccess(['samples.write'])"
@@ -437,13 +447,18 @@ onBeforeUnmount(()=>{++listSequence;skuPickerOpen.value=false;window.removeEvent
       @discard="close"
     />
   </section>
+  <SampleLabelDialog
+    v-if="printSample"
+    :sample="printSample"
+    @close="printSample = undefined"
+  />
 </template>
 <style scoped>
 .sample-location-code { color: #dc2626; }
 .sample-manual-fields{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}.sample-manual-fields label{display:grid;gap:6px}.sample-source{margin-bottom:12px}.sample-storage-editor{margin-top:16px;display:grid;gap:10px}.sample-storage-preview{display:flex;align-items:center;gap:12px}.required{color:#b42318}@media(max-width:600px){.sample-manual-fields{grid-template-columns:1fr}}
 #app .samples-ui .sample-sku-picker-button{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:6px 14px;background:#2864c5;color:white;border:1px solid #2864c5;border-radius:5px;font-size:13px;cursor:pointer}.sample-sku-picker-button:disabled{opacity:.5}
 
-.samples-ui .filter-panel label{flex:0 1 360px;min-width:220px}.sample-table{min-width:800px;width:100%}.sample-table small,.sku-options small{display:block}.sample-table .text-action{background:transparent;border:0;color:var(--accent);padding:0 8px;min-height:32px;height:32px;cursor:pointer}.sample-table .text-action.danger{color:#b42318}.sample-table th:last-child,.sample-table td:last-child{width:128px;min-width:128px}
+.samples-ui .filter-panel label{flex:0 1 360px;min-width:220px}.sample-table{min-width:800px;width:100%}.sample-table small,.sku-options small{display:block}.sample-table .text-action{background:transparent;border:0;color:var(--accent);padding:0 8px;min-height:32px;height:32px;cursor:pointer}.sample-table .text-action.danger{color:#b42318}.sample-table th:last-child,.sample-table td:last-child{width:208px;min-width:208px}
 .sample-dialog{border:0;border-radius:12px;padding:0;width:min(820px,calc(100vw - 32px));max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);overflow:hidden}.sample-dialog::backdrop{background:#17203366}
 .sample-dialog form{display:flex;flex-direction:column;max-height:calc(100dvh - 32px);min-width:0}.sample-dialog header,.sample-dialog footer{display:flex;align-items:center;gap:8px;padding:16px;flex-shrink:0}.sample-dialog header{justify-content:space-between;border-bottom:1px solid var(--line)}.sample-dialog footer button{min-height:40px;padding:0 18px;border:1px solid var(--line);border-radius:6px;cursor:pointer}.sample-dialog footer .primary-action{background:var(--accent);color:white;border-color:var(--accent)}.sample-dialog footer button:disabled{opacity:.6;cursor:default}.sample-dialog h2{margin:0;font-size:18px}.sample-dialog footer{justify-content:flex-end;border-top:1px solid var(--line)}.sample-dialog-body{overflow:auto;padding:16px;min-height:0}
 .sku-search{display:flex;align-items:end;gap:8px}.sku-search label{flex:1;min-width:0;display:grid;gap:4px}.sample-dialog input:not([type=radio]){width:100%;min-width:0;box-sizing:border-box;height:40px;border:1px solid var(--line);border-radius:6px;padding:0 10px}.sku-options{overflow:auto;max-height:260px;margin-top:8px}.sku-options table{width:100%;min-width:480px}.sku-options input[type=radio]{width:24px;height:24px}.sku-pages{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}.sku-pages button{min-height:32px}.selected-sku{display:flex;flex-wrap:wrap;gap:8px;background:#f5f7fa;padding:10px;border-radius:6px}.location-field{display:block;margin-top:12px}.location-field input{display:block;margin-top:6px}

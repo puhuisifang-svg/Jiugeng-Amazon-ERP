@@ -89,3 +89,10 @@ it('keeps saved sample specifications when editing',async()=>{
  const w=view();await flushPromises();await button(w,'编辑').trigger('click');await flushPromises()
  expect((w.get('input[placeholder="选填，如颜色、尺寸"]').element as HTMLInputElement).value).toBe('已有样品说明');w.unmount()
 })
+
+it('opens printing for read-only users with the selected sample fields',async()=>{
+ h.write=false;h.list.mockResolvedValue({items:[{...row,specification:'30×20cm'}],totalCount:1})
+ const w=view();await flushPromises();await button(w,'标签打印').trigger('click');await flushPromises()
+ expect(w.findComponent({name:'SampleLabelDialog'}).props('sample')).toEqual(expect.objectContaining({skuName:row.skuName,specification:'30×20cm',locationCode:'A-01'}))
+ expect(h.update).not.toHaveBeenCalled();w.unmount()
+})

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch, type Ref } from 'vue'
 import JSZip from 'jszip'
+import { labelContentBounds } from '@/utils/labelContentBounds'
 import PdfPagePreview from '@/components/PdfPagePreview.vue'
 import { vSingleSelect } from '@/directives/singleSelect'
 import { downloadPdf, ensurePrintable, imagesToPdf, loadPdf, MAX_PDF_BYTES, MM, overlayPdf, pageGroups, splitPdf, squareLabels, type PdfImage } from '@/utils/pdfTools'
@@ -20,7 +21,7 @@ function createTabState() {
   return {
     source: shallowRef<Uint8Array>(), result: shallowRef<Uint8Array>(), name: ref(''), pageCount: ref(0), page: ref(0),
     message: ref(''), error: ref(''), ranges: ref(''), splitMode: ref('ranges'),
-    margin: ref(2), imageMargin: ref(2), paper: ref<'a4' | 'square' | 'original'>('a4'), landscape: ref(false),
+    fitContent: ref(true), margin: ref(2), imageMargin: ref(2), paper: ref<'a4' | 'square' | 'original'>('a4'), landscape: ref(false),
     images: ref<ImageItem[]>([]), layers: ref<Layer[]>([]), selectedId: ref<number>(), dimensions: ref({ width: 595, height: 842 }),
   }
 }
@@ -30,6 +31,7 @@ function activeRef<T>(select: (state: ReturnType<typeof createTabState>) => Ref<
 }
 const source = activeRef(s => s.source), result = activeRef(s => s.result), name = activeRef(s => s.name), pageCount = activeRef(s => s.pageCount), page = activeRef(s => s.page)
 const busy = ref(false), message = activeRef(s => s.message), error = activeRef(s => s.error), ranges = activeRef(s => s.ranges), splitMode = activeRef(s => s.splitMode)
+const fitContent = activeRef(s => s.fitContent)
 const margin = activeRef(s => s.margin), imageMargin = activeRef(s => s.imageMargin), paper = activeRef(s => s.paper), landscape = activeRef(s => s.landscape)
 const images = activeRef<ImageItem[]>(s => s.images), layers = activeRef<Layer[]>(s => s.layers), selectedId = activeRef(s => s.selectedId), dimensions = activeRef(s => s.dimensions)
 const thumbnailPage = ref(0)
@@ -52,7 +54,7 @@ const canExport = computed(() => !busy.value && (tab.value === 'images' ? images
 const outputLabel = computed(() => extraction.value ? '合并所选页面并下载' : ({ split: '拆分并下载', images: '生成PDF', edit: '保存并下载', fba: '转换并下载' })[tab.value])
 function resetResult() { result.value = undefined; message.value = ''; error.value = '' }
 for (const state of Object.values(states)) {
-  watch([state.margin, state.imageMargin, state.paper, state.landscape, state.ranges, state.splitMode], () => {
+  watch([state.fitContent, state.margin, state.imageMargin, state.paper, state.landscape, state.ranges, state.splitMode], () => {
     state.result.value = undefined; state.message.value = ''; state.error.value = ''
   }, { flush: 'sync' })
 }
@@ -97,7 +99,7 @@ async function acceptFiles(files: File[]) {
       ensurePrintable(doc)
       source.value = bytes; pageCount.value = doc.getPageCount(); page.value = 0; name.value = file.name
       ranges.value = `1-${pageCount.value}`; thumbnailPage.value = 0; clearLayers()
-      if (tab.value === 'fba') result.value = await squareLabels(bytes, margin.value)
+      if (tab.value === 'fba') result.value = await convertLabels(bytes)
     }
   })
 }
@@ -181,6 +183,10 @@ async function renderLayers() {
   }
   return output
 }
+async function convertLabels(bytes: Uint8Array) {
+  const bounds = fitContent.value ? await labelContentBounds(bytes) : undefined
+  return squareLabels(bytes, margin.value, bounds)
+}
 async function exportFile() {
   await run(async () => {
     if (tab.value === 'split') {
@@ -201,7 +207,7 @@ async function exportFile() {
       const bytes = await overlayPdf(source.value!, await renderLayers())
       downloadPdf(bytes, `${baseName.value}-编辑.pdf`); message.value = '编辑结果已生成，下载已开始'
     } else {
-      result.value = await squareLabels(source.value!, margin.value)
+      result.value = await convertLabels(source.value!)
       downloadPdf(result.value, `${baseName.value}-100x100mm.pdf`); message.value = '转换完成。打印请选择100×100毫米纸张、实际大小（100%）'
     }
   })
@@ -342,6 +348,11 @@ onBeforeUnmount(() => { observer?.disconnect(); endDrag?.(); window.removeEventL
           <div class="pdf-spec">
             <strong>100 × 100 <small>mm</small></strong><span>正方形标签 · 保留矢量条码</span>
           </div>
+          <label>适配方式<select
+            v-model="fitContent"
+            v-single-select
+            :disabled="busy"
+          ><option :value="true">自动去除空白边缘</option><option :value="false">保留完整页面</option></select></label>
           <label>打印边距（毫米）<input
             v-model.number="margin"
             type="number"
@@ -353,12 +364,12 @@ onBeforeUnmount(() => { observer?.disconnect(); endDrag?.(); window.removeEventL
             type="button"
             class="secondary"
             :disabled="!source || busy"
-            @click="run(async () => { result = await squareLabels(source!, margin) })"
+            @click="run(async () => { result = await convertLabels(source!) })"
           >
             预览转换效果
           </button>
           <p class="pdf-hint">
-            整页等比缩小、居中留白，不裁切、不拉伸。打印选择“实际大小 / 100%”，建议先试打一张确认扫码。
+            自动识别内容并保留安全留白，等比缩放，不拉伸条码。可切换保留完整页面。打印选择“实际大小 / 100%”，建议先试打一张确认扫码。
           </p>
         </template>
         <template v-if="tab === 'edit'">

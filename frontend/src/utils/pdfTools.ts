@@ -35,14 +35,24 @@ export async function splitPdf(bytes: Uint8Array, groups: number[][]) {
   }
   return results
 }
-export async function squareLabels(bytes: Uint8Array, marginMm = 2) {
+export type LabelCrop = { x: number; y: number; width: number; height: number }
+export async function squareLabels(bytes: Uint8Array, marginMm = 2, crops?: (LabelCrop | undefined)[]) {
   if (!Number.isFinite(marginMm) || marginMm < 0 || marginMm > 10) throw new Error('边距应为0～10毫米')
   const source = await loadPdf(bytes)
   ensurePrintable(source)
   const out = await PDFDocument.create(), side = 100 * MM, usable = side - 2 * marginMm * MM
-  for (const page of source.getPages()) {
+  for (const [index, page] of source.getPages().entries()) {
     if (page.node.Annots()?.size()) throw new Error('标签包含批注，请先另存为普通PDF，以免遗漏批注内容')
-    const box = page.getCropBox(), rotation = ((page.getRotation().angle % 360) + 360) % 360
+    const original = page.getCropBox(), candidate = crops?.[index]
+    let box = original
+    if (candidate && Object.values(candidate).every(Number.isFinite) && candidate.width > 0 && candidate.height > 0) {
+      const x = Math.max(original.x, candidate.x), y = Math.max(original.y, candidate.y)
+      const width = Math.min(original.x + original.width, candidate.x + candidate.width) - x
+      const height = Math.min(original.y + original.height, candidate.y + candidate.height) - y
+      // Leave normal full-page labels unchanged; only fit significantly empty margins.
+      if (width > 0 && height > 0 && Math.max(original.width, original.height) / Math.max(width, height) > 1.05) box = { x, y, width, height }
+    }
+    const rotation = ((page.getRotation().angle % 360) + 360) % 360
     const swapped = rotation === 90 || rotation === 270
     const width = swapped ? box.height : box.width, height = swapped ? box.width : box.height
     const scale = Math.min(usable / width, usable / height)

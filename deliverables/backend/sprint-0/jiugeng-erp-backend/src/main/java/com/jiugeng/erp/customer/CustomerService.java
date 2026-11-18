@@ -153,8 +153,11 @@ class CustomerService implements CustomerProductLookup {
             var sku=catalog.findSku(input.productId(),input.variantId())
                 .orElseThrow(()->new CustomerException(400,"CUSTOMER_SKU_INVALID","请选择有效的产品 SKU"));
             if(!sku.active()) throw new CustomerException(409,"CUSTOMER_SKU_DISABLED","SKU 或所属产品已停用");
-            skuCode=sku.skuCode(); productName=sku.name();
+            if(create && input.skuCode()==null && !sku.skuCode().startsWith("SYS-SKU-"))skuCode=sku.skuCode(); productName=sku.name();
         }
+        if(input.skuCode()!=null)skuCode=text(input.skuCode());
+        if(!skuCode.isBlank() && jdbc.sql("SELECT COUNT(*) FROM customer_product WHERE customer_id=:customer AND UPPER(TRIM(sku_code))=:code AND variant_id<>:variant AND deleted_at IS NULL AND (:id IS NULL OR id<>:id)").param("customer",input.customerId()).param("code",skuCode.toUpperCase(Locale.ROOT)).param("variant",input.variantId()).param("id",id,java.sql.Types.VARCHAR).query(Long.class).single()>0)
+            throw new CustomerException(409,"CUSTOMER_SKU_CODE_DUPLICATE","该客户的 SKU 编码已存在，请使用其他编码");
         if(create) id=UUID.randomUUID().toString();
         var params=new HashMap<String,Object>(); params.put("id",id); params.put("actor",actor.userId());
         params.put("customer",input.customerId()); params.put("product",input.productId()); params.put("variant",input.variantId());
@@ -193,7 +196,7 @@ class CustomerService implements CustomerProductLookup {
         if(id==null || id.isBlank()) return Optional.empty();
         return jdbc.sql("SELECT p.*,c.name customer_name FROM customer_product p JOIN customer c ON c.id=p.customer_id WHERE p.id=:id AND (p.deleted_at IS NULL AND p.status='ACTIVE' OR :existing=TRUE AND p.deleted_at IS NOT NULL) AND c.status='ACTIVE' FOR UPDATE").param("existing",existing)
             .param("id",id).query((r,n)->new ShippingProduct(r.getString("id"),r.getString("customer_id"),r.getString("customer_name"),
-                r.getString("product_id"),r.getString("variant_id"),r.getString("customer_product_code"),r.getString("requirements"))).optional()
+                r.getString("product_id"),r.getString("variant_id"),r.getString("customer_product_code"),r.getString("requirements"),r.getString("sku_code"))).optional()
             .filter(value->(existing?catalog.findExistingSku(value.productId(),value.variantId()):catalog.findSku(value.productId(),value.variantId())).map(ProductLookup.SkuReference::active).orElse(false));
     }
     private String text(String value) {

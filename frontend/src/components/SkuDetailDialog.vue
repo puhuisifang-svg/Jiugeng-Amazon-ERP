@@ -77,7 +77,7 @@ watch(() => props.detailRow, async row => {
           >
             {{ error }}
           </p><div class="sku-identity">
-            <p><span>SKU 编码</span> {{ detailVariant?.skuCode }}</p><p><span>所属父体</span> {{ detailRow.productName }}</p><p><span>父体编码</span> {{ detailRow.productCode }}</p>
+            <p><span>所属父体</span> {{ detailRow.productName }}</p>
           </div>
         </div>
       </header><nav class="product-editor-tabs">
@@ -112,7 +112,7 @@ watch(() => props.detailRow, async row => {
           <dl
             class="sku-detail-grid"
           >
-            <dt>SKU</dt><dd>{{ detailVariant?.skuCode }}</dd><dt>品名</dt><dd>
+            <dt>品名</dt><dd>
               <ProductName
                 :text="detailVariant?.variantName ?? ''"
                 :styles="detailVariant?.nameStyles"

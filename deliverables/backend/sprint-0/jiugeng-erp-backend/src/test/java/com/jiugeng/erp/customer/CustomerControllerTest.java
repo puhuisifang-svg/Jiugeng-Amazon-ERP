@@ -111,6 +111,22 @@ class CustomerControllerTest {
         String audit=jdbc.queryForObject("SELECT CONCAT(before_value,after_value) FROM audit_event WHERE action='CUSTOMER_PRODUCT_UPDATE' AND resource_id=?",String.class,id);
         assertThat(audit).contains("12.5","13.2").doesNotContain("合成特殊要求");
     }
+    @Test void customerSkuCodesAreIndependentEditableAndUniqueWithinCustomer() throws Exception {
+        String token=login("ADMIN"), a=createCustomer(token), b=createCustomer(token); String[] item=sku();
+        var first=quote(a,item,"1");first.put("skuCode","CLIENT-A");
+        var saved=body(write(token,"/products",null,first).andExpect(status().isOk()).andExpect(jsonPath("$.skuCode").value("CLIENT-A")));
+        var second=quote(b,item,"2");second.put("skuCode","CLIENT-B");
+        var other=body(write(token,"/products",null,second).andExpect(status().isOk()).andExpect(jsonPath("$.skuCode").value("CLIENT-B")));
+        first.put("version",0);first.put("skuCode","CLIENT-B");
+        write(token,"/products",saved.path("id").asText(),first).andExpect(status().isOk()).andExpect(jsonPath("$.skuCode").value("CLIENT-B"));
+        first.put("version",1);first.remove("skuCode");
+        write(token,"/products",saved.path("id").asText(),first).andExpect(status().isOk()).andExpect(jsonPath("$.skuCode").value("CLIENT-B"));
+        assertThat(jdbc.queryForObject("SELECT sku_code FROM customer_product WHERE id=?",String.class,other.path("id").asText())).isEqualTo("CLIENT-B");
+        assertThat(jdbc.queryForObject("SELECT sku_code FROM product_variant WHERE id=?",String.class,item[1])).isEqualTo(item[1]);
+        var duplicate=quote(a,sku(),"3");duplicate.put("skuCode"," client-b ");
+        write(token,"/products",null,duplicate).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CUSTOMER_SKU_CODE_DUPLICATE"));
+        duplicate.put("skuCode","");write(token,"/products",null,duplicate).andExpect(status().isOk()).andExpect(jsonPath("$.skuCode").value(""));
+    }
     @Test void validatesMoneyRelationshipsStatusAndImmutableIdentity() throws Exception {
         String token=login("ADMIN"), customer=createCustomer(token); String[] sku=sku();
         var input=quote(customer,sku,"-1"); write(token,"/products",null,input).andExpect(status().isBadRequest());
@@ -215,7 +231,8 @@ class CustomerControllerTest {
         jdbc.update("UPDATE customer SET export_enabled=TRUE,export_company_name=name,export_company_prefix='SYN' WHERE id IN (?,?)",a,b);
         String quoteId=body(write(token,"/products",null,quote(a,first,"1")).andExpect(status().isOk())).path("id").asText();
         write(token,"/products",null,quote(b,second,"2")).andExpect(status().isOk());
-        mvc.perform(get("/api/v1/product-customs").param("customerId",a).header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(1)).andExpect(jsonPath("$.items[0].variantId").value(first[1]));
+        jdbc.update("UPDATE customer_product SET sku_code='CUSTOMER-CUSTOMS-SKU' WHERE id=?",quoteId);
+        mvc.perform(get("/api/v1/product-customs").param("customerId",a).header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(1)).andExpect(jsonPath("$.items[0].variantId").value(first[1])).andExpect(jsonPath("$.items[0].skuCode").value("CUSTOMER-CUSTOMS-SKU"));
         mvc.perform(get("/api/v1/product-customs").param("customerId",a).param("productId",second[0]).header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(0));
         var fields=Map.of("customerId",a,"shipperId",a,"seller","合成出口公司");
         var item=Map.of("variantId",first[1],"sku","SYN-A","name","合成商品");

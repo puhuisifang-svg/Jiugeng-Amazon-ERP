@@ -200,3 +200,13 @@ describe('报关单据编辑',()=>{
  })
  it('keeps read-only documents immutable and shows missing export requirements',async()=>{const w=render({document:source,writable:false});expect(w.findAll('button').some(b=>b.text()==='保存草稿')).toBe(false);expect(w.get('fieldset').attributes('disabled')).toBeDefined();expect(w.find('.customs-inline-input').exists()).toBe(false);await w.findAll('button').find(b=>b.text().startsWith('查看导出检查'))!.trigger('click');expect(w.text()).toContain('合同协议号');expect(w.findAll('button').find(b=>b.text()==='导出 Excel')!.attributes('disabled')).toBeDefined();expect(missingFields({},[])).toContain('至少添加一项商品');w.unmount()})
 })
+
+it('keeps the picker open and explains missing customer SKU before adding',async()=>{
+ api.list.mockResolvedValue({items:[{variantId:'v',skuCode:'',skuName:'合成商品',customs:null}],totalCount:1})
+ const w=render();await flushPromises();await w.get('select[aria-label="境内发货人"]').setValue('default')
+ await w.findAll('button').find(b=>b.text()==='选择产品 SKU')!.trigger('click');await flushPromises()
+ await w.get('input[aria-label="选择 "]').setValue(true)
+ await w.findAll('button').find(b=>b.text()==='添加所选（1）')!.trigger('click')
+ expect(w.text()).toContain('请先到客户商品中填写')
+ expect(w.get('.customs-items-table').text()).not.toContain('合成商品');w.unmount()
+})

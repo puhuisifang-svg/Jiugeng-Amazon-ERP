@@ -306,7 +306,7 @@ class DashboardService {
     private ProductLookup.ProductReference sku(ShipmentInput input) {
         var sku=(input.customerProduct()==null?products.findSku(input.productId(),input.variantId()):products.findExistingSku(input.productId(),input.variantId())).orElseThrow(()->invalid("所选 SKU 不属于该产品或已不存在，请重新选择"));
         if(!sku.active())throw invalid("只能选择启用产品下的启用 SKU");
-        return new ProductLookup.ProductReference(input.productId(),sku.skuCode(),sku.name(),true);
+        return new ProductLookup.ProductReference(input.productId(),input.customerProduct()!=null&&input.customerProduct().skuCode()!=null?input.customerProduct().skuCode():sku.skuCode(),sku.name(),true);
     }
     private ProductLookup.ProductReference product(String id){var product=products.findById(id).orElseThrow(()->missing("PRODUCT_NOT_FOUND","产品不存在"));
         if(!product.active())throw new DashboardException(409,"PRODUCT_DISABLED","不允许引用停用产品");if(product.name().length()>128)throw invalid("产品名称超过工作台快照上限 128 字符");return product;}

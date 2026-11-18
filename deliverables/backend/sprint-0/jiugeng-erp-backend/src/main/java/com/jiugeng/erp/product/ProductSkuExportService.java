@@ -16,7 +16,7 @@ class ProductSkuExportService {
     byte[] export(List<SkuListItem> rows) {
         try (var workbook = new XSSFWorkbook(); var output = new ByteArrayOutputStream()) {
             var sheet = workbook.createSheet("产品SKU");
-            String[] headers = {"SKU", "品名", "产品编码", "产品名称", "产品状态", "SKU状态", "业务可用",
+            String[] headers = {"品名", "父体名称", "产品状态", "SKU状态", "业务可用",
                     "产品长(cm)", "产品宽(cm)", "产品高(cm)", "包装长(cm)", "包装宽(cm)", "包装高(cm)",
                     "包装重量(g)", "供应商数", "辅料数", "更新时间"};
             CellStyle header = workbook.createCellStyle();
@@ -29,8 +29,8 @@ class ProductSkuExportService {
             int rowIndex = 1;
             for (SkuListItem item : rows) {
                 var row = sheet.createRow(rowIndex++); var variant = item.variant(); int column = 0;
-                text(row, column++, variant.skuCode()); text(row, column++, variant.variantName());
-                text(row, column++, item.productCode()); text(row, column++, item.productName());
+                text(row, column++, variant.variantName());
+                text(row, column++, item.productName());
                 text(row, column++, item.productStatus().name()); text(row, column++, variant.status().name());
                 text(row, column++, item.businessAvailable() ? "是" : "否");
                 number(row, column++, variant.itemLengthCm()); number(row, column++, variant.itemWidthCm());

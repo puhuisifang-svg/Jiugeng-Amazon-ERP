@@ -34,7 +34,7 @@ final class CustomerTypes {
         @NotBlank @Size(max=36) String productId, @NotBlank @Size(max=36) String variantId,
         @DecimalMin("0") @Digits(integer=12, fraction=2) BigDecimal supplyPrice,
         @NotBlank @Size(max=16) String priceUnit, @Size(max=128) String customerProductCode,
-        @Size(max=2000) String requirements, @NotNull Status status, @PositiveOrZero Long version) {}
+        @Size(max=2000) String requirements, @NotNull Status status, @PositiveOrZero Long version, @Size(max=64) String skuCode) {}
     record ProductView(String id, String customerId, String customerName, Status customerStatus,
         String productId, String variantId, String skuCode, String productName,
         BigDecimal supplyPrice, String priceUnit, String customerProductCode, String requirements,

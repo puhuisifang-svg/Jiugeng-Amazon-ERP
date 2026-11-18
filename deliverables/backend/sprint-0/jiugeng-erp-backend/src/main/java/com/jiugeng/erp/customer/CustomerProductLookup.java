@@ -8,5 +8,5 @@ public interface CustomerProductLookup {
     /** Only for a persisted document retaining its original customer-product identity. */
     default Optional<ShippingProduct> forExisting(String id) { return active(id); }
     record ShippingProduct(String id, String customerId, String customerName, String productId,
-        String variantId, String customerProductCode, String requirements) {}
+        String variantId, String customerProductCode, String requirements, String skuCode) {}
 }

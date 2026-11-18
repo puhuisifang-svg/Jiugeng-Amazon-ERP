@@ -52,7 +52,7 @@ const titleFields = [['invoiceTitle', '开票抬头', 200], ['taxNumber', '纳�
 const blankExportProfile=()=>({name:'',prefix:'',address:'',phone:'',fax:''})
 const exportNameInput=ref<HTMLInputElement>()
 const blankCustomer = (): CustomerInput => ({ exportEnabled:false,exportProfile:blankExportProfile(),wechatImageId: '', addresses: [], invoiceTitles: [blankTitle()], name: '', account1688: '', contactPerson: '', phone: '', wechatId: '', invoiceTitle: '', taxNumber: '', registeredAddress: '', registeredPhone: '', bankName: '', bankAccount: '', defaultCustomer: false, address: '', remark: '', status: 'ACTIVE', version: undefined })
-const blankProduct = (): CustomerProductInput => ({ customerId: '', productId: '', variantId: '', supplyPrice: '', priceUnit: '件', customerProductCode: '', requirements: '', status: 'ACTIVE', version: undefined })
+const blankProduct = (): CustomerProductInput => ({ skuCode: '', customerId: '', productId: '', variantId: '', supplyPrice: '', priceUnit: '件', customerProductCode: '', requirements: '', status: 'ACTIVE', version: undefined })
 const customerForm = reactive(blankCustomer()), productForm = reactive(blankProduct())
 function removeAddress(index:number) {
   customerForm.addresses?.splice(index,1)
@@ -112,7 +112,7 @@ async function open(item?: Customer | CustomerProduct) {
   if (isProduct.value && !item) productForm.customerId = activeCustomers.value.find(customer => customer.defaultCustomer)?.id ?? ''
   if (item && 'customerId' in item) {
     Object.assign(productForm, { customerId: item.customerId, productId: item.productId, variantId: item.variantId,
-      supplyPrice: item.supplyPrice == null ? '' : String(item.supplyPrice), priceUnit: item.priceUnit, customerProductCode: item.customerProductCode,
+      skuCode: item.skuCode, supplyPrice: item.supplyPrice == null ? '' : String(item.supplyPrice), priceUnit: item.priceUnit, customerProductCode: item.customerProductCode,
       requirements: item.requirements, status: item.status, version: item.version })
     selectionSummary.value = `${item.customerName} · ${item.productName} · SKU：${item.skuCode}`
   } else if (item) {
@@ -351,7 +351,7 @@ watch(()=>[props.kind,route.query.editCustomer,route.query.section],async()=>{
                     :alt="item.productName"
                   />
                 </td>
-                <td>{{ item.productName }}<small>SKU：{{ item.skuCode }}</small></td><td class="customer-price">
+                <td>{{ item.productName }}<small>SKU：{{ item.skuCode || '未维护' }}</small></td><td class="customer-price">
                   {{ item.supplyPrice == null ? '未定价' : `¥${Number(item.supplyPrice).toFixed(2)}` }} / {{ item.priceUnit }}
                 </td><td>{{ item.customerProductCode || '—' }}</td><td class="customer-long-text">
                   {{ item.requirements || '—' }}
@@ -716,7 +716,7 @@ watch(()=>[props.kind,route.query.editCustomer,route.query.section],async()=>{
             v-if="editingId"
             class="form-wide customer-selection"
           >
-            {{ selectionSummary }}<small>客户与 SKU 不可更换，其他客户或 SKU 请另行新增。</small>
+            {{ selectionSummary }}<small>客户与关联产品不可更换；SKU 编码可在下方修改。</small>
           </p>
           <template v-else>
             <label class="form-wide">客户 *<select
@@ -742,7 +742,7 @@ watch(()=>[props.kind,route.query.editCustomer,route.query.section],async()=>{
             </div>
             <div class="form-wide customer-batch-products">
               <table class="data-table">
-                <thead><tr><th>图片</th><th>商品 / 父体</th><th>供货价（人民币）</th><th>单位 *</th><th>客户产品编码</th><th>产品特殊需求</th><th>操作</th></tr></thead><tbody>
+                <thead><tr><th>图片</th><th>商品 / 父体</th><th>SKU 编码</th><th>供货价（人民币）</th><th>单位 *</th><th>客户产品编码</th><th>产品特殊需求</th><th>操作</th></tr></thead><tbody>
                   <tr
                     v-for="(row,index) in batchProducts"
                     :key="row.sku.variant.id"
@@ -755,6 +755,15 @@ watch(()=>[props.kind,route.query.editCustomer,route.query.section],async()=>{
                       />
                     </td>
                     <td>{{ row.sku.variant.variantName }}<small>父体：{{ row.sku.productName }}</small></td>
+                    <td>
+                      <input
+                        v-model.trim="row.form.skuCode"
+                        maxlength="64"
+                        :disabled="saving"
+                        :aria-label="`商品${index+1}SKU编码`"
+                        placeholder="该客户使用的 SKU"
+                      >
+                    </td>
                     <td>
                       <input
                         v-model="row.form.supplyPrice"
@@ -827,6 +836,12 @@ watch(()=>[props.kind,route.query.editCustomer,route.query.section],async()=>{
               :disabled="saving"
               placeholder="如：件、套、箱"
             ></label>
+            <label>SKU 编码<input
+              v-model.trim="productForm.skuCode"
+              maxlength="64"
+              :disabled="saving"
+              placeholder="该客户使用的 SKU"
+            ></label>
             <label>客户产品编码<input
               v-model="productForm.customerProductCode"
               maxlength="128"
@@ -846,7 +861,7 @@ watch(()=>[props.kind,route.query.editCustomer,route.query.section],async()=>{
             ></label>
           </template>
           <p class="form-wide customer-help">
-            每个客户与 SKU 维护一条当前报价；不同客户可设置不同供货价。报价不自动生成订单。
+            每个客户与产品维护一条记录；不同客户可设置不同 SKU 编码和供货价。
           </p>
         </template>
         <p

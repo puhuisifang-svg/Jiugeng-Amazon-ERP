@@ -179,12 +179,6 @@ onMounted(loadReferences)
             父体与 SKU 图片独立维护，随产品保存。
           </p>
         </fieldset>
-        <label>产品编码<input
-          v-model="model.productCode"
-          required
-          maxlength="64"
-          :readonly="Boolean(model.version != null)"
-        ></label>
         <label>产品名称<input
           v-model="model.productName"
           required
@@ -340,11 +334,6 @@ onMounted(loadReferences)
               data-editor-tab="basic"
               class="operation-form nested-form product-basic-fields product-tab-panel--wide"
             >
-              <label>SKU 编码<input
-                v-model="variant.skuCode"
-                required
-                maxlength="64"
-              ></label>
               <label>状态<select
                 v-model="variant.status"
                 v-single-select

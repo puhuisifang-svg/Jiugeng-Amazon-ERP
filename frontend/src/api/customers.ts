@@ -22,6 +22,7 @@ export interface CustomerInput {
 }
 export interface Customer extends CustomerInput { id: string; version: number; updatedAt: string }
 export interface CustomerProductInput {
+  skuCode?: string
   customerId: string; productId: string; variantId: string; supplyPrice: string | number | null; priceUnit: string
   customerProductCode: string; requirements: string; status: CustomerStatus; version?: number | undefined
 }

@@ -12,8 +12,6 @@ import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vu
 import SupplierContactLinks from '@/components/SupplierContactLinks.vue'
 import { runtimeConfig } from '@/config/runtime'
 import { session } from '@/state/session'
-import { blankCustoms, customsInput } from '@/api/customs'
-import CustomsFields from '@/components/CustomsFields.vue'
 
 defineOptions({ inheritAttrs: false })
 const props = defineProps<{ initial?: ProductInput; busy?: boolean; submitLabel: string; showCancel?: boolean; focusVariantId?: string | undefined }>()
@@ -21,16 +19,16 @@ const emit = defineEmits<{ submit: [value: ProductInput]; cancel: [] }>()
 const suppliers = ref<SupplierDto[]>([]); const materials = ref<MaterialDetailDto[]>([])
 const balances = ref<InventoryBalanceViewDto[]>([]); const inventoryFailed = ref(false)
 const referenceError = ref(''); const loadingReferences = ref(false); const imageError = ref(''); const uploading = ref(new Set<number>())
-const activeTabs = ref<Record<number, 'basic' | 'purchase' | 'specs' | 'materials' | 'customs'>>({})
+const activeTabs = ref<Record<number, 'basic' | 'purchase' | 'specs' | 'materials'>>({})
 function activeTab(index: number) { return activeTabs.value[index] ?? 'basic' }
-function setTab(index: number, value: 'basic' | 'purchase' | 'specs' | 'materials' | 'customs') { if (value === 'customs' && !model.variants[index]!.customs) model.variants[index]!.customs = blankCustoms(); activeTabs.value[index] = value }
+function setTab(index: number, value: 'basic' | 'purchase' | 'specs' | 'materials') { activeTabs.value[index] = value }
 const supplierAccess = computed(() => session.canAccess(['suppliers.read']))
 function blankVariant(): ProductVariantInput { return { skuCode: '', variantName: '', nameHighlighted: false, status: 'ACTIVE', suppliers: [], materials: [] } }
 const model = reactive<ProductInput>(JSON.parse(JSON.stringify(props.initial ?? { productCode: '', productName: '', status: 'ACTIVE', variants: [blankVariant()] })))
 function addVariant() { model.variants.push(blankVariant()) }
 function removeVariant(index: number) { if (!uploading.value.size && model.variants.length > 1) model.variants.splice(index, 1) }
 function supplierName(id: string) { return suppliers.value.find(item => item.id === id)?.name ?? id }
-function materialName(id: string) { const item = materials.value.find(value => value.id === id); return item ? `${item.materialCode} · ${item.name}` : id }
+function materialName(id: string) { const item = materials.value.find(value => value.id === id); return item ? item.name : id }
 function stockLabel(material: MaterialDetailDto) { if (!session.canAccess(['inventory.read'])) return '无查看权限'; if (inventoryFailed.value) return '暂不可用'; const balance = balances.value.find(item => item.materialId === material.id); return balance ? `库存 ${balance.quantity} ${balance.unit}` : '库存未初始化' }
 function addSupplier(variant: ProductVariantInput, event: Event) { const element = event.target as HTMLSelectElement; const id = element.value; element.value = ''; if (id && !variant.suppliers.some(item => item.supplierId === id)) variant.suppliers.push({ supplierId: id, primary: variant.suppliers.length === 0 }) }
 const materialTarget = ref<ProductVariantInput>()
@@ -102,13 +100,13 @@ async function submit(event: Event) {
     if (editor) {
       const index = Number(editor.dataset.variantIndex)
       const panel = invalid.closest<HTMLElement>('[data-editor-tab]')
-      setTab(index, panel?.dataset.editorTab as 'basic' | 'purchase' | 'specs' | 'materials' | 'customs' ?? 'basic')
+      setTab(index, panel?.dataset.editorTab as 'basic' | 'purchase' | 'specs' | 'materials' ?? 'basic')
     }
     await nextTick(); invalid.reportValidity(); invalid.focus(); return
   }
   const input = copyFormValue(model)
   for (const variant of input.variants) {
-    if (variant.customs) variant.customs = customsInput(variant.customs)
+    delete variant.customs
     for (const key of ['itemLengthCm', 'itemWidthCm', 'itemHeightCm', 'packageLengthCm', 'packageWidthCm', 'packageHeightCm', 'packageWeightGrams'] as const) {
       if ((variant[key] as unknown) === '') variant[key] = undefined
     }
@@ -259,25 +257,7 @@ onMounted(loadReferences)
             >
               关联辅料
             </button>
-            <button
-              type="button"
-              :class="{ active: activeTab(variantIndex) === 'customs' }"
-              @click="setTab(variantIndex, 'customs')"
-            >
-              报关资料
-            </button>
           </nav>
-          <div
-            v-if="variant.customs"
-            v-show="activeTab(variantIndex) === 'customs'"
-            data-editor-tab="customs"
-            class="product-tab-panel product-tab-panel--wide"
-          >
-            <CustomsFields
-              v-model="variant.customs"
-              :disabled="busy"
-            />
-          </div>
           <div class="sku-editor-grid">
             <div
               v-show="activeTab(variantIndex) === 'basic'"

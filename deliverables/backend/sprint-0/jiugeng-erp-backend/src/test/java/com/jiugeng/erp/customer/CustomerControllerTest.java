@@ -111,6 +111,30 @@ class CustomerControllerTest {
         String audit=jdbc.queryForObject("SELECT CONCAT(before_value,after_value) FROM audit_event WHERE action='CUSTOMER_PRODUCT_UPDATE' AND resource_id=?",String.class,id);
         assertThat(audit).contains("12.5","13.2").doesNotContain("合成特殊要求");
     }
+    @Test void customerCustomsAreIndependentValidatedAndUsedByDeclarationPicker() throws Exception {
+        String token=login("ADMIN"),a=createCustomer(token),b=createCustomer(token);String[] item=sku();
+        jdbc.update("UPDATE customer SET export_enabled=TRUE WHERE id IN (?,?)",a,b);
+        var profile=new HashMap<String,Object>(Map.of("nameZh","合成甲申报品名","chinaCode","6307909000","schemaCode","6307909000","elementFields",List.of(Map.of("key","brandType","label","品牌类型")),"elements",Map.of("brandType","无品牌"),"measurementUnit","千克/个","state","DRAFT","version",0));
+        var first=quote(a,item,"1");first.put("customs",profile);
+        String id=body(write(token,"/products",null,first).andExpect(status().isOk()).andExpect(jsonPath("$.customs.elements.brandType").value("无品牌"))).path("id").asText();
+        var second=quote(b,item,"2");String secondId=body(write(token,"/products",null,second).andExpect(status().isOk()).andExpect(jsonPath("$.customs").isEmpty())).path("id").asText();
+        profile.put("nameZh","合成乙申报品名");second.put("customs",profile);second.put("version",0);
+        write(token,"/products",secondId,second).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/product-customs").param("customerId",a).header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.items[0].customs.nameZh").value("合成甲申报品名"));
+        mvc.perform(get("/api/v1/product-customs").param("customerId",b).header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.items[0].customs.nameZh").value("合成乙申报品名"));
+        assertThat(jdbc.queryForObject("SELECT customs_data FROM product_variant WHERE id=?",String.class,item[1])).isNull();
+        first.put("version",0);first.remove("customs");
+        write(token,"/products",id,first).andExpect(status().isOk()).andExpect(jsonPath("$.customs.nameZh").value("合成甲申报品名"));
+        write(token,"/products",id,first).andExpect(status().isConflict());
+        first.put("version",1);first.put("customs",profile);profile.put("schemaCode","5705002000");
+        write(token,"/products",id,first).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("CUSTOMS_SCHEMA_MISMATCH"));
+        profile.put("schemaCode","6307909000");profile.put("elements",Map.of("unknownField","invalid"));
+        write(token,"/products",id,first).andExpect(status().isBadRequest());
+        profile.put("elements",Map.of("brandType","无品牌"));profile.put("chinaCode","invalid");
+        write(token,"/products",id,first).andExpect(status().isBadRequest());
+        profile.put("chinaCode","6307909000");
+        write(login("SELECTION"),"/products",id,first).andExpect(status().isForbidden());
+    }
     @Test void customerSkuCodesAreIndependentEditableAndUniqueWithinCustomer() throws Exception {
         String token=login("ADMIN"), a=createCustomer(token), b=createCustomer(token); String[] item=sku();
         var first=quote(a,item,"1");first.put("skuCode","CLIENT-A");

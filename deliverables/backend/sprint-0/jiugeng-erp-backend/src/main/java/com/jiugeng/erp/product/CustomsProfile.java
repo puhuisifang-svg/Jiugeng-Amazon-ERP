@@ -3,7 +3,7 @@ package com.jiugeng.erp.product;
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
 
-record CustomsProfile(
+public record CustomsProfile(
     @Size(max=200) String nameZh, @Size(max=200) String nameEn,
     @Size(max=1000) String composition, @Size(max=1000) String usage,
     @Size(max=100) String brand, @Size(max=200) String model,
@@ -23,5 +23,5 @@ record CustomsProfile(
     @Pattern(regexp="^$|[0-9]{10}") String schemaCode,
     @Size(max=100) String measurementUnit,
     @NotNull State state, @NotNull @Min(0) Long version) {
-    enum State { DRAFT, REVIEWED }
+    public enum State { DRAFT, REVIEWED }
 }

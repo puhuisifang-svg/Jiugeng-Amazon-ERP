@@ -3,7 +3,6 @@ import { beijingDateTime } from '@/utils/dateTime'
 
 
 import ProductName from './ProductName.vue'
-import { profileFields, profileElements } from '@/api/customs'
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { domainApi, type SkuListItemDto, type ProductHistoryDto, type ProductVariantDto } from '@/api/domain'
@@ -14,8 +13,6 @@ import { productActionLabel } from '@/utils/productHistory'
 const props = defineProps<{ detailRow: SkuListItemDto; writable: boolean; error?: string; hideParentLink?: boolean }>()
 const emit = defineEmits<{ close: []; edit: [row: SkuListItemDto] }>()
 const detailVariant = computed(() => props.detailRow.variant)
-const customs = computed(() => detailVariant.value.customs)
-const customsElements = computed(() => customs.value ? profileElements(customs.value) : {})
 const detailTab = ref('basic'), detailHistory = ref<ProductHistoryDto[]>([]), historyError = ref('')
 function labelStatus(status: string) { return status === 'ACTIVE' ? '启用' : status === 'DRAFT' ? '待定' : '停用' }
 function dimensionLabel(variant: ProductVariantDto) {
@@ -82,7 +79,7 @@ watch(() => props.detailRow, async row => {
         </div>
       </header><nav class="product-editor-tabs">
         <button
-          v-for="tab in ([['basic','基础信息'],['purchase','采购信息'],['specs','规格信息'],['materials','关联辅料'],['customs','报关资料'],['manual','说明书管理'],['history','操作日志']] as const)"
+          v-for="tab in ([['basic','基础信息'],['purchase','采购信息'],['specs','规格信息'],['materials','关联辅料'],['manual','说明书管理'],['history','操作日志']] as const)"
           :key="tab[0]"
           type="button"
           :class="{ active: detailTab === tab[0] }"
@@ -125,33 +122,6 @@ watch(() => props.detailRow, async row => {
             class="sku-parent-notice"
           >
             所属父体{{ labelStatus(detailRow.productStatus) }}，当前 SKU 暂不可用于业务；请到父体资料中调整。
-          </p>
-        </section>
-        <section
-          v-else-if="detailTab === 'customs'"
-          class="sku-customs-panel"
-        >
-          <template v-if="customs">
-            <p class="customs-summary">
-              出口美国 · 申报要素
-            </p>
-            <dl class="sku-detail-grid">
-              <dt>HS</dt><dd>{{ customs.chinaCode || '—' }}</dd>
-              <dt>品名</dt><dd>{{ customs.nameZh || '—' }}</dd>
-              <template
-                v-for="[key, label] in profileFields(customs)"
-                :key="key"
-              >
-                <dt>{{ label }}</dt><dd>{{ customsElements[key] || '—' }}</dd>
-              </template>
-              <dt>计量单位</dt><dd>{{ customs.measurementUnit || customs.unit || '—' }}</dd>
-            </dl>
-          </template>
-          <p
-            v-else
-            class="data-state"
-          >
-            暂无报关资料{{ writable ? '，请点击“编辑 SKU”补充。' : '。' }}
           </p>
         </section>
         <div

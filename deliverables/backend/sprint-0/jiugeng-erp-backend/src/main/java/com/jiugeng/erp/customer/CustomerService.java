@@ -1,5 +1,7 @@
 package com.jiugeng.erp.customer;
 
+import com.jiugeng.erp.product.CustomsProfiles;
+
 import static com.jiugeng.erp.customer.CustomerTypes.*;
 import com.jiugeng.erp.iam.AuditTrail;
 import com.jiugeng.erp.iam.AuthenticatedActor;
@@ -158,21 +160,24 @@ class CustomerService implements CustomerProductLookup {
         if(input.skuCode()!=null)skuCode=text(input.skuCode());
         if(!skuCode.isBlank() && jdbc.sql("SELECT COUNT(*) FROM customer_product WHERE customer_id=:customer AND UPPER(TRIM(sku_code))=:code AND variant_id<>:variant AND deleted_at IS NULL AND (:id IS NULL OR id<>:id)").param("customer",input.customerId()).param("code",skuCode.toUpperCase(Locale.ROOT)).param("variant",input.variantId()).param("id",id,java.sql.Types.VARCHAR).query(Long.class).single()>0)
             throw new CustomerException(409,"CUSTOMER_SKU_CODE_DUPLICATE","该客户的 SKU 编码已存在，请使用其他编码");
+        String customsData=before==null||before.customs()==null?null:CustomsProfiles.encode(before.customs());
+        if(input.customs()!=null)try { customsData=CustomsProfiles.encode(CustomsProfiles.normalize(input.customs())); }
+        catch(CustomsProfiles.ValidationException e){throw new CustomerException(400,e.code(),e.getMessage());}
         if(create) id=UUID.randomUUID().toString();
         var params=new HashMap<String,Object>(); params.put("id",id); params.put("actor",actor.userId());
         params.put("customer",input.customerId()); params.put("product",input.productId()); params.put("variant",input.variantId());
-        params.put("sku",skuCode); params.put("name",productName); params.put("price",input.supplyPrice());
+        params.put("customs",customsData); params.put("sku",skuCode); params.put("name",productName); params.put("price",input.supplyPrice());
         params.put("unit",required(input.priceUnit(),"计价单位")); params.put("code",text(input.customerProductCode()));
         params.put("requirements",text(input.requirements())); params.put("status",input.status().name()); params.put("version",input.version());
         try {
             if(create) jdbc.sql("""
                 INSERT INTO customer_product(id,customer_id,product_id,variant_id,sku_code,product_name,supply_price,price_unit,
-                customer_product_code,requirements,status,created_by,updated_by)
-                VALUES(:id,:customer,:product,:variant,:sku,:name,:price,:unit,:code,:requirements,:status,:actor,:actor)
+                customer_product_code,requirements,status,created_by,updated_by,customs_data)
+                VALUES(:id,:customer,:product,:variant,:sku,:name,:price,:unit,:code,:requirements,:status,:actor,:actor,:customs)
                 """).params(params).update();
             else if(jdbc.sql("""
                 UPDATE customer_product SET sku_code=:sku,product_name=:name,supply_price=:price,price_unit=:unit,
-                customer_product_code=:code,requirements=:requirements,status=:status,version=version+1,
+                customer_product_code=:code,requirements=:requirements,status=:status,customs_data=:customs,version=version+1,
                 updated_by=:actor,updated_at=CURRENT_TIMESTAMP WHERE id=:id AND version=:version AND deleted_at IS NULL
                 """).params(params).update()!=1) throw conflict();
         } catch(DuplicateKeyException error) {
@@ -226,6 +231,6 @@ class CustomerService implements CustomerProductLookup {
         return new ProductView(r.getString("id"),r.getString("customer_id"),r.getString("customer_name"),Status.valueOf(r.getString("customer_status")),
             r.getString("product_id"),r.getString("variant_id"),r.getString("sku_code"),r.getString("product_name"),r.getBigDecimal("supply_price"),
             r.getString("price_unit"),r.getString("customer_product_code"),r.getString("requirements"),Status.valueOf(r.getString("status")),
-            r.getLong("version"),r.getTimestamp("updated_at").toInstant(),catalog.skuSpecification(r.getString("product_id"),r.getString("variant_id")));
+            r.getLong("version"),r.getTimestamp("updated_at").toInstant(),catalog.skuSpecification(r.getString("product_id"),r.getString("variant_id")),CustomsProfiles.decode(r.getString("customs_data"),r.getLong("version")));
     }
 }

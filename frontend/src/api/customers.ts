@@ -1,4 +1,5 @@
 import { apiRequest } from './client'
+import type { CustomsProfile } from './customs'
 
 export type CustomerStatus = 'ACTIVE' | 'DISABLED'
 export interface InvoiceTitle {
@@ -22,6 +23,7 @@ export interface CustomerInput {
 }
 export interface Customer extends CustomerInput { id: string; version: number; updatedAt: string }
 export interface CustomerProductInput {
+  customs?: CustomsProfile | null
   skuCode?: string
   customerId: string; productId: string; variantId: string; supplyPrice: string | number | null; priceUnit: string
   customerProductCode: string; requirements: string; status: CustomerStatus; version?: number | undefined

@@ -6,6 +6,6 @@ import org.springframework.context.annotation.Profile;
 class HsSchemaController {
  private final HsSchemaService service;
  HsSchemaController(HsSchemaService service){this.service=service;}
- @GetMapping("/{code}") @PreAuthorize("hasAuthority('products.read')")
+ @GetMapping("/{code}") @PreAuthorize("hasAnyAuthority('products.read','customers.read')")
  HsSchemaService.Schema get(@PathVariable String code){return service.lookup(code);}
 }

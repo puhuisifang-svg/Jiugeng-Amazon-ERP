@@ -7,11 +7,12 @@ beforeEach(() => { HTMLDialogElement.prototype.showModal = function () { this.op
 describe('ProductMaterialPicker', () => {
   it('filters the complete collection, excludes linked/disabled items, preserves selections across filters', async () => {
     const wrapper = mount(ProductMaterialPicker, { props: { materials, selectedIds: ['0'], stockLabel: () => '库存未初始化' } })
-    expect(wrapper.find('[aria-label="选择 M-0"]').exists()).toBe(false)
-    await wrapper.get('[aria-label="选择 M-1"]').setValue(true)
+    expect(wrapper.find('[aria-label="选择 辅料0"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('M-1')
+    await wrapper.get('[aria-label="选择 辅料1"]').setValue(true)
     await wrapper.get('input[type="search"]').setValue('M-23')
-    expect(wrapper.find('[aria-label="选择 M-23"]').exists()).toBe(true)
-    await wrapper.get('[aria-label="选择 M-23"]').setValue(true)
+    expect(wrapper.find('[aria-label="选择 辅料23"]').exists()).toBe(true)
+    await wrapper.get('[aria-label="选择 辅料23"]').setValue(true)
     await wrapper.get('input[type="search"]').setValue('M-24')
     expect(wrapper.text()).toContain('没有符合条件')
     await wrapper.get('.primary-button').trigger('click')
@@ -20,7 +21,7 @@ describe('ProductMaterialPicker', () => {
   })
   it('does not apply selection on cancel', async () => {
     const wrapper = mount(ProductMaterialPicker, { props: { materials, selectedIds: [], stockLabel: () => '' } })
-    await wrapper.get('[aria-label="选择 M-0"]').setValue(true)
+    await wrapper.get('[aria-label="选择 辅料0"]').setValue(true)
     await wrapper.findAll('button').find(b => b.text() === '取消')!.trigger('click')
     expect(wrapper.emitted('close')).toHaveLength(1)
     expect(wrapper.emitted('select')).toBeUndefined()

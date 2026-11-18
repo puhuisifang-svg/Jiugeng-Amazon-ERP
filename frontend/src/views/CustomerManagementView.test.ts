@@ -1,3 +1,4 @@
+import { blankCustoms } from '@/api/customs'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -244,4 +245,38 @@ it('creates multiple customer products with independent editable rows and retrie
   expect(mocks.saveProduct.mock.calls.map(args=>args[1].variantId)).toEqual(['v1','v2','v2'])
   expect(mocks.saveProduct.mock.calls[2]![1].supplyPrice).toBe(8)
   wrapper.unmount()
+})
+
+it('edits customer-specific declaration fields and preserves them across tabs without mutating the list',async()=>{
+ const customs={...blankCustoms(),chinaCode:'6307909000',schemaCode:'6307909000',nameZh:'合成申报品名',elementFields:[{key:'brandType',label:'品牌类型'}],elements:{brandType:'旧品牌'}}
+ mocks.products.mockResolvedValue(page([{...product,customs}]))
+ const w=render('products');await flushPromises()
+ await w.findAll('tbody button').find(b=>b.text()==='报关资料')!.trigger('click');await flushPromises()
+ await w.findAll('.customs-fields label').find(l=>l.text()==='品牌类型')!.get('input').setValue('无品牌')
+ await w.findAll('nav[aria-label="客户商品资料"] button').find(b=>b.text()==='基础信息')!.trigger('click')
+ await w.findAll('nav[aria-label="客户商品资料"] button').find(b=>b.text()==='报关资料')!.trigger('click')
+ expect((w.findAll('.customs-fields label').find(l=>l.text()==='品牌类型')!.get('input').element as HTMLInputElement).value).toBe('无品牌')
+ await w.get('dialog form').trigger('submit');await flushPromises()
+ expect(mocks.saveProduct).toHaveBeenCalledWith('cp1',expect.objectContaining({version:3,customs:expect.objectContaining({elements:{brandType:'无品牌'},chinaCode:'6307909000'})}))
+ expect(customs.elements.brandType).toBe('旧品牌');w.unmount()
+})
+it('allows reading customer customs without granting write controls',async()=>{
+ mocks.canAccess.mockImplementation((caps:string[])=>!caps.includes('customers.write'))
+ const w=render('products');await flushPromises();await w.findAll('tbody button').find(b=>b.text()==='报关资料')!.trigger('click');await flushPromises()
+ expect(w.get('.customs-fields').attributes('disabled')).toBeDefined();expect(w.find('dialog button[type="submit"]').exists()).toBe(false)
+ await w.get('dialog form').trigger('submit');expect(mocks.saveProduct).not.toHaveBeenCalled();w.unmount()
+})
+
+it('keeps declaration profiles separate for multiple newly selected customer goods',async()=>{
+ mocks.skus.mockResolvedValue(page([sku,{...sku,variant:{...sku.variant,id:'v2',variantName:'红色SKU'}}]))
+ const w=render('products');await flushPromises();await w.get('.material-toolbar button').trigger('click');await flushPromises()
+ await w.findAll('dialog button').find(b=>b.text().startsWith('选择产品 SKU'))!.trigger('click');await flushPromises()
+ await w.get('[aria-label="选择 蓝色SKU"]').setValue(true);await w.get('[aria-label="选择 红色SKU"]').setValue(true)
+ await w.findAll('button').find(b=>b.text()==='确认选择')!.trigger('click')
+ await w.findAll('nav[aria-label="客户商品资料"] button').find(b=>b.text()==='报关资料')!.trigger('click')
+ const name=()=>w.findAll('.customs-fields label').find(l=>l.text()==='品名')!.get('input')
+ await name().setValue('蓝色申报品名');await w.get('.customer-customs-pane>label select').setValue('1');await name().setValue('红色申报品名')
+ await w.get('dialog form').trigger('submit');await flushPromises()
+ expect(mocks.saveProduct).toHaveBeenNthCalledWith(1,undefined,expect.objectContaining({variantId:'v1',customs:expect.objectContaining({nameZh:'蓝色申报品名'})}))
+ expect(mocks.saveProduct).toHaveBeenNthCalledWith(2,undefined,expect.objectContaining({variantId:'v2',customs:expect.objectContaining({nameZh:'红色申报品名'})}));w.unmount()
 })

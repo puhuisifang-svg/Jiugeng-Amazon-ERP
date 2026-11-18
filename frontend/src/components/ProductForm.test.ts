@@ -59,30 +59,16 @@ describe('ProductForm', () => {
     wrapper.unmount(); spy.mockRestore()
   })
 
-  it('submits customs with the SKU aggregate and preserves edits across tabs', async () => {
-    const wrapper = mount(ProductForm, { props: { submitLabel: '创建产品', initial: { productCode: 'SYN-P', productName: '合成父体', status: 'DRAFT', variants: [{ skuCode: 'SYN-S', variantName: '合成子体', status: 'DRAFT', suppliers: [], materials: [], customs:{...blankCustoms(),elements:{other:'旧资料'}} }] } } })
-    await wrapper.findAll('.product-editor-tabs button').find(button => button.text() === '报关资料')!.trigger('click')
-    const fields = wrapper.findAll('.customs-fields label')
-    await fields.find(label => label.text().startsWith('品名'))!.get('input').setValue('Synthetic pouch')
-    await fields.find(label => label.text().startsWith('其他'))!.get('textarea').setValue('合成材质：示例')
-    await wrapper.findAll('.product-editor-tabs button').find(button => button.text() === '基础信息')!.trigger('click')
-    await wrapper.get('form').trigger('submit')
-    expect(wrapper.emitted('submit')?.[0]?.[0]).toMatchObject({ variants: [{ customs: { nameZh: 'Synthetic pouch', elements: {other:'合成材质：示例'}, state: 'DRAFT', version: 0 } }] })
-    wrapper.unmount()
-  })
-
-  it('saves a focused SKU after editing dynamic customs fields without cloning reactive proxies', async () => {
-    const customs={...blankCustoms(),chinaCode:'6307909000',schemaCode:'6307909000',nameZh:'合成品名',measurementUnit:'千克/个',elementFields:[{key:'brandType',label:'品牌类型'},{key:'articleNumber',label:'货号'}],elements:{brandType:'',articleNumber:''}}
-    const wrapper=mount(ProductForm,{props:{submitLabel:'保存',focusVariantId:'v1',initial:{productCode:'SYN',productName:'合成父体',status:'ACTIVE',variants:[{id:'v1',skuCode:'SYN-1',variantName:'合成子体',status:'ACTIVE',suppliers:[],materials:[],customs},{id:'v2',skuCode:'SYN-2',variantName:'其他子体',status:'ACTIVE',suppliers:[],materials:[]}]}}})
-    await wrapper.findAll('.product-editor-tabs button').find(b=>b.text()==='报关资料')!.trigger('click')
-    await wrapper.findAll('.customs-fields label').find(l=>l.text()==='品牌类型')!.get('input').setValue('无品牌')
-    await wrapper.findAll('.customs-fields label').find(l=>l.text()==='货号')!.get('input').setValue('SYN-ARTICLE')
-    expect(wrapper.get('.customs-fields').text()).not.toContain('资料状态')
+  it('removes the customs tab and omits legacy customs when editing product data', async () => {
+    const customs={...blankCustoms(),nameZh:'历史申报品名'}
+    const wrapper=mount(ProductForm,{props:{submitLabel:'保存',initial:{productCode:'SYN',productName:'合成父体',status:'ACTIVE',variants:[{id:'v1',skuCode:'SYN-1',variantName:'合成子体',status:'ACTIVE',suppliers:[],materials:[],customs}]}}})
+    expect(wrapper.findAll('.product-editor-tabs button').map(b=>b.text())).not.toContain('报关资料')
+    await wrapper.get('textarea[required]').setValue('修改名称')
     await wrapper.get('form').trigger('submit');await flushPromises()
-    const saved=wrapper.emitted('submit')?.[0]?.[0]
-    expect(saved).toMatchObject({variants:[{id:'v1',customs:{schemaCode:'6307909000',state:'DRAFT',elements:{brandType:'无品牌',articleNumber:'SYN-ARTICLE'},elementFields:customs.elementFields}},{id:'v2',skuCode:'SYN-2'}]})
-    expect(()=>structuredClone(saved)).not.toThrow()
-    wrapper.unmount()
+    expect(wrapper.emitted('submit')?.[0]?.[0]).toMatchObject({variants:[{variantName:'修改名称'}]})
+    const saved=wrapper.emitted('submit')?.[0]?.[0] as {variants:Array<{customs?:unknown}>}
+    expect(saved.variants[0]!.customs).toBeUndefined()
+    expect(customs.nameZh).toBe('历史申报品名');wrapper.unmount()
   })
 
   it('submits the unified product name with active product and SKU defaults', async () => {

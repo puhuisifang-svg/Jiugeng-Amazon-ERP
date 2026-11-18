@@ -1,6 +1,7 @@
 package com.jiugeng.erp.customer;
 
 import jakarta.validation.constraints.*;
+import com.jiugeng.erp.product.CustomsProfile;
 import jakarta.validation.Valid;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -34,10 +35,10 @@ final class CustomerTypes {
         @NotBlank @Size(max=36) String productId, @NotBlank @Size(max=36) String variantId,
         @DecimalMin("0") @Digits(integer=12, fraction=2) BigDecimal supplyPrice,
         @NotBlank @Size(max=16) String priceUnit, @Size(max=128) String customerProductCode,
-        @Size(max=2000) String requirements, @NotNull Status status, @PositiveOrZero Long version, @Size(max=64) String skuCode) {}
+        @Size(max=2000) String requirements, @NotNull Status status, @PositiveOrZero Long version, @Size(max=64) String skuCode, @Valid CustomsProfile customs) {}
     record ProductView(String id, String customerId, String customerName, Status customerStatus,
         String productId, String variantId, String skuCode, String productName,
         BigDecimal supplyPrice, String priceUnit, String customerProductCode, String requirements,
-        Status status, long version, Instant updatedAt, String specification) {}
+        Status status, long version, Instant updatedAt, String specification, CustomsProfile customs) {}
     record Page<T>(List<T> items, long totalCount, int page, int size) {}
 }

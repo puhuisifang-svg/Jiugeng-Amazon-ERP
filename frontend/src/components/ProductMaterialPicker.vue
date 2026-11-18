@@ -24,7 +24,7 @@ function confirm() { emit('select', selected.value.filter(id => available.value.
       <label>搜索辅料<input
         v-model="keyword"
         type="search"
-        placeholder="编码、名称或规格"
+        placeholder="名称或规格"
       ></label>
       <label>类型<select
         v-model="category"
@@ -50,9 +50,9 @@ function confirm() { emit('select', selected.value.filter(id => available.value.
                 v-model="selected"
                 type="checkbox"
                 :value="item.id"
-                :aria-label="`选择 ${item.materialCode}`"
+                :aria-label="`选择 ${item.name}`"
               >
-            </td><td><strong>{{ item.name }}</strong><small>{{ item.materialCode }}</small></td><td>{{ item.materialType }}</td><td>{{ item.specification || '—' }}</td><td>{{ item.unit }}</td><td>{{ stockLabel(item) }}</td>
+            </td><td><strong>{{ item.name }}</strong></td><td>{{ item.materialType }}</td><td>{{ item.specification || '—' }}</td><td>{{ item.unit }}</td><td>{{ stockLabel(item) }}</td>
           </tr>
           <tr v-if="!rows.length">
             <td

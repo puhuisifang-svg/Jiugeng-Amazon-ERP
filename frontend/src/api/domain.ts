@@ -49,7 +49,7 @@ export interface ProductVariantInput {
 }
 export interface SkuListItemDto { productId: string; productCode: string; productName: string; productStatus: ProductStatus; productType?: string; variant: ProductVariantDto; businessAvailable: boolean; updatedAt?: string }
 export interface SkuPageDto { items: SkuListItemDto[]; totalCount: number; page: number; size: number }
-export interface ProductHistoryDto { id: string; action: string; actorLoginName: string; actorDisplayName?: string; detail?: string; occurredAt: string }
+export interface ProductHistoryDto { beforeValue?: Record<string, unknown>; afterValue?: Record<string, unknown>; id: string; action: string; actorLoginName: string; actorDisplayName?: string; detail?: string; occurredAt: string }
 export interface BatchVariantPatchInput { productId: string; variantId: string; productVersion: number; variantVersion: number; status?: VariantStatus | undefined; statusSelected: boolean; itemLengthCm?: number | undefined; itemWidthCm?: number | undefined; itemHeightCm?: number | undefined; itemDimensionsSelected: boolean; packageLengthCm?: number | undefined; packageWidthCm?: number | undefined; packageHeightCm?: number | undefined; packageDimensionsSelected: boolean; packageWeightGrams?: number | undefined; packageWeightSelected: boolean }
 export interface ProductDetailDto {
   imageAssetId?: string | null | undefined
@@ -230,7 +230,7 @@ async function product(id: string): Promise<ProductDetailDto> {
   return apiRequest<ProductDetailDto>(`/v1/products/${id}`)
 }
 
-async function exportSkus(filters: { productType?: string | undefined; field?: string | undefined; q?: string | undefined; exact?: boolean | undefined; status?: VariantStatus | undefined; productStatus?: ProductStatus | undefined; hasImage?: boolean | undefined; hasSupplier?: boolean | undefined; hasMaterial?: boolean | undefined; variantIds?: string[] | undefined }): Promise<void> {
+async function exportSkus(filters: { sort?: string | undefined; direction?: string | undefined; stock?: string | undefined; missing?: string | undefined; productType?: string | undefined; field?: string | undefined; q?: string | undefined; exact?: boolean | undefined; status?: VariantStatus | undefined; productStatus?: ProductStatus | undefined; hasImage?: boolean | undefined; hasSupplier?: boolean | undefined; hasMaterial?: boolean | undefined; variantIds?: string[] | undefined }): Promise<void> {
   if (runtimeConfig.authMode === 'mock') throw new Error('模拟模式不提供正式导出')
   const search = new URLSearchParams()
   Object.entries(filters).forEach(([key, value]) => {
@@ -342,6 +342,7 @@ export const domainApi = {
   supplierDependencies: (id:string) => apiRequest<SupplierDependency[]>(`/v1/suppliers/${encodeURIComponent(id)}/dependencies`),
   deleteSupplier: (id: string, version: number) => apiRequest<void>(`/v1/suppliers/${encodeURIComponent(id)}?version=${version}`, { method: 'DELETE' }),
   disableSupplier: (id: string, version: number) => apiRequest<SupplierDto>(`/v1/suppliers/${id}/disable`, { method: 'POST', body: JSON.stringify({ version }) }),
+  variantSupplierLinks: (id: string) => runtimeConfig.authMode === 'mock' ? Promise.resolve([] as SupplierLinkDto[]) : apiRequest<SupplierLinkDto[]>(`/v1/suppliers/variant/${encodeURIComponent(id)}`),
   materialSupplierLinks: (id: string) => apiRequest<SupplierLinkDto[]>(`/v1/suppliers/material/${id}`),
   replaceMaterialSupplierLinks: (id: string, links: SupplierAssignmentDto[]) => apiRequest<SupplierLinkDto[]>(`/v1/suppliers/material/${id}`, { method: 'PUT', body: JSON.stringify({ links }) }),
   materials,

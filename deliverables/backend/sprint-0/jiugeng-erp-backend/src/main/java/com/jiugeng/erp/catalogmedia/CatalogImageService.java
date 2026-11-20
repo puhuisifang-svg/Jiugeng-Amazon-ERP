@@ -34,6 +34,23 @@ class CatalogImageService implements CatalogImageGateway {
         boolean allowed=switch(image.purpose()){case PRODUCT_MAIN, SKU_MAIN->productsRead;case MATERIAL_IMAGE->materialsRead;case SUPPLIER_QR->suppliersRead;case SAMPLE_STORAGE, SAMPLE_IMAGE->samplesRead;case CUSTOMER_WECHAT->customersRead;case PURCHASE_ITEM, PURCHASE_WAYBILL->purchasesRead;};if(!allowed)throw missing();
         return new Content(store.read(thumbnail?image.thumbnailKey():image.originalKey()),image.storedMediaType());}
     @Override @Transactional
+    public String copyForSample(String imageId,String sampleId,AuthenticatedActor actor) {
+        if(imageId==null)return null;
+        var source=asset(imageId);
+        if(!"ACTIVE".equals(source.status())||!java.util.Set.of(Purpose.SKU_MAIN,Purpose.SAMPLE_IMAGE).contains(source.purpose()))
+            throw new CatalogImageGateway.AttachmentException(409,"SAMPLE_IMAGE_UNAVAILABLE","来源图片已变化，请刷新后重试");
+        try {
+            String copy=upload(Purpose.SAMPLE_IMAGE,source.fileName(),store.read(source.originalKey()),actor).id();
+            var copied=asset(copy);
+            if(org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive())
+                org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization(){
+                    @Override public void afterCompletion(int status){if(status==STATUS_ROLLED_BACK){delete(copied.originalKey());delete(copied.thumbnailKey());}}
+                });
+            attach(copy,Purpose.SAMPLE_IMAGE,"SAMPLE_LOCATION",sampleId,actor);
+            return copy;
+        } catch(IOException e) { throw new CatalogImageGateway.AttachmentException(503,"SAMPLE_IMAGE_COPY_FAILED","样品图片留存失败，请使用原请求重试"); }
+    }
+    @Override @Transactional
     public void attach(String imageId,Purpose purpose,String type,String resourceId,AuthenticatedActor actor){if(imageId==null)return;try{var image=asset(imageId);
         if(image.purpose()!=purpose)throw new CatalogImageException(400,"CATALOG_IMAGE_PURPOSE_INVALID","图片用途与资源不匹配");
         if("ACTIVE".equals(image.status())){if(type.equals(image.resourceType())&&resourceId.equals(image.resourceId()))return;throw new CatalogImageException(409,"CATALOG_IMAGE_ALREADY_ATTACHED","图片已被其他资源引用");}

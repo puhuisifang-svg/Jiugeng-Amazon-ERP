@@ -132,7 +132,7 @@ class IamControllerTest {
                 "purchases.read", "purchases.write", "purchases.receive", "customers.read", "customers.write");
         assertThat(IamTypes.capabilities(Role.SELECTION)).isEqualTo(Set.of(
                 "products.read", "materials.read", "selection.read", "selection.write", "watch.read",
-                "watch.write", "audit.read.self", "dashboard.read", "dashboard.pending-products.manage"));
+                "watch.write", "audit.read.self", "dashboard.read", "dashboard.pending-products.manage", "suppliers.read", "inventory.read"));
     }
 
     @Test

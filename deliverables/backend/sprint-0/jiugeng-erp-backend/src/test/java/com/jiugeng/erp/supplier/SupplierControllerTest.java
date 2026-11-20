@@ -96,7 +96,7 @@ class SupplierControllerTest {
 
         String reader = createUserAndLogin("selector", "SELECTION");
         mvc.perform(get("/api/v1/suppliers").header("Authorization", bearer(reader)))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
         mvc.perform(post("/api/v1/suppliers").header("Authorization", bearer(reader))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(supplier("越权", "10086", null, null))))

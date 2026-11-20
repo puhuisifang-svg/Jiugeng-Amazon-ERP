@@ -37,6 +37,13 @@
 | DEL-033 | 2026-10-15 | Backend/Ops/QA | ERP-007 正式运行与 MySQL 持久化底座 | v1.0 | Completed | PJM | [实施与验收记录](../deliverables/pjm/ERP-007_MYSQL_PERSISTENCE_FOUNDATION.md) |
 | DEL-034 | 2026-10-15 | Backend/Frontend/QA | ERP-008 IAM 认证与权限闭环 | v1.0 | Completed | PJM | [实施与验收记录](../deliverables/pjm/ERP-008_IAM_AUTHENTICATION.md) |
 | DEL-035 | 2026-10-15 | Backend/Frontend/QA | ERP-009 操作审计闭环 | v1.0 | Completed | PJM | [实施与验收记录](../deliverables/pjm/ERP-009_AUDIT_CLOSURE.md) |
+| DEL-036 | 2026-11-20 | Codex | 当前系统接手入口、状态报告、文档维护规则和会话交接模板 | v0.1 | In Review | 待 PJM 复核 | [接手指南](04-engineering/PROJECT_HANDOVER.md) / [状态及本次交接](08-project-management/STATUS_REPORT.md) / [模板](../templates/SESSION_HANDOFF_TEMPLATE.md)；用户直接授权文档维护，未分配新 ERP 编号 |
+| DEL-037 | 2026-11-20 | Codex | 产品列表图片前置与 UI 优化 | v0.1 | In Review | 待用户 / PJM 复核 | [本地交接](../deliverables/pjm/PRODUCT_LIST_UI_LOCAL_2026-11-20.md)；本地未提交、未发布 |
+| DEL-038 | 2026-11-20 | Codex | 图片预览弹窗关闭位置和展示尺寸统一 | v0.1 | In Review | 待用户 / PJM 复核 | [本地交接](../deliverables/pjm/IMAGE_PREVIEW_UI_LOCAL_2026-11-20.md)；本地未提交，待迭代统一验证 |
+| DEL-039 | 2026-11-20 | Codex | 子体关联紧凑详情/编辑、列表快捷入口与父体删除保护 | v0.4 | In Review | 待用户 / PJM 复核 | [本地交接](../deliverables/pjm/SKU_DETAIL_DELETE_GUARD_LOCAL_2026-11-20.md)；本地未提交，前后端待迭代统一验证 |
+| DEL-040 | 2026-11-20 | Codex | 产品管理 19 项收尾：权限联动、子体库存、分页、单子体保存及恢复 | v0.1 | In Review | 待用户 / PJM 复核 | [本地实施与待验记录](../deliverables/pjm/PRODUCT_CLOSEOUT_LOCAL_2026-11-20.md)；未提交、未发布，待迭代统一验证 |
+| DEL-041 | 2026-11-21 | Codex | 样品管理 P1/P2 17 项收尾（不含 P3） | v0.1 | In Review | 待用户 / PJM 复核 | [本地实施与待验记录](../deliverables/pjm/SAMPLE_CLOSEOUT_LOCAL_2026-11-21.md)；未提交、未发布，持久本地服务已备份并同步至 V101、前后端已重启，完整验证待迭代交接 |
+| DEL-042 | 2026-11-21 | Codex → PJM | 产品与样品累计迭代统一验证及授权发布交接 | v1.0 | In Review | 用户已授权发布；PJM 独立复核 | [发布交接](../deliverables/pjm/CATALOG_RELEASE_HANDOFF_2026-11-21.md)；完整门禁与 7 项浏览器检查通过，待 PR 合并与线上证据 |
 
 ## 登记要求
 

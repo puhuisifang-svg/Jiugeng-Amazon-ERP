@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ImagePreviewDialog from '@/components/ImagePreviewDialog.vue'
 import { beijingDateTime } from '@/utils/dateTime'
 
 
@@ -922,29 +923,17 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
         </footer>
       </section>
     </div>
-    <div
+    <ImagePreviewDialog
       v-if="imagePreview"
-      class="operation-dialog cost-modal cost-image-modal"
-      role="dialog"
-      aria-modal="true"
-      aria-label="产品图片预览"
-      @click.self="imagePreview = undefined"
-      @keydown.esc.stop="imagePreview = undefined"
+      title="产品图片预览"
+      :description="imagePreview.name"
+      @close="imagePreview = undefined"
     >
-      <section class="cost-image-panel">
-        <header>
-          <strong>{{ imagePreview.name }}</strong><button
-            class="cost-button"
-            @click="imagePreview = undefined"
-          >
-            关闭
-          </button>
-        </header><AuthenticatedCatalogImage
-          :image-id="imagePreview.id"
-          :alt="imagePreview.name"
-          variant="original"
-        />
-      </section>
-    </div>
+      <AuthenticatedCatalogImage
+        :image-id="imagePreview.id"
+        :alt="imagePreview.name"
+        variant="original"
+      />
+    </ImagePreviewDialog>
   </section>
 </template>

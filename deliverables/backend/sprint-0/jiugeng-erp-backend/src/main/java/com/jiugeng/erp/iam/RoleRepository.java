@@ -25,7 +25,7 @@ class RoleRepository {
     Map<String,List<RoleRef>> sources(String userId) {
         var result = new TreeMap<String,List<RoleRef>>();
         for (var role : userRoles(userId)) if (role.status().equals("ENABLED")) {
-            for (String code : permissions(role.id())) result.computeIfAbsent(code,k->new ArrayList<>()).add(role);
+            for (String code : PermissionCatalog.expand(permissions(role.id()))) result.computeIfAbsent(code,k->new ArrayList<>()).add(role);
         }
         return result;
     }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ImagePreviewDialog from '@/components/ImagePreviewDialog.vue'
 import { createRequestId } from '@/utils/requestId'
 
 import {computed,onBeforeUnmount,ref,watch} from 'vue'
@@ -53,7 +54,16 @@ void load()
     <ListPagination :page="page" :page-size="size" :total="total" :disabled="loading" @update:page="page=$event;load()" @update:page-size="resize" />
     <DevelopmentProjectDialog v-if="id" :key="id" :project-id="id" @close="router.push('/product-development')" @changed="load" />
     <AccessDialog v-if="createOpen" title="新建开发项目" :busy="creating" :dirty="createDirty" @close="createOpen=false;route.path.endsWith('/new')&&router.push('/product-development')"><form id="development-create" class="access-form" @submit.prevent="create"><p class="candidate-hint">独立项目先建立草稿，再补充需求、方案、成本与风险资料；立项审核通过后开始开发。</p><p v-if="createError" role="alert" class="data-state--error">{{ createError }}</p><label>项目名称<input v-model.trim="createDraft.title" required maxlength="300" placeholder="填写易于识别的开发项目名称"></label><label>开发负责人<input v-model.trim="createDraft.owner" required maxlength="100"></label><label>立项理由<textarea v-model.trim="createDraft.reason" required maxlength="1000" rows="3" placeholder="要解决什么问题？为什么启动这个项目？" /></label></form><template #footer><button :disabled="creating" @click="closeCreate">取消</button><button class="candidate-primary" form="development-create" :disabled="creating">{{ creating?'创建中…':'创建项目' }}</button></template></AccessDialog>
-    <AccessDialog v-if="preview" title="产品图片" wide @close="preview=''"><img class="candidate-image-preview" :src="preview" alt="产品图片"></AccessDialog>
+    <ImagePreviewDialog
+      v-if="preview"
+      title="产品图片"
+      @close="preview=''"
+    >
+      <img
+        :src="preview"
+        alt="产品图片"
+      >
+    </ImagePreviewDialog>
   </section>
 </template>
 <style src="@/styles/candidateWorkbench.css"></style>

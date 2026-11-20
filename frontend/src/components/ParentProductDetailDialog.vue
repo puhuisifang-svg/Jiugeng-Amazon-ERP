@@ -4,7 +4,9 @@ import { beijingDateTime } from '@/utils/dateTime'
 
 import { onMounted, ref, watch } from 'vue'
 import { domainApi, type ProductDetailDto, type ProductHistoryDto, type ProductVariantDto, type SkuListItemDto } from '@/api/domain'
-import { productActionLabel } from '@/utils/productHistory'
+import '@/styles/productManagement.css'
+import ProductHistoryTable from './ProductHistoryTable.vue'
+import ProductUiState from './ProductUiState.vue'
 import AccessDialog from './AccessDialog.vue'
 import AuthenticatedCatalogImage from './AuthenticatedCatalogImage.vue'
 import ProductName from './ProductName.vue'
@@ -22,26 +24,22 @@ function status(value: string) { return ({ ACTIVE: '启用', DISABLED: '停用',
 <template>
   <AccessDialog
     title="产品详情"
+    dialog-class="product-ui product-parent-dialog"
     wide
     @close="emit('close')"
   >
-    <p
+    <ProductUiState
       v-if="loading"
-      role="status"
-    >
-      正在加载产品详情…
-    </p>
-    <div
+      loading
+      title="正在加载产品详情…"
+    />
+    <ProductUiState
       v-else-if="error"
-      role="alert"
-    >
-      {{ error }} <button
-        type="button"
-        @click="load"
-      >
-        重试
-      </button>
-    </div>
+      error
+      title="产品详情加载失败"
+      :description="error"
+      @retry="load"
+    />
     <template v-else-if="product">
       <nav
         class="access-tabs"
@@ -115,43 +113,13 @@ function status(value: string) { return ({ ACTIVE: '启用', DISABLED: '停用',
           </table>
         </div>
       </div>
-      <div v-else>
-        <p
-          v-if="historyLoading"
-          role="status"
-        >
-          正在加载变更记录…
-        </p><p
-          v-else-if="historyError"
-          role="alert"
-        >
-          {{ historyError }} <button
-            type="button"
-            @click="loadHistory"
-          >
-            重试
-          </button>
-        </p>
-        <div
-          v-else
-          class="parent-detail-table"
-        >
-          <table class="data-table">
-            <thead><tr><th>时间</th><th>操作人</th><th>操作</th><th>内容</th></tr></thead><tbody>
-              <tr
-                v-for="item in history"
-                :key="item.id"
-              >
-                <td>{{ beijingDateTime(item.occurredAt) }}</td><td>{{ item.actorDisplayName || item.actorLoginName }}</td><td>{{ productActionLabel(item.action) }}</td><td>{{ item.detail || '—' }}</td>
-              </tr><tr v-if="!history.length">
-                <td colspan="4">
-                  暂无变更记录
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <ProductHistoryTable
+        v-else
+        :entries="history"
+        :loading="historyLoading"
+        :error="historyError"
+        @retry="loadHistory"
+      />
     </template>
     <template #footer>
       <button

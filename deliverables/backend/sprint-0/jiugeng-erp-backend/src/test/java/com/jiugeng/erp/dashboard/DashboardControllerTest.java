@@ -230,7 +230,10 @@ class DashboardControllerTest {
             .header("Authorization",bearer(token)).header("Idempotency-Key","deleted-new")
             .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(input)))
             .andExpect(status().isBadRequest());
-        mvc.perform(delete("/api/v1/products/"+product).param("version","0").header("Authorization",bearer(token)))
+        mvc.perform(delete("/api/v1/products/"+product+"/skus/"+input.get("variantId"))
+            .param("productVersion","0").param("version","0").header("Authorization",bearer(token)))
+            .andExpect(status().isNoContent());
+        mvc.perform(delete("/api/v1/products/"+product).param("version","1").header("Authorization",bearer(token)))
             .andExpect(status().isNoContent());
         jdbc.update("UPDATE product_variant SET variant_name='新名称' WHERE id=?",input.get("variantId"));
         mvc.perform(patch("/api/v1/dashboard-maintenance/pending-shipments/"+pendingId)

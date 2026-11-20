@@ -95,11 +95,12 @@ describe('application routes', () => {
     expect(paths.has('/listing-mappings')).toBe(false)
   })
 
-  it('protects supplier contact data with its dedicated capability', () => {
+  it('requires supplier read capability and includes it in product read dependencies', () => {
     const shell = appRoutes.find((route) => route.path === '/')
     const suppliers = shell?.children?.find((route) => route.name === 'suppliers')
     expect(suppliers?.meta?.capabilities).toEqual(['suppliers.read'])
-    expect(capabilitiesForRole('SELECTION')).not.toContain('suppliers.read')
+    expect(capabilitiesForRole('SELECTION')).toContain('suppliers.read')
+    expect(capabilitiesForRole('SELECTION')).not.toContain('suppliers.write')
   })
 
   it('protects all purchase workspaces and keeps selection users out', () => {

@@ -1,5 +1,13 @@
 # 项目文档总索引
 
+## 当前接手入口（2026-11-20 更新）
+
+先读 [README](../README.md) → [AGENTS](../AGENTS.md) → [项目接手指南](04-engineering/PROJECT_HANDOVER.md) → [当前状态报告](08-project-management/STATUS_REPORT.md)。界面任务同时读 [UI 规范](ui/UI_STANDARD.md)，跨会话使用 [交接模板](../templates/SESSION_HANDOFF_TEMPLATE.md)。
+
+当前未提交业务迭代：[产品管理 19 项收尾记录](../deliverables/pjm/PRODUCT_CLOSEOUT_LOCAL_2026-11-20.md)。其中库存、恢复、权限依赖和列表新 API 是本地新增，尚未发布；接手时先检查该记录的验证状态。
+
+下表保留原有文档登记和审批状态，不表示各历史文档已同步到最新代码。早期 MVP、Backlog、架构和编码规范的适用范围需结合当前实现与近期任务记录判断；差异交 PJM 确认，不静默覆盖历史批准。
+
 | 分类 | 文档 | Owner | 状态 |
 | --- | --- | --- | --- |
 | 治理 | [项目章程](00-governance/PROJECT_CHARTER.md) | PJM | Draft |
@@ -21,6 +29,9 @@
 | 架构 | [ADR 索引](03-architecture/adr/README.md) | Backend/Ops | Active |
 | 架构 | [API 规范](03-architecture/API_GUIDELINES.md) | Backend | Draft |
 | 架构 | [数据字典](03-architecture/DATA_DICTIONARY.md) | PM/Backend | Draft |
+| 研发 | [项目接手指南](04-engineering/PROJECT_HANDOVER.md) | PJM / Codex | In Review |
+| 设计 | [当前 UI 规范](ui/UI_STANDARD.md) | UI / Frontend | 见文内日期增补及验收范围 |
+| 项管 | [会话交接模板](../templates/SESSION_HANDOFF_TEMPLATE.md) | PJM / Codex | In Review |
 | 研发 | [开发规范](04-engineering/DEVELOPMENT_GUIDE.md) | Frontend/Backend | Draft |
 | 研发 | [环境说明](04-engineering/ENVIRONMENTS.md) | Ops | Draft |
 | 研发 | [本地开发环境审计](04-engineering/LOCAL_ENVIRONMENT_AUDIT.md) | PJM | Completed |
@@ -37,9 +48,11 @@
 | 项管 | [项目状态报告](08-project-management/STATUS_REPORT.md) | PJM | Active |
 | 交付 | [交付物总账](DELIVERABLE_REGISTER.md) | PJM | Active |
 
+最新累计迭代发布交接：[DEL-042（2026-11-21）](../deliverables/pjm/CATALOG_RELEASE_HANDOFF_2026-11-21.md)。
+
 ## 权威性说明
 
-- `Approved` 文档是当前执行基线。
+- `Approved` 表示相应范围和版本曾获批准，不表示文档自动覆盖后续全部实现；当前接手信息以带日期和证据的状态报告及代码地图为入口，业务规则冲突交 PJM 复核。
 - 同一主题存在多个版本时，以状态为 `Approved` 且版本号最高者为准。
 - 口头或聊天结论须进入决策日志或对应文档后，才视为正式项目决定。
 - 旧版本不得删除，应标记为 `Superseded` 并指向新版本。

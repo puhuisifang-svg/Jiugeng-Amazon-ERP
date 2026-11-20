@@ -19,7 +19,7 @@ describe('MVP role capabilities', () => {
   it('does not grant import mutation capabilities to selection users', () => {
     expect(capabilitiesForRole('SELECTION')).toEqual([
       'products.read', 'materials.read', 'selection.read', 'selection.write', 'watch.read', 'watch.write',
-      'audit.read.self', 'dashboard.read', 'dashboard.pending-products.manage',
+      'audit.read.self', 'dashboard.read', 'dashboard.pending-products.manage', 'suppliers.read', 'inventory.read',
     ])
   })
 })

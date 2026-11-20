@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import AccessDialog from './AccessDialog.vue'
+import ImagePreviewDialog from './ImagePreviewDialog.vue'
 import AuthenticatedCatalogImage from './AuthenticatedCatalogImage.vue'
 defineProps<{ imageAssetId?: string | null | undefined; imageUrl?: string | null | undefined; alt: string }>()
 const preview = ref(false)
@@ -31,27 +31,26 @@ const preview = ref(false)
     role="img"
     :aria-label="`${alt}暂无图片`"
   >图</span>
-  <AccessDialog
+  <ImagePreviewDialog
     v-if="preview"
     title="商品图片预览"
-    wide
+    :description="alt"
     @close="preview = false"
   >
-    <div class="purchase-image-preview">
-      <AuthenticatedCatalogImage
-        v-if="imageAssetId"
-        :image-id="imageAssetId"
-        variant="original"
-        :alt="alt"
-      /><img
-        v-else
-        :src="imageUrl ?? undefined"
-        :alt="alt"
-        referrerpolicy="no-referrer"
-      >
-    </div>
-  </AccessDialog>
+    <AuthenticatedCatalogImage
+      v-if="imageAssetId"
+      :image-id="imageAssetId"
+      variant="original"
+      :alt="alt"
+    />
+    <img
+      v-else
+      :src="imageUrl ?? undefined"
+      :alt="alt"
+      referrerpolicy="no-referrer"
+    >
+  </ImagePreviewDialog>
 </template>
 <style scoped>
-.purchase-image-preview{display:flex;justify-content:center}.purchase-image-preview :deep(img){width:auto;height:auto;max-width:100%;max-height:70vh;object-fit:contain}.image-button .catalog-image{object-fit:contain}
+.image-button .catalog-image{object-fit:contain}
 </style>

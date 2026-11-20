@@ -41,10 +41,11 @@ import { domainApi } from '@/api/domain'
 
 const RouterLink = { props: ['to'], template: '<a :href="to"><slot /></a>' }
 const AuthenticatedCatalogImage = { props: ['imageId', 'alt'], template: '<span class="image-stub">{{ imageId || alt }}</span>' }
-const global = { stubs: { RouterLink, AuthenticatedCatalogImage } }
+const global = { stubs: { Teleport: true, RouterLink, AuthenticatedCatalogImage } }
 
 describe('MaterialsView merged material management', () => {
   beforeEach(() => {
+    HTMLDialogElement.prototype.showModal = function () { this.open = true }; HTMLDialogElement.prototype.close = function () { this.open = false }
     deleteMaterials.mockReset().mockResolvedValue(undefined)
     createMaterial.mockReset(); disableMaterial.mockReset(); enableMaterial.mockReset(); materialSupplierLinks.mockReset().mockResolvedValue([]); replaceMaterialSupplierLinks.mockReset(); supplier.mockReset(); transact.mockReset(); updateSafetyStock.mockReset(); uploadImage.mockReset()
   })

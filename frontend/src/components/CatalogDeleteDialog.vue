@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-defineProps<{ title: string; name: string; description: string; busy: boolean; error: string; notice?: string }>()
+defineProps<{ title: string; name: string; description: string; busy: boolean; error: string; notice?: string; blocked?: boolean }>()
 const emit = defineEmits<{ confirm: []; cancel: [] }>()
 const dialog = ref<HTMLDialogElement>()
 onMounted(() => dialog.value?.showModal())
@@ -39,7 +39,7 @@ onMounted(() => dialog.value?.showModal())
         <button
           type="button"
           class="danger-button"
-          :disabled="busy"
+          :disabled="busy || blocked"
           @click="emit('confirm')"
         >
           {{ busy ? '删除中…' : '确认删除' }}

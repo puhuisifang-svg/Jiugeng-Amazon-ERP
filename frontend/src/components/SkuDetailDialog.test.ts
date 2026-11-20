@@ -1,18 +1,118 @@
-import { mount, flushPromises } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SkuDetailDialog from './SkuDetailDialog.vue'
+import { session } from '@/state/session'
 import { blankCustoms } from '@/api/customs'
 import { domainApi, type SkuListItemDto } from '@/api/domain'
 
-const row = (): SkuListItemDto => ({ productId: 'synthetic', productCode: 'SYN', productName: '测试父体', productStatus: 'ACTIVE', businessAvailable: true, variant: { skuCode: 'SYN-S', variantName: '测试子体', status: 'ACTIVE', attributes: [], suppliers: [], materials: [], imageAssetId: 'synthetic-image', customs: { ...blankCustoms(), chinaCode: '6307909000', nameZh: '测试申报品名', measurementUnit: '千克/个', state: 'REVIEWED', elementFields: [{ key: 'compositionContent', label: '成分含量' }], elements: { compositionContent: '测试成分' } } } })
-const options = { stubs: { RouterLink: true, AuthenticatedCatalogImage: true } }
+enableAutoUnmount(afterEach)
+const row = (): SkuListItemDto => ({ productId: 'synthetic', productCode: 'SYN', productName: '测试父体', productStatus: 'ACTIVE', businessAvailable: true, variant: { id: 'synthetic-variant', skuCode: 'SYN-S', variantName: '测试子体', status: 'ACTIVE', attributes: [], suppliers: [], materials: [], imageAssetId: 'synthetic-image', customs: { ...blankCustoms(), chinaCode: '6307909000', nameZh: '测试申报品名', measurementUnit: '千克/个', state: 'REVIEWED', elementFields: [{ key: 'compositionContent', label: '成分含量' }], elements: { compositionContent: '测试成分' } } } })
+const options = { stubs: { RouterLink: true, AuthenticatedCatalogImage: true, PurchaseItemImage: true } }
 describe('SKU detail information', () => {
+  beforeEach(() => {
+    vi.spyOn(session, 'canAccess').mockReturnValue(true)
+    vi.spyOn(domainApi, 'productHistory').mockResolvedValue([])
+    vi.spyOn(domainApi, 'variantSupplierLinks').mockResolvedValue([])
+    vi.spyOn(domainApi, 'productMaterialRelations').mockResolvedValue([])
+    vi.spyOn(domainApi, 'supplier').mockResolvedValue({ id: 'supplier-id', name: '合成包装供应商', status: 'ACTIVE', version: 0, contactPerson: '合成联系人', phone: '00000000000', wechatId: 'synthetic-wechat', categories: ['PRODUCT'], remark: '合成供应商备注' })
+    vi.spyOn(domainApi, 'material').mockResolvedValue({ id: 'material-id', materialCode: 'MAT-SYN', name: '合成纸箱', materialType: '包装', specification: '30 × 20 × 10 cm', unit: '个', status: 'ACTIVE', remark: '合成辅料备注' })
+  })
+  afterEach(() => vi.restoreAllMocks())
+  it('shows related names and purchasing details without internal IDs or the full-product link', async () => {
+    vi.mocked(domainApi.variantSupplierLinks).mockResolvedValue([{ id: 'link-id', ownerId: 'synthetic-variant', supplierId: 'supplier-id', supplierName: '合成包装供应商', supplierStatus: 'ACTIVE', primary: true, purchaseUrl: 'https://example.com/synthetic', remark: '合成采购备注' }])
+    vi.mocked(domainApi.productMaterialRelations).mockResolvedValue([{ id: 'relation-id', productId: 'synthetic', productCode: 'SYN', variantId: 'synthetic-variant', skuCode: 'SYN-S', materialId: 'material-id', materialCode: 'MAT-SYN', materialName: '合成纸箱', standardQuantity: 2, unit: '个', lossRate: 0, enabled: true }])
+    const w = mount(SkuDetailDialog, { attachTo: document.body, props: { detailRow: row(), writable: true }, global: options })
+    expect(w.text()).not.toContain('查看产品完整资料')
+    await w.findAll('button').find(button => button.text() === '采购信息')!.trigger('click'); await flushPromises()
+    expect(w.get('.relation-name').text()).toBe('合成包装供应商')
+    expect(w.get('.relation-primary').text()).toBe('主供应商')
+    expect(w.text()).toContain('合成联系人')
+    expect(w.text()).toContain('synthetic-wechat')
+    expect(w.get('.relation-expanded-row').isVisible()).toBe(false)
+    await w.get('.relation-expand').trigger('click')
+    expect(w.get('.relation-expand').attributes('aria-expanded')).toBe('true')
+    expect(w.get('.relation-expanded-row').isVisible()).toBe(true)
+    expect(w.get('.relation-expanded-row').text()).toContain('合成采购备注')
+    await w.get('.relation-expand').trigger('click')
+    expect(w.get('.relation-expanded-row').isVisible()).toBe(false)
+    expect(w.get('a').attributes('href')).toBe('https://example.com/synthetic')
+    expect(w.text()).not.toContain('supplier-id')
+    await w.findAll('button').find(button => button.text() === '关联辅料')!.trigger('click'); await flushPromises()
+    expect(domainApi.productMaterialRelations).toHaveBeenCalledWith({ variantId: 'synthetic-variant' })
+    expect(w.get('.relation-name').text()).toBe('合成纸箱')
+    expect(w.get('.relation-quantity').text()).toContain('2 个')
+    expect(w.text()).toContain('30 × 20 × 10 cm')
+    expect(w.get('.relation-expanded-row').isVisible()).toBe(false)
+    await w.get('.relation-expand').trigger('click')
+    expect(w.get('.relation-expanded-row').isVisible()).toBe(true)
+    expect(w.get('.relation-expanded-row').text()).toContain('合成辅料备注')
+    expect(w.text()).not.toContain('material-id')
+    expect(w.text()).not.toContain('MAT-SYN')
+    w.unmount()
+  })
+  it('does not request restricted relation details and distinguishes lack of permission from empty data', async () => {
+    vi.mocked(session.canAccess).mockReturnValue(false)
+    const w = mount(SkuDetailDialog, { attachTo: document.body, props: { detailRow: row(), writable: false }, global: options })
+    await w.findAll('button').find(button => button.text() === '采购信息')!.trigger('click'); await flushPromises()
+    expect(w.text()).toContain('暂无供应商资料查看权限')
+    expect(domainApi.variantSupplierLinks).not.toHaveBeenCalled()
+    await w.findAll('button').find(button => button.text() === '关联辅料')!.trigger('click'); await flushPromises()
+    expect(w.text()).toContain('暂无辅料资料查看权限')
+    expect(domainApi.productMaterialRelations).not.toHaveBeenCalled()
+    expect(domainApi.supplier).not.toHaveBeenCalled()
+    expect(domainApi.material).not.toHaveBeenCalled()
+    w.unmount()
+  })
+  it('offers retry on failure and discards late responses after switching to another SKU', async () => {
+    vi.mocked(domainApi.variantSupplierLinks).mockRejectedValueOnce(new Error('unavailable'))
+    const w = mount(SkuDetailDialog, { attachTo: document.body, props: { detailRow: row(), writable: true }, global: options })
+    await w.findAll('button').find(button => button.text() === '采购信息')!.trigger('click'); await flushPromises()
+    expect(w.get('[role="alert"]').text()).toContain('供应商资料加载失败')
+    let finish!: (value: Awaited<ReturnType<typeof domainApi.variantSupplierLinks>>) => void
+    vi.mocked(domainApi.variantSupplierLinks).mockReturnValueOnce(new Promise(resolve => { finish = resolve }))
+    await w.findAll('button').find(button => button.text() === '重试')!.trigger('click')
+    const next = row(); next.variant.id = 'next-variant'
+    await w.setProps({ detailRow: next })
+    await w.findAll('button').find(button => button.text() === '采购信息')!.trigger('click'); await flushPromises()
+    finish([{ id: 'old-link', ownerId: 'synthetic-variant', supplierId: 'old-id', supplierName: '旧子体的供应商', supplierStatus: 'ACTIVE', primary: false }]); await flushPromises()
+    expect(w.text()).toContain('未关联供应商')
+    expect(w.text()).not.toContain('旧子体的供应商')
+    w.unmount()
+  })
+
+  it('opens the requested tab, retains relation data on detail failure and retries only the failed detail', async () => {
+    vi.mocked(domainApi.variantSupplierLinks).mockResolvedValue([{ id: 'link-id', ownerId: 'synthetic-variant', supplierId: 'supplier-id', supplierName: '合成包装供应商', supplierStatus: 'ACTIVE', primary: true, purchaseUrl: 'https://example.com/synthetic' }])
+    vi.mocked(domainApi.supplier).mockRejectedValueOnce(new Error('unavailable'))
+    const w = mount(SkuDetailDialog, { attachTo: document.body, props: { detailRow: row(), writable: false, initialTab: 'purchase' }, global: options })
+    await flushPromises()
+    expect(w.get('.product-editor-tabs .active').text()).toBe('采购信息')
+    expect(w.get('.relation-name').text()).toBe('合成包装供应商')
+    expect(w.get('[role="alert"]').text()).toContain('详细资料加载失败')
+    expect(w.get('a').attributes('href')).toBe('https://example.com/synthetic')
+    await w.findAll('button').find(button => button.text() === '重试详情')!.trigger('click'); await flushPromises()
+    expect(w.text()).toContain('合成联系人')
+    expect(domainApi.variantSupplierLinks).toHaveBeenCalledTimes(1)
+    expect(domainApi.supplier).toHaveBeenCalledTimes(2)
+    w.unmount()
+  })
+  it('opens material details directly and formats the stored loss ratio as a percentage', async () => {
+    vi.mocked(domainApi.productMaterialRelations).mockResolvedValue([{ id: 'relation-id', productId: 'synthetic', productCode: 'SYN', variantId: 'synthetic-variant', skuCode: 'SYN-S', materialId: 'material-id', materialCode: 'MAT-SYN', materialName: '合成纸箱', standardQuantity: 2, unit: '个', lossRate: 0.025, enabled: false }])
+    const w = mount(SkuDetailDialog, { attachTo: document.body, props: { detailRow: row(), writable: false, initialTab: 'materials' }, global: options })
+    await flushPromises()
+    expect(w.get('.product-editor-tabs .active').text()).toBe('关联辅料')
+    expect(w.get('.relation-loss').text()).toContain('2.5%')
+    expect(w.get('.relation-badge').text()).toBe('关联停用')
+    expect(domainApi.variantSupplierLinks).not.toHaveBeenCalled()
+    w.unmount()
+  })
   it('shows images before basic fields and saved dynamic customs without mutation', async () => {
     vi.spyOn(domainApi, 'productHistory').mockResolvedValue([])
     const input = row(), snapshot = JSON.stringify(input)
-    const w = mount(SkuDetailDialog, { props: { detailRow: input, writable: true }, global: options })
+    const w = mount(SkuDetailDialog, { attachTo: document.body, props: { detailRow: input, writable: true }, global: options })
     expect(w.findAll('.product-editor-tabs button').map(b => b.text())).not.toContain('图片管理')
-    expect(w.get('.sku-basic-panel').element.firstElementChild?.className).toContain('sku-basic-image')
+    expect(w.findAll('.product-detail-main-image')).toHaveLength(1)
+    expect(w.get('.sku-detail-header').findComponent({ name: 'PurchaseItemImage' }).exists()).toBe(true)
+    expect(w.get('.sku-basic-panel').findComponent({ name: 'PurchaseItemImage' }).exists()).toBe(false)
     expect(w.findAll('.product-editor-tabs button').map(b=>b.text())).not.toContain('报关资料')
     expect(JSON.stringify(input)).toBe(snapshot)
     await w.findAll('button').find(b => b.text() === '编辑 SKU')!.trigger('click')
@@ -22,7 +122,7 @@ describe('SKU detail information', () => {
   it('handles missing customs and resets the tab when another SKU is opened', async () => {
     vi.spyOn(domainApi, 'productHistory').mockResolvedValue([])
     const input = row(); input.variant.customs = null
-    const w = mount(SkuDetailDialog, { props: { detailRow: input, writable: false }, global: options })
+    const w = mount(SkuDetailDialog, { attachTo: document.body, props: { detailRow: input, writable: false }, global: options })
     await w.findAll('button').find(b => b.text() === '规格信息')!.trigger('click')
     expect(w.text()).not.toContain('编辑 SKU')
     await w.setProps({ detailRow: row() }); await flushPromises()

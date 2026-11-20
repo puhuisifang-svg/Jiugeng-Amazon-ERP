@@ -7,6 +7,15 @@ import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { appRoutes } from '@/router'
 import { session } from '@/state/session'
 
+const accountLabel = computed(() => {
+  const user = session.user.value
+  if (!user) return ''
+  const name = user.displayName?.trim() || user.loginName
+  const roles = [...new Set((user.roles?.length ? user.roles.map(role => role.name) : [user.role])
+    .map(role => role.trim()).filter(role => role && role !== name))]
+  return [name, roles.join('、')].filter(Boolean).join(' · ')
+})
+
 const route = useRoute()
 const router = useRouter()
 const navigation = ref<HTMLElement>()
@@ -222,7 +231,7 @@ onBeforeUnmount(() => {
         <span
           class="erp-account__user"
           aria-label="当前账号"
-        >{{ session.user.value?.displayName }} · {{ session.user.value?.roles?.map(r=>r.name).join('、') || session.user.value?.role }}</span>
+        >{{ accountLabel }}</span>
         <button
           type="button"
           @click="logout"

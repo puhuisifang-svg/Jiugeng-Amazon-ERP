@@ -9,7 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@RestControllerAdvice(assignableTypes = {ProductController.class, SkuDocumentController.class, ProductCustomsController.class})
+@RestControllerAdvice(assignableTypes = {ProductController.class, SkuDocumentController.class, ProductCustomsController.class, ProductPageController.class, ProductInventoryController.class})
 @Profile("!mock")
 class ProductExceptionHandler {
     @ExceptionHandler(ProductException.class)

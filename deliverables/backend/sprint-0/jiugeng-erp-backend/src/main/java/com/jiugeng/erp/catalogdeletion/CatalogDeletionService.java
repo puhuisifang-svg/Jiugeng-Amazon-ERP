@@ -30,6 +30,9 @@ class CatalogDeletionService {
         Entry parent=lock("product",id);version(parent,productVersion);
         var variants=jdbc.sql("SELECT id,version,main_image_asset_id FROM product_variant WHERE product_id=:id AND deleted_at IS NULL ORDER BY id FOR UPDATE")
             .param("id",id).query((r,n)->new Entry(r.getString("id"),r.getLong("version"),r.getString("main_image_asset_id"))).list();
+        if(variantId==null && !variants.isEmpty()) {
+            throw new Failure(409,"PRODUCT_HAS_VARIANTS","该父体下还有子体，请先删除全部子体后再删除父体（停用子体也需删除）");
+        }
         var targets=variantId==null?variants:variants.stream().filter(v->v.id().equals(variantId)).toList();
         if(variantId!=null) {
             if(targets.isEmpty()) throw new Failure(404,"CATALOG_NOT_FOUND","SKU 不存在或不属于该父体");
@@ -37,6 +40,8 @@ class CatalogDeletionService {
         }
 
         for(var sku:targets) {
+            if(jdbc.sql("SELECT COUNT(*) FROM product_inventory_balance WHERE variant_id=:id AND quantity>0").param("id",sku.id()).query(Integer.class).single()>0)
+                throw new Failure(409,"SKU_HAS_STOCK","子体仍有库存，请先核实并处理库存后再删除");
             var customers=jdbc.sql("SELECT id,version FROM customer_product WHERE variant_id=:id AND deleted_at IS NULL ORDER BY id FOR UPDATE")
                 .param("id",sku.id()).query((r,n)->new Entry(r.getString("id"),r.getLong("version"),null)).list();
             for(var cp:customers) customerProduct(cp.id(),cp.version(),actor);

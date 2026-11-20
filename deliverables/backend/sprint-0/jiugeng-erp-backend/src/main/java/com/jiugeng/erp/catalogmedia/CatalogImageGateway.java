@@ -12,6 +12,9 @@ public interface CatalogImageGateway {
         public int status(){return status;} public String code(){return code;}
     }
 
+    /** Independent sample snapshot; never shares storage keys with a replaceable source. */
+    default String copyForSample(String imageId,String sampleId,AuthenticatedActor actor) { throw new UnsupportedOperationException("Sample image copy unavailable"); }
+
     void attach(String imageId, Purpose purpose, String resourceType, String resourceId,
             AuthenticatedActor actor);
 

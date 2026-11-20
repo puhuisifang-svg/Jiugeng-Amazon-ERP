@@ -59,7 +59,7 @@ class SampleControllerTest {
   String id=json.readTree(mvc.perform(post("/api/v1/samples").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("sampleName","Synthetic photo sample","locationCode","PHOTO-01","storageImageId",image)))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("id").asText();
   mvc.perform(get("/api/v1/catalog-images/"+image+"/original").header("Authorization",reader)).andExpect(status().isOk());
   mvc.perform(delete("/api/v1/samples/"+id).param("version","0").header("Authorization",token)).andExpect(status().isOk());
-  assertThat(jdbc.queryForObject("SELECT status FROM catalog_image_asset WHERE id=?",String.class,image)).isEqualTo("PENDING");
+  assertThat(jdbc.queryForObject("SELECT status FROM catalog_image_asset WHERE id=?",String.class,image)).isEqualTo("ACTIVE");
  }
  @Test void samplePicturesArePermissionControlledAndReleased()throws Exception{
   String token=user("ADMIN"),reader=user("SELECTION");
@@ -70,7 +70,46 @@ class SampleControllerTest {
   String id=json.readTree(mvc.perform(post("/api/v1/samples").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("sampleName","Synthetic photo sample","locationCode","PHOTO-01","sampleImageId",image)))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("id").asText();
   mvc.perform(get("/api/v1/catalog-images/"+image+"/original").header("Authorization",reader)).andExpect(status().isOk());
   mvc.perform(delete("/api/v1/samples/"+id).param("version","0").header("Authorization",token)).andExpect(status().isOk());
-  assertThat(jdbc.queryForObject("SELECT status FROM catalog_image_asset WHERE id=?",String.class,image)).isEqualTo("PENDING");
+  assertThat(jdbc.queryForObject("SELECT status FROM catalog_image_asset WHERE id=?",String.class,image)).isEqualTo("ACTIVE");
+ }
+ @Test void softRemovalRestoreAndSafeRetryUseNewSchema()throws Exception{
+  String token=user("ADMIN");var ids=sku();String key=UUID.randomUUID().toString();
+  String body=json.writeValueAsString(Map.of("sampleName","Synthetic retry","locationCode","R-01","remark","note searchable"));
+  var request=post("/api/v1/samples").header("Authorization",token).header("Idempotency-Key",key).contentType(MediaType.APPLICATION_JSON).content(body);
+  String id=json.readTree(mvc.perform(request).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("id").asText();
+  mvc.perform(post("/api/v1/samples").header("Authorization",token).header("Idempotency-Key",key).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isOk()).andExpect(jsonPath("$.id").value(id));
+  assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM sample_location WHERE id=?",Integer.class,id)).isEqualTo(1);
+  assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE resource_id=? AND action='SAMPLE_CREATE'",Integer.class,id)).isEqualTo(1);
+  mvc.perform(post("/api/v1/samples").header("Authorization",token).header("Idempotency-Key",key).contentType(MediaType.APPLICATION_JSON).content(body.replace("R-01","R-02"))).andExpect(status().isConflict());
+  mvc.perform(get("/api/v1/samples").param("q","searchable").param("source","MANUAL").param("location","r-").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(1));
+  mvc.perform(delete("/api/v1/samples/"+id).param("version","0").header("Authorization",token)).andExpect(status().isOk());
+  mvc.perform(get("/api/v1/samples").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(0));
+  mvc.perform(get("/api/v1/samples").param("deleted","true").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.items[0].id").value(id));
+  mvc.perform(post("/api/v1/samples/"+id+"/restore").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content("{\"version\":1}")).andExpect(status().isOk());
+  mvc.perform(get("/api/v1/samples/"+id+"/history").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(3));
+  JsonNode linked=create(ids,"LINKED",token,200);String linkedId=linked.path("id").asText();
+  mvc.perform(delete("/api/v1/samples/"+linkedId).param("version","0").header("Authorization",token)).andExpect(status().isOk());
+  create(ids,"linked",token,200);
+  mvc.perform(post("/api/v1/samples/"+linkedId+"/restore").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content("{\"version\":1}")).andExpect(status().isConflict());
+  assertThat(jdbc.queryForObject("SELECT deletion_key FROM sample_location WHERE id=?",String.class,linkedId)).isEqualTo(linkedId);
+ }
+ @Test void exportsProtectSpreadsheetCellsAndDoNotTruncateSelection()throws Exception{
+  String token=user("ADMIN");String body=json.writeValueAsString(Map.of("sampleName","=formula\nnext","locationCode","CSV-01","remark","quoted \" text"));
+  String id=json.readTree(mvc.perform(post("/api/v1/samples").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("id").asText();
+  String csv=mvc.perform(get("/api/v1/samples/export").param("ids",id).header("Authorization",token)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+  assertThat(csv).contains("'=formula","quoted \"\" text");
+  mvc.perform(post("/api/v1/samples/selection").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("ids",List.of(id,"missing"))))).andExpect(status().isBadRequest());
+ }
+ @Test void copiesImagesIndependentlyAndReturnsPresentationInOnePage()throws Exception{
+  String token=user("ADMIN");var bytes=new java.io.ByteArrayOutputStream();javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(3,3,java.awt.image.BufferedImage.TYPE_INT_RGB),"png",bytes);
+  var file=new org.springframework.mock.web.MockMultipartFile("file","synthetic.png","image/png",bytes.toByteArray());
+  String image=json.readTree(mvc.perform(multipart("/api/v1/catalog-images").file(file).param("purpose","SAMPLE_IMAGE").header("Authorization",token)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("id").asText();
+  String id=json.readTree(mvc.perform(post("/api/v1/samples").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("sampleName","Synthetic copy","locationCode","C-01","sampleImageId",image)))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("id").asText();
+  var copy=json.readTree(mvc.perform(post("/api/v1/samples").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("sampleName","Synthetic copy","locationCode","C-02","copyFromId",id)))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+  String copied=copy.path("displayImageId").asText();assertThat(copied).isNotBlank().isNotEqualTo(image);assertThat(copy.path("storageImageId").isNull()).isTrue();
+  assertThat(jdbc.queryForObject("SELECT original_storage_key FROM catalog_image_asset WHERE id=?",String.class,copied)).isNotEqualTo(jdbc.queryForObject("SELECT original_storage_key FROM catalog_image_asset WHERE id=?",String.class,image));
+  var ids=sku();create(ids,"LINKED-IMAGE",token,200);
+  mvc.perform(get("/api/v1/samples").param("source","LINKED").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.items[0].currentSkuName").value("Synthetic sample SKU")).andExpect(jsonPath("$.items[0].imageSource").value("SNAPSHOT"));
  }
  private JsonNode create(List<String> ids,String location,String token,int expected)throws Exception{return json.readTree(mvc.perform(post("/api/v1/samples").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("productId",ids.get(0),"variantId",ids.get(1),"locationCode",location)))).andExpect(status().is(expected)).andReturn().getResponse().getContentAsString());}
  private List<String> sku(){String p=UUID.randomUUID().toString(),v=UUID.randomUUID().toString();jdbc.update("INSERT INTO product(id,product_code,product_code_normalized,name_zh,product_name,status,created_by,updated_by) VALUES(?,?,?,?,?,'ACTIVE','test','test')",p,p,p,"Synthetic sample product","Synthetic sample product");jdbc.update("INSERT INTO product_variant(id,product_id,sku_code,sku_code_normalized,variant_name,attribute_signature,status) VALUES(?,?,?,?,?,'SYNTHETIC','ACTIVE')",v,p,v,v,"Synthetic sample SKU");return List.of(p,v);}

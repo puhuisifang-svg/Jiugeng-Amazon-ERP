@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ImagePreviewDialog from './ImagePreviewDialog.vue'
 import { computed, ref, watch } from 'vue'
 import { domainApi, type ProductDetailDto } from '@/api/domain'
 import AuthenticatedCatalogImage from './AuthenticatedCatalogImage.vue'
@@ -44,39 +45,23 @@ const variant = computed(() => props.variantId ? (props.product ?? loaded.value)
     role="img"
     :aria-label="`${alt}（未设置产品图片）`"
   >{{ variantId ? '未设置产品图片' : '待补选 SKU' }}</span>
-  <Teleport to="body">
-    <div
-      v-if="preview"
-      class="image-dialog material-preview"
-      role="dialog"
-      aria-modal="true"
-      aria-label="产品图片预览"
-      @click.self="preview = false"
-      @keydown.esc="preview = false"
+  <ImagePreviewDialog
+    v-if="preview"
+    title="产品图片预览"
+    :description="alt"
+    @close="preview = false"
+  >
+    <AuthenticatedCatalogImage
+      v-if="variant?.imageAssetId"
+      :image-id="variant.imageAssetId"
+      variant="original"
+      :alt="alt"
+    />
+    <img
+      v-else
+      :src="variant?.imageUrl"
+      :alt="alt"
+      referrerpolicy="no-referrer"
     >
-      <div>
-        <button
-          type="button"
-          aria-label="关闭图片预览"
-          autofocus
-          @click="preview = false"
-        >
-          ×
-        </button>
-        <AuthenticatedCatalogImage
-          v-if="variant?.imageAssetId"
-          :image-id="variant.imageAssetId"
-          variant="original"
-          :alt="alt"
-        />
-        <img
-          v-else
-          class="material-preview__image"
-          :src="variant?.imageUrl"
-          :alt="alt"
-          referrerpolicy="no-referrer"
-        >
-      </div>
-    </div>
-  </Teleport>
+  </ImagePreviewDialog>
 </template>

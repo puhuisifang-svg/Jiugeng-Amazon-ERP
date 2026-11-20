@@ -6,6 +6,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.*;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -35,11 +37,31 @@ class CatalogDeletionControllerTest {
     long count(String table,String id) { return jdbc.queryForObject("SELECT COUNT(*) FROM "+table+" WHERE id=?",Long.class,id); }
     String productPath(Fixture f) { return "/api/v1/products/"+f.product(); }
     String cpPath(Fixture f) { return "/api/v1/customers/products/"+f.cp(); }
+    void deleteSkuThenParent(Fixture f,String token) throws Exception {
+        mvc.perform(delete(productPath(f)+"/skus/"+f.variant()).param("productVersion","0").param("version","0").header("Authorization",token))
+            .andExpect(status().isNoContent());
+        mvc.perform(delete(productPath(f)).param("version","1").header("Authorization",token))
+            .andExpect(status().isNoContent());
+    }
+    @ParameterizedTest @ValueSource(strings={"ACTIVE","DISABLED"})
+    void parentWithAnyRemainingSkuIsRejectedWithoutChangingCatalog(String skuStatus) throws Exception {
+        var f=fixture();String token=login("ADMIN");
+        jdbc.update("UPDATE product_variant SET status=? WHERE id=?",skuStatus,f.variant());
+        mvc.perform(delete(productPath(f)).param("version","0").header("Authorization",token))
+            .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("PRODUCT_HAS_VARIANTS"));
+        assertThat(jdbc.queryForObject("SELECT deleted_at FROM product WHERE id=?",java.sql.Timestamp.class,f.product())).isNull();
+        assertThat(jdbc.queryForObject("SELECT deleted_at FROM product_variant WHERE id=?",java.sql.Timestamp.class,f.variant())).isNull();
+        assertThat(jdbc.queryForObject("SELECT deleted_at FROM customer_product WHERE id=?",java.sql.Timestamp.class,f.cp())).isNull();
+        assertThat(jdbc.queryForObject("SELECT version FROM product WHERE id=?",Long.class,f.product())).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE action='PRODUCT_DELETE' AND resource_id=?",Long.class,f.product())).isZero();
+        deleteSkuThenParent(f,token);
+        assertThat(jdbc.queryForObject("SELECT deleted_at FROM product WHERE id=?",java.sql.Timestamp.class,f.product())).isNotNull();
+    }
     @Test void deletedCatalogCannotBeSelectedOrRevivedByImport() throws Exception {
         var f=fixture();String token=login("ADMIN");
         jdbc.update("UPDATE product SET product_code_normalized=UPPER(product_code) WHERE id=?",f.product());
         jdbc.update("UPDATE product_variant SET sku_code_normalized=UPPER(sku_code) WHERE id=?",f.variant());
-        mvc.perform(delete(productPath(f)).param("version","0").header("Authorization",token)).andExpect(status().isNoContent());
+        deleteSkuThenParent(f,token);
         assertThat(catalog.findSku(f.product(),f.variant())).isEmpty();
         assertThat(catalog.findExistingSku(f.product(),f.variant())).isPresent();
         var parent=new com.jiugeng.erp.product.ProductImportGateway.ImportRow("导入模板",2,
@@ -57,7 +79,7 @@ class CatalogDeletionControllerTest {
         jdbc.update("UPDATE product_variant SET main_image_asset_id=? WHERE id=?",skuImage,f.variant());
         jdbc.update("INSERT INTO variant_attribute(variant_id,attribute_code,attribute_code_normalized,attribute_value,display_order) VALUES(?,'COLOR','COLOR','synthetic',0)",f.variant());
         jdbc.update("INSERT INTO sku_document(id,variant_id,kind,file_name,byte_size,content,uploaded_by) VALUES(?,?,'MANUAL','synthetic.txt',1,?,'test')",UUID.randomUUID().toString(),f.variant(),new byte[]{1});
-        mvc.perform(delete(productPath(f)).param("version","0").header("Authorization",token)).andExpect(status().isNoContent());
+        deleteSkuThenParent(f,token);
         assertThat(jdbc.queryForObject("SELECT status FROM catalog_image_asset WHERE id=?",String.class,parentImage)).isEqualTo("ACTIVE");
         assertThat(jdbc.queryForObject("SELECT status FROM catalog_image_asset WHERE id=?",String.class,skuImage)).isEqualTo("ACTIVE");
         assertThat(count("product",f.product())).isOne();assertThat(count("product_variant",f.variant())).isOne();
@@ -103,7 +125,7 @@ class CatalogDeletionControllerTest {
     @Test void invoiceIsRetainedAfterParentLogicalDeletion() throws Exception {
         var f=fixture();String token=login("ADMIN");
         jdbc.update("INSERT INTO customer_invoice(id,customer_product_id,customer_id,customer_name,invoice_title,item_name,unit,quantity,net_unit_price,net_amount,tax_amount,total_amount,created_by,updated_by) VALUES(?,?,?,'合成客户','合成抬头','合成品','套',1,1,1,0,1,'test','test')",UUID.randomUUID().toString(),f.cp(),f.customer());
-        mvc.perform(delete(productPath(f)).param("version","0").header("Authorization",token)).andExpect(status().isNoContent());
+        deleteSkuThenParent(f,token);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM customer_invoice WHERE customer_product_id=?",Long.class,f.cp())).isOne();
         mvc.perform(delete(productPath(f)+"/skus/"+f.variant()).param("productVersion","0").param("version","0").header("Authorization",token)).andExpect(status().isNotFound());
         mvc.perform(delete(cpPath(f)).param("version","0").header("Authorization",token)).andExpect(status().isNotFound());
@@ -112,7 +134,7 @@ class CatalogDeletionControllerTest {
     @Test void archivedShipmentsAreRetainedAfterDeletion() throws Exception {
         var f=fixture();String token=login("ADMIN");
         jdbc.update("INSERT INTO dashboard_today_shipment(id,ship_date,product_id,product_code_snapshot,product_name_snapshot,quantity,box_count,latest_ship_at,status,created_by,updated_by,variant_id,customer_product_id) VALUES(?,CURRENT_DATE,?,'SYN','合成',1,1,CURRENT_TIMESTAMP,'ARCHIVED','test','test',?,?)",UUID.randomUUID().toString(),f.product(),f.variant(),f.cp());
-        mvc.perform(delete(productPath(f)).param("version","0").header("Authorization",token)).andExpect(status().isNoContent());
+        deleteSkuThenParent(f,token);
         mvc.perform(delete(cpPath(f)).param("version","0").header("Authorization",token)).andExpect(status().isNotFound());
         assertThat(count("customer_product",f.cp())).isOne();
     }
@@ -121,7 +143,7 @@ class CatalogDeletionControllerTest {
         jdbc.update("INSERT INTO supplier(id,name,phone,status,created_by,updated_by) VALUES(?,'合成供应商','SYN','ACTIVE','test','test')",supplier);
         jdbc.update("INSERT INTO purchase_order(id,order_no,order_type,supplier_id,status,currency,created_by,updated_by) VALUES(?,?,'PRODUCT',?,'CANCELLED','CNY','test','test')",order,order.substring(0,30),supplier);
         jdbc.update("INSERT INTO purchase_order_line(id,order_id,line_no,item_id,item_code,item_name,unit,ordered_quantity,unit_price) VALUES(?,?,1,?,'SYN','合成','套',1,1)",UUID.randomUUID().toString(),order,f.variant());
-        mvc.perform(delete(productPath(f)).param("version","0").header("Authorization",token)).andExpect(status().isNoContent());
+        deleteSkuThenParent(f,token);
         mvc.perform(delete(cpPath(f)).param("version","0").header("Authorization",token)).andExpect(status().isNotFound());
     }
     @Test void permissionsVersionsAndOwnershipAreRequired() throws Exception {

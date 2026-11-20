@@ -32,8 +32,8 @@ final class PermissionCatalog {
         new Permission("costs.publish", "产品成本", "发布成本", List.of("costs.read", "products.write", "materials.write"), true, true),
         new Permission("costs.export", "产品成本", "导出成本", List.of("costs.read"), true, true),
         new Permission("system.users.manage", "系统管理", "用户与角色授权管理", List.of(), false, false),
-        new Permission("products.read", "产品管理", "查看产品", List.of(), false, true),
-        new Permission("products.write", "产品管理", "新增编辑产品", List.of("products.read"), false, true),
+        new Permission("products.read", "产品管理", "查看产品", List.of("materials.read", "suppliers.read", "inventory.read"), false, true),
+        new Permission("products.write", "产品管理", "新增编辑产品", List.of("products.read", "materials.write", "suppliers.write"), false, true),
         new Permission("materials.read", "辅料管理", "查看辅料", List.of(), false, true),
         new Permission("materials.write", "辅料管理", "维护辅料", List.of("materials.read"), false, true),
         new Permission("inventory.read", "辅料库存", "查看库存及流水", List.of("materials.read"), false, true),
@@ -60,7 +60,7 @@ final class PermissionCatalog {
         new Permission("purchases.receive", "采购管理", "采购收货", List.of("purchases.read"), false, true),
         new Permission("customers.read", "客户管理", "查看客户与客户商品", List.of(), false, true),
         new Permission("customers.write", "客户管理", "维护客户与客户商品", List.of("customers.read"), false, true),
-        new Permission("samples.read", "样品管理", "查看样品库位", List.of(), false, true),
+        new Permission("samples.read", "样品管理", "查看样品库位", List.of("products.read"), false, true),
         new Permission("samples.write", "样品管理", "维护样品库位", List.of("samples.read", "products.read"), false, true),
         new Permission("samples.remove", "样品管理", "移除样品", List.of("samples.read"), false, true),
         new Permission("development.read", "新品开发", "查看新品开发", List.of(), false, true),
@@ -96,6 +96,10 @@ final class PermissionCatalog {
     static Set<String> normalize(Collection<String> input) {
         Set<String> result = new TreeSet<>(input);
         if (!codes().containsAll(result) || result.contains("system.users.manage")) throw new IamException(400, "PERMISSION_INVALID", "包含未知或仅管理员可用的权限");
+        return expand(result);
+    }
+    static Set<String> expand(Collection<String> input) {
+        Set<String> result = new TreeSet<>(input);
         boolean changed; do { changed = false; for (var p : ALL) if (result.contains(p.code())) changed |= result.addAll(p.dependencies()); } while(changed);
         return result;
     }

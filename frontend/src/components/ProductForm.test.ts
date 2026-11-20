@@ -21,7 +21,7 @@ describe('ProductForm', () => {
   })
   it('separates parent and SKU panels while retaining add/remove actions', async () => {
     const wrapper = mount(ProductForm, { props: { submitLabel: '创建产品', showCancel: true } })
-    expect(wrapper.get('.product-form__parent').text()).toContain('产品基础信息')
+    expect(wrapper.get('.product-form__parent').text()).toContain('父体资料')
     expect(wrapper.get('.sku-image-editor').isVisible()).toBe(true)
     expect(wrapper.findAll('.product-editor-tabs button').map(b => b.text())).not.toContain('图片管理')
     expect(wrapper.get('.product-form__variants').findAll('.variant-editor')).toHaveLength(1)

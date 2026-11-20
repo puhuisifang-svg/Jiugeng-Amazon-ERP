@@ -7,12 +7,16 @@ import { session } from '@/state/session'
 import ProductForm from '@/components/ProductForm.vue'
 import ProductDetailView from './ProductDetailView.vue'
 
+vi.mock('@/api/productManagement', () => ({ productManagementApi: { updateSku: vi.fn(), skuHistory: vi.fn(async () => []) } }))
+import { productManagementApi } from '@/api/productManagement'
+
 vi.mock('@/config/runtime', () => ({ runtimeConfig: { authMode: 'password' } }))
 vi.mock('@/state/session', () => ({ session: { canAccess: vi.fn(() => true) } }))
 vi.mock('@/api/domain', () => ({ domainApi: { product: vi.fn(), productHistory: vi.fn(), updateProduct: vi.fn(), disableProduct: vi.fn(), supplier: vi.fn(), productMaterialRelations: vi.fn() } }))
 const product: ProductDetailDto = { id: 'p1', productCode: 'P-TEST', productName: '合成父体', nameZh: '合成父体', imageAssetId: 'parent-image', status: 'ACTIVE', version: 2, skuCount: 1, supplierDetailsAvailable: true, variants: [{ id: 'v1', skuCode: 'SKU-TEST', variantName: '测试子体', status: 'ACTIVE', itemLengthCm: 10, itemWidthCm: 20, itemHeightCm: 30, customs: { ...blankCustoms(), nameZh: '测试申报品名' }, attributes: [], suppliers: [{ supplierId: 's1', primary: true }], materials: [] }] }
 const wrappers: ReturnType<typeof mount>[] = []
 beforeEach(() => {
+  HTMLDialogElement.prototype.showModal = function () { this.open = true }; HTMLDialogElement.prototype.close = function () { this.open = false }
   vi.clearAllMocks()
   vi.mocked(session.canAccess).mockReturnValue(true)
   vi.mocked(domainApi.product).mockReset().mockResolvedValue(structuredClone(product))
@@ -20,13 +24,14 @@ beforeEach(() => {
   vi.mocked(domainApi.productMaterialRelations).mockResolvedValue([])
   vi.mocked(domainApi.supplier).mockResolvedValue({ id: 's1', name: '合成供应商', status: 'ACTIVE', version: 0 })
   vi.mocked(domainApi.updateProduct).mockReset().mockResolvedValue(product)
+  vi.mocked(productManagementApi.updateSku).mockReset().mockResolvedValue(product)
   vi.mocked(domainApi.disableProduct).mockResolvedValue({ ...product, status: 'DISABLED' })
 })
 afterEach(() => wrappers.splice(0).forEach(wrapper => wrapper.unmount()))
 async function setup(path = '/products/p1') {
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/products/:productId/:section?', component: ProductDetailView }, { path: '/products', component: { template: '<p>产品管理</p>' } }] })
   await router.push(path); await router.isReady()
-  const wrapper = mount(ProductDetailView, { global: { plugins: [router], stubs: { ProductForm: true, AuthenticatedCatalogImage: true, SkuDocumentsPanel: true, TableViewport: { template: '<div><slot /></div>' } } } })
+  const wrapper = mount(ProductDetailView, { global: { plugins: [router], stubs: { Teleport: true, ProductForm: true, AuthenticatedCatalogImage: true, SkuDocumentsPanel: true, TableViewport: { template: '<div><slot /></div>' } } } })
   wrappers.push(wrapper); await flushPromises()
   return { wrapper, router }
 }
@@ -70,6 +75,15 @@ describe('parent product details', () => {
     await wrapper.get('.sku-overview-link').trigger('click'); await flushPromises()
     await wrapper.findAll('button').find(b => b.text() === '编辑 SKU')!.trigger('click')
     expect(wrapper.getComponent(ProductForm).props('focusVariantId')).toBe('v1')
+  })
+  it('saves a selected child through the isolated SKU endpoint', async () => {
+    const { wrapper } = await setup()
+    await wrapper.get('.sku-overview-link').trigger('click'); await flushPromises()
+    await wrapper.findAll('button').find(b => b.text() === '编辑 SKU')!.trigger('click')
+    const form = wrapper.getComponent(ProductForm)
+    form.vm.$emit('submit', form.props('initial')); await flushPromises()
+    expect(productManagementApi.updateSku).toHaveBeenCalledWith('p1', expect.objectContaining({ id: 'v1' }))
+    expect(domainApi.updateProduct).not.toHaveBeenCalled()
   })
   it.each(['variants', 'materials', 'documents'])('shows only basics for legacy section %s without fetching removed content', async section => {
     const { wrapper } = await setup('/products/p1/' + section)

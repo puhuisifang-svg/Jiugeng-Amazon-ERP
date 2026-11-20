@@ -8,8 +8,12 @@ This repository is a shared working directory used by the Jiugeng project-manage
 - Do not rely on chat memory, model identity, the `sprint-0` directory name, or old Sprint/MVP documents to infer current implementation or deployment. The handover guide maps current modules; the status report records dated evidence and unresolved work.
 - Recheck branch, worktree, base SHA and task ownership every time. A historical clean-worktree statement is not a write-slot grant. Resume uncommitted work only when ownership and scope are established.
 - Distinguish implemented, tested, merged, deployed and business-accepted states. Verify the production workflow's actual deploy step and the intended site's `/version.json` before reporting a version as live. Never copy tokens, private runtime configuration or business data into handover documents.
-- Before handoff, update the status report for material behavior, release evidence or unfinished work; update the handover guide when module ownership, workflows or investigation paths change. Use `templates/SESSION_HANDOFF_TEMPLATE.md` for an interrupted or multi-session task. Record exact commands/results, not just “tests passed.”
+- Before handoff, update the status report for material behavior or unfinished work; the project manager adds post-handoff release evidence; update the handover guide when module ownership, workflows or investigation paths change. Use `templates/SESSION_HANDOFF_TEMPLATE.md` for an interrupted or multi-session task. Record exact commands/results, not just “tests passed.”
 - Documentation-only changes require link/path and `git diff --check` validation. Application gates remain required for affected application changes. These reading/maintenance requirements do not authorize merges, production releases or concurrent edits. Local service restarts have standing user authorization below.
+
+## 发布职责分工（2026-11-21，立即生效）
+
+本条覆盖此前要求 Codex 持续跟踪、轮询或等待线上发布结果的约定（包括交接后“只读跟踪”要求）。Codex 负责本地实现、必要验证、按用户指令提交和完整交接；交接内容与写入权移交完成后即可结束，无需等待 CI/CD、合并或部署结果。项目经理独立负责 PR 必需检查、合入 main、CI/CD、部署失败处理、实际线上入口/健康/迁移核验及向用户报告。项目经理不得要求 Codex 为等待发布而保持会话或重复轮询；确需代码修正时另行明确分配任务与写入权。此规则不改变单写入者、显式发布授权及分支保护要求。
 
 ## Ownership and coordination
 

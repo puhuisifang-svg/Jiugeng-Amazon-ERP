@@ -17,6 +17,13 @@
 
 最终范围、修正、精确命令、运行版本差异与写入权见 [发布交接 DEL-042](../../deliverables/pjm/CATALOG_RELEASE_HANDOFF_2026-11-21.md)。下方“待交接”“未发布”等是此前阶段事实，当前以本节及后续 PJM 发布证据为准。
 
+## PJM 发布接管与最新协作规则（2026-11-21）
+
+- [PR #20](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/pull/20) 已通过五项必需检查并合入 main：`f87d7c98b9a32a1c73a4441abcfb8caad5f668d3`。此前本地“未提交/未授权发布”段落是历史快照，不覆盖本节。
+- [PR CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/44777927486) 与 [main CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/44780176140) 均通过；[Production](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/44780176054) attempt 1 在部署步骤达到 30 分钟总时限后取消，无备份完成/部署成功标记，入口仍为旧基线。确认无并发发布后已重跑同 SHA，attempt 2 正在部署，尚未确认上线。
+- 用户最新长期规则立即生效：Codex 完成本地实现、必要验证、按指令提交和完整交接后即可结束，不再轮询或等待线上发布；PJM 独立负责 CI/CD、合入/部署、失败处理及线上核验，并直接向用户报告。覆盖旧的 Codex 持续跟踪/只读等待要求。
+- 当前 PJM 独占写入；此次规则更新不取消或重跑正在执行的发布，也不要求 Codex 等待。AGENTS、README、接手指南及交接模板已同步。
+
 ## 最新本地追加：样品管理收尾（2026-11-21）
 
 用户批准 P1/P2 第 1–17 项，明确不做 P3（手动转 SKU、数量/借还、扫码盘点）。已实现权限依赖、批量图片信息/独立留图、逻辑移除/恢复、分页历史、原请求重试、紧凑表单/详情、筛选与库位建议、复制/连续新增、批量标签和盘点 CSV。见 [样品收尾实施与待验记录](../../deliverables/pjm/SAMPLE_CLOSEOUT_LOCAL_2026-11-21.md)。

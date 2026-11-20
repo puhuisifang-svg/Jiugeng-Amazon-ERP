@@ -31,4 +31,14 @@ describe('catalog image API', () => {
     expect(new Headers(init.headers).get('Authorization')).toBe('Bearer token')
     expect(new Headers(init.headers).has('Content-Type')).toBe(false)
   })
+  it('reuses the server thumbnail returned by a successful upload', async () => {
+    window.localStorage.setItem('jiugeng.session.token', 'preview-session')
+    const fetchMock=vi.fn().mockResolvedValue({ok:true,json:async()=>({id:'new-image',mediaType:'image/png',thumbnailBase64:btoa('server bytes')})})
+    vi.stubGlobal('fetch',fetchMock)
+    const {catalogApi}=await import('./catalog')
+    await catalogApi.uploadImage('SKU_MAIN',new File(['source'],'synthetic.png',{type:'image/png'}))
+    const thumbnail=await catalogApi.imageBlob('new-image')
+    expect(thumbnail.size).toBe(12);expect(thumbnail.type).toBe('image/png');expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
 })

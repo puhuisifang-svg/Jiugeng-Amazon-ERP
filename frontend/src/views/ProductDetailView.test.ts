@@ -58,7 +58,7 @@ describe('parent product details', () => {
     vi.mocked(domainApi.product).mockResolvedValue({ ...product, variants: [...product.variants, { ...product.variants[0]!, id: 'v2', skuCode: 'SECOND-SKU', variantName: '第二子体' }] })
     const { wrapper } = await setup()
     await wrapper.findAll('.sku-overview-link')[1]!.trigger('click'); await flushPromises()
-    expect(wrapper.get('[role="dialog"]').text()).toContain('SECOND-SKU')
+    expect(wrapper.get('[role="dialog"]').text()).toContain('第二子体')
     expect(wrapper.get('[role="dialog"]').text()).toContain('第二子体')
     expect(wrapper.get('[role="dialog"]').text()).not.toContain('查看产品完整资料')
     await wrapper.get('[aria-label="关闭"]').trigger('click')

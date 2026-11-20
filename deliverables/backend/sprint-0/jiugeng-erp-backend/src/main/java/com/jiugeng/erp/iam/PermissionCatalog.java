@@ -25,8 +25,8 @@ final class PermissionCatalog {
         new Permission("factory.payroll.pay", "月度工资", "登记及作废发放", List.of("factory.payroll.read"), true, true),
         new Permission("factory.payroll.export", "月度工资", "导出工资", List.of("factory.payroll.read"), true, true),
 
-        new Permission("finance.read", "财务账单", "查看全部店铺账单", List.of(), true, true),
-        new Permission("finance.write", "财务账单", "维护店铺和账单", List.of("finance.read"), true, true),
+        new Permission("finance.read", "财务账单", "查看客户账单及历史账单", List.of(), true, true),
+        new Permission("finance.write", "财务账单", "维护客户账单和收支账户", List.of("finance.read"), true, true),
         new Permission("costs.read", "产品成本", "查看成本", List.of(), true, true),
         new Permission("costs.write", "产品成本", "编辑成本", List.of("costs.read", "products.read", "materials.read"), true, true),
         new Permission("costs.publish", "产品成本", "发布成本", List.of("costs.read", "products.write", "materials.write"), true, true),

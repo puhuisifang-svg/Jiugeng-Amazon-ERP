@@ -126,7 +126,7 @@ class CustomerOrderService {
             var net=d.quantity().multiply(d.netUnitPrice()).setScale(2,RoundingMode.HALF_UP);
             var tax=net.multiply(d.taxRate()).movePointLeft(2).setScale(2,RoundingMode.HALF_UP);
             var presentation=original!=null&&original.product().id().equals(cp.id())&&original.details().name().equals(d.name())?original.namePresentation():products.namePresentation(cp.productId(),cp.variantId(),d.name());
-            lines.add(new Line(lineId,d,original!=null&&original.product().id().equals(cp.id())?original.product():cp,sku.skuCode(),presentation,net,tax,net.add(tax),BigDecimal.ZERO,BigDecimal.ZERO));
+            lines.add(new Line(lineId,d,original!=null&&original.product().id().equals(cp.id())?original.product():cp,original!=null&&original.product().id().equals(cp.id())?original.skuCode():cp.skuCode(),presentation,net,tax,net.add(tax),BigDecimal.ZERO,BigDecimal.ZERO));
         }
         BigDecimal net=lines.stream().map(Line::netAmount).reduce(BigDecimal.ZERO,BigDecimal::add), tax=lines.stream().map(Line::taxAmount).reduce(BigDecimal.ZERO,BigDecimal::add);
         var p=new HashMap<String,Object>();p.put("id",orderId);p.put("customer",input.customerId());p.put("name",customerName);p.put("source",input.source());

@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import {computed,ref} from 'vue'
+import type { UploadProgress } from '@/utils/imageUpload'
 import VoucherUpload from './VoucherUpload.vue'
-const props=withDefaults(defineProps<{title:string;accept?:string;maxMb?:number;disabled?:boolean;upload:(file:File)=>Promise<unknown>|unknown;deferred?:boolean;hint?:string;compact?:boolean}>(),{accept:'.png,.jpg,.jpeg,.pdf',maxMb:5,hint:''})
+const props=withDefaults(defineProps<{title:string;accept?:string;maxMb?:number;disabled?:boolean;upload:(file:File, progress?: UploadProgress)=>Promise<unknown>|unknown;deferred?:boolean;hint?:string;compact?:boolean}>(),{accept:'.png,.jpg,.jpeg,.pdf',maxMb:5,hint:''})
 const files=ref<File[]>([]),working=ref(false),failed=ref(false),status=ref('')
 const unavailable=computed(()=>props.disabled||working.value)
-async function send(){if(unavailable.value||!files.value[0])return;working.value=true;failed.value=false;status.value=props.deferred?'正在准备…':'正在上传…';try{const result=await props.upload(files.value[0]);if(result===false)throw new Error('upload failed');status.value=props.deferred?'待保存': '已上传'}catch{failed.value=true;status.value='上传失败，可重试'}finally{working.value=false}}
+async function send(){if(unavailable.value||!files.value[0])return;working.value=true;failed.value=false;status.value=props.deferred?'正在准备…':'正在上传…';try{const result=await props.upload(files.value[0], text => { status.value = text });if(result===false)throw new Error('upload failed');status.value=props.deferred?'待保存': '已上传'}catch{failed.value=true;status.value='上传失败，可重试'}finally{working.value=false}}
 async function select(next:File[]){if(unavailable.value)return;files.value=next;failed.value=false;status.value='';if(next.length)await send()}
 </script>
 <template>

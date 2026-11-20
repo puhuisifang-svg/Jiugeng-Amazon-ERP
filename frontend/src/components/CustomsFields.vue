@@ -33,7 +33,7 @@ function enableStructured(){if(!model.value.elements)model.value={...model.value
   >
     <legend>出口美国 · 申报要素</legend>
     <p class="form-wide customs-help">
-      选择此 SKU 制作报关单时，自动带入以下资料；本票修改不覆盖 SKU 档案。
+      选择此客户商品制作报关单时，自动带入以下资料；单据内修改不覆盖客户商品档案。
     </p>
     <label>HS<input
       ref="hsInput"

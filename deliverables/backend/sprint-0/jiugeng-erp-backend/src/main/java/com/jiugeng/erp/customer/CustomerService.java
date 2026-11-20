@@ -1,5 +1,7 @@
 package com.jiugeng.erp.customer;
 
+import com.jiugeng.erp.product.CustomsProfiles;
+
 import static com.jiugeng.erp.customer.CustomerTypes.*;
 import com.jiugeng.erp.iam.AuditTrail;
 import com.jiugeng.erp.iam.AuthenticatedActor;
@@ -53,7 +55,8 @@ class CustomerService implements CustomerProductLookup {
         var params=new HashMap<String,Object>(); String term=q.trim().toLowerCase(Locale.ROOT);
         params.put("q",term); params.put("term","%"+term+"%"); params.put("status",status==null?"":status.name()); return params;
     }
-    private CustomerView getCustomer(String id) {
+    @Transactional(readOnly=true)
+    CustomerView getCustomer(String id) {
         return jdbc.sql("SELECT *, (id=(SELECT default_customer_id FROM customer_preferences WHERE id=1)) default_customer FROM customer WHERE id=:id").param("id",id).query(this::customer).optional()
             .orElseThrow(()->new CustomerException(404,"CUSTOMER_NOT_FOUND","客户不存在"));
     }
@@ -74,6 +77,15 @@ class CustomerService implements CustomerProductLookup {
             throw new CustomerException(409,"DEFAULT_CUSTOMER_DISABLED","默认客户不能停用，请先将其他启用客户设为默认");
         if(Boolean.FALSE.equals(input.defaultCustomer()) && Objects.equals(id,oldDefault))
             throw new CustomerException(409,"DEFAULT_CUSTOMER_REQUIRED","请通过设置其他默认客户进行切换");
+
+        boolean exportEnabled=input.exportEnabled()==null?(before!=null&&before.exportEnabled()):input.exportEnabled();
+        ExportProfile profile=input.exportProfile()!=null?input.exportProfile():before!=null?before.exportProfile():new ExportProfile("","","","","");
+        String prefix=text(profile.prefix()).toUpperCase(Locale.ROOT),company=text(profile.name());
+        if(exportEnabled&&(company.isBlank()||!prefix.matches("[A-Z]{1,20}")))throw new CustomerException(400,"EXPORT_PROFILE_REQUIRED","境外出口客户须填写公司名称及1至20位英文字母的公司简称");
+        if(exportEnabled&&(text(profile.address()).isBlank()||text(profile.phone()).isBlank()))throw new CustomerException(400,"EXPORT_PROFILE_REQUIRED","境外出口客户须填写公司地址和联系电话");
+        if(!com.jiugeng.erp.ChinaPhone.contact(profile.phone()))throw new CustomerException(400,"PHONE_INVALID",com.jiugeng.erp.ChinaPhone.MESSAGE);
+        for(String value:List.of(company,prefix,text(profile.address()),text(profile.phone()),text(profile.fax())))
+            if(value.chars().anyMatch(Character::isISOControl))throw new CustomerException(400,"EXPORT_PROFILE_INVALID","境内发货人信息不能包含控制字符");
 
         if(create) id=UUID.randomUUID().toString();
         var params=new HashMap<String,Object>(); params.put("id",id); params.put("actor",actor.userId());
@@ -116,6 +128,8 @@ class CustomerService implements CustomerProductLookup {
         catch(CatalogImageGateway.AttachmentException e) { throw new CustomerException(e.status(),e.code(),e.getMessage()); }
         if(before!=null)images.releaseReplaced(before.wechatImageId(),image,"CUSTOMER",id);
         jdbc.sql("UPDATE customer SET wechat_image_id=:image WHERE id=:id").param("image",image,java.sql.Types.VARCHAR).param("id",id).update();
+        jdbc.sql("UPDATE customer SET export_enabled=:enabled,export_company_name=:name,export_company_prefix=:prefix,export_company_address=:address,export_company_phone=:phone,export_company_fax=:fax WHERE id=:id")
+            .param("id",id).param("enabled",exportEnabled).param("name",company).param("prefix",prefix).param("address",text(profile.address())).param("phone",text(profile.phone())).param("fax",text(profile.fax())).update();
         var after=getCustomer(id);
         // Contact details and free text never enter audit logs.
         audit(actor,create?"CUSTOMER_CREATE":"CUSTOMER_UPDATE","CUSTOMER",id,
@@ -141,23 +155,29 @@ class CustomerService implements CustomerProductLookup {
             var sku=catalog.findSku(input.productId(),input.variantId())
                 .orElseThrow(()->new CustomerException(400,"CUSTOMER_SKU_INVALID","请选择有效的产品 SKU"));
             if(!sku.active()) throw new CustomerException(409,"CUSTOMER_SKU_DISABLED","SKU 或所属产品已停用");
-            skuCode=sku.skuCode(); productName=sku.name();
+            if(create && input.skuCode()==null && !sku.skuCode().startsWith("SYS-SKU-"))skuCode=sku.skuCode(); productName=sku.name();
         }
+        if(input.skuCode()!=null)skuCode=text(input.skuCode());
+        if(!skuCode.isBlank() && jdbc.sql("SELECT COUNT(*) FROM customer_product WHERE customer_id=:customer AND UPPER(TRIM(sku_code))=:code AND variant_id<>:variant AND deleted_at IS NULL AND (:id IS NULL OR id<>:id)").param("customer",input.customerId()).param("code",skuCode.toUpperCase(Locale.ROOT)).param("variant",input.variantId()).param("id",id,java.sql.Types.VARCHAR).query(Long.class).single()>0)
+            throw new CustomerException(409,"CUSTOMER_SKU_CODE_DUPLICATE","该客户的 SKU 编码已存在，请使用其他编码");
+        String customsData=before==null||before.customs()==null?null:CustomsProfiles.encode(before.customs());
+        if(input.customs()!=null)try { customsData=CustomsProfiles.encode(CustomsProfiles.normalize(input.customs())); }
+        catch(CustomsProfiles.ValidationException e){throw new CustomerException(400,e.code(),e.getMessage());}
         if(create) id=UUID.randomUUID().toString();
         var params=new HashMap<String,Object>(); params.put("id",id); params.put("actor",actor.userId());
         params.put("customer",input.customerId()); params.put("product",input.productId()); params.put("variant",input.variantId());
-        params.put("sku",skuCode); params.put("name",productName); params.put("price",input.supplyPrice());
+        params.put("customs",customsData); params.put("sku",skuCode); params.put("name",productName); params.put("price",input.supplyPrice());
         params.put("unit",required(input.priceUnit(),"计价单位")); params.put("code",text(input.customerProductCode()));
         params.put("requirements",text(input.requirements())); params.put("status",input.status().name()); params.put("version",input.version());
         try {
             if(create) jdbc.sql("""
                 INSERT INTO customer_product(id,customer_id,product_id,variant_id,sku_code,product_name,supply_price,price_unit,
-                customer_product_code,requirements,status,created_by,updated_by)
-                VALUES(:id,:customer,:product,:variant,:sku,:name,:price,:unit,:code,:requirements,:status,:actor,:actor)
+                customer_product_code,requirements,status,created_by,updated_by,customs_data)
+                VALUES(:id,:customer,:product,:variant,:sku,:name,:price,:unit,:code,:requirements,:status,:actor,:actor,:customs)
                 """).params(params).update();
             else if(jdbc.sql("""
                 UPDATE customer_product SET sku_code=:sku,product_name=:name,supply_price=:price,price_unit=:unit,
-                customer_product_code=:code,requirements=:requirements,status=:status,version=version+1,
+                customer_product_code=:code,requirements=:requirements,status=:status,customs_data=:customs,version=version+1,
                 updated_by=:actor,updated_at=CURRENT_TIMESTAMP WHERE id=:id AND version=:version AND deleted_at IS NULL
                 """).params(params).update()!=1) throw conflict();
         } catch(DuplicateKeyException error) {
@@ -181,7 +201,7 @@ class CustomerService implements CustomerProductLookup {
         if(id==null || id.isBlank()) return Optional.empty();
         return jdbc.sql("SELECT p.*,c.name customer_name FROM customer_product p JOIN customer c ON c.id=p.customer_id WHERE p.id=:id AND (p.deleted_at IS NULL AND p.status='ACTIVE' OR :existing=TRUE AND p.deleted_at IS NOT NULL) AND c.status='ACTIVE' FOR UPDATE").param("existing",existing)
             .param("id",id).query((r,n)->new ShippingProduct(r.getString("id"),r.getString("customer_id"),r.getString("customer_name"),
-                r.getString("product_id"),r.getString("variant_id"),r.getString("customer_product_code"),r.getString("requirements"))).optional()
+                r.getString("product_id"),r.getString("variant_id"),r.getString("customer_product_code"),r.getString("requirements"),r.getString("sku_code"))).optional()
             .filter(value->(existing?catalog.findExistingSku(value.productId(),value.variantId()):catalog.findSku(value.productId(),value.variantId())).map(ProductLookup.SkuReference::active).orElse(false));
     }
     private String text(String value) {
@@ -194,7 +214,7 @@ class CustomerService implements CustomerProductLookup {
         String result=text(value); if(result.isBlank()) throw new CustomerException(400,"CUSTOMER_FIELD_INVALID",label+"不能为空"); return result;
     }
     private CustomerException conflict() { return new CustomerException(409,"CUSTOMER_VERSION_CONFLICT","记录已被其他用户修改，请刷新后重新编辑"); }
-    private Map<String,?> customerAudit(CustomerView v) { return Map.of("status",v.status(),"version",v.version(),"defaultCustomer",v.defaultCustomer()); }
+    private Map<String,?> customerAudit(CustomerView v) { return Map.of("status",v.status(),"version",v.version(),"defaultCustomer",v.defaultCustomer(),"exportEnabled",v.exportEnabled()); }
     private Map<String,?> productAudit(ProductView v) {
         return Map.of("customerId",v.customerId(),"variantId",v.variantId(),"supplyPrice",v.supplyPrice()==null?"未定价":v.supplyPrice(),"priceUnit",v.priceUnit(),
             "status",v.status(),"version",v.version());
@@ -205,12 +225,12 @@ class CustomerService implements CustomerProductLookup {
     private CustomerView customer(ResultSet r,int row) throws SQLException {
         return new CustomerView(r.getString("id"),r.getString("name"),r.getString("account_1688"),r.getString("contact_person"),
             r.getString("phone"),r.getString("wechat_id"),r.getString("address"),r.getString("remark"),Status.valueOf(r.getString("status")),
-            r.getLong("version"),r.getTimestamp("updated_at").toInstant(),r.getString("invoice_title"),r.getString("tax_number"),r.getString("registered_address"),r.getString("registered_phone"),r.getString("bank_name"),r.getString("bank_account"),r.getBoolean("default_customer"),CustomerInvoiceTitles.read(r),CustomerAddresses.read(r),r.getString("wechat_image_id"));
+            r.getLong("version"),r.getTimestamp("updated_at").toInstant(),r.getString("invoice_title"),r.getString("tax_number"),r.getString("registered_address"),r.getString("registered_phone"),r.getString("bank_name"),r.getString("bank_account"),r.getBoolean("default_customer"),CustomerInvoiceTitles.read(r),CustomerAddresses.read(r),r.getString("wechat_image_id"),r.getBoolean("export_enabled"),new ExportProfile(r.getString("export_company_name"),r.getString("export_company_prefix"),r.getString("export_company_address"),r.getString("export_company_phone"),r.getString("export_company_fax")));
     }
     private ProductView product(ResultSet r,int row) throws SQLException {
         return new ProductView(r.getString("id"),r.getString("customer_id"),r.getString("customer_name"),Status.valueOf(r.getString("customer_status")),
             r.getString("product_id"),r.getString("variant_id"),r.getString("sku_code"),r.getString("product_name"),r.getBigDecimal("supply_price"),
             r.getString("price_unit"),r.getString("customer_product_code"),r.getString("requirements"),Status.valueOf(r.getString("status")),
-            r.getLong("version"),r.getTimestamp("updated_at").toInstant(),catalog.skuSpecification(r.getString("product_id"),r.getString("variant_id")));
+            r.getLong("version"),r.getTimestamp("updated_at").toInstant(),catalog.skuSpecification(r.getString("product_id"),r.getString("variant_id")),CustomsProfiles.decode(r.getString("customs_data"),r.getLong("version")));
     }
 }

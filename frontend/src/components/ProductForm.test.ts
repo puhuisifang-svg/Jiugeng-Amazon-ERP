@@ -43,7 +43,7 @@ describe('ProductForm', () => {
     const file = new File(['synthetic'], 'synthetic.png', { type: 'image/png' })
     Object.defineProperty(field.element, 'files', { value: [file], configurable: true })
     await field.trigger('change')
-    expect(spy).toHaveBeenCalledWith('PRODUCT_MAIN', file)
+    expect(spy).toHaveBeenCalledWith('PRODUCT_MAIN', file, expect.any(Function))
     await wrapper.get('form').trigger('submit'); expect(wrapper.emitted('submit')).toBeUndefined()
     done({ id: 'new-parent' } as Awaited<ReturnType<typeof catalogApi.uploadImage>>); await flushPromises()
     await wrapper.get('form').trigger('submit')
@@ -59,40 +59,28 @@ describe('ProductForm', () => {
     wrapper.unmount(); spy.mockRestore()
   })
 
-  it('submits customs with the SKU aggregate and preserves edits across tabs', async () => {
-    const wrapper = mount(ProductForm, { props: { submitLabel: '创建产品', initial: { productCode: 'SYN-P', productName: '合成父体', status: 'DRAFT', variants: [{ skuCode: 'SYN-S', variantName: '合成子体', status: 'DRAFT', suppliers: [], materials: [], customs:{...blankCustoms(),elements:{other:'旧资料'}} }] } } })
-    await wrapper.findAll('.product-editor-tabs button').find(button => button.text() === '报关资料')!.trigger('click')
-    const fields = wrapper.findAll('.customs-fields label')
-    await fields.find(label => label.text().startsWith('品名'))!.get('input').setValue('Synthetic pouch')
-    await fields.find(label => label.text().startsWith('其他'))!.get('textarea').setValue('合成材质：示例')
-    await wrapper.findAll('.product-editor-tabs button').find(button => button.text() === '基础信息')!.trigger('click')
-    await wrapper.get('form').trigger('submit')
-    expect(wrapper.emitted('submit')?.[0]?.[0]).toMatchObject({ variants: [{ customs: { nameZh: 'Synthetic pouch', elements: {other:'合成材质：示例'}, state: 'DRAFT', version: 0 } }] })
-    wrapper.unmount()
-  })
-
-  it('saves a focused SKU after editing dynamic customs fields without cloning reactive proxies', async () => {
-    const customs={...blankCustoms(),chinaCode:'6307909000',schemaCode:'6307909000',nameZh:'合成品名',measurementUnit:'千克/个',elementFields:[{key:'brandType',label:'品牌类型'},{key:'articleNumber',label:'货号'}],elements:{brandType:'',articleNumber:''}}
-    const wrapper=mount(ProductForm,{props:{submitLabel:'保存',focusVariantId:'v1',initial:{productCode:'SYN',productName:'合成父体',status:'ACTIVE',variants:[{id:'v1',skuCode:'SYN-1',variantName:'合成子体',status:'ACTIVE',suppliers:[],materials:[],customs},{id:'v2',skuCode:'SYN-2',variantName:'其他子体',status:'ACTIVE',suppliers:[],materials:[]}]}}})
-    await wrapper.findAll('.product-editor-tabs button').find(b=>b.text()==='报关资料')!.trigger('click')
-    await wrapper.findAll('.customs-fields label').find(l=>l.text()==='品牌类型')!.get('input').setValue('无品牌')
-    await wrapper.findAll('.customs-fields label').find(l=>l.text()==='货号')!.get('input').setValue('SYN-ARTICLE')
-    expect(wrapper.get('.customs-fields').text()).not.toContain('资料状态')
+  it('removes the customs tab and omits legacy customs when editing product data', async () => {
+    const customs={...blankCustoms(),nameZh:'历史申报品名'}
+    const wrapper=mount(ProductForm,{props:{submitLabel:'保存',initial:{productCode:'SYN',productName:'合成父体',status:'ACTIVE',variants:[{id:'v1',skuCode:'SYN-1',variantName:'合成子体',status:'ACTIVE',suppliers:[],materials:[],customs}]}}})
+    expect(wrapper.findAll('.product-editor-tabs button').map(b=>b.text())).not.toContain('报关资料')
+    await wrapper.get('textarea[required]').setValue('修改名称')
     await wrapper.get('form').trigger('submit');await flushPromises()
-    const saved=wrapper.emitted('submit')?.[0]?.[0]
-    expect(saved).toMatchObject({variants:[{id:'v1',customs:{schemaCode:'6307909000',state:'DRAFT',elements:{brandType:'无品牌',articleNumber:'SYN-ARTICLE'},elementFields:customs.elementFields}},{id:'v2',skuCode:'SYN-2'}]})
-    expect(()=>structuredClone(saved)).not.toThrow()
-    wrapper.unmount()
+    expect(wrapper.emitted('submit')?.[0]?.[0]).toMatchObject({variants:[{variantName:'修改名称'}]})
+    const saved=wrapper.emitted('submit')?.[0]?.[0] as {variants:Array<{customs?:unknown}>}
+    expect(saved.variants[0]!.customs).toBeUndefined()
+    expect(customs.nameZh).toBe('历史申报品名');wrapper.unmount()
   })
 
   it('submits the unified product name with active product and SKU defaults', async () => {
     const wrapper = mount(ProductForm, { props: { submitLabel: '创建产品' } })
     const productInputs = wrapper.find('.product-form').findAll('input[required]')
-    await productInputs[0]!.setValue('PROD-001'); await productInputs[1]!.setValue('旅行收纳袋')
+    await productInputs[0]!.setValue('旅行收纳袋')
+    expect(wrapper.text()).not.toContain('父体编码')
+    expect(wrapper.text()).not.toContain('SKU 编码')
     const skuInputs = wrapper.find('.variant-editor').findAll('input[required], textarea[required]')
-    await skuInputs[0]!.setValue('SKU-001-BLK'); await skuInputs[1]!.setValue('黑色款')
+    await skuInputs[0]!.setValue('黑色款')
     await wrapper.get('form').trigger('submit')
-    expect(wrapper.emitted('submit')?.[0]?.[0]).toMatchObject({ productCode: 'PROD-001', productName: '旅行收纳袋', status: 'ACTIVE', variants: [{ skuCode: 'SKU-001-BLK', variantName: '黑色款', status: 'ACTIVE', suppliers: [], materials: [] }] })
+    expect(wrapper.emitted('submit')?.[0]?.[0]).toMatchObject({ productCode: '', productName: '旅行收纳袋', status: 'ACTIVE', variants: [{ skuCode: '', variantName: '黑色款', status: 'ACTIVE', suppliers: [], materials: [] }] })
     expect((wrapper.get('.product-form select').element as HTMLSelectElement).value).toBe('ACTIVE')
     expect((wrapper.get('.nested-form select').element as HTMLSelectElement).value).toBe('ACTIVE')
     expect(wrapper.text()).not.toContain('动态属性')
@@ -116,11 +104,9 @@ describe('ProductForm', () => {
     const wrapper = mount(ProductForm, { props: { submitLabel: '创建产品' } })
     await wrapper.get('input[aria-label="SKU 1 图片 URL"]').setValue('https://images.example.com/sku-1.png')
     const skuInputs = wrapper.find('.variant-editor').findAll('input[required], textarea[required]')
-    await skuInputs[0]!.setValue('SKU-URL')
-    await skuInputs[1]!.setValue('URL 图片款')
+    await skuInputs[0]!.setValue('URL 图片款')
     const productInputs = wrapper.find('.product-form').findAll('input[required]')
-    await productInputs[0]!.setValue('PROD-URL')
-    await productInputs[1]!.setValue('URL 图片产品')
+    await productInputs[0]!.setValue('URL 图片产品')
     await wrapper.get('form').trigger('submit')
 
     expect(wrapper.emitted('submit')?.[0]?.[0]).toMatchObject({

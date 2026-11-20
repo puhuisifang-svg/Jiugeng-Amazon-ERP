@@ -19,6 +19,8 @@ class CustomerController {
         @RequestParam(defaultValue="20") @Min(1) @Max(100) int size) { return service.customers(q,status,page,size); }
     @GetMapping("/default") @PreAuthorize("hasAuthority('customers.read')")
     CustomerView defaultCustomer() { return service.defaultCustomer(); }
+    @GetMapping("/{id}") @PreAuthorize("hasAuthority('customers.read')")
+    CustomerView get(@PathVariable String id) { return service.getCustomer(id); }
     @PostMapping @PreAuthorize("hasAuthority('customers.write')")
     CustomerView create(@Valid @RequestBody CustomerInput input, @AuthenticationPrincipal AuthenticatedActor actor) {
         return service.saveCustomer(null,input,actor);

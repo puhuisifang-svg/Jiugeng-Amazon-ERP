@@ -23,7 +23,7 @@ public class CustomsDocuments {
  public record Page(List<Summary> items,long totalCount){}
  private final JdbcClient jdbc;private final ObjectMapper json;private final AuditTrail audit;
  public CustomsDocuments(JdbcClient jdbc,ObjectMapper json,AuditTrail audit){this.jdbc=jdbc;this.json=json;this.audit=audit;}
- static final Set<String> HEADERS=Set.of("shipperId","ruleVersion","sellerPrefix","grossWeight","netWeight","contractNo","invoiceNo","date","exportDate","declarationDate","seller","sellerAddress","sellerPhone","sellerFax","buyer","buyerAddress","buyerPhone","buyerFax","producer","customsPort","recordNo","transport","voyage","billNo","supervision","taxNature","license","tradeCountry","destination","destinationPort","exitPort","packaging","terms","currency","freight","insurance","otherCharges","documents","marks","orderNo","fbaNo","warehouse","sourcePlace","exemption","signPlace","payment","tolerance","packingMarks","tradeTerms","shippingMarks","declarant","declarationCompany","relatedParty","priceInfluence","royalty","selfTax");
+ static final Set<String> HEADERS=Set.of("customerId","shipperId","ruleVersion","sellerPrefix","grossWeight","netWeight","contractNo","invoiceNo","date","exportDate","declarationDate","seller","sellerAddress","sellerPhone","sellerFax","buyer","buyerAddress","buyerPhone","buyerFax","producer","customsPort","recordNo","transport","voyage","billNo","supervision","taxNature","license","tradeCountry","destination","destinationPort","exitPort","packaging","terms","currency","freight","insurance","otherCharges","documents","marks","orderNo","fbaNo","warehouse","sourcePlace","exemption","signPlace","payment","tolerance","packingMarks","tradeTerms","shippingMarks","declarant","declarationCompany","relatedParty","priceInfluence","royalty","selfTax");
  static final Set<String> ITEM_FIELDS=Set.of("elementFields","schemaCode","measurementUnit","elementsVersion","brandType","exportBenefit","floorCovering","fiberComposition","dimensions","weavingMethod","fixingMethod","gtin","cas","other","sku","variantId","name","nameEn","hsCode","unit","quantity","price","cartons","cartonNo","grossWeight","netWeight","origin","destination","sourcePlace","exemption","declarationElements","quantity2","unit2","quantity3","unit3");
  static final Set<String> NUMBERS=Set.of("quantity","price","cartons","grossWeight","netWeight","quantity2","quantity3");
  static void require(boolean ok,String message){if(!ok)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,message);}
@@ -100,9 +100,29 @@ public class CustomsDocuments {
  Document save(String id,Input input,AuthenticatedActor actor){
   if(id!=null){jdbc.sql("SELECT id FROM customs_document WHERE id=:id AND deleted_at IS NULL FOR UPDATE").param("id",id).query(String.class).optional().orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"报关单据不存在"));require(!fileStatus(id).equals("COMPLETED"),"已完成单据仅可查看，不允许编辑");}
   Input in=validate(input);Document before=id==null?null:get(id);if(before!=null){require(!before.status().equals("VOID"),"已作废单据不可修改");if(in.version()==null||in.version()!=before.version())throw new ResponseStatusException(HttpStatus.CONFLICT,"单据已变化，请重新打开后修改");}
+  validateCustomer(in,before);
   if(id==null){id=UUID.randomUUID().toString();jdbc.sql("INSERT INTO customs_document(id,document_no,status,payload,fba_no) VALUES(:id,:no,:status,:data,:fba)").param("id",id).param("no",in.documentNo()).param("status",in.status()).param("data",encode(in)).param("fba",text(in.fields().get("fbaNo"))).update();}
   else {int count=jdbc.sql("UPDATE customs_document SET document_no=:no,status=:status,payload=:data,fba_no=:fba,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=:id AND deleted_at IS NULL AND version=:version").param("id",id).param("no",in.documentNo()).param("status",in.status()).param("data",encode(in)).param("fba",text(in.fields().get("fbaNo"))).param("version",in.version()).update();if(count!=1)throw new ResponseStatusException(HttpStatus.CONFLICT,"单据已变化，请重新打开后修改");}
+  String customer=text(in.fields().get("customerId"));
+  jdbc.sql("UPDATE customs_document SET customer_id=:customer WHERE id=:id").param("customer",customer.isBlank()?null:customer,java.sql.Types.VARCHAR).param("id",id).update();
   Document after=get(id);record(actor,before==null?"CUSTOMS_DOCUMENT_CREATE":"CUSTOMS_DOCUMENT_UPDATE",after);return after;
+ }
+ private void validateCustomer(Input in,Document before){
+  String customer=text(in.fields().get("customerId"));
+  boolean legacy=before!=null&&text(before.fields().get("customerId")).isBlank();
+  if(legacy&&customer.isBlank()){
+   require(text(in.fields().get("shipperId")).equals(text(before.fields().get("shipperId")))&&text(in.fields().get("seller")).equals(text(before.fields().get("seller"))),"更换境内发货人须选择客户");
+   Set<String> previous=new HashSet<>();before.items().forEach(row->previous.add(text(row.get("variantId"))));
+   require(in.items().stream().allMatch(row->text(row.get("variantId")).isBlank()||previous.contains(text(row.get("variantId")))),"新增客户商品前请先选择境内发货人");return;
+  }
+  require(!customer.isBlank()&&customer.equals(text(in.fields().get("shipperId"))),"请先选择境内发货人");
+  require(jdbc.sql("SELECT COUNT(*) FROM customer WHERE id=:id AND export_enabled=TRUE AND status='ACTIVE'").param("id",customer).query(Long.class).single()==1,"该客户未开启境外出口或已停用，请重新选择境内发货人");
+  for(var row:in.items()){
+   String variant=text(row.get("variantId"));if(variant.isBlank())continue;
+   // Existing snapshots remain editable if the customer product is later removed.
+   if(before!=null&&customer.equals(text(before.fields().get("customerId")))&&before.items().stream().anyMatch(old->variant.equals(text(old.get("variantId")))))continue;
+   require(jdbc.sql("SELECT COUNT(*) FROM customer_product cp JOIN product_variant v ON v.id=cp.variant_id JOIN product p ON p.id=cp.product_id WHERE cp.customer_id=:customer AND cp.variant_id=:variant AND cp.status='ACTIVE' AND cp.deleted_at IS NULL AND v.deleted_at IS NULL AND p.deleted_at IS NULL").param("customer",customer).param("variant",variant).query(Long.class).single()>0,"所选 SKU 不属于当前境内发货人的客户商品，请重新选择");
+  }
  }
  Document voidDocument(String id,long version,AuthenticatedActor actor){int count=jdbc.sql("UPDATE customs_document SET status='VOID',version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=:id AND deleted_at IS NULL AND version=:v AND status<>'VOID'").param("id",id).param("v",version).update();if(count!=1)throw new ResponseStatusException(HttpStatus.CONFLICT,"单据已变化，请刷新后重试");Document d=get(id);record(actor,"CUSTOMS_DOCUMENT_VOID",d);return d;}
  void delete(String id,long version,AuthenticatedActor actor){

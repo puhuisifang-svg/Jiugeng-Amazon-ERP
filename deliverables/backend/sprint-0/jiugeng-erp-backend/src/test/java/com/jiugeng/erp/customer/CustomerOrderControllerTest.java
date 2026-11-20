@@ -23,6 +23,17 @@ class CustomerOrderControllerTest {
     @Autowired MockMvc mvc;@Autowired ObjectMapper mapper;@Autowired JdbcTemplate jdbc;@Autowired Clock clock;
     static final String BASE="/api/v1/customer-orders";
     String date(){return LocalDate.now(clock.withZone(ZoneId.of("Asia/Shanghai"))).toString();}
+    @Test void newOrdersUseCustomerSkuAndExistingOrderSnapshotsSurviveChanges() throws Exception {
+        String token=login("ADMIN"),cp=fixture();
+        jdbc.update("UPDATE customer_product SET sku_code='CLIENT-OLD' WHERE id=?",cp);
+        var old=body(send(token,BASE,input(cp)).andExpect(status().isOk()));
+        assertThat(old.at("/lines/0/skuCode").asText()).isEqualTo("CLIENT-OLD");
+        jdbc.update("UPDATE customer_product SET sku_code='CLIENT-NEW' WHERE id=?",cp);
+        mvc.perform(put(BASE+"/"+old.path("id").asText()).header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(edit(old,0))))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.lines[0].skuCode").value("CLIENT-OLD"));
+        var fresh=body(send(token,BASE,input(cp)).andExpect(status().isOk()));
+        assertThat(fresh.at("/lines/0/skuCode").asText()).isEqualTo("CLIENT-NEW");
+    }
     @Test void multiItemOrderHasOneInvoiceWithImmutableTitleAndServerAmounts() throws Exception {
         String token=login("ADMIN"),cp=fixture();var input=input(cp);
         input.put("totalAmount",0);var order=body(send(token,BASE,input).andExpect(status().isOk()));String id=order.path("id").asText();

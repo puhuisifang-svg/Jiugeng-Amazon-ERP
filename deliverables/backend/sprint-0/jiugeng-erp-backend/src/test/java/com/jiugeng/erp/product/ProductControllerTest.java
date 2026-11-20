@@ -134,6 +134,24 @@ class ProductControllerTest {
     private Map<String,Object> customsProfile() { return new java.util.HashMap<>(Map.of("nameEn","Synthetic textile pouch","state","DRAFT","version",0)); }
 
     @Test
+    void createsAndUpdatesProductsWithoutManualCodes() throws Exception {
+        String token=createUserAndLogin("no-code-owner","PRODUCT_MATERIAL");
+        var input=product("", "合成无编码父体", "", "合成子体");
+        @SuppressWarnings("unchecked") var variants=(List<Map<String,Object>>)input.get("variants");
+        variants.getFirst().put("nameHighlighted",true);variants.getFirst().put("customs",customsProfile());
+        var created=objectMapper.readTree(mvc.perform(post("/api/v1/products").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input)))
+            .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(created.path("productCode").asText()).startsWith("SYS-P-");
+        assertThat(created.at("/variants/0/skuCode").asText()).startsWith("SYS-SKU-");
+        assertThat(jdbc.queryForList("SELECT sku_code FROM customer_product WHERE product_id=?",String.class,created.path("id").asText())).allMatch(String::isEmpty);
+        var edit=created.deepCopy();((com.fasterxml.jackson.databind.node.ObjectNode)edit).remove("productCode");
+        ((com.fasterxml.jackson.databind.node.ObjectNode)edit.at("/variants/0")).remove("skuCode");
+        mvc.perform(put("/api/v1/products/"+created.path("id").asText()).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(edit.toString()))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.productCode").value(created.path("productCode").asText()))
+            .andExpect(jsonPath("$.variants[0].skuCode").value(created.at("/variants/0/skuCode").asText()));
+    }
+
+    @Test
     void createsEachSkuForCurrentDefaultCustomerWithoutInventingPrices() throws Exception {
         String token = createUserAndLogin("default-customer-owner", "PRODUCT_MATERIAL");
         String oldDefault = jdbc.queryForObject("SELECT default_customer_id FROM customer_preferences WHERE id=1", String.class);
@@ -430,8 +448,8 @@ class ProductControllerTest {
                 .andReturn().getResponse().getContentAsByteArray();
         try (var workbook = new XSSFWorkbook(new ByteArrayInputStream(export))) {
             assertThat(workbook.getSheet("产品SKU").getRow(1).getCell(0).getStringCellValue())
-                    .isEqualTo("SKU-LIST-001");
-            assertThat(workbook.getSheet("产品SKU").getRow(1).getCell(12).getNumericCellValue())
+                    .isEqualTo(created.at("/variants/0/variantName").asText());
+            assertThat(workbook.getSheet("产品SKU").getRow(1).getCell(10).getNumericCellValue())
                     .isEqualTo(4.0);
         }
         mvc.perform(get("/api/v1/products/{id}/history", created.get("id").asText())

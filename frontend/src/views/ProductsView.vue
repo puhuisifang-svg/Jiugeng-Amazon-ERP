@@ -38,7 +38,7 @@ const imagePreview = ref<{ imageAssetId?: string | undefined; imageUrl?: string 
 watch(imagePreview, () => { imageDownloadError.value = '' })
 type ColumnKey = 'image' | 'sku' | 'status' | 'dimensions' | 'weight' | 'supplier' | 'material' | 'updated' | 'stock'
 const columns: Array<{ key: ColumnKey; label: string }> = [
-  { key: 'image', label: '图片' }, { key: 'sku', label: '品名 / SKU编码' },
+  { key: 'image', label: '图片' }, { key: 'sku', label: '品名' },
   { key: 'status', label: '状态' }, { key: 'dimensions', label: '规格' },
   { key: 'weight', label: '包装重量' }, { key: 'supplier', label: '供应商' }, { key: 'material', label: '辅料' }, { key: 'updated', label: '更新时间' }, { key: 'stock', label: '库存状态' },
 ]
@@ -132,8 +132,8 @@ const groups = computed(() => {
     } as SkuListItemDto)),
   })).filter(group => group.children.length || (!group.product.variants.length && matches(group.product)))
     .sort((a, b) => {
-      const first = f.sort === 'sku' ? a.product.productCode : a.product.updatedAt ?? ''
-      const second = f.sort === 'sku' ? b.product.productCode : b.product.updatedAt ?? ''
+      const first = f.sort === 'sku' ? a.product.productName : a.product.updatedAt ?? ''
+      const second = f.sort === 'sku' ? b.product.productName : b.product.updatedAt ?? ''
       return first.localeCompare(second) * (f.direction === 'asc' ? 1 : -1)
     })
 })
@@ -255,7 +255,7 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
       <label>关键词<input
         v-model="filters.q"
         type="search"
-        placeholder="SKU、品名或规格模糊搜索"
+        placeholder="品名或规格模糊搜索"
         @input="filters.field = 'KEYWORD'; filters.exact = false"
       ></label>
       <label>产品状态<select
@@ -330,8 +330,8 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
     <CatalogDeleteDialog
       v-if="deleteTarget"
       :title="deleteTarget.variant ? '删除 SKU' : '删除父体'"
-      :name="deleteTarget.variant ? deleteTarget.variant.skuCode + ' · ' + deleteTarget.variant.variantName : deleteTarget.product.productCode + ' · ' + deleteTarget.product.productName"
-      notice="采用逻辑删除，保留图片、资料和历史单据；已有采购及发货仍可继续处理，不再用于新建业务。原编码保留，删除后暂不支持页面恢复。"
+      :name="deleteTarget.variant ? deleteTarget.variant.variantName : deleteTarget.product.productName"
+      notice="采用逻辑删除，保留图片、资料和历史单据；已有采购及发货仍可继续处理，不再用于新建业务。删除后暂不支持页面恢复。"
       :description="deleteTarget.variant ? '将从列表隐藏此 SKU 及对应客户商品，不影响父体或其他 SKU。' : '将从列表隐藏此父体、全部 SKU 及对应客户商品。'"
       :busy="deleting"
       :error="deleteError"
@@ -391,7 +391,7 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
                     type="button"
                     @click="toggleSort(key === 'sku' ? 'sku' : 'updatedAt')"
                   >
-                    {{ key === 'sku' ? '品名 / SKU编码' : '更新时间' }} {{ filters.sort === (key === 'sku' ? 'sku' : 'updatedAt') ? (filters.direction === 'asc' ? '↑' : '↓') : '' }}
+                    {{ key === 'sku' ? '品名' : '更新时间' }} {{ filters.sort === (key === 'sku' ? 'sku' : 'updatedAt') ? (filters.direction === 'asc' ? '↑' : '↓') : '' }}
                   </button><template v-else>
                     {{ columns.find(column => column.key === key)?.label }}
                   </template>
@@ -412,7 +412,7 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
                   <td @click.stop>
                     <input
                       type="checkbox"
-                      :aria-label="`选择父体 ${group.product.productCode}`"
+                      :aria-label="`选择父体 ${group.product.productName}`"
                       :checked="group.children.length > 0 && group.children.every(row => selected.includes(row.variant.id ?? ''))"
                       :disabled="!group.children.length"
                       @change="toggleGroup(group.children)"
@@ -430,7 +430,7 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
                       :aria-expanded="expanded.includes(group.product.id)"
                       @click.stop="toggleParent(group.product.id)"
                     >
-                      <span class="product-display-name">{{ expanded.includes(group.product.id) ? '▾' : '▸' }} {{ group.product.productName }}</span><small class="product-display-code">{{ group.product.productCode }} · 父体 · {{ group.children.length }} 个子体</small>
+                      <span class="product-display-name">{{ expanded.includes(group.product.id) ? '▾' : '▸' }} {{ group.product.productName }}</span><small class="product-display-code">父体 · {{ group.children.length }} 个子体</small>
                     </button>
                     <template v-else-if="key === 'image'">
                       <button
@@ -474,7 +474,7 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
                       </button>
                       <RowMoreActions
                         v-if="writable || session.canAccess(['products.delete'])"
-                        :label="`父体 ${group.product.productCode} 更多操作`"
+                        :label="`父体 ${group.product.productName} 更多操作`"
                       >
                         <button
                           v-if="writable"
@@ -515,7 +515,7 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
                     <td>
                       <input
                         type="checkbox"
-                        :aria-label="`选择 ${row.variant.skuCode}`"
+                        :aria-label="`选择 ${row.variant.variantName}`"
                         :checked="selected.includes(row.variant.id ?? '')"
                         @change="toggle(row.variant.id)"
                       >
@@ -560,7 +560,7 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
                           :text="row.variant.variantName"
                           :styles="row.variant.nameStyles"
                           :highlighted="row.variant.nameHighlighted"
-                        /><small class="product-display-code">{{ row.variant.skuCode }}</small>
+                        />
                       </button>
                       <span
                         v-else-if="key === 'stock'"
@@ -597,7 +597,7 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
                         </button>
                         <RowMoreActions
                           v-if="writable || session.canAccess(['products.delete'])"
-                          :label="`SKU ${row.variant.skuCode} 更多操作`"
+                          :label="`SKU ${row.variant.variantName} 更多操作`"
                         >
                           <button
                             v-if="writable"
@@ -688,7 +688,7 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
           v-for="product in selectedProducts"
           :key="product.id"
           :value="product.id"
-        >{{ product.productCode }} · {{ product.productName }}</option></select></label>
+        >{{ product.productName }}</option></select></label>
         <footer class="ui-dialog-actions dialog-footer">
           <button
             class="secondary-action"
@@ -1064,7 +1064,7 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
           step="0.001"
           :disabled="!batch.packageWeightSelected || batch.packageWeightMode === 'CLEAR'"
         ></label><section class="batch-preview">
-          <strong>变更预览</strong><p>目标：{{ selectedRows.map(row => row.variant.skuCode).join('、') }}</p><ul>
+          <strong>变更预览</strong><p>目标：{{ selectedRows.map(row => row.variant.variantName).join('、') }}</p><ul>
             <li v-if="batch.statusSelected">
               SKU 状态 → {{ labelStatus(batch.status) }}
             </li><li v-if="batch.itemDimensionsSelected">

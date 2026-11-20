@@ -1,11 +1,12 @@
+import { blankCustoms } from '@/api/customs'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ list: vi.fn(), products: vi.fn(), save: vi.fn(), saveProduct: vi.fn(), deleteProduct: vi.fn(), skus: vi.fn(), canAccess: vi.fn(), leave: vi.fn() }))
+const mocks = vi.hoisted(() => ({ routeQuery:{} as Record<string,string>,get:vi.fn(),list: vi.fn(), products: vi.fn(), save: vi.fn(), saveProduct: vi.fn(), deleteProduct: vi.fn(), skus: vi.fn(), canAccess: vi.fn(), leave: vi.fn() }))
 vi.mock('@/api/customers', async (importOriginal) => ({ ...await importOriginal<typeof import('@/api/customers')>(), customersApi: mocks }))
 vi.mock('@/api/domain', () => ({ domainApi: { skus: mocks.skus } }))
 vi.mock('@/state/session', () => ({ session: { canAccess: mocks.canAccess } }))
-vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }), onBeforeRouteLeave: mocks.leave, onBeforeRouteUpdate: vi.fn(), RouterLink: { template: '<a><slot /></a>' } }))
+vi.mock('vue-router', () => ({ useRoute: () => ({ query: mocks.routeQuery }), onBeforeRouteLeave: mocks.leave, onBeforeRouteUpdate: vi.fn(), RouterLink: { template: '<a><slot /></a>' } }))
 import CustomerManagementView from './CustomerManagementView.vue'
 
 const customer = { defaultCustomer: true, id: 'c1', name: '合成客户', account1688: 'synthetic-buyer', contactPerson: '', phone: '', wechatId: '', address: '', remark: '', status: 'ACTIVE', version: 2 }
@@ -16,7 +17,7 @@ function render(kind: 'info' | 'products' = 'info') {
 }
 function page<T>(items: T[], totalCount = items.length) { return { items, totalCount, page: 0, size: 20 } }
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.clearAllMocks();mocks.routeQuery={}
   mocks.canAccess.mockReturnValue(true)
   mocks.list.mockResolvedValue(page([customer])); mocks.products.mockResolvedValue(page([product])); mocks.skus.mockResolvedValue(page([sku]))
   mocks.save.mockResolvedValue(customer); mocks.saveProduct.mockResolvedValue(product)
@@ -25,6 +26,13 @@ beforeEach(() => {
 })
 
 describe('客户管理', () => {
+  it('enables export fields and deep-links to the company-name input',async()=>{
+    const input={...customer,exportEnabled:true,exportProfile:{name:'合成出口公司',prefix:'SYN',address:'合成地址',phone:'',fax:''}};
+    mocks.get.mockResolvedValue(input);mocks.routeQuery={editCustomer:'c1',section:'export'};HTMLElement.prototype.scrollIntoView=vi.fn();
+    const w=render();await flushPromises();expect(mocks.get).toHaveBeenCalledWith('c1');expect((w.get('[aria-label="出口公司名称"]').element as HTMLInputElement).value).toBe('合成出口公司');expect(w.get('[aria-label="出口公司名称"]').attributes('required')).toBeDefined();
+    await w.get('[role="switch"]').trigger('click');expect(w.find('[aria-label="出口公司名称"]').exists()).toBe(false);await w.get('[role="switch"]').trigger('click');expect((w.get('[aria-label="出口公司名称"]').element as HTMLInputElement).value).toBe('合成出口公司');w.unmount()
+  })
+
   it('scopes every product query to the selected customer and defaults new records', async () => {
     mocks.list.mockResolvedValue(page([customer, { ...customer, id: 'c2', name: '第二客户', defaultCustomer: false }]))
     const wrapper = render('products'); await flushPromises()
@@ -151,13 +159,14 @@ describe('客户管理', () => {
     await wrapper.findAll('dialog button').find(b => b.text().startsWith('选择产品 SKU'))!.trigger('click'); await flushPromises()
     await wrapper.get('dialog[aria-label="选择产品 SKU"] [aria-label="下一页"]').trigger('click'); await flushPromises()
     expect(mocks.skus).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, exact: false, status: 'ACTIVE', productStatus: 'ACTIVE' }))
-    await wrapper.get('input[aria-label="选择 SYN-BLUE"]').setValue(true)
+    await wrapper.get('input[aria-label="选择 蓝色SKU"]').setValue(true)
     await wrapper.findAll('button').find(b => b.text() === '确认选择')!.trigger('click')
     await wrapper.get('dialog input[type="number"]').setValue('9.80')
     await wrapper.get('input[aria-label="商品1客户产品编码"]').setValue('CLIENT-B')
+    await wrapper.get('input[aria-label="商品1SKU编码"]').setValue('CUSTOMER-SKU')
     await wrapper.get('input[maxlength="2000"]').setValue('合成定制包装')
     await wrapper.get('dialog form').trigger('submit'); await flushPromises()
-    expect(mocks.saveProduct).toHaveBeenCalledWith(undefined, expect.objectContaining({ customerId: 'c1', productId: 'p1', variantId: 'v1', supplyPrice: 9.8, customerProductCode: 'CLIENT-B', requirements: '合成定制包装' }))
+    expect(mocks.saveProduct).toHaveBeenCalledWith(undefined, expect.objectContaining({ customerId: 'c1', productId: 'p1', variantId: 'v1', supplyPrice: 9.8, customerProductCode: 'CLIENT-B', skuCode: 'CUSTOMER-SKU', requirements: '合成定制包装' }))
     wrapper.unmount()
   })
   it('blocks missing selection, invalid prices, repeated saves and closing while saving', async () => {
@@ -166,7 +175,7 @@ describe('客户管理', () => {
     await wrapper.get('dialog form').trigger('submit'); await flushPromises()
     expect(wrapper.get('[role="alert"]').text()).toContain('请选择客户')
     await wrapper.get('select[aria-label="选择客户"]').setValue('c1'); await wrapper.findAll('dialog button').find(b => b.text().startsWith('选择产品 SKU'))!.trigger('click'); await flushPromises()
-    await wrapper.get('input[aria-label="选择 SYN-BLUE"]').setValue(true); await wrapper.findAll('button').find(b => b.text() === '确认选择')!.trigger('click')
+    await wrapper.get('input[aria-label="选择 蓝色SKU"]').setValue(true); await wrapper.findAll('button').find(b => b.text() === '确认选择')!.trigger('click')
     await wrapper.get('dialog input[type="number"]').setValue('1.001'); await wrapper.get('dialog form').trigger('submit')
     expect(wrapper.get('[role="alert"]').text()).toContain('最多两位小数'); expect(mocks.saveProduct).not.toHaveBeenCalled()
     let finish!: (value: unknown) => void
@@ -220,8 +229,8 @@ it('creates multiple customer products with independent editable rows and retrie
   const wrapper=render('products');await flushPromises()
   await wrapper.get('.material-toolbar button').trigger('click');await flushPromises()
   await wrapper.findAll('dialog button').find(b=>b.text().startsWith('选择产品 SKU'))!.trigger('click');await flushPromises()
-  await wrapper.get('[aria-label="选择 SYN-BLUE"]').setValue(true)
-  await wrapper.get('[aria-label="选择 SYN-RED"]').setValue(true)
+  await wrapper.get('[aria-label="选择 蓝色SKU"]').setValue(true)
+  await wrapper.get('[aria-label="选择 红色SKU"]').setValue(true)
   await wrapper.findAll('button').find(b=>b.text()==='确认选择')!.trigger('click')
   expect(wrapper.findAll('.customer-batch-products tbody tr')).toHaveLength(2)
   await wrapper.get('[aria-label="商品1供货价"]').setValue('3.50')
@@ -236,4 +245,38 @@ it('creates multiple customer products with independent editable rows and retrie
   expect(mocks.saveProduct.mock.calls.map(args=>args[1].variantId)).toEqual(['v1','v2','v2'])
   expect(mocks.saveProduct.mock.calls[2]![1].supplyPrice).toBe(8)
   wrapper.unmount()
+})
+
+it('edits customer-specific declaration fields and preserves them across tabs without mutating the list',async()=>{
+ const customs={...blankCustoms(),chinaCode:'6307909000',schemaCode:'6307909000',nameZh:'合成申报品名',elementFields:[{key:'brandType',label:'品牌类型'}],elements:{brandType:'旧品牌'}}
+ mocks.products.mockResolvedValue(page([{...product,customs}]))
+ const w=render('products');await flushPromises()
+ await w.findAll('tbody button').find(b=>b.text()==='报关资料')!.trigger('click');await flushPromises()
+ await w.findAll('.customs-fields label').find(l=>l.text()==='品牌类型')!.get('input').setValue('无品牌')
+ await w.findAll('nav[aria-label="客户商品资料"] button').find(b=>b.text()==='基础信息')!.trigger('click')
+ await w.findAll('nav[aria-label="客户商品资料"] button').find(b=>b.text()==='报关资料')!.trigger('click')
+ expect((w.findAll('.customs-fields label').find(l=>l.text()==='品牌类型')!.get('input').element as HTMLInputElement).value).toBe('无品牌')
+ await w.get('dialog form').trigger('submit');await flushPromises()
+ expect(mocks.saveProduct).toHaveBeenCalledWith('cp1',expect.objectContaining({version:3,customs:expect.objectContaining({elements:{brandType:'无品牌'},chinaCode:'6307909000'})}))
+ expect(customs.elements.brandType).toBe('旧品牌');w.unmount()
+})
+it('allows reading customer customs without granting write controls',async()=>{
+ mocks.canAccess.mockImplementation((caps:string[])=>!caps.includes('customers.write'))
+ const w=render('products');await flushPromises();await w.findAll('tbody button').find(b=>b.text()==='报关资料')!.trigger('click');await flushPromises()
+ expect(w.get('.customs-fields').attributes('disabled')).toBeDefined();expect(w.find('dialog button[type="submit"]').exists()).toBe(false)
+ await w.get('dialog form').trigger('submit');expect(mocks.saveProduct).not.toHaveBeenCalled();w.unmount()
+})
+
+it('keeps declaration profiles separate for multiple newly selected customer goods',async()=>{
+ mocks.skus.mockResolvedValue(page([sku,{...sku,variant:{...sku.variant,id:'v2',variantName:'红色SKU'}}]))
+ const w=render('products');await flushPromises();await w.get('.material-toolbar button').trigger('click');await flushPromises()
+ await w.findAll('dialog button').find(b=>b.text().startsWith('选择产品 SKU'))!.trigger('click');await flushPromises()
+ await w.get('[aria-label="选择 蓝色SKU"]').setValue(true);await w.get('[aria-label="选择 红色SKU"]').setValue(true)
+ await w.findAll('button').find(b=>b.text()==='确认选择')!.trigger('click')
+ await w.findAll('nav[aria-label="客户商品资料"] button').find(b=>b.text()==='报关资料')!.trigger('click')
+ const name=()=>w.findAll('.customs-fields label').find(l=>l.text()==='品名')!.get('input')
+ await name().setValue('蓝色申报品名');await w.get('.customer-customs-pane>label select').setValue('1');await name().setValue('红色申报品名')
+ await w.get('dialog form').trigger('submit');await flushPromises()
+ expect(mocks.saveProduct).toHaveBeenNthCalledWith(1,undefined,expect.objectContaining({variantId:'v1',customs:expect.objectContaining({nameZh:'蓝色申报品名'})}))
+ expect(mocks.saveProduct).toHaveBeenNthCalledWith(2,undefined,expect.objectContaining({variantId:'v2',customs:expect.objectContaining({nameZh:'红色申报品名'})}));w.unmount()
 })

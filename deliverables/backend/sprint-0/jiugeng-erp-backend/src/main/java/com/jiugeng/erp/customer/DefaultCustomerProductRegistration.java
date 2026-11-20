@@ -39,7 +39,7 @@ class DefaultCustomerProductRegistration {
                     supply_price,price_unit,status,created_by,updated_by)
                 VALUES(:id,:customer,:product,:variant,:sku,:name,NULL,'套','ACTIVE',:actor,:actor)
                 """).params(Map.of("id", id, "customer", customer, "product", event.productId(),
-                    "variant", sku.id(), "sku", sku.code(), "name", sku.name(), "actor", event.actor().userId())).update();
+                    "variant", sku.id(), "sku", sku.code().startsWith("SYS-SKU-")?"":sku.code(), "name", sku.name(), "actor", event.actor().userId())).update();
             var actor = event.actor();
             audit.record(new AuditTrail.BusinessOperation(actor.userId(), actor.loginName(), actor.displayName(),
                 "CUSTOMER_PRODUCT_CREATE", "CUSTOMER_PRODUCT", id, true, null,

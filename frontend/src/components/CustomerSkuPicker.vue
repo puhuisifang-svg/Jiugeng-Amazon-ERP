@@ -5,7 +5,7 @@ import { domainApi, type SkuListItemDto } from '@/api/domain'
 import AccessDialog from './AccessDialog.vue'
 import ListPagination from './ListPagination.vue'
 import AuthenticatedCatalogImage from './AuthenticatedCatalogImage.vue'
-const props = withDefaults(defineProps<{ selectedId?: string; activeOnly?: boolean; showCodes?: boolean; multiple?:boolean; existingIds?:string[] }>(), { activeOnly: true, selectedId: '', showCodes: true, multiple:false, existingIds:()=>[] })
+const props = withDefaults(defineProps<{ selectedId?: string; activeOnly?: boolean; showCodes?: boolean; multiple?:boolean; existingIds?:string[] }>(), { activeOnly: true, selectedId: '', showCodes: false, multiple:false, existingIds:()=>[] })
 const emit = defineEmits<{ close: []; select: [sku: SkuListItemDto]; confirm:[skus:SkuListItemDto[]] }>()
 const query = ref(''), applied = ref(''), page = ref(1), size = ref(20), total = ref(0)
 const rows = ref<SkuListItemDto[]>([]), chosen = ref<SkuListItemDto>(), loading = ref(false), error = ref('')

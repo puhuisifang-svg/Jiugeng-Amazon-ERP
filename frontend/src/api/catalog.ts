@@ -1,8 +1,10 @@
+import { cachedImage } from '@/utils/catalogImageCache'
+import { queueImageUpload, uploadImageRequest, type UploadProgress } from '@/utils/imageUpload'
 import { ApiError, getSessionToken, SESSION_EXPIRED_EVENT } from './client'
 import { runtimeConfig } from '@/config/runtime'
 
 export type CatalogImagePurpose = 'PRODUCT_MAIN' | 'SKU_MAIN' | 'SUPPLIER_QR' | 'MATERIAL_IMAGE' | 'SAMPLE_STORAGE' | 'CUSTOMER_WECHAT' | 'SAMPLE_IMAGE' | 'PURCHASE_ITEM' | 'PURCHASE_WAYBILL'
-export interface CatalogImageReceipt { id: string; purpose: CatalogImagePurpose; sourceFileName: string; mediaType: string; byteSize: number; width: number; height: number; sha256: string }
+export interface CatalogImageReceipt { id: string; purpose: CatalogImagePurpose; sourceFileName: string; mediaType: string; byteSize: number; width: number; height: number; sha256: string; thumbnailBase64?: string }
 export interface SkuDocument { id: string; kind: 'MANUAL' | 'LABEL'; fileName: string; byteSize: number; uploadedAt: string }
 function documentPath(productId: string, variantId: string) { return `/v1/products/${encodeURIComponent(productId)}/skus/${encodeURIComponent(variantId)}/documents` }
 
@@ -51,9 +53,21 @@ export const catalogApi = {
     window.document.body.append(link); link.click(); link.remove()
     window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   },
-  uploadImage: async (purpose: CatalogImagePurpose, file: File) => {
+  uploadImage: async (purpose: CatalogImagePurpose, file: File, progress?: UploadProgress) => {
     const body = new FormData(); body.set('purpose', purpose); body.set('file', file)
-    return (await request('/v1/catalog-images', { method: 'POST', body })).json() as Promise<CatalogImageReceipt>
+    const session = getSessionToken() ?? ''
+    const receipt = await queueImageUpload(() => {
+      if ((getSessionToken() ?? '') !== session) throw new Error('登录状态已变化，请重新上传。')
+      return progress ? uploadImageRequest<CatalogImageReceipt>(body, progress) : request('/v1/catalog-images', { method: 'POST', body }).then(r => r.json() as Promise<CatalogImageReceipt>)
+    }, progress)
+    if ((getSessionToken() ?? '') !== session) throw new Error('登录状态已变化，请重新上传。')
+    if (receipt.thumbnailBase64 && (getSessionToken() ?? '') === session) {
+      try {
+        const bytes = Uint8Array.from(atob(receipt.thumbnailBase64), c => c.charCodeAt(0))
+        await cachedImage(session, `${receipt.id}/thumbnail`, async () => new Blob([bytes], { type: receipt.mediaType }))
+      } catch { /* A preview failure must not turn a successfully persisted upload into a failure. */ }
+    }
+    return receipt
   },
   downloadImage: async (image: { imageAssetId?: string | undefined; imageUrl?: string | undefined; variantName: string }) => {
     const blob = image.imageAssetId
@@ -70,6 +84,7 @@ export const catalogApi = {
     document.body.append(link); link.click(); link.remove()
     window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   },
-  imageBlob: async (id: string, variant: 'thumbnail' | 'original' = 'thumbnail') =>
-    (await request(`/v1/catalog-images/${id}/${variant}`, { method: 'GET' })).blob(),
+  imageBlob: (id: string, variant: 'thumbnail' | 'original' = 'thumbnail', signal?: AbortSignal) =>
+    cachedImage(getSessionToken() ?? '', `${id}/${variant}`, async sharedSignal =>
+      (await request(`/v1/catalog-images/${id}/${variant}`, { method: 'GET', signal: sharedSignal })).blob(), signal),
 }

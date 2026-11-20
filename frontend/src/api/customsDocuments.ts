@@ -13,11 +13,9 @@ export const customsDocumentsApi={
  export:async(id:string,name:string)=>{const token=getSessionToken();const r=await fetch(`${runtimeConfig.apiBaseUrl}${base}/${id}/export`,{headers:token?{Authorization:`Bearer ${token}`}:{}});if(!r.ok){if(r.status===401)window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));const p=await r.json().catch(()=>null) as {detail?:string}|null;throw new ApiError(r.status,'CUSTOMS_EXPORT_FAILED',p?.detail??'导出失败，请重试')}const url=URL.createObjectURL(await r.blob());const a=document.createElement('a');a.href=url;a.download=exportFilename(r.headers.get('Content-Disposition'),name);document.body.append(a);a.click();a.remove();window.setTimeout(()=>URL.revokeObjectURL(url),1000)},
 }
 
-export interface CustomsShipper {id:string;name:string;prefix:string;address:string;phone:string;fax:string}
+export interface CustomsShipper {id:string;customerId:string;name:string;prefix:string;address:string;phone:string;fax:string}
 export const customsShippersApi={
- update:(id:string,shipper:Omit<CustomsShipper,'id'>)=>apiRequest<CustomsShipper>(`/v1/customs-shippers/${id}`,{method:'PUT',body:JSON.stringify(shipper)}),
  list:()=>apiRequest<CustomsShipper[]>('/v1/customs-shippers'),
- add:(shipper:Omit<CustomsShipper,'id'>)=>apiRequest<CustomsShipper>('/v1/customs-shippers',{method:'POST',body:JSON.stringify(shipper)}),
 }
 
 export interface CustomsWarehouse {code:string;country:string;region:string;city:string;postalCode:string;address:string;source:string;verifiedOn:string;version?:number|undefined}

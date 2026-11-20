@@ -67,7 +67,7 @@ function status(value: string) { return ({ ACTIVE: '启用', DISABLED: '停用',
             :image-id="product.imageAssetId ?? undefined"
             alt="父体图片"
           /><div>
-            <h3>{{ product.productName }}</h3><p>父体编码：{{ product.productCode }}</p><p>产品状态：{{ status(product.status) }}</p><p>说明：{{ product.description || '—' }}</p><p class="access-muted">
+            <h3>{{ product.productName }}</h3><p>产品状态：{{ status(product.status) }}</p><p>说明：{{ product.description || '—' }}</p><p class="access-muted">
               创建时间：{{ beijingDateTime(product.createdAt) }} · 更新时间：{{ beijingDateTime(product.updatedAt) }}
             </p>
           </div>
@@ -77,7 +77,7 @@ function status(value: string) { return ({ ACTIVE: '启用', DISABLED: '停用',
         </h3>
         <div class="parent-detail-table">
           <table class="data-table">
-            <thead><tr><th>图片</th><th>SKU 名称 / 编码</th><th>SKU 状态</th><th>包装重量</th><th>操作</th></tr></thead><tbody>
+            <thead><tr><th>图片</th><th>SKU 名称</th><th>SKU 状态</th><th>包装重量</th><th>操作</th></tr></thead><tbody>
               <tr
                 v-for="variant in product.variants"
                 :key="variant.id"
@@ -100,7 +100,7 @@ function status(value: string) { return ({ ACTIVE: '启用', DISABLED: '停用',
                     :text="variant.variantName"
                     :highlighted="variant.nameHighlighted"
                     :styles="variant.nameStyles"
-                  /><small>{{ variant.skuCode }}</small>
+                  />
                 </td><td>{{ status(variant.status) }}</td><td>{{ variant.packageWeightGrams == null ? '—' : variant.packageWeightGrams + ' g' }}</td><td>
                   <button
                     type="button"

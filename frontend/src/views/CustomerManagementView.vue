@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import CustomsFields from '@/components/CustomsFields.vue'
+import { blankCustoms, customsInput, type CustomsProfile } from '@/api/customs'
 import { vPhone } from '@/directives/phone'
 import AddressRecognition from '@/components/AddressRecognition.vue'
 import SingleFileUpload from '@/components/SingleFileUpload.vue'
@@ -49,8 +51,10 @@ const dialog = ref<HTMLDialogElement>(), continueButton = ref<HTMLButtonElement>
 const selectionSummary = ref(''), initial = ref('')
 const blankTitle = (): InvoiceTitle => ({ invoiceTitle: '', taxNumber: '', registeredAddress: '', registeredPhone: '', bankName: '', bankAccount: '' })
 const titleFields = [['invoiceTitle', '开票抬头', 200], ['taxNumber', '纳税人识别号', 64], ['registeredAddress', '注册地址', 500], ['registeredPhone', '注册电话', 32], ['bankName', '开户银行', 200], ['bankAccount', '银行账号', 64]] as const
-const blankCustomer = (): CustomerInput => ({ wechatImageId: '', addresses: [], invoiceTitles: [blankTitle()], name: '', account1688: '', contactPerson: '', phone: '', wechatId: '', invoiceTitle: '', taxNumber: '', registeredAddress: '', registeredPhone: '', bankName: '', bankAccount: '', defaultCustomer: false, address: '', remark: '', status: 'ACTIVE', version: undefined })
-const blankProduct = (): CustomerProductInput => ({ customerId: '', productId: '', variantId: '', supplyPrice: '', priceUnit: '件', customerProductCode: '', requirements: '', status: 'ACTIVE', version: undefined })
+const blankExportProfile=()=>({name:'',prefix:'',address:'',phone:'',fax:''})
+const exportNameInput=ref<HTMLInputElement>()
+const blankCustomer = (): CustomerInput => ({ exportEnabled:false,exportProfile:blankExportProfile(),wechatImageId: '', addresses: [], invoiceTitles: [blankTitle()], name: '', account1688: '', contactPerson: '', phone: '', wechatId: '', invoiceTitle: '', taxNumber: '', registeredAddress: '', registeredPhone: '', bankName: '', bankAccount: '', defaultCustomer: false, address: '', remark: '', status: 'ACTIVE', version: undefined })
+const blankProduct = (): CustomerProductInput => ({ customs: blankCustoms(), skuCode: '', customerId: '', productId: '', variantId: '', supplyPrice: '', priceUnit: '件', customerProductCode: '', requirements: '', status: 'ACTIVE', version: undefined })
 const customerForm = reactive(blankCustomer()), productForm = reactive(blankProduct())
 function removeAddress(index:number) {
   customerForm.addresses?.splice(index,1)
@@ -63,6 +67,16 @@ const routeCustomerId = computed(() => typeof route.query.customerId === 'string
 const customerFilter = ref(''), customerOptions = ref<Customer[]>([]), customersLoading = ref(false), customersError = ref('')
 const selectedSku = ref<SkuListItemDto>(), skuPickerOpen = ref(false)
 const batchProducts=ref<{sku:SkuListItemDto;form:CustomerProductInput}[]>([]), batchSaved=ref(0)
+const productTab=ref<'basic'|'customs'>('basic'), customsRow=ref(0)
+const customsForm=computed<CustomsProfile>({get:()=> (editingId.value?productForm:batchProducts.value[customsRow.value]?.form)?.customs??blankCustoms(),set:value=>{const target=editingId.value?productForm:batchProducts.value[customsRow.value]?.form;if(target)target.customs=value}})
+function setProductTab(tab:'basic'|'customs'){productTab.value=tab;if(tab==='customs'){const target=editingId.value?productForm:batchProducts.value[customsRow.value]?.form;if(target&&!target.customs)target.customs=blankCustoms()}}
+async function showInvalidProductField(event:Event){
+ if(!isProduct.value)return
+ const input=event.target as HTMLInputElement, tab=input.closest('.customer-customs-pane')?'customs':'basic'
+ if(productTab.value===tab)return
+ event.preventDefault();productTab.value=tab;await nextTick();input.focus();input.reportValidity()
+}
+async function openCustoms(item:CustomerProduct){await open(item);setProductTab('customs')}
 function addSkus(rows:SkuListItemDto[]){for(const sku of rows){if(!sku.variant.id||batchProducts.value.some(r=>r.sku.variant.id===sku.variant.id))continue;batchProducts.value.push({sku,form:{...blankProduct(),productId:sku.productId,variantId:sku.variant.id}})}skuPickerOpen.value=false}
 const activeCustomers = computed(() => customerOptions.value.filter(item => item.status === 'ACTIVE'))
 const currentCustomer = computed(() => customerOptions.value.find(item => item.id === customerFilter.value))
@@ -104,17 +118,17 @@ async function load() {
 function search() { page.value = 0; void load() }
 function turnPage(delta: number) { page.value += delta; void load() }
 async function open(item?: Customer | CustomerProduct) {
-  editingId.value = item?.id; discard.value = false; formError.value = ''; success.value = ''
+  productTab.value='basic';customsRow.value=0;editingId.value = item?.id; discard.value = false; formError.value = ''; success.value = ''
   Object.assign(customerForm, blankCustomer()); Object.assign(productForm, blankProduct())
   batchProducts.value=[];batchSaved.value=0;selectedSku.value = undefined; selectionSummary.value = ''; skuPickerOpen.value = false
   if (isProduct.value && !item) productForm.customerId = activeCustomers.value.find(customer => customer.defaultCustomer)?.id ?? ''
   if (item && 'customerId' in item) {
     Object.assign(productForm, { customerId: item.customerId, productId: item.productId, variantId: item.variantId,
-      supplyPrice: item.supplyPrice == null ? '' : String(item.supplyPrice), priceUnit: item.priceUnit, customerProductCode: item.customerProductCode,
+      customs: item.customs ? JSON.parse(JSON.stringify(item.customs)) : blankCustoms(), skuCode: item.skuCode, supplyPrice: item.supplyPrice == null ? '' : String(item.supplyPrice), priceUnit: item.priceUnit, customerProductCode: item.customerProductCode,
       requirements: item.requirements, status: item.status, version: item.version })
     selectionSummary.value = `${item.customerName} · ${item.productName} · SKU：${item.skuCode}`
   } else if (item) {
-    Object.assign(customerForm, { wechatImageId: item.wechatImageId ?? '', addresses: customerAddresses(item), invoiceTitles: item.invoiceTitles?.map(t => ({ ...t })) ?? [{ ...blankTitle(), invoiceTitle: item.invoiceTitle ?? '', taxNumber: item.taxNumber ?? '', registeredAddress: item.registeredAddress ?? '', registeredPhone: item.registeredPhone ?? '', bankName: item.bankName ?? '', bankAccount: item.bankAccount ?? '' }], name: item.name, account1688: item.account1688, contactPerson: item.contactPerson,
+    Object.assign(customerForm, { exportEnabled:item.exportEnabled??false,exportProfile:{...blankExportProfile(),...item.exportProfile},wechatImageId: item.wechatImageId ?? '', addresses: customerAddresses(item), invoiceTitles: item.invoiceTitles?.map(t => ({ ...t })) ?? [{ ...blankTitle(), invoiceTitle: item.invoiceTitle ?? '', taxNumber: item.taxNumber ?? '', registeredAddress: item.registeredAddress ?? '', registeredPhone: item.registeredPhone ?? '', bankName: item.bankName ?? '', bankAccount: item.bankAccount ?? '' }], name: item.name, account1688: item.account1688, contactPerson: item.contactPerson,
       phone: item.phone, wechatId: item.wechatId, invoiceTitle: item.invoiceTitle ?? '', taxNumber: item.taxNumber ?? '', registeredAddress: item.registeredAddress ?? '', registeredPhone: item.registeredPhone ?? '', bankName: item.bankName ?? '', bankAccount: item.bankAccount ?? '', defaultCustomer: item.defaultCustomer ?? false, address: item.address, remark: item.remark, status: item.status, version: item.version })
   }
   initial.value = snapshot(); opened.value = true
@@ -137,7 +151,7 @@ function guardNavigation() {
 }
 onBeforeRouteLeave(guardNavigation); onBeforeRouteUpdate(guardNavigation)
 async function save() {
-  if (saving.value || discard.value) return
+  if (saving.value || discard.value || !writable.value) return
   formError.value = ''; success.value = ''
   if (isProduct.value && (!productForm.customerId || (editingId.value ? !productForm.variantId : !batchProducts.value.length))) { formError.value = '请选择客户及具体 SKU。'; return }
   if (isProduct.value && productForm.supplyPrice !== '' && productForm.supplyPrice != null && !/^\d{1,12}(\.\d{1,2})?$/.test(String(productForm.supplyPrice))) { formError.value = '供货价须为非负金额，最多两位小数。'; return }
@@ -145,9 +159,9 @@ async function save() {
   saving.value = true
   try {
     if(isProduct.value && !editingId.value){
-      while(batchProducts.value.length){const row=batchProducts.value[0]!;try{await customersApi.saveProduct(undefined,{...row.form,customerId:productForm.customerId,supplyPrice:row.form.supplyPrice===''?null:row.form.supplyPrice});batchProducts.value.shift();batchSaved.value++}catch(e){throw new Error(`已保存 ${batchSaved.value} 项，${row.sku.variant.variantName} 保存失败：${message(e)}。已保存项已从待保存列表移除，请处理剩余项。`,{cause:e})}}
+      while(batchProducts.value.length){const row=batchProducts.value[0]!;try{await customersApi.saveProduct(undefined,{...row.form,customs:row.form.customs?customsInput(row.form.customs):null,customerId:productForm.customerId,supplyPrice:row.form.supplyPrice===''?null:row.form.supplyPrice});batchProducts.value.shift();batchSaved.value++}catch(e){throw new Error(`已保存 ${batchSaved.value} 项，${row.sku.variant.variantName} 保存失败：${message(e)}。已保存项已从待保存列表移除，请处理剩余项。`,{cause:e})}}
     }
-    else if (isProduct.value) await customersApi.saveProduct(editingId.value, { ...productForm, supplyPrice: productForm.supplyPrice === '' ? null : productForm.supplyPrice })
+    else if (isProduct.value) await customersApi.saveProduct(editingId.value, { ...productForm, customs: productForm.customs ? customsInput(productForm.customs) : null, supplyPrice: productForm.supplyPrice === '' ? null : productForm.supplyPrice })
     else {
       const invoiceTitles = (customerForm.invoiceTitles ?? []).filter(t => Object.values(t).some(v => v.trim()))
       if (invoiceTitles.some(t => !t.invoiceTitle.trim())) { formError.value = '请填写每组开票信息的抬头，或移除不用的信息。'; return }
@@ -162,6 +176,11 @@ watch(() => [props.kind, routeCustomerId.value], () => {
   query.value = ''; status.value = ''; page.value = 0; customerRows.value = []; productRows.value = []; total.value = 0
   success.value = ''; loadSequence++; directorySequence++; customerFilter.value = ''; if (isProduct.value) void loadCustomers(); else void load()
 }, { immediate: true })
+watch(()=>[props.kind,route.query.editCustomer,route.query.section],async()=>{
+ if(isProduct.value||typeof route.query.editCustomer!=='string'||!writable.value)return
+ try{await open(await customersApi.get(route.query.editCustomer));await nextTick();exportNameInput.value?.scrollIntoView({block:'center'});exportNameInput.value?.focus()}
+ catch(e){error.value=message(e)}
+},{immediate:true})
 </script>
 
 <template>
@@ -344,7 +363,7 @@ watch(() => [props.kind, routeCustomerId.value], () => {
                     :alt="item.productName"
                   />
                 </td>
-                <td>{{ item.productName }}<small>SKU：{{ item.skuCode }}</small></td><td class="customer-price">
+                <td>{{ item.productName }}<small>SKU：{{ item.skuCode || '未维护' }}</small></td><td class="customer-price">
                   {{ item.supplyPrice == null ? '未定价' : `¥${Number(item.supplyPrice).toFixed(2)}` }} / {{ item.priceUnit }}
                 </td><td>{{ item.customerProductCode || '—' }}</td><td class="customer-long-text">
                   {{ item.requirements || '—' }}
@@ -364,6 +383,12 @@ watch(() => [props.kind, routeCustomerId.value], () => {
                     @click="showLegacyLabels = false; labelProduct = item"
                   >
                     商品标签
+                  </button>
+                  <button
+                    type="button"
+                    @click="openCustoms(item)"
+                  >
+                    报关资料
                   </button>
                   <button
                     v-if="session.canAccess(['customers.delete'])"
@@ -472,9 +497,10 @@ watch(() => [props.kind, routeCustomerId.value], () => {
         v-else
         class="panel operation-form operation-dialog__card"
         @submit.prevent="save"
+        @invalid.capture="showInvalidProductField"
       >
         <h2 class="form-wide">
-          {{ editingId ? '编辑' : '新增' }}{{ title }}
+          {{ !writable ? '查看' : editingId ? '编辑' : '新增' }}{{ title }}
         </h2><button
           class="operation-dialog__close"
           type="button"
@@ -643,6 +669,58 @@ watch(() => [props.kind, routeCustomerId.value], () => {
           >
             添加收货地址
           </button>
+          <section class="form-wide customer-export-section">
+            <div class="customer-export-heading">
+              <h3>境内发货人信息</h3><label class="customer-export-toggle"><span>是否境外出口</span><button
+                type="button"
+                role="switch"
+                :aria-checked="customerForm.exportEnabled"
+                aria-label="是否境外出口"
+                :class="{'is-on':customerForm.exportEnabled}"
+                :disabled="saving"
+                @click="customerForm.exportEnabled=!customerForm.exportEnabled"
+              ><span />{{ customerForm.exportEnabled?'是':'否' }}</button></label>
+            </div>
+            <div
+              v-if="customerForm.exportEnabled && customerForm.exportProfile"
+              class="customer-export-fields"
+            >
+              <label>公司名称 <span class="required">*</span><input
+                ref="exportNameInput"
+                v-model.trim="customerForm.exportProfile.name"
+                required
+                maxlength="300"
+                :disabled="saving"
+                aria-label="出口公司名称"
+              ></label>
+              <label>公司简称 <span class="required">*</span><input
+                v-model.trim="customerForm.exportProfile.prefix"
+                required
+                pattern="[A-Za-z]{1,20}"
+                maxlength="20"
+                :disabled="saving"
+                placeholder="例如 XMH，用于生成单据编号"
+              ></label>
+              <label class="form-wide">公司地址 <span class="required">*</span><input
+                v-model.trim="customerForm.exportProfile.address"
+                required
+                maxlength="1000"
+                :disabled="saving"
+              ></label>
+              <label>联系电话 <span class="required">*</span><input
+                v-model.trim="customerForm.exportProfile.phone"
+                v-phone
+                required
+                maxlength="100"
+                :disabled="saving"
+              ></label>
+              <label>传真（选填）<input
+                v-model.trim="customerForm.exportProfile.fax"
+                maxlength="100"
+                :disabled="saving"
+              ></label>
+            </div>
+          </section>
           <label class="form-wide">备注<input
             v-model="customerForm.remark"
             maxlength="500"
@@ -653,142 +731,213 @@ watch(() => [props.kind, routeCustomerId.value], () => {
           </p>
         </template>
         <template v-else>
+          <nav
+            class="ui-section-tabs form-wide"
+            aria-label="客户商品资料"
+          >
+            <button
+              type="button"
+              :class="{active:productTab==='basic'}"
+              :aria-pressed="productTab==='basic'"
+              @click="setProductTab('basic')"
+            >
+              基础信息
+            </button>
+            <button
+              type="button"
+              :class="{active:productTab==='customs'}"
+              :aria-pressed="productTab==='customs'"
+              @click="setProductTab('customs')"
+            >
+              报关资料
+            </button>
+          </nav>
           <p
             v-if="editingId"
             class="form-wide customer-selection"
           >
-            {{ selectionSummary }}<small>客户与 SKU 不可更换，其他客户或 SKU 请另行新增。</small>
+            {{ selectionSummary }}<small>客户与关联产品不可更换；SKU 编码可在下方修改。</small>
           </p>
-          <template v-else>
-            <label class="form-wide">客户 *<select
-              v-model="productForm.customerId"
-              v-single-select
-              aria-label="选择客户"
-              required
-              :disabled="saving || customersLoading || batchSaved>0"
-            ><option value="">请选择启用客户</option><option
-              v-for="customer in activeCustomers"
-              :key="customer.id"
-              :value="customer.id"
-            >{{ customer.name }}{{ customer.defaultCustomer ? '（默认）' : '' }}</option></select></label>
-            <div class="form-wide customer-sku-selection">
-              <button
-                type="button"
-                class="primary-button"
+          <fieldset
+            v-show="productTab==='basic'"
+            class="customer-product-basic form-wide"
+            :disabled="saving || !writable"
+          >
+            <template v-if="!editingId">
+              <label class="form-wide">客户 *<select
+                v-model="productForm.customerId"
+                v-single-select
+                aria-label="选择客户"
+                required
+                :disabled="saving || customersLoading || batchSaved>0"
+              ><option value="">请选择启用客户</option><option
+                v-for="customer in activeCustomers"
+                :key="customer.id"
+                :value="customer.id"
+              >{{ customer.name }}{{ customer.defaultCustomer ? '（默认）' : '' }}</option></select></label>
+              <div class="form-wide customer-sku-selection">
+                <button
+                  type="button"
+                  class="primary-button"
+                  :disabled="saving"
+                  @click="skuPickerOpen = true"
+                >
+                  选择产品 SKU（可多选）
+                </button>
+              </div>
+              <div class="form-wide customer-batch-products">
+                <table class="data-table">
+                  <thead><tr><th>图片</th><th>商品 / 父体</th><th>SKU 编码</th><th>供货价（人民币）</th><th>单位 *</th><th>客户产品编码</th><th>产品特殊需求</th><th>操作</th></tr></thead><tbody>
+                    <tr
+                      v-for="(row,index) in batchProducts"
+                      :key="row.sku.variant.id"
+                    >
+                      <td>
+                        <ShipmentProductImage
+                          :product-id="row.sku.productId"
+                          :variant-id="row.sku.variant.id"
+                          :alt="row.sku.variant.variantName"
+                        />
+                      </td>
+                      <td>{{ row.sku.variant.variantName }}<small>父体：{{ row.sku.productName }}</small></td>
+                      <td>
+                        <input
+                          v-model.trim="row.form.skuCode"
+                          maxlength="64"
+                          :disabled="saving"
+                          :aria-label="`商品${index+1}SKU编码`"
+                          placeholder="该客户使用的 SKU"
+                        >
+                      </td>
+                      <td>
+                        <input
+                          v-model="row.form.supplyPrice"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          :disabled="saving"
+                          :aria-label="`商品${index+1}供货价`"
+                          placeholder="可留空"
+                        >
+                      </td>
+                      <td>
+                        <input
+                          v-model="row.form.priceUnit"
+                          required
+                          maxlength="16"
+                          :disabled="saving"
+                          :aria-label="`商品${index+1}计价单位`"
+                        >
+                      </td>
+                      <td>
+                        <input
+                          v-model="row.form.customerProductCode"
+                          maxlength="128"
+                          :disabled="saving"
+                          :aria-label="`商品${index+1}客户产品编码`"
+                        >
+                      </td>
+                      <td>
+                        <input
+                          v-model="row.form.requirements"
+                          maxlength="2000"
+                          :disabled="saving"
+                          :aria-label="`商品${index+1}特殊需求`"
+                        >
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          :disabled="saving"
+                          class="customer-batch-remove"
+                          @click="batchProducts.splice(index,1)"
+                        >
+                          移除
+                        </button>
+                      </td>
+                    </tr><tr v-if="!batchProducts.length">
+                      <td colspan="8">
+                        请选择产品 SKU，可一次添加多项
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </template>
+            <template v-if="editingId">
+              <label>供货价（人民币，可留空）<input
+                v-model="productForm.supplyPrice"
+                type="number"
+                min="0"
+                max="999999999999.99"
+                step="0.01"
                 :disabled="saving"
-                @click="skuPickerOpen = true"
-              >
-                选择产品 SKU（可多选）
-              </button>
-            </div>
-            <div class="form-wide customer-batch-products">
-              <table class="data-table">
-                <thead><tr><th>图片</th><th>商品 / 父体</th><th>供货价（人民币）</th><th>单位 *</th><th>客户产品编码</th><th>产品特殊需求</th><th>操作</th></tr></thead><tbody>
-                  <tr
-                    v-for="(row,index) in batchProducts"
-                    :key="row.sku.variant.id"
-                  >
-                    <td>
-                      <ShipmentProductImage
-                        :product-id="row.sku.productId"
-                        :variant-id="row.sku.variant.id"
-                        :alt="row.sku.variant.variantName"
-                      />
-                    </td>
-                    <td>{{ row.sku.variant.variantName }}<small>父体：{{ row.sku.productName }}</small></td>
-                    <td>
-                      <input
-                        v-model="row.form.supplyPrice"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        :disabled="saving"
-                        :aria-label="`商品${index+1}供货价`"
-                        placeholder="可留空"
-                      >
-                    </td>
-                    <td>
-                      <input
-                        v-model="row.form.priceUnit"
-                        required
-                        maxlength="16"
-                        :disabled="saving"
-                        :aria-label="`商品${index+1}计价单位`"
-                      >
-                    </td>
-                    <td>
-                      <input
-                        v-model="row.form.customerProductCode"
-                        maxlength="128"
-                        :disabled="saving"
-                        :aria-label="`商品${index+1}客户产品编码`"
-                      >
-                    </td>
-                    <td>
-                      <input
-                        v-model="row.form.requirements"
-                        maxlength="2000"
-                        :disabled="saving"
-                        :aria-label="`商品${index+1}特殊需求`"
-                      >
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        :disabled="saving"
-                        class="customer-batch-remove"
-                        @click="batchProducts.splice(index,1)"
-                      >
-                        移除
-                      </button>
-                    </td>
-                  </tr><tr v-if="!batchProducts.length">
-                    <td colspan="7">
-                      请选择产品 SKU，可一次添加多项
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </template>
-          <template v-if="editingId">
-            <label>供货价（人民币，可留空）<input
-              v-model="productForm.supplyPrice"
-              type="number"
-              min="0"
-              max="999999999999.99"
-              step="0.01"
-              :disabled="saving"
-              placeholder="0.00"
-            ></label>
-            <label>计价单位 *<input
-              v-model="productForm.priceUnit"
-              required
-              maxlength="16"
-              :disabled="saving"
-              placeholder="如：件、套、箱"
-            ></label>
-            <label>客户产品编码<input
-              v-model="productForm.customerProductCode"
-              maxlength="128"
-              :disabled="saving"
-              placeholder="客户内部的产品编号"
-            ></label>
-            <label>状态<select
-              v-model="productForm.status"
+                placeholder="0.00"
+              ></label>
+              <label>计价单位 *<input
+                v-model="productForm.priceUnit"
+                required
+                maxlength="16"
+                :disabled="saving"
+                placeholder="如：件、套、箱"
+              ></label>
+              <label>SKU 编码<input
+                v-model.trim="productForm.skuCode"
+                maxlength="64"
+                :disabled="saving"
+                placeholder="该客户使用的 SKU"
+              ></label>
+              <label>客户产品编码<input
+                v-model="productForm.customerProductCode"
+                maxlength="128"
+                :disabled="saving"
+                placeholder="客户内部的产品编号"
+              ></label>
+              <label>状态<select
+                v-model="productForm.status"
+                v-single-select
+                :disabled="saving"
+              ><option value="ACTIVE">启用</option><option value="DISABLED">停用</option></select></label>
+              <label class="form-wide">产品特殊需求<input
+                v-model="productForm.requirements"
+                maxlength="2000"
+                :disabled="saving"
+                placeholder="如包装、颜色、贴标、配件要求；税费及运费约定也可注明"
+              ></label>
+            </template>
+            <p class="form-wide customer-help">
+              每个客户与产品维护一条记录；不同客户可设置不同 SKU 编码和供货价。
+            </p>
+          </fieldset>
+          <section
+            v-show="productTab==='customs'"
+            class="form-wide customer-customs-pane"
+          >
+            <p class="customer-help">
+              报关资料仅属于当前客户商品，同一产品在其他客户下独立维护。
+            </p>
+            <label v-if="!editingId && batchProducts.length">当前商品<select
+              v-model="customsRow"
               v-single-select
               :disabled="saving"
-            ><option value="ACTIVE">启用</option><option value="DISABLED">停用</option></select></label>
-            <label class="form-wide">产品特殊需求<input
-              v-model="productForm.requirements"
-              maxlength="2000"
-              :disabled="saving"
-              placeholder="如包装、颜色、贴标、配件要求；税费及运费约定也可注明"
-            ></label>
-          </template>
-          <p class="form-wide customer-help">
-            每个客户与 SKU 维护一条当前报价；不同客户可设置不同供货价。报价不自动生成订单。
-          </p>
+              @change="setProductTab('customs')"
+            ><option
+              v-for="(row,index) in batchProducts"
+              :key="row.sku.variant.id"
+              :value="index"
+            >{{ row.sku.variant.variantName }}</option></select></label>
+            <CustomsFields
+              v-if="editingId || batchProducts.length"
+              v-model="customsForm"
+              :disabled="saving || !writable"
+            />
+            <p
+              v-else
+              class="data-state"
+            >
+              请先在基础信息中选择客户和产品 SKU。
+            </p>
+          </section>
         </template>
         <p
           v-if="formError"
@@ -806,6 +955,7 @@ watch(() => [props.kind, routeCustomerId.value], () => {
           >
             取消
           </button><button
+            v-if="writable"
             type="submit"
             :disabled="saving"
           >
@@ -883,4 +1033,12 @@ small { display: block; margin-top: 6px; color: #68758c; }
 <style scoped>
 .customer-dialog:focus{outline:none}
 .customer-batch-products .customer-batch-remove{background:#fff1f2!important;color:#b42335!important;border:1px solid #f1ccd1;border-radius:4px;padding:5px 10px;font-size:12px;min-height:28px}
+</style>
+
+<style scoped>
+.customer-export-section{border-top:1px solid var(--line);padding-top:12px}.customer-export-heading{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:12px}.customer-export-heading h3{margin:0;font-size:14px}.customer-export-heading .customer-export-toggle{display:flex;align-items:center;gap:10px;font-size:13px}.customer-export-toggle button{display:flex;align-items:center;gap:5px;border:0;border-radius:16px;background:#98a2b3;color:white;padding:4px 8px;min-height:28px;min-width:54px;font-size:12px}.customer-export-toggle button.is-on{background:#2675d8}.customer-export-toggle button>span{width:16px;height:16px;border-radius:50%;background:white}.customer-export-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.customer-export-fields label{display:block;font-size:13px}.customer-export-fields input{margin-top:6px}.customer-export-fields .required{color:#b42318}@media(max-width:640px){.customer-export-fields{grid-template-columns:1fr}}
+</style>
+
+<style scoped>
+.customer-product-basic{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;border:0;padding:0;margin:0;min-width:0}.customer-customs-pane{min-width:0}.customer-customs-pane :deep(.customs-fields){padding:0}.customer-customs-pane>label{display:block;max-width:360px;margin-bottom:12px}@media(max-width:700px){.customer-product-basic{grid-template-columns:minmax(0,1fr)}}
 </style>

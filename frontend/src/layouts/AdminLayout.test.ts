@@ -29,6 +29,21 @@ async function setup(path = '/home', allowed = ref<string[] | null>(null)) {
 }
 
 describe('horizontal navigation shell', () => {
+  it.each([
+    ['系统管理员', ['系统管理员'], '系统管理员'],
+    ['合成测试账号', ['系统管理员'], '合成测试账号 · 系统管理员'],
+    ['系统管理员', ['系统管理员', '采购员', '采购员'], '系统管理员 · 采购员'],
+    ['合成测试账号', [], '合成测试账号 · ADMIN'],
+  ] as [string, string[], string][])('avoids repeating the account name while retaining distinct roles: %s / %j', async (displayName, roleNames, expected) => {
+    vi.spyOn(session.user, 'value', 'get').mockReturnValue({
+      id: 'synthetic-account', loginName: 'synthetic-account', displayName, role: 'ADMIN',
+      status: 'ENABLED', mustChangePassword: false, capabilities: [],
+      roles: roleNames.map((name, index) => ({ id: `synthetic-role-${index}`, name, status: 'ENABLED' })),
+    })
+    const { wrapper } = await setup()
+    expect(wrapper.get('[aria-label="当前账号"]').text()).toBe(expected)
+  })
+
   it.each(['/products/example', '/products/example/variants', '/products/example/documents'])('links product detail breadcrumbs back to products: %s', async path => {
     const { wrapper, router } = await setup(path)
     expect(wrapper.get('.page-heading__trail').text()).toBe('商品/产品管理/产品详情')

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ImagePreviewDialog from '@/components/ImagePreviewDialog.vue'
 import EditableSelect from '@/components/EditableSelect.vue'
 import { materialTypesApi } from '@/api/materialTypes'
 import { costsApi, type MaterialPrice } from '@/api/costs'
@@ -906,39 +907,25 @@ onMounted(async()=>{await load();await openLinkedSupplier()})
         </div>
       </section>
     </div>
-    <div
+    <ImagePreviewDialog
       v-if="imagePreview"
-      class="image-dialog"
-      role="dialog"
-      aria-modal="true"
-      :aria-label="`${imagePreview.alt}图片预览`"
-      @click.self="imagePreview = null"
-      @keydown.esc="imagePreview = null"
+      :title="`${imagePreview.alt}图片预览`"
+      :description="imagePreview.alt"
+      @close="imagePreview = null"
     >
-      <div class="material-preview">
-        <button
-          type="button"
-          aria-label="关闭图片预览"
-          @click="imagePreview = null"
-        >
-          ×
-        </button>
-        <AuthenticatedCatalogImage
-          v-if="'imageAssetId' in imagePreview"
-          :class="{ 'supplier-qr-preview': imagePreview.kind === 'supplier-qr' }"
-          :image-id="imagePreview.imageAssetId"
-          variant="original"
-          :alt="imagePreview.alt"
-        /><img
-          v-else
-          :class="imagePreview.kind === 'supplier-qr' ? 'supplier-qr-preview' : 'material-preview__image'"
-          :src="imagePreview.imageUrl"
-          :alt="imagePreview.alt"
-          referrerpolicy="no-referrer"
-        >
-        <p>{{ imagePreview.alt }}</p>
-      </div>
-    </div>
+      <AuthenticatedCatalogImage
+        v-if="'imageAssetId' in imagePreview"
+        :image-id="imagePreview.imageAssetId"
+        variant="original"
+        :alt="imagePreview.alt"
+      />
+      <img
+        v-else
+        :src="imagePreview.imageUrl"
+        :alt="imagePreview.alt"
+        referrerpolicy="no-referrer"
+      >
+    </ImagePreviewDialog>
   </section>
 </template>
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ImagePreviewDialog from '@/components/ImagePreviewDialog.vue'
 import { beijingDateTime, beijingDate } from '@/utils/dateTime'
 
 
@@ -478,27 +479,16 @@ onBeforeUnmount(() => { window.clearInterval(refreshTimer); window.removeEventLi
       </article>
     </div>
 
-    <div
+    <ImagePreviewDialog
       v-if="previewId"
-      class="image-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-label="产品图案预览"
-      @click.self="previewId = ''"
+      title="产品图案预览"
+      @close="previewId = ''"
     >
-      <div>
-        <button
-          type="button"
-          aria-label="关闭预览"
-          @click="previewId = ''"
-        >
-          ×
-        </button><AuthenticatedDashboardImage
-          :image-id="previewId"
-          variant="original"
-          alt="产品图案原图"
-        />
-      </div>
-    </div>
+      <AuthenticatedDashboardImage
+        :image-id="previewId"
+        variant="original"
+        alt="产品图案原图"
+      />
+    </ImagePreviewDialog>
   </section>
 </template>

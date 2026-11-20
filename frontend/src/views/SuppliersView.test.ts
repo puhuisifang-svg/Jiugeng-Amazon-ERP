@@ -92,11 +92,11 @@ describe('SuppliersView', () => {
 
   it('uses a consistent responsive canvas for URL QR previews', async () => {
     suppliers.mockResolvedValue({ items: [{ id: 's1', name: '二维码供应商', qrImageUrl: 'https://images.example.com/qr.png', status: 'ACTIVE', version: 0 }], totalCount: 1, page: 0, size: 100 })
-    const wrapper = mount(SuppliersView, { global: { stubs: { AuthenticatedCatalogImage } } })
+    const wrapper = mount(SuppliersView, { global: { stubs: { Teleport: true, AuthenticatedCatalogImage } } })
     await flushPromises()
 
     await wrapper.get('button.image-button').trigger('click')
-    const preview = wrapper.get('.image-dialog .supplier-qr-preview')
+    const preview = wrapper.get('.image-preview-dialog__stage img')
     expect(preview.attributes('src')).toBe('https://images.example.com/qr.png')
   })
   it('keeps form input on backdrop and cancels status confirmation without writes', async () => {

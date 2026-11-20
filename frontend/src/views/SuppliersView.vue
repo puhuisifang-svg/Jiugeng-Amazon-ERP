@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ImagePreviewDialog from '@/components/ImagePreviewDialog.vue'
 import { vPhone } from '@/directives/phone'
 import SupplierDeleteDialog from '@/components/SupplierDeleteDialog.vue'
 import SingleFileUpload from '@/components/SingleFileUpload.vue'
@@ -330,36 +331,25 @@ onMounted(load)
         暂无供应商。
       </p>
     </article>
-    <div
+    <ImagePreviewDialog
       v-if="preview"
-      class="image-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-label="图片预览"
-      @click.self="preview = undefined"
+      title="图片预览"
+      description="供应商图片"
+      @close="preview = undefined"
     >
-      <div>
-        <button
-          type="button"
-          aria-label="关闭"
-          @click="preview = undefined"
-        >
-          ×
-        </button><AuthenticatedCatalogImage
-          v-if="preview.kind === 'asset'"
-          class="supplier-qr-preview"
-          :image-id="preview.value"
-          variant="original"
-          alt="供应商图片"
-        /><img
-          v-else
-          class="supplier-qr-preview"
-          :src="preview.value"
-          alt="供应商图片"
-          referrerpolicy="no-referrer"
-        >
-      </div>
-    </div>
+      <AuthenticatedCatalogImage
+        v-if="preview.kind === 'asset'"
+        :image-id="preview.value"
+        variant="original"
+        alt="供应商图片"
+      />
+      <img
+        v-else
+        :src="preview.value"
+        alt="供应商图片"
+        referrerpolicy="no-referrer"
+      >
+    </ImagePreviewDialog>
   </section>
   <SupplierDeleteDialog
     v-if="deleteTarget"

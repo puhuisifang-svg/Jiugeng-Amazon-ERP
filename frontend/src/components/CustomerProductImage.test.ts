@@ -11,7 +11,7 @@ it('uses the selected SKU image and opens a native preview above the picker',asy
  await w.get('[aria-label="放大查看测试商品"]').trigger('click')
  expect(document.querySelector('dialog')?.hasAttribute('open')).toBe(true)
  expect(w.findAllComponents({name:'AuthenticatedCatalogImage'})[1]!.props()).toMatchObject({imageId:'asset2',variant:'original'})
- ;(document.querySelector('[aria-label="关闭图片预览"]') as HTMLButtonElement).click();expect(document.querySelector('dialog')?.getAttribute('open')).toBeNull();w.unmount()
+ ;(document.querySelector('[aria-label="关闭图片预览"]') as HTMLButtonElement).click();await flushPromises();expect(document.querySelector('dialog[open]')).toBeNull();w.unmount()
 })
 it('shows a placeholder when product images are unavailable',async()=>{
  vi.mocked(domainApi.product).mockRejectedValue(new Error('not accessible'))

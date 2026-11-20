@@ -111,7 +111,7 @@ class InventoryControllerTest {
         transact(writer, command("req-capability", "INBOUND", 2, null), 200);
         String selector = createUserAndLogin("selector", "SELECTION");
         mvc.perform(get("/api/v1/inventory/transactions").header("Authorization", bearer(selector)))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
         transact(selector, command("req-denied", "INBOUND", 1, null), 403);
     }
 

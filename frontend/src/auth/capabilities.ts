@@ -27,5 +27,8 @@ const ROLE_CAPABILITIES: Record<AppRole, Capability[]> = {
 }
 
 export function capabilitiesForRole(role: AppRole): Capability[] {
-  return ROLE_CAPABILITIES[role]
+  const result = new Set<Capability>(ROLE_CAPABILITIES[role])
+  if (result.has('products.read')) ['materials.read', 'suppliers.read', 'inventory.read'].forEach(code => result.add(code as Capability))
+  if (result.has('products.write')) ['materials.write', 'suppliers.write'].forEach(code => result.add(code as Capability))
+  return [...result]
 }

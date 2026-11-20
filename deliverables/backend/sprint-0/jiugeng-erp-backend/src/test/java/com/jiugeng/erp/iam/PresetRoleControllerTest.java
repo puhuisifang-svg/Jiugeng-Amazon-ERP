@@ -40,7 +40,7 @@ class PresetRoleControllerTest {
         mvc.perform(post("/api/v1/roles/SELECTION/preview").header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(request))).andExpect(status().isOk());
         mvc.perform(put("/api/v1/roles/SELECTION").header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(request)))
             .andExpect(status().isOk()).andExpect(jsonPath("$.name").value("选品测试职责"));
-        assertThat(jdbc.queryForList("SELECT permission_code FROM iam_role_permission WHERE role_id='SELECTION'",String.class)).containsExactlyInAnyOrder("products.read","products.write");
+        assertThat(jdbc.queryForList("SELECT permission_code FROM iam_role_permission WHERE role_id='SELECTION'",String.class)).containsExactlyInAnyOrder("products.read","products.write","materials.read","materials.write","suppliers.read","suppliers.write","inventory.read");
         mvc.perform(get("/api/v1/auth/me").header("Authorization",member)).andExpect(status().isUnauthorized());
         String renewed=login("preset-member");
         mvc.perform(get("/api/v1/roles").header("Authorization",renewed)).andExpect(status().isForbidden());

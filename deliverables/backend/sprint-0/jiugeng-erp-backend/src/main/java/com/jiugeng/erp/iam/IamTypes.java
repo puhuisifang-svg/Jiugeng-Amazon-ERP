@@ -21,7 +21,7 @@ final class IamTypes {
     }
 
     static Set<String> capabilities(Role role) {
-        return switch (role) {
+        return PermissionCatalog.expand(switch (role) {
             case CUSTOM -> Set.of();
             case ADMIN -> Set.of(
                     "finance.read", "finance.write",
@@ -43,7 +43,7 @@ final class IamTypes {
             case SELECTION -> Set.of(
                     "products.read", "materials.read", "selection.read", "selection.write", "watch.read",
                     "watch.write", "audit.read.self", "dashboard.read", "dashboard.pending-products.manage");
-        };
+        });
     }
 
     record User(String id, String loginName, String displayName, String email, String phone, Role role, Status status,

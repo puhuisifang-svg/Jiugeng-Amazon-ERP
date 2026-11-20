@@ -21,4 +21,15 @@ describe('catalog lazy images',()=>{
   const w=mount(Image,{props:{imageId:'id',alt:'image',variant:'original'}});await flushPromises();expect(w.find('img').exists()).toBe(true)
   window.dispatchEvent(new Event(IMAGE_SESSION_CHANGED));await flushPromises();expect(w.find('img').exists()).toBe(false);w.unmount()
  })
+ it('retries a failed transfer from the placeholder without opening its parent preview', async () => {
+  vi.mocked(catalogApi.imageBlob).mockRejectedValueOnce(new Error('network'))
+  URL.createObjectURL=vi.fn(()=> 'blob:synthetic');URL.revokeObjectURL=vi.fn()
+  const w=mount(Image,{props:{imageId:'retry-image',alt:'合成图片',variant:'original'}})
+  await flushPromises()
+  await w.get('[role="button"]').trigger('click');await flushPromises()
+  expect(catalogApi.imageBlob).toHaveBeenCalledTimes(2)
+  expect(w.find('img').exists()).toBe(true)
+  w.unmount()
+ })
+
 })

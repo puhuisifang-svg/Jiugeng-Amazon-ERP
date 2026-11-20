@@ -2,11 +2,12 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { catalogApi } from '@/api/catalog'
 import { getSessionToken } from '@/api/client'
-import { IMAGE_SESSION_CHANGED } from '@/utils/catalogImageCache'
+import { evictCachedImage, IMAGE_SESSION_CHANGED } from '@/utils/catalogImageCache'
 const props = withDefaults(defineProps<{ imageId: string | undefined; variant?: 'thumbnail' | 'original'; alt: string }>(), { variant: 'thumbnail' })
 const host = ref<HTMLElement>(), source = ref(''), failed = ref(false), revision = ref(0)
 const visible = ref(props.variant === 'original' || typeof IntersectionObserver === 'undefined')
 let observer: IntersectionObserver | undefined, controller: AbortController | undefined, blocked = false
+function retry() { if (props.imageId) evictCachedImage(getSessionToken() ?? '', `${props.imageId}/${props.variant}`); revision.value++ }
 function revoke() { if (source.value) URL.revokeObjectURL(source.value); source.value = '' }
 async function changed() {
   controller?.abort(); revoke(); blocked = true
@@ -42,9 +43,20 @@ onBeforeUnmount(() => {
     v-if="!imageId || failed"
     ref="host"
     class="catalog-image catalog-image--placeholder"
-    role="img"
-    :aria-label="`${alt}（无可用图片）`"
-  >图</span>
+    :role="failed ? undefined : 'img'"
+    :aria-label="failed ? undefined : `${alt}（无可用图片）`"
+  >
+    <span
+      v-if="failed && imageId"
+      role="button"
+      tabindex="0"
+      :aria-label="`重新加载${alt}`"
+      @click.stop="retry"
+      @keydown.enter.stop.prevent="retry"
+      @keydown.space.stop.prevent="retry"
+    >加载失败 · 重试</span>
+    <template v-else>图</template>
+  </span>
   <img
     v-else-if="source"
     ref="host"
@@ -52,6 +64,8 @@ onBeforeUnmount(() => {
     :src="source"
     :alt="alt"
     loading="lazy"
+    decoding="async"
+    @error="failed = true"
   >
   <span
     v-else

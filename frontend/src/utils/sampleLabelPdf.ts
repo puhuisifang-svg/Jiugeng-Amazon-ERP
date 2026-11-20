@@ -2,9 +2,8 @@ import { PDFDocument, PrintScaling } from 'pdf-lib'
 import { MM } from './pdfTools'
 
 // Render the fitted preview's exact line positions at 384 DPI, including CJK fonts.
-export async function sampleLabelPdf(doc: Document): Promise<Uint8Array> {
+async function renderLabel(doc: Document, label: HTMLElement): Promise<Uint8Array> {
   await doc.fonts?.ready
-  const label = doc.querySelector<HTMLElement>('.label')
   if (!label) throw new Error('标签预览尚未加载，请稍后重试')
   const box = label.getBoundingClientRect(), scale = 4
   if (!box.width || !box.height) throw new Error('标签预览尺寸无效')
@@ -37,4 +36,16 @@ export async function sampleLabelPdf(doc: Document): Promise<Uint8Array> {
   pdf.addPage([70 * MM, 30 * MM]).drawImage(image, { x: 0, y: 0, width: 70 * MM, height: 30 * MM })
   pdf.catalog.getOrCreateViewerPreferences().setPrintScaling(PrintScaling.None)
   return pdf.save()
+}
+
+export async function sampleLabelPdf(doc: Document): Promise<Uint8Array> {
+  const labels = [...doc.querySelectorAll<HTMLElement>('.label')]
+  if (!labels.length || labels.length > 500) throw new Error('一次支持 1～500 张标签')
+  const result = await PDFDocument.create()
+  for (const label of labels) {
+    const source = await PDFDocument.load(await renderLabel(doc, label))
+    for (const page of await result.copyPages(source, [0])) result.addPage(page)
+  }
+  result.catalog.getOrCreateViewerPreferences().setPrintScaling(PrintScaling.None)
+  return result.save()
 }

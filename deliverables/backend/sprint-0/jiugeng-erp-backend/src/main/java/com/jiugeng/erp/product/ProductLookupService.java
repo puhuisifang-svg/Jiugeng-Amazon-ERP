@@ -11,6 +11,16 @@ class ProductLookupService implements ProductLookup {
 
     ProductLookupService(ProductRepository repository,org.springframework.jdbc.core.simple.JdbcClient jdbc) { this.repository = repository;this.jdbc=jdbc; }
 
+    @Override @Transactional(readOnly=true)
+    public java.util.List<SamplePresentation> samplePresentations(java.util.List<String> ids) {
+        if(ids.isEmpty()) return java.util.List.of();
+        if(ids.size()>10000) throw new IllegalArgumentException("Too many product identities");
+        return jdbc.sql("SELECT p.id product_id,v.id,p.product_name,v.variant_name,p.status,v.lifecycle_status,p.deleted_at parent_deleted,v.deleted_at,v.main_image_asset_id,v.main_image_url FROM product_variant v JOIN product p ON p.id=v.product_id WHERE v.id IN (:ids)")
+            .param("ids",ids).query((r,n)->new SamplePresentation(r.getString("product_id"),r.getString("id"),r.getString("product_name"),r.getString("variant_name"),
+                r.getTimestamp("parent_deleted")!=null||r.getTimestamp("deleted_at")!=null?"DELETED":
+                "ACTIVE".equals(r.getString("status"))&&"ACTIVE".equals(r.getString("lifecycle_status"))?"ACTIVE":"DISABLED",r.getString("main_image_asset_id"),r.getString("main_image_url"))).list();
+    }
+
     @Override
     public String skuSpecification(String productId,String variantId) {
         return repository.findById(productId,false).flatMap(p->p.variants().stream().filter(v->v.id().equals(variantId)).findFirst()).map(v->{

@@ -132,6 +132,7 @@ class ProductMaterialRelationService implements ProductMaterialAssignmentGateway
             String materialId = required(value.materialId(), "辅料", 36);
             if (!retained.add(materialId)) throw new MaterialException(409, "PRODUCT_MATERIAL_EXISTS", "同一 SKU 不可重复关联辅料");
             String materialUnit = repository.activeMaterialUnit(materialId);
+            if (materialUnit == null && existing.containsKey(materialId)) materialUnit = existing.get(materialId).unit();
             if (materialUnit == null) throw new MaterialException(409, "ACTIVE_MATERIAL_REQUIRED", "只能引用启用辅料");
             String unit = required(value.unit(), "单位", 32);
             if (!materialUnit.equals(unit)) throw new MaterialException(409, "MATERIAL_UNIT_MISMATCH", "用量单位必须与辅料主档一致");

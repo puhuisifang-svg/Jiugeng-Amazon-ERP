@@ -31,20 +31,21 @@ class ProductSkuExportService {
                 var row = sheet.createRow(rowIndex++); var variant = item.variant(); int column = 0;
                 text(row, column++, variant.variantName());
                 text(row, column++, item.productName());
-                text(row, column++, item.productStatus().name()); text(row, column++, variant.status().name());
+                text(row, column++, status(item.productStatus().name())); text(row, column++, status(variant.status().name()));
                 text(row, column++, item.businessAvailable() ? "是" : "否");
                 number(row, column++, variant.itemLengthCm()); number(row, column++, variant.itemWidthCm());
                 number(row, column++, variant.itemHeightCm()); number(row, column++, variant.packageLengthCm());
                 number(row, column++, variant.packageWidthCm()); number(row, column++, variant.packageHeightCm());
                 number(row, column++, variant.packageWeightGrams()); row.createCell(column++).setCellValue(variant.suppliers().size());
                 row.createCell(column++).setCellValue(variant.materials().size());
-                text(row, column, item.updatedAt() == null ? null : item.updatedAt().toString());
+                text(row, column, item.updatedAt() == null ? null : java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(java.time.ZoneId.of("Asia/Shanghai")).format(item.updatedAt()));
             }
             sheet.createFreezePane(0, 1); sheet.setAutoFilter(new org.apache.poi.ss.util.CellRangeAddress(0, Math.max(0, rowIndex - 1), 0, headers.length - 1));
             for (int column = 0; column < headers.length; column++) sheet.setColumnWidth(column, Math.min(column < 4 ? 24 : 18, 255) * 256);
             workbook.write(output); return output.toByteArray();
         } catch (IOException exception) { throw new ProductException(500, "SKU_EXPORT_FAILED", "SKU 导出文件生成失败"); }
     }
+    private String status(String value) { return switch(value) { case "ACTIVE" -> "启用"; case "DISABLED" -> "停用"; default -> "待定"; }; }
     private void text(org.apache.poi.ss.usermodel.Row row, int column, String value) { row.createCell(column).setCellValue(value == null ? "" : value); }
     private void number(org.apache.poi.ss.usermodel.Row row, int column, java.math.BigDecimal value) { if (value != null) row.createCell(column).setCellValue(value.doubleValue()); else row.createCell(column).setBlank(); }
 }

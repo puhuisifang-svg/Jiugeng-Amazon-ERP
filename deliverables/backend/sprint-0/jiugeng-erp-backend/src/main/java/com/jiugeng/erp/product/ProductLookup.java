@@ -15,6 +15,10 @@ public interface ProductLookup {
     default Optional<SkuReference> findExistingSku(String productId,String variantId) { return findSku(productId,variantId); }
     default java.util.List<String> skuCodes(String productId) { return java.util.List.of(); }
 
+    /** Lightweight presentation batch, including deleted identities for historical documents. */
+    default java.util.List<SamplePresentation> samplePresentations(java.util.List<String> variantIds) { return java.util.List.of(); }
+    record SamplePresentation(String productId,String variantId,String productName,String skuName,String status,String imageId,String imageUrl) {}
+
     record ProductReference(String id, String productCode, String name, boolean active) {}
     record SkuReference(String id, String skuCode, String name, boolean active) {}
 }

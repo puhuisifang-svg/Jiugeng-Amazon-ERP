@@ -24,7 +24,31 @@ describe('protected image cache', () => {
     vi.useFakeTimers();const load=vi.fn(async()=>new Blob(['x']))
     await cachedImage('a','id',load);vi.advanceTimersByTime(60001);await cachedImage('a','id',load);expect(load).toHaveBeenCalledTimes(2)
     let shared!:AbortSignal;const ctrl=new AbortController()
-    const p=cachedImage('a','pending',signal=>{shared=signal;return new Promise(()=>{})},ctrl.signal)
+    const p=cachedImage('a','pending',signal=>{shared=signal;return new Promise<Blob>((_resolve,reject)=>signal.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')),{once:true}))},ctrl.signal)
     ctrl.abort();await expect(p).rejects.toMatchObject({name:'AbortError'});expect(shared.aborted).toBe(true)
   })
+  it('limits parallel transfers and removes cancelled queued work', async () => {
+    let active = 0, peak = 0
+    const finish: Array<() => void> = []
+    const load = vi.fn(() => new Promise<Blob>(resolve => {
+      active++; peak = Math.max(peak, active)
+      finish.push(() => { active--; resolve(new Blob(['image'])) })
+    }))
+    const pending = Array.from({ length: 8 }, (_, i) => cachedImage('limit', `image-${i}`, load))
+    const cancelled = new AbortController()
+    const extra = cachedImage('limit', 'cancelled', load, cancelled.signal)
+    const complete = Promise.allSettled([...pending, extra])
+    cancelled.abort()
+    expect(load).toHaveBeenCalledTimes(6)
+    while (finish.length) {
+      finish.shift()!()
+      await new Promise(resolve => setTimeout(resolve, 0))
+    }
+    const results = await complete
+    expect(peak).toBe(6)
+    expect(load).toHaveBeenCalledTimes(8)
+    expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(8)
+    expect(results[8]).toMatchObject({ status: 'rejected', reason: { name: 'AbortError' } })
+  })
+
 })

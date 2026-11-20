@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ImagePreviewDialog from '@/components/ImagePreviewDialog.vue'
 import { createRequestId } from '@/utils/requestId'
 
 import {computed,onBeforeUnmount,ref,watch} from 'vue'
@@ -73,7 +74,16 @@ void load()
     <ListPagination :page="page" :page-size="size" :total="total" :disabled="loading" @update:page="page=$event;load()" @update:page-size="resize" />
     <CandidateAssessmentDialog v-if="id" :key="id" :candidate-id="id" @close="closeDetail" @changed="load" />
     <AccessDialog v-if="createOpen" title="添加候选" :busy="creating" :dirty="createDirty" @close="createOpen=false"><form id="candidate-create" class="access-form" @submit.prevent="create"><p v-if="createError" role="alert" class="data-state--error">{{ createError }}</p><label>产品来源<select v-model="createDraft.type" v-single-select><option value="AMAZON">亚马逊商品 / ASIN</option><option value="OTHER">非亚马逊产品 / 样品 / 原创概念</option></select></label><label v-if="createDraft.type==='AMAZON'">ASIN 或美国站商品链接<input v-model.trim="createDraft.asinOrUrl" required maxlength="1000" placeholder="B0… 或 https://www.amazon.com/dp/…"></label><label>候选名称<input v-model.trim="createDraft.title" required maxlength="300" placeholder="填写易于识别的产品名称"></label><label>负责人<input v-model.trim="createDraft.owner" required maxlength="100"></label><label>入池理由<textarea v-model.trim="createDraft.reason" required maxlength="1000" rows="3" placeholder="看到了什么机会？准备解决什么问题？" /></label><label v-if="createDraft.type==='OTHER'">来源链接（选填）<input v-model.trim="createDraft.sourceUrl" type="url" pattern="https://.*" placeholder="供应商或平台产品链接"></label><p class="candidate-hint">先建立候选，再逐步补充评估。亚马逊产品创建后会请求采集参考数据，采集结果需核对后采纳。</p></form><template #footer><button :disabled="creating" @click="guard().then(ok=>{if(ok)createOpen=false})">取消</button><button class="candidate-primary" form="candidate-create" :disabled="creating">{{ creating?'创建中…':'创建并评估' }}</button></template></AccessDialog>
-    <AccessDialog v-if="preview" title="产品图片" wide @close="preview=''"><img class="candidate-image-preview" :src="preview" alt="放大的产品图片"></AccessDialog>
+    <ImagePreviewDialog
+      v-if="preview"
+      title="产品图片"
+      @close="preview=''"
+    >
+      <img
+        :src="preview"
+        alt="放大的产品图片"
+      >
+    </ImagePreviewDialog>
   </section>
 </template>
 <style src="@/styles/candidateWorkbench.css"></style>

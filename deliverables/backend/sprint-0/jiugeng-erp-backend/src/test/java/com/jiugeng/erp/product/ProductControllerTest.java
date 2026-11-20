@@ -451,6 +451,8 @@ class ProductControllerTest {
                     .isEqualTo(created.at("/variants/0/variantName").asText());
             assertThat(workbook.getSheet("产品SKU").getRow(1).getCell(10).getNumericCellValue())
                     .isEqualTo(4.0);
+            assertThat(workbook.getSheet("产品SKU").getRow(1).getCell(3).getStringCellValue()).isEqualTo("启用");
+            assertThat(workbook.getSheet("产品SKU").getRow(1).getCell(14).getStringCellValue()).matches("[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}");
         }
         mvc.perform(get("/api/v1/products/{id}/history", created.get("id").asText())
                         .header("Authorization", bearer(token)))

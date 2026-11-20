@@ -104,7 +104,8 @@ class PurchaseControllerTest {
     @Test void productReceiptCompletesWithoutInventorySideEffectAndOverReceiptIsRejected() throws Exception {
         String token=login("product-buyer","PRODUCT_MATERIAL"); JsonNode order=createOrder(token,"PRODUCT",variantId,"2","18"); String id=order.get("id").asText();
         String productId=jdbc.queryForObject("SELECT product_id FROM product_variant WHERE id=?",String.class,variantId);
-        mvc.perform(delete("/api/v1/products/"+productId).param("version","0").header("Authorization",bearer(token))).andExpect(status().isNoContent());
+        mvc.perform(delete("/api/v1/products/"+productId+"/skus/"+variantId).param("productVersion","0").param("version","0").header("Authorization",bearer(token))).andExpect(status().isNoContent());
+        mvc.perform(delete("/api/v1/products/"+productId).param("version","1").header("Authorization",bearer(token))).andExpect(status().isNoContent());
         mvc.perform(get("/api/v1/products/"+productId).header("Authorization",bearer(token))).andExpect(status().isNotFound());
         var payload=Map.of("orderType","PRODUCT","supplierId",supplierId,"currency","CNY","version",0,
             "lines",List.of(Map.of("itemId",variantId,"quantity",2,"unitPrice",18)));

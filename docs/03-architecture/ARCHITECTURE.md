@@ -1,5 +1,7 @@
 # MVP 总体架构说明
 
+> 2026-11-20 适用范围说明：以下保留 2026-10-15 架构基线及原审批状态。模块、持久化和生产部署已有后续演进，Redis/Compose 等规划不能直接视为线上现状；当前代码与运行入口见[接手指南](../04-engineering/PROJECT_HANDOVER.md)，版本证据见[状态报告](../08-project-management/STATUS_REPORT.md)。
+
 | 字段 | 内容 |
 | --- | --- |
 | Owner | Backend / Ops |

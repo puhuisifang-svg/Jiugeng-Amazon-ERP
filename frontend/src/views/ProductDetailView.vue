@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { productManagementApi } from '@/api/productManagement'
+import ImagePreviewDialog from '@/components/ImagePreviewDialog.vue'
 import { beijingDateTime } from '@/utils/dateTime'
 
 
@@ -8,7 +10,8 @@ import { RouterLink, useRoute } from 'vue-router'
 import { domainApi, type ProductHistoryDto, type ProductDetailDto, type ProductInput, type ProductVariantDto, type SkuListItemDto } from '@/api/domain'
 import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vue'
 import ProductEditDialog from '@/components/ProductEditDialog.vue'
-import { productActionLabel } from '@/utils/productHistory'
+import '@/styles/productManagement.css'
+import ProductHistoryTable from '@/components/ProductHistoryTable.vue'
 import SkuDetailDialog from '@/components/SkuDetailDialog.vue'
 import SuccessToast from '@/components/SuccessToast.vue'
 import TableViewport from '@/components/TableViewport.vue'
@@ -66,7 +69,8 @@ async function load() {
 async function save(input: ProductInput) {
   if (!product.value || busy.value || !writable.value) return
   busy.value = true; error.value = ''; success.value = ''
-  try { await domainApi.updateProduct(product.value.id, input); await load(); success.value = '产品、SKU 及关联资料已更新。' }
+  try { const target = focusVariantId.value ? input.variants.find(v=>v.id===focusVariantId.value) : undefined
+    if(target) await productManagementApi.updateSku(product.value.id,target); else await domainApi.updateProduct(product.value.id, input); await load(); success.value = '产品、SKU 及关联资料已更新。' }
   catch (exception) { error.value = exception instanceof Error ? exception.message : '产品更新失败。' }
   finally { busy.value = false }
 }
@@ -82,7 +86,7 @@ watch([section, () => product.value?.id, () => product.value?.updatedAt, () => p
 </script>
 
 <template>
-  <section class="page-stack product-detail">
+  <section class="page-stack product-detail product-ui">
     <SyntheticNotice v-if="runtimeConfig.authMode === 'mock'" />
     <p
       v-if="error"
@@ -207,46 +211,12 @@ watch([section, () => product.value?.id, () => product.value?.updatedAt, () => p
         class="panel compact-panel"
       >
         <h2>变更记录</h2>
-        <p
-          v-if="historyLoading"
-          class="data-state"
-        >
-          正在加载变更记录…
-        </p>
-        <p
-          v-else-if="historyError"
-          role="alert"
-        >
-          {{ historyError }} <button
-            type="button"
-            class="secondary-action"
-            @click="loadHistory"
-          >
-            重试
-          </button>
-        </p>
-        <TableViewport v-else-if="history.length">
-          <table class="data-table">
-            <thead><tr><th>时间</th><th>操作人</th><th>操作</th><th>变更内容</th></tr></thead><tbody>
-              <tr
-                v-for="item in history"
-                :key="item.id"
-              >
-                <td>{{ beijingDateTime(item.occurredAt) }}</td><td>{{ item.actorDisplayName || item.actorLoginName }}</td><td :title="item.action">
-                  {{ productActionLabel(item.action) }}
-                </td><td class="history-detail">
-                  {{ item.detail || '—' }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </TableViewport>
-        <p
-          v-else
-          class="data-state"
-        >
-          暂无变更记录。
-        </p>
+        <ProductHistoryTable
+          :entries="history"
+          :loading="historyLoading"
+          :error="historyError"
+          @retry="loadHistory"
+        />
       </article>
     </template>
     <ProductEditDialog
@@ -263,7 +233,6 @@ watch([section, () => product.value?.id, () => product.value?.updatedAt, () => p
       v-if="selectedSku"
       :detail-row="selectedSku"
       :writable="writable"
-      hide-parent-link
       @close="selectedSku = undefined"
       @edit="editSku"
     />
@@ -299,35 +268,25 @@ watch([section, () => product.value?.id, () => product.value?.updatedAt, () => p
         </div>
       </section>
     </div>
-    <div
+    <ImagePreviewDialog
       v-if="preview"
-      class="operation-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-label="产品图片预览"
-      tabindex="-1"
-      @click.self="preview = undefined"
-      @keydown.esc="preview = undefined"
+      title="产品图片预览"
+      :description="preview.name"
+      @close="preview = undefined"
     >
-      <section class="panel operation-dialog__card detail-preview">
-        <button
-          type="button"
-          aria-label="关闭图片预览"
-          @click="preview = undefined"
-        >
-          关闭
-        </button><AuthenticatedCatalogImage
-          v-if="preview.id"
-          :image-id="preview.id"
-          :alt="preview.name"
-        /><img
-          v-else
-          :src="preview.url"
-          :alt="preview.name"
-          referrerpolicy="no-referrer"
-        ><p>{{ preview.name }}</p>
-      </section>
-    </div>
+      <AuthenticatedCatalogImage
+        v-if="preview.id"
+        :image-id="preview.id"
+        variant="original"
+        :alt="preview.name"
+      />
+      <img
+        v-else
+        :src="preview.url"
+        :alt="preview.name"
+        referrerpolicy="no-referrer"
+      >
+    </ImagePreviewDialog>
   </section>
 </template>
 
@@ -345,7 +304,6 @@ watch([section, () => product.value?.id, () => product.value?.updatedAt, () => p
 .detail-wide { grid-column: 1 / -1; }
 .detail-tabs .is-current { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
 .history-detail { white-space: pre-wrap; min-width: 200px; overflow-wrap: anywhere; }
-.detail-preview :deep(img) { display: block; width: 100%; height: auto; max-height: 70vh; object-fit: contain; }
 @media (max-width: 800px) { .detail-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 480px) { .detail-fields { grid-template-columns: 1fr; } .detail-summary .table-actions { margin-left: 0; } }
 </style>

@@ -1,5 +1,7 @@
 # 开发规范
 
+> 2026-11-20 更新：接手流程与当前代码地图见[项目接手指南](PROJECT_HANDOVER.md)，写入权和质量门禁以根 [AGENTS.md](../../AGENTS.md) 为准。本次仅修正工具链入口，不改变原审批状态。
+
 | 字段 | 内容 |
 | --- | --- |
 | Owner | Frontend / Backend |
@@ -18,7 +20,7 @@
 - 后端使用 Java 21、Maven，并在后端脚手架中提交 Maven Wrapper。
 - 前端统一使用 pnpm；禁止同时提交 npm 或 Yarn 锁文件。
 - 项目级 npm Registry 由根目录 `.npmrc` 固定，用户全局 Registry 配置不作为项目基线。
-- 前端脚手架创建后，在根 `package.json` 固定 `packageManager`、`engines`，并提交 `pnpm-lock.yaml`。
+- 前端已在 `frontend/package.json` 固定 `packageManager`、`engines`，锁文件为 `frontend/pnpm-lock.yaml`；以实际文件和 CI 为准。
 
 ## 提交与分支
 

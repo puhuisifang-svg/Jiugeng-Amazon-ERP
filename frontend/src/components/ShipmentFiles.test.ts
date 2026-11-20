@@ -47,6 +47,7 @@ describe('shipment files and previews', () => {
     wrapper.unmount()
   })
   it('opens and closes product image preview', async () => {
+    HTMLDialogElement.prototype.showModal = function () { this.open = true }; HTMLDialogElement.prototype.close = function () { this.open = false }
     const product = { id: 'p1', variants: [{ id: 'v2', imageUrl: 'https://example.com/wrong.png' }, { id: 'v1', imageUrl: 'https://example.com/test.png' }] } as ProductDetailDto
     const wrapper = mount(ShipmentProductImage, { props: { productId: 'p1', variantId: 'v1', product, alt: '测试产品' }, global: { stubs: { Teleport: true } } })
     await wrapper.get('.image-button').trigger('click')

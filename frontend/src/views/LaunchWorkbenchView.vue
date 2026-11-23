@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vue'
 import { createRequestId } from '@/utils/requestId'
 
 import SingleFileUpload from '@/components/SingleFileUpload.vue'
@@ -196,11 +197,12 @@ watch(()=>route.fullPath,()=>{workspace.value=undefined;tab.value='overview';sel
       </div>
       <template v-if="workspace">
         <header class="launch-hero panel">
-          <img
+          <AuthenticatedCatalogImage
             v-if="String(draft.imageUrl??'').startsWith('https://')"
-            :src="String(draft.imageUrl)"
+            :draft-permission="development ? 'development.read' : 'selection.read'"
+            :image-url="String(draft.imageUrl)"
             alt="产品参考图片"
-          >
+          />
           <div class="launch-title">
             <span class="muted">{{ development?'新品开发':'候选评估' }} · {{ id.slice(0,8) }}</span><h1>{{ draft.name }}</h1><div class="inline-actions">
               <span

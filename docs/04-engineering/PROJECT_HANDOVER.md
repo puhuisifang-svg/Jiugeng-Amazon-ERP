@@ -9,6 +9,12 @@
 | 审批人 | 待 PJM 复核；本文记录实现事实，不新增业务批准 |
 | 核实基线 | 见[当前状态报告](../08-project-management/STATUS_REPORT.md)；此指南不是实时线上状态 |
 
+## 最新交接入口：图片性能与 PDF（2026-11-23）
+
+用户已明确授权本轮全部累计改动提交远端 main 并部署。分支 `feature/ERP-101-image-performance`，基线 `dfba431424226445db34aa1c937915d85edef9dd`，实施内容仍未提交。完整前后端门禁通过，最终后端 lease 防护定向 8 项通过，三尺寸共 13 个独立浏览器场景通过；跳过与边界见 [DEL-049 发布交接](../../deliverables/pjm/IMAGE_PDF_RELEASE_HANDOFF_2026-11-23.md)。正式发送交接后唯一写入权归 PJM，Codex 停止修改，不跟踪线上发布。PJM 须同步实际 Caddy 缺省缓存头并使用最终 SHA 构建，不能复用本地旧 JAR。
+
+本节覆盖下方开发阶段“无发布授权 / 待统一验证”的历史表述；不表示已提交、已合并、已部署或已业务验收。
+
 ## 先恢复上下文，再开始任务
 
 1. 阅读根目录 [AGENTS.md](../../AGENTS.md)，检查实际分支、HEAD 和工作区。确认当前任务、修改归属和写入权；共享工作区不得并行改动。
@@ -18,6 +24,22 @@
 5. 多文件或跨层变更先给出短计划，按 [AGENTS.md](../../AGENTS.md) 实施和交接。合并和线上发布/重启仍由任务授权及 PJM 流程决定；用户已于 2026-11-21 长期授权按开发需要自主重启本地持久服务，无需逐次确认。
 
 本次用户直接授权文档维护，没有新增 PJM ERP 编号；维护分支例外和当前未提交状态记在状态报告中，不应复制为后续业务任务的通用分支规则。
+
+## 当前同迭代 PDF 追加（2026-11-23，本地未提交）
+
+先读 [DEL-048 PDF 收尾记录](../../deliverables/pjm/PDF_CLOSEOUT_LOCAL_2026-11-23.md)，仅批准 3、5、6、8、9、10、12、15、19，其他清单项未实施。沿用下节图片性能分支及 Codex 写入权，保留所有累计修改和 PDF 源文件命名约定，完整验证仍待用户交接指令。
+
+`PdfToolsView.vue` 保持四个页签独立内存状态；`pdfPreviewPool.ts` 管共享 PDF.js 文档引用和两路渲染，`PdfPagePreview` 管可见区域/取消/重试；`pdfImageInput` 管 JPEG/PNG 编码及导入预算，预览小图不能误用于导出。`PdfTextLayer` 与导出共用 `pdfTextLayout` 的 PDF 点坐标文字绘制。图层数组顺序就是绘制顺序，复制图片必须拥有独立 Blob URL；释放共享文档时不得中断其他持有者。本模块不上传原文件、不保存草稿，无后端迁移。
+
+## 当前图片性能迭代（ERP-101，2026-11-23，本地未提交）
+
+接手先读 [DEL-047 图片性能实施记录](../../deliverables/pjm/ERP-101_IMAGE_PERFORMANCE_LOCAL_2026-11-23.md)。当前分支 `feature/ERP-101-image-performance`，基线 `dfba431424226445db34aa1c937915d85edef9dd`，PJM 明确分配任务和 Codex 唯一写入权；用户批准 1–7、保持显示大小、不接 CDN。以下旧迭代的未提交状态已经过时，当前待验和运行包以 DEL-047 为准。
+
+图片调查从 `catalogmedia/CatalogImageVariants`（历史衍生图回填）、`ImageHttpResponse`（鉴权后的私有缓存）、`ExternalImageService/Fetcher`（外链镜像/条件更新/来源安全）、`LocalCatalogImageStore`（内存与持久读缓存）开始。各领域公开 `ExternalImageSource` 提供自己的 URL 和权限，禁止直接依赖别的领域内部类型。V107 新增镜像/衍生图/清理/草稿授权记录；原受控图片与独立业务快照不改写。
+
+前端统一入口 `AuthenticatedCatalogImage`、`api/catalog.ts` 与 `utils/catalogImageCache.ts`。真实认证环境外链经后端受控存储；保留的 mock 环境仍直接显示模拟外链且关闭后台抓取。URL 字段变化立即重新解析；同 URL 内容默认每小时条件检查、至少每日完整检查，失败保留上次成功内容。此前“外链只保存 URL”描述仅代表历史行为，镜像并非独立冻结快照。列表/弹窗的视觉尺寸不变。
+
+生产代理旧配置强制 `no-store` 会抵消后端缓存。仓库 Caddy 模板已使用 `?Cache-Control` 仅在响应缺少该头时兜底；未来 PJM 发布需检查实际配置并校验/重载，不应认为 JAR 部署自动完成代理变更。本轮仅本地实现，待用户交接指令再统一验证，无提交或部署授权。
 
 ## 2026-11-23 累计迭代交接入口
 
@@ -140,7 +162,7 @@ Vitest 测试多数与源码同目录；浏览器冒烟在 `frontend/e2e/`，使
 
 `release.py` 将完整 SHA 写入 `frontend/version.json` 并打包校验清单；`receive.sh` 检查健康和服务端前端版本。发布门禁包括仓库变量 `PRODUCTION_DEPLOY_ENABLED` 和服务器端开关；是否启用须现场核对。只读排查不授权修改门禁、重跑发布或重启线上服务。
 
-图片缓存案例：`utils/catalogImageCache.ts` 的缓存是会话隔离、内存级、60 秒 TTL，限制约 32 MiB / 80 条；页面刷新清空，过期后再访问重新请求。该优化不承诺首次加载瞬间完成。应分别测量首次访问、60 秒内重复访问及过期后的访问。
+图片缓存案例（ERP-101 本地实现）：`utils/catalogImageCache.ts` 是会话隔离的 60 秒内存缓存，限制 32 MiB / 200 条；页面刷新清空。普通有效图片另有浏览器私有缓存，过期/刷新仍向服务端鉴权并用 ETag 校验，可返回 304；待绑定和敏感用途图片仍 no-store。应分别测量首次访问、内存命中、刷新后的 304 及来源更新；不能只看网络请求数量。`window.jiugengImageDiagnostics()` 与 `scripts/diagnostics/catalog-image-performance.js` 输出匿名耗时/大小，不输出图片地址或账号信息。
 
 ## 文档如何保持有效
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cachedImage, clearImageCache, IMAGE_SESSION_CHANGED } from './catalogImageCache'
+import { cachedImage, clearImageCache, peekCachedImage, IMAGE_SESSION_CHANGED } from './catalogImageCache'
 afterEach(() => { clearImageCache(); vi.useRealTimers() })
 describe('protected image cache', () => {
   it('deduplicates requests and reuses bytes only inside the same session', async () => {
@@ -14,7 +14,7 @@ describe('protected image cache', () => {
     const load=vi.fn((signal:AbortSignal)=>{shared=signal;return new Promise<Blob>(r=>{finish=r})})
     const a=new AbortController(),b=new AbortController()
     const first=cachedImage('a','id',load,a.signal),second=cachedImage('a','id',load,b.signal)
-    a.abort();await expect(first).rejects.toMatchObject({name:'AbortError'});expect(shared.aborted).toBe(false)
+    await Promise.resolve();a.abort();await expect(first).rejects.toMatchObject({name:'AbortError'});expect(shared.aborted).toBe(false)
     finish(new Blob(['image']));await second
     const failed=vi.fn().mockRejectedValue(new Error('forbidden'))
     await expect(cachedImage('a','denied',failed)).rejects.toThrow('forbidden')
@@ -25,7 +25,7 @@ describe('protected image cache', () => {
     await cachedImage('a','id',load);vi.advanceTimersByTime(60001);await cachedImage('a','id',load);expect(load).toHaveBeenCalledTimes(2)
     let shared!:AbortSignal;const ctrl=new AbortController()
     const p=cachedImage('a','pending',signal=>{shared=signal;return new Promise<Blob>((_resolve,reject)=>signal.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')),{once:true}))},ctrl.signal)
-    ctrl.abort();await expect(p).rejects.toMatchObject({name:'AbortError'});expect(shared.aborted).toBe(true)
+    await Promise.resolve();ctrl.abort();await expect(p).rejects.toMatchObject({name:'AbortError'});expect(shared.aborted).toBe(true)
   })
   it('limits parallel transfers and removes cancelled queued work', async () => {
     let active = 0, peak = 0
@@ -39,16 +39,29 @@ describe('protected image cache', () => {
     const extra = cachedImage('limit', 'cancelled', load, cancelled.signal)
     const complete = Promise.allSettled([...pending, extra])
     cancelled.abort()
-    expect(load).toHaveBeenCalledTimes(6)
+    await Promise.resolve();expect(load).toHaveBeenCalledTimes(5)
     while (finish.length) {
       finish.shift()!()
       await new Promise(resolve => setTimeout(resolve, 0))
     }
     const results = await complete
-    expect(peak).toBe(6)
+    expect(peak).toBe(5)
     expect(load).toHaveBeenCalledTimes(8)
     expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(8)
     expect(results[8]).toMatchObject({ status: 'rejected', reason: { name: 'AbortError' } })
+  })
+  it('reserves capacity for previews and runs visible work ahead of prefetch', async () => {
+    const starts: string[] = [], finish: Array<() => void> = []
+    const load = (id: string) => async () => { starts.push(id); return new Promise<Blob>(resolve => finish.push(() => resolve(new Blob([id])))) }
+    const pending = Array.from({length:5},(_,i) => cachedImage('p',String(i),load(String(i))))
+    pending.push(cachedImage('p','near',load('near'),undefined,'prefetch'))
+    pending.push(cachedImage('p','visible',load('visible'),undefined,'visible'))
+    pending.push(cachedImage('p','large',load('large'),undefined,'preview'))
+    await Promise.resolve();expect(starts).toEqual(['0','1','2','3','4','large'])
+    finish.shift()!();await new Promise(resolve => setTimeout(resolve,0));expect(starts[6]).toBe('visible')
+    while(finish.length){finish.shift()!();await new Promise(resolve => setTimeout(resolve,0))}
+    await Promise.all(pending)
+    expect(peekCachedImage('p','large')).toBeInstanceOf(Blob);expect(peekCachedImage('other','large')).toBeUndefined()
   })
 
 })

@@ -740,14 +740,12 @@ onMounted(async()=>{
                             :image-id="row.variant.imageAssetId"
                             :alt="`${row.variant.variantName}主图`"
                           />
-                          <img
+                          <AuthenticatedCatalogImage
                             v-else-if="row.variant.imageUrl"
                             class="product-thumbnail"
-                            loading="lazy"
-                            decoding="async"
-                            :src="row.variant.imageUrl"
+                            :image-url="row.variant.imageUrl"
                             :alt="`${row.variant.variantName}主图`"
-                          >
+                          />
                         </button>
                         <span
                           v-else
@@ -1382,12 +1380,12 @@ onMounted(async()=>{
         variant="original"
         :alt="imagePreview.variantName"
       />
-      <img
+      <AuthenticatedCatalogImage
         v-else
-        :src="imagePreview.imageUrl"
+        variant="original"
+        :image-url="imagePreview.imageUrl"
         :alt="imagePreview.variantName"
-        referrerpolicy="no-referrer"
-      >
+      />
       <template #actions>
         <button
           type="button"

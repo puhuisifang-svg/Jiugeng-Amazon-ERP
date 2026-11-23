@@ -32,13 +32,12 @@ const variant = computed(() => props.variantId ? (props.product ?? loaded.value)
       :image-id="variant.imageAssetId"
       :alt="alt"
     />
-    <img
+    <AuthenticatedCatalogImage
       v-else
       class="catalog-image"
-      :src="variant.imageUrl"
+      :image-url="variant.imageUrl"
       :alt="alt"
-      referrerpolicy="no-referrer"
-    >
+    />
   </button>
   <span
     v-else
@@ -57,11 +56,11 @@ const variant = computed(() => props.variantId ? (props.product ?? loaded.value)
       variant="original"
       :alt="alt"
     />
-    <img
+    <AuthenticatedCatalogImage
       v-else
-      :src="variant?.imageUrl"
+      variant="original"
+      :image-url="variant?.imageUrl"
       :alt="alt"
-      referrerpolicy="no-referrer"
-    >
+    />
   </ImagePreviewDialog>
 </template>

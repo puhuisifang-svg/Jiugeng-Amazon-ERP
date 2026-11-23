@@ -81,13 +81,12 @@ function status(value: string) { return ({ ACTIVE: '启用', DISABLED: '停用',
                 :key="variant.id"
               >
                 <td>
-                  <img
+                  <AuthenticatedCatalogImage
                     v-if="!variant.imageAssetId && variant.imageUrl"
                     class="catalog-image"
-                    :src="variant.imageUrl"
+                    :image-url="variant.imageUrl"
                     :alt="variant.variantName"
-                    referrerpolicy="no-referrer"
-                  >
+                  />
                   <AuthenticatedCatalogImage
                     v-else
                     :image-id="variant.imageAssetId"

@@ -1,16 +1,16 @@
 # 项目文档总索引
 
-## 当前接手入口（2026-11-21 更新）
+## 当前接手入口（2026-11-23 更新）
 
 先读 [README](../README.md) → [AGENTS](../AGENTS.md) → [项目接手指南](04-engineering/PROJECT_HANDOVER.md) → [当前状态报告](08-project-management/STATUS_REPORT.md)。界面任务同时读 [UI 规范](ui/UI_STANDARD.md)，跨会话使用 [交接模板](../templates/SESSION_HANDOFF_TEMPLATE.md)。
 
-最新发布授权与交接：[DEL-046 辅料/供应商/采购累计迭代（2026-11-23）](../deliverables/pjm/OPERATIONS_RELEASE_HANDOFF_2026-11-23.md)。已完成本地统一验证；提交、合并和发布由 PJM 执行，结果待其记录。下面保留各模块开发阶段入口。
+当前授权发布交接：[DEL-049 图片性能与 PDF](../deliverables/pjm/IMAGE_PDF_RELEASE_HANDOFF_2026-11-23.md)；统一验证完成，正式移交后由 PJM 独占写入、提交 main 和部署，Codex 不跟踪上线。下述是开发阶段记录。
 
-当前未提交业务迭代：[ERP-100 辅料管理 1–22 项收尾 / DEL-043](../deliverables/pjm/ERP-100_MATERIAL_CLOSEOUT.md)。用户明确排除 23、24；完整门禁在交接节点统一执行，发布由 PJM 负责。产品与样品累计修改已包含在本轮 main 基线，历史记录的未提交状态不再代表当前工作区。
+开发阶段累计迭代：[ERP-101 图片性能 1–7 项 / DEL-047](../deliverables/pjm/ERP-101_IMAGE_PERFORMANCE_LOCAL_2026-11-23.md)。显示尺寸不变，外链转受控存储并更新；本地已同步 V107，完整验证与发布授权状态已由 DEL-049 更新。
 
-同迭代新增：[供应商第 1–20 项收尾 / DEL-044](../deliverables/pjm/SUPPLIER_CLOSEOUT_LOCAL_2026-11-21.md)，P3 不做；辅料改动继续保留，供应商阶段已同步 V104，尚未提交。
+同迭代追加：[PDF 编辑选定九项收尾 / DEL-048](../deliverables/pjm/PDF_CLOSEOUT_LOCAL_2026-11-23.md)，本地未提交；保留四页签源文件命名，最终验证与未测边界见 DEL-049。
 
-同迭代新增：[采购第 1–22、24 项收尾 / DEL-045](../deliverables/pjm/PURCHASE_CLOSEOUT_LOCAL_2026-11-22.md)，23/25 不做；当前本地运行包已同步 V105/V106，完整验证待交接。
+上一轮累计发布：[DEL-046 交接](../deliverables/pjm/OPERATIONS_RELEASE_HANDOFF_2026-11-23.md)及 [PJM 发布结果](../deliverables/pjm/OPERATIONS_RELEASE_RESULT_2026-11-23.md)。辅料 / 供应商 / 采购原开发记录（DEL-043–045）保留技术背景，其未提交状态不再代表当前工作区。
 
 下表保留原有文档登记和审批状态，不表示各历史文档已同步到最新代码。早期 MVP、Backlog、架构和编码规范的适用范围需结合当前实现与近期任务记录判断；差异交 PJM 确认，不静默覆盖历史批准。
 

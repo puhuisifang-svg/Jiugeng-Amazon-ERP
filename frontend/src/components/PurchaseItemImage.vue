@@ -23,16 +23,14 @@ const preview = ref(false),failed=ref(false),retry=ref(0)
       tabindex="0"
       @click.stop="failed=false;retry++"
       @keydown.enter.stop="failed=false;retry++"
-    >加载失败 · 重试</span><img
+    >加载失败 · 重试</span><AuthenticatedCatalogImage
       v-else
       :key="retry"
-      loading="lazy"
       class="catalog-image"
-      :src="imageUrl ?? undefined"
+      draft-permission="purchases.read"
+      :image-url="imageUrl ?? undefined"
       :alt="alt"
-      referrerpolicy="no-referrer"
-      @error="failed=true"
-    >
+    />
   </button>
   <span
     v-else
@@ -58,15 +56,14 @@ const preview = ref(false),failed=ref(false),retry=ref(0)
       tabindex="0"
       @click.stop="failed=false;retry++"
       @keydown.enter.stop="failed=false;retry++"
-    >加载失败 · 重试</span><img
+    >加载失败 · 重试</span><AuthenticatedCatalogImage
       v-else
       :key="retry"
-      loading="lazy"
-      :src="imageUrl ?? undefined"
+      variant="original"
+      draft-permission="purchases.read"
+      :image-url="imageUrl ?? undefined"
       :alt="alt"
-      referrerpolicy="no-referrer"
-      @error="failed=true"
-    >
+    />
   </ImagePreviewDialog>
 </template>
 <style scoped>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vue'
 import ImagePreviewDialog from '@/components/ImagePreviewDialog.vue'
 import { createRequestId } from '@/utils/requestId'
 
@@ -62,7 +63,7 @@ void load()
         <table class="candidate-table">
           <thead><tr><th class="candidate-product-fixed">候选产品</th><th>评估状态</th><th>来源 / 负责人</th><th>销售表现</th><th>参考售价</th><th>目标售价</th><th>评估得分</th><th>风险调查</th><th>更新时间</th><th class="candidate-action-fixed">操作</th></tr></thead><tbody>
             <tr v-for="item in items" :key="item.id">
-              <td class="candidate-product-fixed"><div class="candidate-product"><button v-if="image(item)" class="candidate-thumbnail" aria-label="放大产品图片" @click="preview=image(item)"><img :src="image(item)" alt="产品图片"></button><span v-else class="candidate-image-empty">暂无图片</span><div><RouterLink :to="`/selection/candidates/${item.id}`">{{ item.title }}</RouterLink><small>{{ item.asin||'非亚马逊产品' }}</small><small v-if="item.document.reason" class="candidate-reason" :title="String(item.document.reason)">{{ item.document.reason }}</small></div></div></td>
+              <td class="candidate-product-fixed"><div class="candidate-product"><button v-if="image(item)" class="candidate-thumbnail" aria-label="放大产品图片" @click="preview=image(item)"><AuthenticatedCatalogImage :image-url="image(item)" alt="产品图片" /></button><span v-else class="candidate-image-empty">暂无图片</span><div><RouterLink :to="`/selection/candidates/${item.id}`">{{ item.title }}</RouterLink><small>{{ item.asin||'非亚马逊产品' }}</small><small v-if="item.document.reason" class="candidate-reason" :title="String(item.document.reason)">{{ item.document.reason }}</small></div></div></td>
               <td><span class="candidate-badge" :data-state="item.state">{{ stateNames[item.state]??'待启用' }}</span></td><td>{{ sourceLabel(item) }}<small>{{ item.document.owner||item.owner||'待分配' }}</small></td>
               <td>{{ item.document.salesValue||'待补充' }}<small>{{ ({OBSERVED:'前台展示',MANUAL:'人工录入',ESTIMATE:'估算'} as Record<string,string>)[String(item.document.salesType)]|| (item.document.salesMissingReason?'已记录无数据原因':'') }}</small></td><td>{{ item.document.referencePrice??item.observation?.price??'—' }}</td><td>{{ item.document.price!=null&&item.document.price!==''?'$'+item.document.price:'—' }}</td><td>{{ candidateScore(item.document)??'未完成' }}<small v-if="candidateScore(item.document)!=null">满分 100</small></td><td>{{ riskProgress(item.document) }} / 5 类<small>{{ rows(item.document,'risks').some(r=>['BLOCKED','DOUBT','REMEDIATE'].includes(String(r.conclusion)))?'存在待处理风险':riskProgress(item.document)===5?'待审核复核':'待完善调查' }}</small></td><td class="candidate-time">{{ formatDate(item.updatedAt) }}</td><td class="candidate-action-fixed"><RouterLink :to="`/selection/candidates/${item.id}`">{{ nextStep(item.state) }}</RouterLink><RouterLink v-if="item.state==='APPROVED'&&item.hasDevelopment!==false&&session.canAccess(['development.read'])" :to="`/product-development/${item.id}`">新品开发 ↗</RouterLink><button v-if="writable" class="candidate-delete" :disabled="!!deleting" @click="remove(item)">{{ deleting===item.id?'删除中…':'删除' }}</button></td>
             </tr>
@@ -79,10 +80,11 @@ void load()
       title="产品图片"
       @close="preview=''"
     >
-      <img
-        :src="preview"
+      <AuthenticatedCatalogImage
+        variant="original"
+        :image-url="preview"
         alt="放大的产品图片"
-      >
+      />
     </ImagePreviewDialog>
   </section>
 </template>

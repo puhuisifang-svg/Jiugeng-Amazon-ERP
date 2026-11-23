@@ -68,4 +68,11 @@ describe('browser PDF tools', () => {
     expect((await PDFDocument.load(await squareLabels(await fixture(), 2, [{x:999,y:999,width:1,height:1}]))).getPageCount()).toBe(4)
   })
 
+  it('distinguishes empty and encrypted PDFs without attempting to remove their protection', async () => {
+    await expect(loadPdf(new Uint8Array())).rejects.toThrow('文件为空')
+    const doc = await PDFDocument.create(); doc.addPage()
+    doc.context.trailerInfo.Encrypt = doc.context.register(doc.context.obj({}))
+    await expect(loadPdf(await doc.save())).rejects.toThrow('密码保护')
+  })
+
 })

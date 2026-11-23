@@ -280,12 +280,12 @@ watch([section, () => product.value?.id, () => product.value?.updatedAt, () => p
         variant="original"
         :alt="preview.name"
       />
-      <img
+      <AuthenticatedCatalogImage
         v-else
-        :src="preview.url"
+        variant="original"
+        :image-url="preview.url"
         :alt="preview.name"
-        referrerpolicy="no-referrer"
-      >
+      />
     </ImagePreviewDialog>
   </section>
 </template>

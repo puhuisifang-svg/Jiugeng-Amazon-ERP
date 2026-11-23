@@ -12,7 +12,7 @@ export function exportPages(rows:ExportRow[],size=20){return Array.from({length:
 function wrap(ctx:CanvasRenderingContext2D,text:string,width:number){const lines:string[]=[];let current='';for(const char of text){if(current&&ctx.measureText(current+char).width>width){lines.push(current);current=''}current+=char}if(current)lines.push(current);return lines}
 async function loadImage(line:PurchaseLine,signal?:AbortSignal):Promise<HTMLImageElement|null>{
   if(!line.imageAssetId&&!line.imageUrl)return null
-  const blob=line.imageAssetId?await catalogApi.imageBlob(line.imageAssetId,'original'):await fetch(line.imageUrl!,{credentials:'omit',referrerPolicy:'no-referrer',signal:signal?AbortSignal.any([signal,AbortSignal.timeout(15000)]):AbortSignal.timeout(15000)}).then(r=>{if(!r.ok)throw Error('图片加载失败');return r.blob()})
+  const blob=line.imageAssetId?await catalogApi.imageBlob(line.imageAssetId,'original',signal):await catalogApi.externalImageBlob(line.imageUrl!,'original',signal)
   const url=URL.createObjectURL(blob)
   try{const image=new Image();image.src=url;await image.decode();return image}finally{URL.revokeObjectURL(url)}
 }

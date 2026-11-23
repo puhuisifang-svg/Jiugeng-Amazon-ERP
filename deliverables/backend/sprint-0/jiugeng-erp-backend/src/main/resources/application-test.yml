@@ -7,3 +7,8 @@ spring:
   h2:
     console:
       enabled: false
+
+# ERP-101: tests invoke maintenance explicitly; never fetch fixture URLs on a timer.
+app:
+  catalog:
+    image-maintenance-enabled: false

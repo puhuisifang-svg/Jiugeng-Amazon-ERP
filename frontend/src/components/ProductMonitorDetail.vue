@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vue'
 import { beijingDateTime } from '@/utils/dateTime'
 
 
@@ -234,19 +235,19 @@ function fieldValue(field:keyof MonitorFields){return value(props.target.fields[
           >
             <h4>{{ labels[change.field]||change.field }}</h4><div class="pmd-comparison">
               <div>
-                <span>变化前</span><img
+                <span>变化前</span><AuthenticatedCatalogImage
                   v-if="change.field==='imageUrl'&&image(change.before)"
-                  :src="image(change.before)"
+                  :image-url="image(change.before)"
                   alt="变化前商品图片"
-                ><p v-else>
+                /><p v-else>
                   {{ value(change.before) }}
                 </p>
               </div><div>
-                <span>变化后</span><img
+                <span>变化后</span><AuthenticatedCatalogImage
                   v-if="change.field==='imageUrl'&&image(change.after)"
-                  :src="image(change.after)"
+                  :image-url="image(change.after)"
                   alt="变化后商品图片"
-                ><p v-else>
+                /><p v-else>
                   {{ value(change.after) }}
                 </p>
               </div>
@@ -259,11 +260,11 @@ function fieldValue(field:keyof MonitorFields){return value(props.target.fields[
                 :key="field.key"
               >
                 <dt>{{ field.label }}</dt><dd>
-                  <img
+                  <AuthenticatedCatalogImage
                     v-if="field.key==='imageUrl'&&image(field.value)"
-                    :src="image(field.value)"
+                    :image-url="image(field.value)"
                     alt="本次观测商品图片"
-                  ><span v-else>{{ value(field.value) }}</span>
+                  /><span v-else>{{ value(field.value) }}</span>
                 </dd>
               </div>
             </dl>

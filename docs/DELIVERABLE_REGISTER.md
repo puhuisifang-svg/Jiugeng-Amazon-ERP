@@ -44,6 +44,10 @@
 | DEL-040 | 2026-11-20 | Codex | 产品管理 19 项收尾：权限联动、子体库存、分页、单子体保存及恢复 | v0.1 | In Review | 待用户 / PJM 复核 | [本地实施与待验记录](../deliverables/pjm/PRODUCT_CLOSEOUT_LOCAL_2026-11-20.md)；未提交、未发布，待迭代统一验证 |
 | DEL-041 | 2026-11-21 | Codex | 样品管理 P1/P2 17 项收尾（不含 P3） | v0.1 | In Review | 待用户 / PJM 复核 | [本地实施与待验记录](../deliverables/pjm/SAMPLE_CLOSEOUT_LOCAL_2026-11-21.md)；未提交、未发布，持久本地服务已备份并同步至 V101、前后端已重启，完整验证待迭代交接 |
 | DEL-042 | 2026-11-21 | Codex → PJM | 产品与样品累计迭代统一验证及授权发布交接 | v1.0 | In Review | 用户已授权发布；PJM 独立复核 | [发布交接](../deliverables/pjm/CATALOG_RELEASE_HANDOFF_2026-11-21.md)；完整门禁与 7 项浏览器检查通过，待 PR 合并与线上证据 |
+| DEL-043 | 2026-11-21 | Codex | ERP-100 辅料管理 1–22 项收尾（排除 23/24） | v0.1 | In Review | 待用户 / PJM 复核 | [实施与待验记录](../deliverables/pjm/ERP-100_MATERIAL_CLOSEOUT.md)；本地未提交，局部检查通过，已备份并同步 V102/V103，完整验证待交接 |
+| DEL-044 | 2026-11-21 | Codex | 供应商管理 1–20 项收尾（P3 不做，同累计迭代） | v0.1 | In Review | 待用户 / PJM 复核 | [实施与待验记录](../deliverables/pjm/SUPPLIER_CLOSEOUT_LOCAL_2026-11-21.md)；未提交，关键局部检查通过，本地已备份并同步 V104，完整验证待交接 |
+| DEL-045 | 2026-11-22 | Codex | 采购管理 1–22、24 项收尾（排除 23/25，同累计迭代） | v0.1 | In Review | 待用户 / PJM 复核 | [实施与待验记录](../deliverables/pjm/PURCHASE_CLOSEOUT_LOCAL_2026-11-22.md)；本地未提交，关键局部检查通过，已备份并同步 V105/V106，完整验证待交接 |
+| DEL-046 | 2026-11-23 | Codex → PJM | 辅料、供应商、采购及样品操作 UI 累计发布交接 | v0.1 | In Review | 用户已授权提交 main / 部署；PJM 执行与核实 | [发布交接记录](../deliverables/pjm/OPERATIONS_RELEASE_HANDOFF_2026-11-23.md)；本地统一门禁通过，提交/线上结果由 PJM 更新 |
 
 ## 登记要求
 

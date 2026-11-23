@@ -51,6 +51,60 @@ class CatalogImageService implements CatalogImageGateway {
         } catch(IOException e) { throw new CatalogImageGateway.AttachmentException(503,"SAMPLE_IMAGE_COPY_FAILED","样品图片留存失败，请使用原请求重试"); }
     }
     @Override @Transactional
+    public String copyForMaterial(String imageId,String materialId,AuthenticatedActor actor) {
+        if(imageId==null)return null;
+        CatalogImageRepository.Asset source;
+        try { source=asset(imageId); } catch(CatalogImageException e){throw new CatalogImageGateway.AttachmentException(e.status(),e.code(),e.getMessage());}
+        if(!"ACTIVE".equals(source.status())||source.purpose()!=Purpose.MATERIAL_IMAGE)
+            throw new CatalogImageGateway.AttachmentException(409,"MATERIAL_IMAGE_UNAVAILABLE","来源图片已变化，请重新选择");
+        try {
+            String copy=upload(Purpose.MATERIAL_IMAGE,source.fileName(),store.read(source.originalKey()),actor).id();
+            var copied=asset(copy);
+            if(org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive())
+                org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization(){
+                    @Override public void afterCompletion(int status){if(status==STATUS_ROLLED_BACK){delete(copied.originalKey());delete(copied.thumbnailKey());}}
+                });
+            attach(copy,Purpose.MATERIAL_IMAGE,"AUXILIARY_MATERIAL",materialId,actor);
+            return copy;
+        } catch(IOException e) { throw new CatalogImageGateway.AttachmentException(503,"MATERIAL_IMAGE_COPY_FAILED","图片复制失败，请使用原请求重试"); }
+    }
+    @Override @Transactional
+    public String copyForSupplier(String imageId,String supplierId,AuthenticatedActor actor) {
+        if(imageId==null)return null;
+        CatalogImageRepository.Asset source;
+        try { source=asset(imageId); } catch(CatalogImageException e){throw new CatalogImageGateway.AttachmentException(e.status(),e.code(),e.getMessage());}
+        if(!"ACTIVE".equals(source.status())||source.purpose()!=Purpose.SUPPLIER_QR)
+            throw new CatalogImageGateway.AttachmentException(409,"SUPPLIER_QR_UNAVAILABLE","来源图片已变化，请重新选择");
+        try {
+            String copy=upload(Purpose.SUPPLIER_QR,source.fileName(),store.read(source.originalKey()),actor).id();
+            var copied=asset(copy);
+            if(org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive())
+                org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization(){
+                    @Override public void afterCompletion(int status){if(status==STATUS_ROLLED_BACK){delete(copied.originalKey());delete(copied.thumbnailKey());}}
+                });
+            attach(copy,Purpose.SUPPLIER_QR,"SUPPLIER",supplierId,actor);
+            return copy;
+        } catch(IOException e) { throw new CatalogImageGateway.AttachmentException(503,"SUPPLIER_QR_COPY_FAILED","图片复制失败，请使用原请求重试"); }
+    }
+    @Override @Transactional
+    public String copyForPurchase(String imageId,String orderId,AuthenticatedActor actor) {
+        if(imageId==null)return null;
+        CatalogImageRepository.Asset source;
+        try { source=asset(imageId); } catch(CatalogImageException e){throw new CatalogImageGateway.AttachmentException(e.status(),e.code(),e.getMessage());}
+        if(!"ACTIVE".equals(source.status())||!java.util.Set.of(Purpose.SKU_MAIN,Purpose.PRODUCT_MAIN,Purpose.MATERIAL_IMAGE,Purpose.PURCHASE_ITEM).contains(source.purpose()))
+            throw new CatalogImageGateway.AttachmentException(409,"PURCHASE_IMAGE_UNAVAILABLE","来源图片已变化，请重新选择");
+        try {
+            String copy=upload(Purpose.PURCHASE_ITEM,source.fileName(),store.read(source.originalKey()),actor).id();
+            var copied=asset(copy);
+            if(org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive())
+                org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization(){
+                    @Override public void afterCompletion(int status){if(status==STATUS_ROLLED_BACK){delete(copied.originalKey());delete(copied.thumbnailKey());}}
+                });
+            attach(copy,Purpose.PURCHASE_ITEM,"PURCHASE",orderId,actor);
+            return copy;
+        } catch(IOException e) { throw new CatalogImageGateway.AttachmentException(503,"PURCHASE_IMAGE_COPY_FAILED","图片复制失败，请使用原请求重试"); }
+    }
+    @Override @Transactional
     public void attach(String imageId,Purpose purpose,String type,String resourceId,AuthenticatedActor actor){if(imageId==null)return;try{var image=asset(imageId);
         if(image.purpose()!=purpose)throw new CatalogImageException(400,"CATALOG_IMAGE_PURPOSE_INVALID","图片用途与资源不匹配");
         if("ACTIVE".equals(image.status())){if(type.equals(image.resourceType())&&resourceId.equals(image.resourceId()))return;throw new CatalogImageException(409,"CATALOG_IMAGE_ALREADY_ATTACHED","图片已被其他资源引用");}

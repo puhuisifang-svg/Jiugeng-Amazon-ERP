@@ -9,10 +9,10 @@ import { productManagementApi, type ProductStockCommand, type ProductStockEntry 
 import { ApiError } from '@/api/client'
 import { session } from '@/state/session'
 import { beijingDateTime } from '@/utils/dateTime'
-const props = defineProps<{ variantId: string; name: string; parentName?: string }>()
+const props = defineProps<{ variantId: string; name: string; parentName?: string; readOnly?:boolean }>()
 const emit = defineEmits<{ close: []; changed: [] }>()
-const inbound = computed(() => session.canAccess(['inventory.inbound']))
-const outbound = computed(() => session.canAccess(['inventory.outbound']))
+const inbound = computed(() => !props.readOnly&&session.canAccess(['inventory.inbound']))
+const outbound = computed(() => !props.readOnly&&session.canAccess(['inventory.outbound']))
 const operations = [
   { key: 'INBOUND', label: '入库', sign: '+', verb: '确认入库' },
   { key: 'OUTBOUND', label: '出库', sign: '−', verb: '确认出库' },

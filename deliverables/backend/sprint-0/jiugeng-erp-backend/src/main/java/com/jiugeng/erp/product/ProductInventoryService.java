@@ -10,7 +10,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-class ProductInventoryService {
+class ProductInventoryService implements ProductPurchaseInventory {
+    @Override @Transactional public String receive(String variantId,String requestId,BigDecimal quantity,String reason,AuthenticatedActor actor) {
+        try { return transact(variantId,requestId,"INBOUND",quantity,reason,actor).item().id(); }
+        catch(ProductException e){throw new ProductPurchaseInventory.Failure(e.status(),e.code(),e.getMessage());}
+    }
     record Balance(String variantId, BigDecimal quantity, Instant updatedAt) {}
     record Entry(String id, String requestId, String variantId, String type, BigDecimal quantity,
                  BigDecimal signedQuantity, BigDecimal balanceAfter, String reason, String actorUserId,

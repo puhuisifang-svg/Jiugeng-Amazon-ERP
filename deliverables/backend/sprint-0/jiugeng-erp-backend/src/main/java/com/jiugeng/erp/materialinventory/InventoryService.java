@@ -59,9 +59,11 @@ class InventoryService implements InventoryOpeningService, InventoryInboundGatew
     @Override
     @Transactional
     public InventoryInboundGateway.Result postInbound(InventoryInboundGateway.Command command, AuthenticatedActor actor) {
+        try {
         TransactionResult result = post(new TransactionCommand(command.requestId(), command.materialId(),
-                TransactionType.INBOUND, command.quantity(), command.unit(), command.reason(), null), actor, false, null);
+                TransactionType.INBOUND, command.quantity(), command.unit(), command.reason(), null), actor, false, null,true);
         return new InventoryInboundGateway.Result(result.item().id(), result.balance().quantity(), result.replayed());
+        }catch(MaterialException e){throw new InventoryInboundGateway.Failure(e.status(),e.code(),e.getMessage());}
     }
 
     @Transactional
@@ -69,6 +71,7 @@ class InventoryService implements InventoryOpeningService, InventoryInboundGatew
         BigDecimal valid = nonNegative(safetyStock, "SAFETY_STOCK_INVALID", "安全库存不能小于 0");
         repository.lockWarehouse();
         InventoryRepository.MaterialRef material = repository.activeMaterial(required(materialId, "辅料", 36));
+        MaterialQuantity.validate(valid, material.unit());
         repository.ensureBalance(material);
         BalanceView before = repository.balance(material.id()).orElseThrow();
         repository.updateSafetyStock(material.id(), valid);
@@ -79,7 +82,8 @@ class InventoryService implements InventoryOpeningService, InventoryInboundGatew
     }
 
     private TransactionResult post(TransactionCommand command, AuthenticatedActor actor, boolean opening,
-            BigDecimal openingSafety) {
+            BigDecimal openingSafety) { return post(command,actor,opening,openingSafety,false); }
+    private TransactionResult post(TransactionCommand command,AuthenticatedActor actor,boolean opening,BigDecimal openingSafety,boolean purchaseReceipt) {
         String requestId = required(command.requestId(), "请求号", 100);
         String materialId = required(command.materialId(), "辅料", 36);
         String reason = required(command.reason(), "原因", 500);
@@ -98,12 +102,16 @@ class InventoryService implements InventoryOpeningService, InventoryInboundGatew
             return result(existing, true);
         }
 
-        InventoryRepository.MaterialRef material = repository.activeMaterial(materialId);
+        InventoryRepository.MaterialRef material = purchaseReceipt?repository.existingMaterial(materialId):repository.activeMaterial(materialId);
         if (!material.unit().equalsIgnoreCase(unit)) {
             throw new MaterialException(409, "INVENTORY_UNIT_MISMATCH", "库存单位必须与辅料主档一致");
         }
+        if(command.type()!=TransactionType.REVERSAL) MaterialQuantity.validate(suppliedQuantity, material.unit());
+        if(openingSafety!=null) MaterialQuantity.validate(openingSafety, material.unit());
         repository.ensureBalance(material);
         InventoryRepository.BalanceState balance = repository.lockBalance(materialId);
+        if(!balance.unit().equalsIgnoreCase(unit) && balance.quantity().signum()!=0)
+            throw new MaterialException(409,"INVENTORY_UNIT_MISMATCH","现存量单位与主档不一致，请先核对历史数据，不能直接混合记账");
         if (opening && balance.openingTransactionId() != null) {
             throw new MaterialException(409, "OPENING_ALREADY_EXISTS", "该辅料已存在期初流水");
         }
@@ -134,6 +142,7 @@ class InventoryService implements InventoryOpeningService, InventoryInboundGatew
             };
         }
         BigDecimal after = balance.quantity().add(delta);
+        MaterialQuantity.validate(after.max(BigDecimal.ZERO), unit);
         if (after.signum() < 0) throw new MaterialException(409, "NEGATIVE_INVENTORY", "库存不足，禁止产生负库存");
         String id = UUID.randomUUID().toString();
         repository.updateBalance(materialId, after, unit);

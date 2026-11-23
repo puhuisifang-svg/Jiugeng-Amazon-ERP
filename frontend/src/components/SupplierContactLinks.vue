@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import type { SupplierDto } from '@/api/domain'
 
-const props = defineProps<{ supplier?: SupplierDto | undefined; purchaseUrl?: string | undefined }>()
+const props = defineProps<{ supplier?: Pick<SupplierDto, 'phone' | 'sourceUrl'> | undefined; purchaseUrl?: string | undefined }>()
 const purchaseLink = computed(() => {
   const value = props.purchaseUrl || props.supplier?.sourceUrl
   if (!value) return undefined

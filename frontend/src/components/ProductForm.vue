@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SupplierDetailDialog from './SupplierDetailDialog.vue'
 import type { UploadProgress } from '@/utils/imageUpload'
 import ProductMaterialPicker from './ProductMaterialPicker.vue'
 import TableViewport from './TableViewport.vue'
@@ -70,6 +71,7 @@ function removeVariant(index: number) {
 function supplierName(id: string) { return suppliers.value.find(item => item.id === id)?.name ?? (loadingReferences.value ? '正在加载供应商…' : '供应商资料暂不可用') }
 function materialName(id: string) { const item = materials.value.find(value => value.id === id); return item ? item.name : loadingReferences.value ? '正在加载辅料…' : '辅料资料暂不可用' }
 function stockLabel(material: MaterialDetailDto) { if (!session.canAccess(['inventory.read'])) return '无查看权限'; if (inventoryFailed.value) return '暂不可用'; const balance = balances.value.find(item => item.materialId === material.id); return balance ? `库存 ${balance.quantity} ${balance.unit}` : '库存未初始化' }
+const supplierDetailId=ref('')
 function addSupplier(variant: ProductVariantInput, event: Event) { const element = event.target as HTMLSelectElement; const id = element.value; element.value = ''; if (id && !variant.suppliers.some(item => item.supplierId === id)) variant.suppliers.push({ supplierId: id, primary: variant.suppliers.length === 0 }) }
 const openRelationNotes = ref(new Set<object>())
 function toggleRelationNote(link: object) {
@@ -580,7 +582,13 @@ const formElement = ref<HTMLFormElement>()
                         scope="row"
                         class="relation-edit-name"
                       >
-                        {{ supplierName(link.supplierId) }}
+                        <button
+                          type="button"
+                          class="product-text-button"
+                          @click="supplierDetailId=link.supplierId"
+                        >
+                          {{ supplierName(link.supplierId) }}
+                        </button>
                         <small
                           v-if="link.primary"
                           class="product-primary-supplier"
@@ -822,6 +830,11 @@ const formElement = ref<HTMLFormElement>()
     :stock-label="stockLabel"
     @close="materialTarget = undefined"
     @select="addMaterials"
+  />
+  <SupplierDetailDialog
+    v-if="supplierDetailId"
+    :id="supplierDetailId"
+    @close="supplierDetailId=''"
   />
 </template>
 

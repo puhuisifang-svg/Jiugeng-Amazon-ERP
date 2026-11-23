@@ -49,5 +49,5 @@ class PurchaseController {
     record VersionRequest(long version){}
     record CancelRequest(long version,String reason){}
     record ReceiptLineRequest(String orderLineId,BigDecimal quantity){ReceiptLineInput input(){return new ReceiptLineInput(orderLineId,quantity);}}
-    record ReceiptRequest(String requestId,Instant receivedAt,String remark,List<ReceiptLineRequest>lines){ReceiptInput input(){return new ReceiptInput(requestId,receivedAt,remark,lines==null?null:lines.stream().map(line -> line == null ? null : line.input()).toList());}}
+    record ReceiptRequest(String requestId,Instant receivedAt,String remark,List<ReceiptLineRequest>lines,String shipmentId){ReceiptInput input(){return new ReceiptInput(requestId,receivedAt,remark,lines==null?null:lines.stream().map(line -> line == null ? null : line.input()).toList(),shipmentId);}}
 }

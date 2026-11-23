@@ -1,219 +1,103 @@
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue'
-import { onBeforeRouteLeave, RouterLink } from 'vue-router'
-import { purchaseApi, type PurchaseOrder } from '@/api/purchases'
-import { ApiError } from '@/api/client'
-import { session } from '@/state/session'
-import { createRequestId } from '@/utils/requestId'
-import PurchaseReceiptDialog from './PurchaseReceiptDialog.vue'
+import '@/styles/purchaseManagement.css'
+import {computed,onMounted,onBeforeUnmount,ref,watch} from 'vue'
+import {RouterLink,onBeforeRouteLeave} from 'vue-router'
+import {purchaseManagementApi as api,blankPurchaseFilters} from '@/api/purchaseManagement'
+import type {PurchaseOrder} from '@/api/purchases'
+import {session} from '@/state/session'
+import {confirmAction} from '@/state/uiConfirmation'
+import PurchaseReceiveFlow from './PurchaseReceiveFlow.vue'
+import PurchaseItemImage from './PurchaseItemImage.vue'
 import TableViewport from './TableViewport.vue'
 import ListPagination from './ListPagination.vue'
-import PurchaseItemImage from './PurchaseItemImage.vue'
-import SuccessToast from './SuccessToast.vue'
-
-const props = defineProps<{ visible: boolean }>()
-const emit = defineEmits<{ count: [number]; busy: [boolean] }>()
-const canRead = computed(() => session.canAccess(['purchases.read']))
-const canReceive = computed(() => session.canAccess(['purchases.receive']))
-const orders = ref<PurchaseOrder[]>([]), loading = ref(false), saving = ref(false), error = ref(''), success = ref('')
-const query = ref(''), page = ref(1), pageSize = ref(10)
-const target = ref<PurchaseOrder>(), opening = ref(false), receiptError = ref(''), remark = ref('')
-const quantities = reactive<Record<string, number | ''>>({})
-type Payload = Parameters<typeof purchaseApi.receive>[1]
-const pending = ref<Payload>()
-const locked = computed(() => saving.value || !!pending.value)
-watch(locked, value => emit('busy', value))
-const filtered = computed(() => orders.value.filter(order => [order.orderNo, order.supplierName, order.trackingNumber, ...order.lines.flatMap(line => [line.itemName, line.itemCode])].join(' ').toLowerCase().includes(query.value.trim().toLowerCase())))
-function purchaseName(order:PurchaseOrder){return (order.lines[0]?.itemName || '未命名采购')+(order.lines.length>1?` 等 ${order.lines.length} 项`:'')}
-const rows = computed(() => filtered.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
-watch([query, pageSize], () => { page.value = 1 })
-watch(() => filtered.value.length, total => { page.value = Math.min(page.value, Math.max(1, Math.ceil(total / pageSize.value))) })
-async function reload() {
-  if (!canRead.value || loading.value || locked.value) return
-  loading.value = true; error.value = ''
-  try {
-    const results = await Promise.all([purchaseApi.orders('SUBMITTED'), purchaseApi.orders('PARTIALLY_RECEIVED')])
-    orders.value = [...new Map(results.flat().filter(order => ['SUBMITTED', 'PARTIALLY_RECEIVED'].includes(order.status)).map(order => [order.id, order])).values()]
-      .sort((a, b) => (a.expectedDeliveryDate || '9999').localeCompare(b.expectedDeliveryDate || '9999') || a.createdAt.localeCompare(b.createdAt))
-    emit('count', orders.value.length)
-  } catch (e) { error.value = e instanceof ApiError ? e.message : '待接收采购单加载失败，请刷新重试。' }
-  finally { loading.value = false }
-}
-async function open(order: PurchaseOrder) {
-  if (opening.value || locked.value || !canReceive.value) return
-  opening.value = true; error.value = ''
-  try {
-    const fresh = await purchaseApi.order(order.id)
-    if (!['SUBMITTED', 'PARTIALLY_RECEIVED'].includes(fresh.status)) { await reload(); error.value = '采购单状态已变化，已刷新待接收列表。'; return }
-    target.value = fresh; receiptError.value = ''; remark.value = ''
-    Object.keys(quantities).forEach(key => delete quantities[key])
-  } catch (e) { error.value = e instanceof ApiError ? e.message : '采购单读取失败，请重试。' }
-  finally { opening.value = false }
-}
-async function receive() {
-  if (!target.value || saving.value || !canReceive.value) return
-  receiptError.value = ''
-  if (!pending.value) {
-    const available = target.value.lines.filter(line => line.remainingQuantity > 0)
-    if (available.some(line => {
-      const value = quantities[line.id]
-      return value !== undefined && value !== '' && (!Number.isFinite(Number(value)) || Number(value) < 0 || Number(value) > line.remainingQuantity || !/^\d+(\.\d{1,4})?$/.test(String(value)))
-    })) { receiptError.value = '实收数量须在 0 与待收数量之间，最多四位小数。'; return }
-    const lines = available.filter(line => Number(quantities[line.id]) > 0).map(line => ({ orderLineId: line.id, quantity: Number(quantities[line.id]) }))
-    if (!lines.length) { receiptError.value = '请至少填写一项本次实收数量。'; return }
-    pending.value = { requestId: createRequestId(), receivedAt: new Date().toISOString(), remark: remark.value.trim(), lines }
-  }
-  const orderId = target.value.id
-  saving.value = true
-  try {
-    await purchaseApi.receive(orderId, pending.value)
-    pending.value = undefined; target.value = undefined
-    success.value = '收货已确认，采购进度已更新。'
-  } catch (e) {
-    if (e instanceof ApiError && e.status >= 400 && e.status < 500) {
-      pending.value = undefined; receiptError.value = e.message
-      // Concurrent receipts may change the remaining quantities.
-      try { target.value = await purchaseApi.order(orderId) } catch { /* Keep the original form for correction. */ }
-    } else { receiptError.value = '收货结果尚未确认，请点击“重试本次收货”。沿用原请求号核对，不会重复入账。' }
-  } finally { saving.value = false }
-  if (!target.value) await reload()
-}
-function close() { if (!locked.value) target.value = undefined }
-function beforeUnload(event: BeforeUnloadEvent) { if (locked.value) { event.preventDefault(); event.returnValue = '' } }
-onBeforeRouteLeave(() => !locked.value)
-window.addEventListener('beforeunload', beforeUnload)
-onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
-onMounted(() => { void reload() })
-watch(() => props.visible, visible => { if (visible) void reload() })
-defineExpose({ reload })
+const props=defineProps<{visible:boolean}>(),emit=defineEmits<{count:[number];busy:[boolean]}>()
+const orders=ref<PurchaseOrder[]>([]),loading=ref(false),error=ref(''),query=ref(''),applied=ref(''),page=ref(1),size=ref(10),total=ref(0),target=ref(''),flow=ref<InstanceType<typeof PurchaseReceiveFlow>>()
+const canRead=computed(()=>session.canAccess(['purchases.read'])),canReceive=computed(()=>session.canAccess(['purchases.receive']))
+let seq=0
+async function reload(){if(!canRead.value)return;const n=++seq;loading.value=true;error.value='';try{const r=await api.page({...blankPurchaseFilters(),type:'',status:'OPEN',q:applied.value},page.value-1,size.value);if(n===seq){orders.value=r.items;total.value=r.total;emit('count',r.total)}}catch(e){if(n===seq)error.value=(e instanceof Error?e.message:'读取失败')+(orders.value.length?'；保留上次读取结果':'')}finally{if(n===seq)loading.value=false}}
+async function completed(){target.value='';await reload()}
+watch([page,size],reload);watch(()=>props.visible,visible=>{if(visible)void reload()});watch(()=>!!flow.value?.busy,v=>emit('busy',v))
+onBeforeRouteLeave(async()=>!flow.value?.busy&&(!flow.value?.dirty||!!flow.value?.pending||await confirmAction('收货资料尚未保存，确定离开？')))
+onMounted(reload);onBeforeUnmount(()=>seq++);defineExpose({reload})
 </script>
-
 <template>
   <section
     v-if="visible"
+    class="purchase-ui"
     aria-label="采购待接收"
-    class="receipt-worklist"
   >
-    <SuccessToast :message="success" />
-    <p
-      v-if="!canRead"
-      class="data-state"
-    >
-      暂无采购查看权限，请联系管理员分配“采购查看”；确认收货还需“采购收货”权限。
-    </p>
-    <template v-else>
-      <div class="receipt-toolbar">
-        <label>查找采购单<input
+    <p v-if="!canRead">
+      暂无采购查看权限
+    </p><template v-else>
+      <form
+        class="purchase-search"
+        @submit.prevent="applied=query;page=1;reload()"
+      >
+        <input
           v-model="query"
           type="search"
-          placeholder="采购单号 / 供应商 / SKU / 运单号"
-        ></label>
-        <span>按实际到货数量确认，支持分批收货。</span>
-      </div>
-      <p
+          placeholder="采购单 / 商品 / 运单号"
+          aria-label="查找采购单"
+        ><button :disabled="loading">
+          搜索
+        </button>
+      </form><p
         v-if="error"
-        class="error-message"
         role="alert"
       >
         {{ error }}
-      </p>
-      <p
-        v-if="loading"
-        class="data-state"
-      >
-        正在加载待接收采购单…
-      </p>
-      <TableViewport v-else-if="rows.length">
-        <table class="data-table receipt-table">
-          <thead><tr><th>采购名称 / 供应商</th><th>采购内容</th><th>预计到货</th><th>物流信息</th><th>状态</th><th>操作</th></tr></thead>
-          <tbody>
+      </p><p v-if="loading">
+        正在读取…
+      </p><TableViewport v-else>
+        <table class="data-table">
+          <thead><tr><th>采购 / 供应商</th><th>商品摘要</th><th>预计到货</th><th>状态</th><th>操作</th></tr></thead><tbody>
             <tr
-              v-for="order in rows"
+              v-for="order in orders"
               :key="order.id"
             >
               <td>
                 <RouterLink :to="`/purchases/orders/${order.id}`">
-                  {{ purchaseName(order) }}
-                </RouterLink><small>{{ order.supplierName }}</small><small>{{ order.orderType === 'MANUAL' ? '日常物品采购' : order.orderType === 'MATERIAL' ? '辅料采购' : '产品采购' }}</small>
-              </td>
-              <td>
+                  {{ order.orderNo }}
+                </RouterLink><small>{{ order.supplierName }}</small>
+              </td><td>
                 <div
-                  v-for="line in order.lines"
+                  v-for="line in order.lines.slice(0,2)"
                   :key="line.id"
-                  class="receipt-item"
+                  class="purchase-list-product"
                 >
                   <PurchaseItemImage
                     :image-asset-id="line.imageAssetId"
                     :image-url="line.imageUrl"
                     :alt="line.itemName"
-                  />
-                  <div>{{ line.itemName }}<small v-if="line.specification">{{ line.specification }}</small><small>已收 {{ line.receivedQuantity }} / 采购 {{ line.orderedQuantity }} {{ line.unit }} · 待收 <strong>{{ line.remainingQuantity }}</strong> {{ line.unit }}</small></div>
-                </div>
-              </td>
-              <td>{{ order.expectedDeliveryDate || '未约定' }}</td>
-              <td>{{ order.carrier || '—' }}<small>{{ order.trackingNumber || '未填写运单号' }}</small></td>
-              <td><span class="receipt-status">{{ order.status === 'PARTIALLY_RECEIVED' ? '部分收货' : '待收货' }}</span></td>
-              <td>
+                  /><span>{{ line.itemName }}<small>已收 {{ line.receivedQuantity }} / {{ line.orderedQuantity }} {{ line.unit }}</small></span>
+                </div><small v-if="order.lines.length>2">共 {{ order.lines.length }} 项，进入收货查看全部</small>
+              </td><td>{{ order.expectedDeliveryDate||'未约定' }}</td><td>{{ order.status==='PARTIALLY_RECEIVED'?'部分收货':'待收货' }}</td><td>
                 <button
                   v-if="canReceive"
-                  type="button"
-                  class="primary-button"
-                  :disabled="opening || locked"
-                  @click="open(order)"
+                  @click="target=order.id"
                 >
                   确认收货
-                </button><span v-else>无收货权限</span>
+                </button>
+              </td>
+            </tr><tr v-if="!orders.length">
+              <td colspan="5">
+                {{ applied?'没有匹配的采购单':'暂无待接收采购单' }}
               </td>
             </tr>
           </tbody>
         </table>
-      </TableViewport>
-      <p
-        v-else
-        class="data-state"
-      >
-        {{ query ? '没有匹配的采购单' : '暂无待接收采购单' }}
-      </p>
-      <ListPagination
-        v-if="visible"
+      </TableViewport><ListPagination
         v-model:page="page"
-        v-model:page-size="pageSize"
-        :total="filtered.length"
-        :disabled="loading || locked"
+        v-model:page-size="size"
+        :total="total"
+        :disabled="loading"
       />
-    </template>
-    <PurchaseReceiptDialog
+    </template><PurchaseReceiveFlow
       v-if="target"
-      :order="target"
-      :quantities="quantities"
-      :remark="remark"
-      :receipt-error="receiptError"
-      :locked="locked"
-      :saving="saving"
-      :pending="!!pending"
-      @close="close"
-      @submit="receive"
-      @quantity="(id,value)=>quantities[id]=value===''?'':Number(value)"
-      @remark="remark=$event"
+      :id="target"
+      ref="flow"
+      @close="target='';reload()"
+      @completed="completed"
     />
   </section>
 </template>
-<style scoped>
-.receipt-worklist { min-width:0; }
-.receipt-toolbar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:10px; color:var(--muted); font-size:13px; }
-.receipt-toolbar label { display:flex; align-items:center; gap:8px; color:var(--ink); }
-.receipt-toolbar input { width:280px; max-width:60vw; }
-input { min-height:32px; border:1px solid var(--line); border-radius:4px; padding:5px 8px; font:inherit; box-sizing:border-box; }
-.receipt-table { min-width:950px; }
-.receipt-table td { vertical-align:top; }
-small { display:block; color:var(--muted); margin-top:3px; font-size:12px; }
-.receipt-item { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
-.receipt-item:last-child { margin-bottom:0; }
-.receipt-status { color:#a35b00; background:#fff4df; border-radius:4px; padding:3px 7px; white-space:nowrap; }
-.receipt-summary { display:flex; flex-wrap:wrap; gap:8px 20px; font-size:13px; }
-.receipt-hint { color:var(--muted); font-size:13px; }
-.receipt-confirm-table { min-width:660px; }
-.receipt-confirm-table input { width:140px; }
-.receipt-remark { display:flex; gap:10px; align-items:center; margin-top:12px; font-size:13px; }
-.receipt-remark input { flex:1; min-width:0; }
-</style>

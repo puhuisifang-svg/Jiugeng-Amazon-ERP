@@ -47,7 +47,7 @@ class ProductMaterialRelationRepository {
     }
 
     boolean activeMaterial(String id) {
-        return count("SELECT COUNT(*) FROM auxiliary_material WHERE id = :id AND status = 'ACTIVE'", id);
+        return jdbc.sql("SELECT id FROM auxiliary_material WHERE id=:id AND status='ACTIVE' FOR UPDATE").param("id",id).query(String.class).optional().isPresent();
     }
 
     List<String> activeVariantIds(String productId) {
@@ -90,7 +90,7 @@ class ProductMaterialRelationRepository {
     }
 
     String activeMaterialUnit(String id) {
-        return jdbc.sql("SELECT unit FROM auxiliary_material WHERE id=:id AND status='ACTIVE'")
+        return jdbc.sql("SELECT unit FROM auxiliary_material WHERE id=:id AND status='ACTIVE' FOR UPDATE")
                 .param("id", id).query(String.class).optional().orElse(null);
     }
 

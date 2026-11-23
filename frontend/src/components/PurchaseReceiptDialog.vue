@@ -1,25 +1,30 @@
 <script setup lang="ts">
+import {ref} from 'vue'
 import type { PurchaseOrder } from '@/api/purchases'
 import AccessDialog from './AccessDialog.vue'
 import TableViewport from './TableViewport.vue'
 import PurchaseItemImage from './PurchaseItemImage.vue'
-defineProps<{order:PurchaseOrder;quantities:Record<string,number|''>;remark:string;receiptError:string;locked:boolean;saving:boolean;pending:boolean}>()
+defineProps<{order:PurchaseOrder;quantities:Record<string,number|''>;remark:string;receiptError:string;locked:boolean;saving:boolean;pending:boolean;dirty?:boolean}>()
+const dialog=ref<InstanceType<typeof AccessDialog>>()
 const emit=defineEmits<{close:[];submit:[];quantity:[id:string,value:string|number];remark:[value:string]}>()
 function purchaseName(order:PurchaseOrder){return (order.lines[0]?.itemName || '未命名采购')+(order.lines.length>1?` 等 ${order.lines.length} 项`:'')}
 </script>
 <template>
   <AccessDialog
+    ref="dialog"
     title="确认采购收货"
     wide
-    :busy="locked"
+    :busy="saving"
+    :dirty="dirty&&!pending"
     @close="emit('close')"
   >
     <div class="receipt-summary">
       <strong>{{ purchaseName(order) }}</strong><span>{{ order.supplierName }}</span><span>{{ order.deliveryAddress || '未填写收货地址' }}</span>
     </div>
     <p class="receipt-hint">
-      核对实物后填写本次实收数量，未到货的项目留空。确认后登记收货；辅料采购同时计入辅料库存。
+      核对实物后填写本次实收数量，未到货的项目留空。确认后登记收货；产品和辅料采购同步计入对应库存；日常物品只登记收货。
     </p>
+    <slot />
     <TableViewport>
       <table class="data-table receipt-confirm-table">
         <thead><tr><th>图片</th><th>商品</th><th>采购</th><th>已收</th><th>待收</th><th>本次实收</th><th>操作</th></tr></thead>
@@ -62,7 +67,6 @@ function purchaseName(order:PurchaseOrder){return (order.lines[0]?.itemName || '
         </tbody>
       </table>
     </TableViewport>
-    <slot />
     <label class="receipt-remark">收货备注<input
       :value="remark"
       :disabled="locked"
@@ -81,8 +85,8 @@ function purchaseName(order:PurchaseOrder){return (order.lines[0]?.itemName || '
       <button
         type="button"
         class="secondary-button"
-        :disabled="locked"
-        @click="emit('close')"
+        :disabled="saving"
+        @click="dialog?.requestClose()"
       >
         取消
       </button><button

@@ -1,120 +1,16 @@
-import { ApiError } from '@/api/client'
-import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-const { createSupplier, suppliers } = vi.hoisted(() => ({ createSupplier: vi.fn(), suppliers: vi.fn() }))
-
-vi.mock('@/state/session', () => ({ session: { canAccess: () => true } }))
-vi.mock('@/api/catalog', () => ({ catalogApi: { uploadImage: vi.fn(), imageBlob: vi.fn() } }))
-vi.mock('@/api/domain', () => ({
-  domainApi: {
-    suppliers,
-    createSupplier,
-    updateSupplier: vi.fn(),
-    disableSupplier: vi.fn(),
-    deleteSupplier: vi.fn(),
-    supplier:vi.fn(),supplierDependencies:vi.fn(),
-  },
-}))
-
+import {mount,flushPromises} from '@vue/test-utils'
+import {beforeEach,expect,it,vi} from 'vitest'
+const h=vi.hoisted(()=>({suppliers:vi.fn(),capabilities:vi.fn(),export:vi.fn()}))
+vi.mock('@/api/domain',()=>({domainApi:{suppliers:h.suppliers}}))
+vi.mock('@/api/supplierManagement',()=>({supplierManagementApi:h}))
+vi.mock('@/state/session',()=>({session:{user:{value:{id:'supplier-page-test'}},canAccess:()=>true}}))
+vi.mock('@/config/runtime',()=>({runtimeConfig:{authMode:'password'}}))
+vi.mock('vue-router',()=>({onBeforeRouteLeave:vi.fn()}))
 import SuppliersView from './SuppliersView.vue'
-import { domainApi } from '@/api/domain'
-import { settleConfirmation, uiConfirmation } from '@/state/uiConfirmation'
-
-const AuthenticatedCatalogImage = { props: ['imageId', 'alt'], template: '<span>{{ alt }}</span>' }
-
-describe('SuppliersView', () => {
-  beforeEach(() => {
-    HTMLDialogElement.prototype.showModal=function(){this.open=true};HTMLDialogElement.prototype.close=function(){this.open=false};
-    vi.mocked(domainApi.supplier).mockResolvedValue({id:'s1',name:'合成供应商',version:3,status:'ACTIVE'} as never)
-    vi.mocked(domainApi.supplierDependencies).mockResolvedValue([])
-    suppliers.mockReset().mockResolvedValue({ items: [], totalCount: 0, page: 0, size: 100 })
-    createSupplier.mockReset().mockResolvedValue({ id: 's1', name: '包装供应商', status: 'ACTIVE', version: 0 })
-  })
-
-  it('keeps validation errors inside the dialog and clears them on reopening', async () => {
-    createSupplier.mockRejectedValueOnce(new ApiError(400, 'VALIDATION', '电话、微信号、1688 链接、图片至少填写一项'))
-    const wrapper=mount(SuppliersView);await flushPromises()
-    await wrapper.get('.material-toolbar button').trigger('click')
-    const dialog=wrapper.get('[aria-labelledby="supplier-dialog-title"]')
-    await dialog.get('input[required]').setValue('合成供应商')
-    await dialog.get('input[value="MATERIAL"]').setValue(true)
-    await dialog.get('form').trigger('submit');await flushPromises()
-    expect(dialog.get('[role="alert"]').text()).toContain('至少填写一项')
-    expect(wrapper.findAll('[role="alert"]')).toHaveLength(1)
-    expect(dialog.get('input[required]').element).toHaveProperty('value','合成供应商')
-    await dialog.get('.operation-dialog__close').trigger('click')
-    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
-    await wrapper.get('.material-toolbar button').trigger('click')
-    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
-    wrapper.unmount()
-  })
-
-  it('cancels deletion and deletes only the confirmed supplier', async () => {
-    suppliers.mockResolvedValue({ items: [{ id: 's1', name: '合成供应商', status: 'ACTIVE', version: 3 }], totalCount: 1 })
-    const w = mount(SuppliersView); await flushPromises()
-    await w.findAll('button').find(b => b.text() === '删除')!.trigger('click')
-    await flushPromises();await w.findAll('button').find(b=>b.text()==='关闭')!.trigger('click');await flushPromises()
-    expect(domainApi.deleteSupplier).not.toHaveBeenCalled()
-    await w.findAll('button').find(b => b.text() === '删除')!.trigger('click')
-    await flushPromises();suppliers.mockResolvedValue({items:[],totalCount:0});await w.findAll('button').find(b=>b.text()==='确认删除')!.trigger('click');await flushPromises()
-    expect(domainApi.deleteSupplier).toHaveBeenCalledWith('s1', 3)
-    expect(w.find('tbody tr').exists()).toBe(false)
-    expect(w.text()).toContain('供应商已删除')
-    w.unmount()
-  })
-
-  it('submits a plain supplier request and reports success', async () => {
-    const wrapper = mount(SuppliersView, { global: { stubs: { AuthenticatedCatalogImage } } })
-    await flushPromises()
-
-    expect(wrapper.findAll('form').some(item => item.text().includes('新增供应商'))).toBe(false)
-    await wrapper.get('.material-toolbar button').trigger('click')
-    const form = wrapper.findAll('form').find(item => item.text().includes('新增供应商'))!
-    expect(wrapper.get('[role="dialog"]').attributes('aria-labelledby')).toBe('supplier-dialog-title')
-    expect(form.get('select.status-select').element).toBeInstanceOf(HTMLSelectElement)
-    await form.get('input[required]').setValue('  包装供应商  ')
-    await form.findAll('input')[1]!.setValue('张三')
-    await form.get('input[autocomplete="off"]').setValue('packing_supplier')
-    expect(form.find('input[placeholder="https://example.com/wechat-qr.png"]').exists()).toBe(false)
-    await form.get('input[value="MATERIAL"]').setValue(true)
-    await form.get('input[value="PRODUCT"]').setValue(true)
-    await form.trigger('submit')
-    await flushPromises()
-
-    expect(createSupplier).toHaveBeenCalledWith({
-      name: '包装供应商', contactPerson: '张三', wechatId: 'packing_supplier',
-      categories: ['MATERIAL', 'PRODUCT'], status: 'ACTIVE',
-    })
-    expect(wrapper.get('[role="status"]').text()).toContain('供应商已创建')
-    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
-  })
-
-  it('uses a consistent responsive canvas for URL QR previews', async () => {
-    suppliers.mockResolvedValue({ items: [{ id: 's1', name: '二维码供应商', qrImageUrl: 'https://images.example.com/qr.png', status: 'ACTIVE', version: 0 }], totalCount: 1, page: 0, size: 100 })
-    const wrapper = mount(SuppliersView, { global: { stubs: { Teleport: true, AuthenticatedCatalogImage } } })
-    await flushPromises()
-
-    await wrapper.get('button.image-button').trigger('click')
-    const preview = wrapper.get('.image-preview-dialog__stage img')
-    expect(preview.attributes('src')).toBe('https://images.example.com/qr.png')
-  })
-  it('keeps form input on backdrop and cancels status confirmation without writes', async () => {
-    suppliers.mockResolvedValue({ items: [{ id: 's1', name: '合成供应商', status: 'ACTIVE', version: 0 }], totalCount: 1, page: 0, size: 100 })
-    const w = mount(SuppliersView); await flushPromises()
-    await w.findAll('button').find(b => b.text() === '停用')!.trigger('click')
-    expect(uiConfirmation.value?.message).toContain('合成供应商'); settleConfirmation(null); await flushPromises()
-    expect(domainApi.disableSupplier).not.toHaveBeenCalled()
-    await w.get('.material-toolbar button').trigger('click')
-    const name = w.get('[role="dialog"] input[required]'); await name.setValue('未保存合成输入')
-    await w.get('[role="dialog"]').trigger('click'); expect(name.element).toHaveProperty('value', '未保存合成输入')
-    expect(w.findAll('[role="dialog"] button').some(b => b.text() === '取消')).toBe(true); w.unmount()
-  })
-})
-
-it('shows supplier remarks in the list', async () => {
-  suppliers.mockResolvedValue({items:[{id:'remark-supplier',name:'测试供应商',status:'ACTIVE',remark:'送货前请联系仓库'}],totalCount:1,page:0,size:100})
-  const wrapper=mount(SuppliersView);await flushPromises()
-  expect(wrapper.get('.supplier-remark').text()).toBe('送货前请联系仓库')
-  wrapper.unmount()
-})
+const item={id:'s1',name:'合成供应商',version:3,status:'ACTIVE',categories:['MATERIAL'],remark:'送货前联系仓库'}
+const global={stubs:{SupplierImage:true,SupplierContactValue:true,SupplierEditor:{template:'<div>编辑器<button @click="$emit(\'saved\',{id:\'s1\'})">模拟已保存</button></div>'},SupplierDetailDialog:true,SupplierDeleteDialog:true,RowMoreActions:true}}
+beforeEach(()=>{sessionStorage.clear();vi.clearAllMocks();h.capabilities.mockResolvedValue({closeoutVersion:1});h.suppliers.mockResolvedValue({items:[item],totalCount:101})})
+it('uses server paging and applies filters only on query',async()=>{const w=mount(SuppliersView,{global});await flushPromises();expect(h.suppliers).toHaveBeenLastCalledWith(expect.objectContaining({page:0,size:20}));await w.get('input[type="search"]').setValue('名称');expect(h.suppliers).toHaveBeenCalledTimes(1);await w.get('form').trigger('submit');await flushPromises();expect(h.suppliers).toHaveBeenLastCalledWith(expect.objectContaining({q:'名称',page:0}));expect(w.text()).toContain('101');w.unmount()})
+it('refetches the active filter after a save and keeps remarks expandable',async()=>{const w=mount(SuppliersView,{global});await flushPromises();await w.findAll('button').find(b=>b.text()==='查看备注')!.trigger('click');expect(w.text()).toContain('送货前联系仓库');await w.findAll('button').find(b=>b.text()==='编辑')!.trigger('click');h.suppliers.mockResolvedValue({items:[],totalCount:0});await w.findAll('button').find(b=>b.text()==='模拟已保存')!.trigger('click');await flushPromises();expect(w.text()).toContain('当前筛选或页码未包含该记录');w.unmount()})
+it('labels retained results after refresh failure',async()=>{const w=mount(SuppliersView,{global});await flushPromises();h.suppliers.mockRejectedValue(new Error('网络异常'));await w.get('form').trigger('submit');await flushPromises();expect(w.text()).toContain('刷新失败，当前显示上次结果');expect(w.text()).toContain('合成供应商');w.unmount()})
+it('disables writes against an old backend',async()=>{h.capabilities.mockRejectedValue(new Error('旧后端'));const w=mount(SuppliersView,{global});await flushPromises();expect(w.findAll('button').find(b=>b.text()==='新增供应商')!.attributes('disabled')).toBeDefined();expect(w.text()).toContain('旧后端');w.unmount()})

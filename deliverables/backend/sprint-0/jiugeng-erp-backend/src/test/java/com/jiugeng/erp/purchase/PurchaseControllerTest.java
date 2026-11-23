@@ -47,6 +47,7 @@ class PurchaseControllerTest {
     }
     @AfterEach void cleanup(){
         cleanupPurchases();
+        jdbc.update("DELETE FROM product_inventory_transaction WHERE variant_id=?",variantId);jdbc.update("DELETE FROM product_inventory_balance WHERE variant_id=?",variantId);
         // Release this fixture's links before another test class deletes catalog rows.
         jdbc.update("DELETE FROM auxiliary_material_supplier WHERE supplier_id=?",supplierId);
         jdbc.update("DELETE FROM product_variant_supplier WHERE supplier_id=?",supplierId);
@@ -101,29 +102,86 @@ class PurchaseControllerTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM inventory_transaction WHERE request_id LIKE 'PURCHASE:%' AND auxiliary_material_id=?",Integer.class,materialId)).isEqualTo(1);
     }
 
-    @Test void productReceiptCompletesWithoutInventorySideEffectAndOverReceiptIsRejected() throws Exception {
+    @Test void productReceiptUpdatesProductInventoryOnceAndRejectsOverReceipt() throws Exception {
         String token=login("product-buyer","PRODUCT_MATERIAL"); JsonNode order=createOrder(token,"PRODUCT",variantId,"2","18"); String id=order.get("id").asText();
-        String productId=jdbc.queryForObject("SELECT product_id FROM product_variant WHERE id=?",String.class,variantId);
-        mvc.perform(delete("/api/v1/products/"+productId+"/skus/"+variantId).param("productVersion","0").param("version","0").header("Authorization",bearer(token))).andExpect(status().isNoContent());
-        mvc.perform(delete("/api/v1/products/"+productId).param("version","1").header("Authorization",bearer(token))).andExpect(status().isNoContent());
-        mvc.perform(get("/api/v1/products/"+productId).header("Authorization",bearer(token))).andExpect(status().isNotFound());
-        var payload=Map.of("orderType","PRODUCT","supplierId",supplierId,"currency","CNY","version",0,
-            "lines",List.of(Map.of("itemId",variantId,"quantity",2,"unitPrice",18)));
-        mvc.perform(post("/api/v1/purchases/orders").header("Authorization",bearer(token))
-            .contentType(MediaType.APPLICATION_JSON).content(json(payload))).andExpect(status().isConflict());
-        order=objectMapper.readTree(mvc.perform(put("/api/v1/purchases/orders/"+id).header("Authorization",bearer(token))
-            .contentType(MediaType.APPLICATION_JSON).content(json(payload))).andExpect(status().isOk())
-            .andExpect(jsonPath("$.lines[0].itemName").value("采购SKU")).andReturn().getResponse().getContentAsString());
-        String submitted=mvc.perform(post("/api/v1/purchases/orders/{id}/submit",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("version",order.get("version").asLong())))).andReturn().getResponse().getContentAsString();
+        mvc.perform(post("/api/v1/purchases/orders/{id}/submit",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("version",0)))).andExpect(status().isOk());
         String lineId=order.at("/lines/0/id").asText();
-        mvc.perform(post("/api/v1/purchases/orders/{id}/receipts",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("requestId","PRODUCT-OVER","receivedAt","2026-10-16T08:00:00Z","lines",List.of(Map.of("orderLineId",lineId,"quantity",3))))))
-                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("PURCHASE_OVER_RECEIPT"));
-        mvc.perform(post("/api/v1/purchases/orders/{id}/receipts",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("requestId","PRODUCT-OK","receivedAt","2026-10-16T08:00:00Z","lines",List.of(Map.of("orderLineId",lineId,"quantity",2))))))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.lines[0].inventoryTransactionId").doesNotExist());
-        mvc.perform(get("/api/v1/purchases/orders/{id}",id).header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("COMPLETED"));
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM inventory_transaction WHERE request_id LIKE 'PURCHASE:%' AND auxiliary_material_id=?",Integer.class,materialId)).isZero();
-        assertThat(objectMapper.readTree(submitted).get("status").asText()).isEqualTo("SUBMITTED");
+        mvc.perform(post("/api/v1/purchases/orders/{id}/receipts",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("requestId","PRODUCT-OVER","receivedAt","2026-10-16T08:00:00Z","lines",List.of(Map.of("orderLineId",lineId,"quantity",3)))))).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("PURCHASE_OVER_RECEIPT"));
+        var receipt=Map.of("requestId","PRODUCT-OK","receivedAt","2026-10-16T08:00:00Z","lines",List.of(Map.of("orderLineId",lineId,"quantity",2)));
+        for(int n=0;n<2;n++)mvc.perform(post("/api/v1/purchases/orders/{id}/receipts",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(receipt))).andExpect(status().isOk()).andExpect(jsonPath("$.replayed").value(n==1)).andExpect(jsonPath("$.lines[0].inventoryTransactionId").isNotEmpty());
+        assertThat(jdbc.queryForObject("SELECT quantity FROM product_inventory_balance WHERE variant_id=?",java.math.BigDecimal.class,variantId)).isEqualByComparingTo("2");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product_inventory_transaction WHERE variant_id=?",Integer.class,variantId)).isEqualTo(1);
     }
+
+    @Test void managedSaveIsIdempotentAndRejectsChangedPayloadAndStaleVersion() throws Exception {
+        String token=login("managed-save","PRODUCT_MATERIAL");var input=managedInput("MATERIAL",materialId,10);var save=new java.util.LinkedHashMap<String,Object>(Map.of("requestId","save-once","order",input));
+        var first=managedSave(token,save);var second=managedSave(token,save);assertThat(second.path("id")).isEqualTo(first.path("id"));
+        input.put("remark","changed");mvc.perform(post("/api/v1/purchases/manage/save").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(save))).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("PURCHASE_REQUEST_CONFLICT"));
+        save.put("requestId","update-stale");save.put("id",first.path("id").asText());input.put("version",0);
+        mvc.perform(post("/api/v1/purchases/manage/save").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(save))).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("PURCHASE_VERSION_CONFLICT"));
+    }
+
+    @Test void countQuantitiesAreValidatedBeforePurchaseAndDisabledMaterialCanFulfillExistingOrder() throws Exception {
+        String token=login("quantity-buyer","PRODUCT_MATERIAL");
+        for(String type:List.of("PRODUCT","MATERIAL"))mvc.perform(post("/api/v1/purchases/manage/save").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("requestId",UUID.randomUUID().toString(),"order",managedInput(type,type.equals("PRODUCT")?variantId:materialId,new java.math.BigDecimal("1.5")))))).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("PURCHASE_QUANTITY_INVALID"));
+        var order=managedSave(token,Map.of("requestId","disabled-receive","order",managedInput("MATERIAL",materialId,4)));jdbc.update("UPDATE auxiliary_material SET status='DISABLED' WHERE id=?",materialId);jdbc.update("UPDATE supplier SET status='DISABLED' WHERE id=?",supplierId);
+        var increase=managedInput("MATERIAL",materialId,5);increase.put("version",1);mvc.perform(post("/api/v1/purchases/manage/save").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("requestId","disabled-increase","id",order.path("id").asText(),"order",increase)))).andExpect(status().isConflict());
+        mvc.perform(post("/api/v1/purchases/orders/{id}/receipts",order.path("id").asText()).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("requestId","disabled-receipt","receivedAt","2026-10-16T08:00:00Z","lines",List.of(Map.of("orderLineId",order.at("/lines/0/id").asText(),"quantity",4)))))).andExpect(status().isOk());
+    }
+
+    @Test void multiShipmentsAllocateOnlyRemainingQuantityAndRequireMatchingReceipt() throws Exception {
+        String token=login("shipment-buyer","PRODUCT_MATERIAL");var order=managedSave(token,Map.of("requestId","multi-order","order",managedInput("PRODUCT",variantId,10)));String id=order.path("id").asText(),line=order.at("/lines/0/id").asText();
+        var input=new java.util.LinkedHashMap<String,Object>(Map.of("requestId","batch-one","version",1,"carrier","Synthetic","trackingNumber","SYN001","shippedOn","2026-10-16","packageCount",1,"lines",List.of(Map.of("orderLineId",line,"quantity",4))));
+        var result=objectMapper.readTree(mvc.perform(post("/api/v1/purchases/manage/{id}/shipments",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString());String shipment=result.at("/0/id").asText();
+        mvc.perform(post("/api/v1/purchases/manage/{id}/shipments",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input))).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1));
+        input.put("requestId","batch-over");input.put("version",2);input.put("lines",List.of(Map.of("orderLineId",line,"quantity",7)));
+        mvc.perform(post("/api/v1/purchases/manage/{id}/shipments",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input))).andExpect(status().isBadRequest());
+        var receipt=new java.util.LinkedHashMap<String,Object>(Map.of("requestId","batch-receipt","receivedAt","2026-10-16T08:00:00Z","lines",List.of(Map.of("orderLineId",line,"quantity",2))));
+        mvc.perform(post("/api/v1/purchases/orders/{id}/receipts",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(receipt))).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("PURCHASE_SHIPMENT_REQUIRED"));
+        receipt.put("shipmentId",shipment);
+        for(int n=0;n<2;n++)mvc.perform(post("/api/v1/purchases/orders/{id}/receipts",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(receipt))).andExpect(status().isOk());
+        assertThat(jdbc.queryForObject("SELECT received_quantity FROM purchase_shipment_line WHERE shipment_id=?",java.math.BigDecimal.class,shipment)).isEqualByComparingTo("2");
+        receipt.put("requestId","batch-too-many");receipt.put("lines",List.of(Map.of("orderLineId",line,"quantity",3)));
+        mvc.perform(post("/api/v1/purchases/orders/{id}/receipts",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(receipt))).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("PURCHASE_SHIPMENT_OVER_RECEIPT"));
+        input.put("requestId","batch-two");input.put("version",3);input.put("lines",List.of(Map.of("orderLineId",line,"quantity",6)));
+        mvc.perform(post("/api/v1/purchases/manage/{id}/shipments",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input))).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(2));
+        mvc.perform(delete("/api/v1/purchases/orders/{id}",id).param("version","4").header("Authorization",bearer(token))).andExpect(status().isConflict());
+    }
+
+    @Test void listUsesRealPagingAndLiteralSearchAndExportsSafeDecimals() throws Exception {
+        String token=login("paged-buyer","PRODUCT_MATERIAL");for(int i=0;i<11;i++)managedSave(token,Map.of("requestId","page-"+i,"order",managedInput("MATERIAL",materialId,2)));
+        mvc.perform(get("/api/v1/purchases/manage/orders").param("type","MATERIAL").param("page","1").param("size","10").header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(11)).andExpect(jsonPath("$.items.length()").value(1));
+        mvc.perform(get("/api/v1/purchases/manage/orders").param("q","%").header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
+        String csv=mvc.perform(post("/api/v1/purchases/manage/export").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("filters",Map.of("type","MATERIAL"),"ids",List.of())))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);assertThat(csv).contains("0.1234","0.25");
+    }
+
+    @Test void snapshotKeepsSupplierNameAndMultilineRemarkAndProtectsNewRoutes() throws Exception {
+        String token=login("snapshot-buyer","PRODUCT_MATERIAL");var input=managedInput("MATERIAL",materialId,2);input.put("remark","合成说明\n第二行");var order=managedSave(token,Map.of("requestId","snapshot-order","order",input));jdbc.update("UPDATE supplier SET name='新合成名称' WHERE id=?",supplierId);
+        mvc.perform(get("/api/v1/purchases/orders/{id}",order.path("id").asText()).header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.supplierName").value("采购供应商")).andExpect(jsonPath("$.remark").value("合成说明\n第二行")).andExpect(jsonPath("$.lines[0].snapshotSaved").value(true));
+        String denied=login("managed-denied","SELECTION");mvc.perform(get("/api/v1/purchases/manage/orders").header("Authorization",bearer(denied))).andExpect(status().isForbidden());mvc.perform(post("/api/v1/purchases/manage/save").header("Authorization",bearer(denied)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("requestId","no","order",input)))).andExpect(status().isForbidden());
+    }
+
+    @Test void catalogImageIsCopiedIndependentlyAndRetainedOnEdit() throws Exception {
+        String token=login("snapshot-image-buyer","PRODUCT_MATERIAL");var bytes=new java.io.ByteArrayOutputStream();javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(2,2,java.awt.image.BufferedImage.TYPE_INT_RGB),"png",bytes);
+        var file=new org.springframework.mock.web.MockMultipartFile("file","synthetic.png","image/png",bytes.toByteArray());
+        String image=objectMapper.readTree(mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/v1/catalog-images").file(file).param("purpose","MATERIAL_IMAGE").header("Authorization",bearer(token))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("id").asText();
+        jdbc.update("UPDATE catalog_image_asset SET status='ACTIVE',attached_resource_type='AUXILIARY_MATERIAL',attached_resource_id=? WHERE id=?",materialId,image);jdbc.update("UPDATE auxiliary_material SET image_asset_id=?,specification='合成规格' WHERE id=?",image,materialId);
+        var input=managedInput("MATERIAL",materialId,2);var order=managedSave(token,Map.of("requestId","image-snapshot","order",input));String snapshot=order.at("/lines/0/imageAssetId").asText();assertThat(snapshot).isNotBlank().isNotEqualTo(image);assertThat(order.at("/lines/0/specification").asText()).isEqualTo("合成规格");
+        jdbc.update("UPDATE auxiliary_material SET image_asset_id=NULL,specification='改变后的规格' WHERE id=?",materialId);input.put("version",order.path("version").asLong());input.put("remark","合成修改");var updated=managedSave(token,Map.of("requestId","image-update","id",order.path("id").asText(),"order",input));assertThat(updated.at("/lines/0/imageAssetId").asText()).isEqualTo(snapshot);assertThat(updated.at("/lines/0/specification").asText()).isEqualTo("合成规格");
+        mvc.perform(get("/api/v1/purchases/manage/{id}/checks",order.path("id").asText()).header("Authorization",bearer(token))).andExpect(status().isOk());
+    }
+
+    private java.util.LinkedHashMap<String,Object> managedInput(String type,String item,Object quantity){return new java.util.LinkedHashMap<>(Map.of("orderType",type,"supplierId",supplierId,"currency","CNY","lines",List.of(Map.of("itemId",item,"quantity",quantity,"unitPrice","0.1234"))));}
+    @Test void manualCopyRejectsMissingOrNullLinesAsValidationErrors() throws Exception {
+        String token=login("managed-invalid-copy","PRODUCT_MATERIAL");
+        for (String lines:List.of("null","[null]","[]")) {
+            mvc.perform(post("/api/v1/purchases/manage/save").header("Authorization",bearer(token))
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"requestId\":\"invalid-copy\",\"copyFromId\":\"synthetic-source\",\"order\":{\"orderType\":\"MANUAL\",\"lines\":"+lines+"}}"))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("PURCHASE_FIELD_INVALID"));
+        }
+    }
+
+    private JsonNode managedSave(String token,Object value)throws Exception{return objectMapper.readTree(mvc.perform(post("/api/v1/purchases/manage/save").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(value))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString());}
 
     @Test void selectionRoleCannotReadOrWritePurchases() throws Exception {
         String token=login("selector-purchase","SELECTION");
@@ -349,6 +407,6 @@ class PurchaseControllerTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("DRAFT")).andReturn().getResponse().getContentAsString();return objectMapper.readTree(body);
     }
     private String login(String name,String role)throws Exception{String uid=UUID.randomUUID().toString();var encoder=new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder();jdbc.update("INSERT INTO iam_user(id,login_name,display_name,password_hash,role,status,must_change_password) VALUES(?,?,?,?,?,'ENABLED',FALSE)",uid,name,name,encoder.encode(PASSWORD),role);jdbc.update("INSERT INTO iam_user_role(user_id,role_id) SELECT id,role FROM iam_user WHERE id=?",uid);String body=mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(json(Map.of("loginName",name,"password",PASSWORD)))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();return objectMapper.readTree(body).get("token").asText();}
-    private void cleanupPurchases(){jdbc.update("DELETE FROM purchase_delivery_hidden");jdbc.update("DELETE FROM purchase_receipt_line");jdbc.update("DELETE FROM purchase_receipt");jdbc.update("DELETE FROM purchase_order_line");jdbc.update("DELETE FROM purchase_order");}
+    private void cleanupPurchases(){jdbc.update("DELETE FROM purchase_write_request");jdbc.update("DELETE FROM purchase_shipment_line");jdbc.update("DELETE FROM purchase_shipment");jdbc.update("DELETE FROM purchase_delivery_hidden");jdbc.update("DELETE FROM purchase_receipt_line");jdbc.update("DELETE FROM purchase_receipt");jdbc.update("DELETE FROM purchase_order_line");jdbc.update("DELETE FROM purchase_order");}
     private String json(Object value)throws Exception{return objectMapper.writeValueAsString(value);}private String bearer(String token){return "Bearer "+token;}
 }

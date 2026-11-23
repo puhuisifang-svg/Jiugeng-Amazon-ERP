@@ -23,6 +23,8 @@
 #app .samples-ui .sample-remark details p{margin:6px 0}
 #app .samples-ui .sample-time{color:var(--muted);font-size:12px;max-width:100px}
 #app .samples-ui .sample-actions{min-width:114px;width:114px;white-space:nowrap}
+#app .samples-ui .sample-actions .text-action,#app .samples-ui .sample-actions .row-more-actions{vertical-align:middle}
+#app .samples-ui .sample-actions .row-more-actions{margin-left:8px}
 #app .samples-ui .sample-table th:last-child{min-width:114px;width:114px}
 #app .samples-ui .sample-row-selected{background:#eff5ff}
 #app .samples-ui .text-action{display:inline-flex;align-items:center;min-height:32px;background:transparent;border:0;color:#2864c5;padding:2px 6px;font-size:13px;cursor:pointer}

@@ -15,6 +15,8 @@ import SkuDocumentsPanel from '@/components/SkuDocumentsPanel.vue'
 import TableViewport from '@/components/TableViewport.vue'
 import PurchaseItemImage from './PurchaseItemImage.vue'
 import SupplierContactLinks from './SupplierContactLinks.vue'
+import SupplierDetailDialog from './SupplierDetailDialog.vue'
+const supplierDetailId=ref('')
 const props = defineProps<{ detailRow: SkuListItemDto; writable: boolean; error?: string; initialTab?: 'basic' | 'purchase' | 'materials' }>()
 const emit = defineEmits<{ close: []; edit: [row: SkuListItemDto] }>()
 const detailVariant = computed(() => props.detailRow.variant)
@@ -252,7 +254,13 @@ onBeforeUnmount(() => { sequence++ })
                 >
                   <tr :class="{ 'relation-row--primary': supplier.primary }">
                     <td class="relation-name-cell">
-                      <strong class="relation-name">{{ supplierDetails[supplier.supplierId]?.name || supplier.supplierName || '供应商名称未维护' }}</strong>
+                      <button
+                        type="button"
+                        class="product-text-button relation-name"
+                        @click="supplierDetailId=supplier.supplierId"
+                      >
+                        {{ supplierDetails[supplier.supplierId]?.name || supplier.supplierName || '供应商名称未维护' }}
+                      </button>
                       <div class="relation-meta">
                         <span
                           v-if="supplier.primary"
@@ -520,6 +528,11 @@ onBeforeUnmount(() => { sequence++ })
       </footer>
     </section>
   </div>
+  <SupplierDetailDialog
+    v-if="supplierDetailId"
+    :id="supplierDetailId"
+    @close="supplierDetailId=''"
+  />
 </template>
 
 <style scoped>

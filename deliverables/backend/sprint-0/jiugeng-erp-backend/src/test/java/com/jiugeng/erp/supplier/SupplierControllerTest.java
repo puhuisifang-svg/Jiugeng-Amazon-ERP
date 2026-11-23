@@ -163,12 +163,15 @@ class SupplierControllerTest {
                                 Map.of("supplierId", second, "primary", true))))))
                 .andExpect(status().isBadRequest());
         jdbc.update("UPDATE supplier SET categories='PRODUCT' WHERE id=?",first);
+        // Existing history survives a category change; newly introduced suppliers still require MATERIAL.
         mvc.perform(put("/api/v1/suppliers/material/{id}", materialId).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON)
             .content(json(Map.of("links",List.of(Map.of("supplierId",first,"primary",true))))))
+            .andExpect(status().isOk());
+        jdbc.update("UPDATE supplier SET categories='PRODUCT' WHERE id=?",second);
+        mvc.perform(put("/api/v1/suppliers/material/{id}", materialId).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON)
+            .content(json(Map.of("links",List.of(Map.of("supplierId",first,"primary",true),Map.of("supplierId",second,"primary",false))))))
             .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SUPPLIER_CATEGORY_REQUIRED"));
-        assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM auxiliary_material_supplier WHERE auxiliary_material_id=?",
-                Integer.class, materialId)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM auxiliary_material_supplier WHERE auxiliary_material_id=?",Integer.class,materialId)).isEqualTo(1);
     }
 
     @Test

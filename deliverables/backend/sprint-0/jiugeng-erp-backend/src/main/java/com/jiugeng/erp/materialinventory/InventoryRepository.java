@@ -25,12 +25,15 @@ class InventoryRepository {
     }
 
     MaterialRef activeMaterial(String id) {
-        return jdbc.sql("SELECT id, material_code, name, unit FROM auxiliary_material WHERE id=:id AND status='ACTIVE'")
+        return jdbc.sql("SELECT id, material_code, name, unit FROM auxiliary_material WHERE id=:id AND status='ACTIVE' FOR UPDATE")
                 .param("id", id).query((rs, row) -> new MaterialRef(rs.getString("id"), rs.getString("material_code"),
                         rs.getString("name"), rs.getString("unit"))).optional()
                 .orElseThrow(() -> new MaterialException(409, "ACTIVE_MATERIAL_REQUIRED", "只能对启用辅料记账"));
     }
 
+    MaterialRef existingMaterial(String id) {
+        return jdbc.sql("SELECT id,material_code,name,unit FROM auxiliary_material WHERE id=:id FOR UPDATE").param("id",id).query((rs,n)->new MaterialRef(rs.getString("id"),rs.getString("material_code"),rs.getString("name"),rs.getString("unit"))).optional().orElseThrow(()->new MaterialException(409,"MATERIAL_NOT_FOUND","辅料不存在，请先核对采购资料"));
+    }
     void ensureBalance(MaterialRef material) {
         int count = jdbc.sql("SELECT COUNT(*) FROM inventory_balance WHERE warehouse_id=:warehouse AND auxiliary_material_id=:material")
                 .param("warehouse", WAREHOUSE_ID).param("material", material.id()).query(Integer.class).single();
@@ -105,6 +108,12 @@ class InventoryRepository {
         return jdbc.sql(transactionSelect() + " WHERE " + condition).param("value", value).query(this::mapTransaction).optional();
     }
 
+    record LedgerPage(List<TransactionView> items,long totalCount) {}
+    LedgerPage page(String id,int page,int size) {
+        var rows=jdbc.sql(transactionSelect()+" WHERE t.auxiliary_material_id=:id ORDER BY t.occurred_at DESC,t.id DESC LIMIT :size OFFSET :offset").param("id",id).param("size",size).param("offset",(long)page*size).query(this::mapTransaction).list();
+        long count=jdbc.sql("SELECT COUNT(*) FROM inventory_transaction WHERE auxiliary_material_id=:id").param("id",id).query(Long.class).single();
+        return new LedgerPage(rows,count);
+    }
     List<TransactionView> transactions(String materialId) {
         String condition = materialId == null || materialId.isBlank() ? "" : " WHERE t.auxiliary_material_id=:material";
         var query = jdbc.sql(transactionSelect() + condition + " ORDER BY t.occurred_at DESC, t.id DESC");

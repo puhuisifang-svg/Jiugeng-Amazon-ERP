@@ -11,6 +11,17 @@
 
 本报告是带日期的快照，不是实时监控。接手时重新检查 HEAD、工作区及当前任务归属；发布状态由 PJM 维护，Codex 不跟踪线上发布。[2026-10-15 原报告](archive/STATUS_REPORT_2026-10-15.md)已归档，保留原始事实及当时风险，不再作为今天的待办清单。
 
+## PJM 发布核验（2026-11-23，DEL-046）
+
+- 用户授权累计范围已通过受保护 main 流程发布；唯一写入者为 PJM，Codex 不等待或跟踪发布。
+- 累计功能提交：`6198abeae0ac997add5d0675d9db383e710cccf3`；测试扫描误报说明提交：`d915dc44d374037818bf4913a5cd1c25781882b3`。未修改业务逻辑、未绕过分支保护。
+- [PR #21](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/pull/21) 于北京时间 14:14:24 合入；应用发布 main SHA：`aa5e69b391b230b414f194b97e21fcf5afb19624`。
+- [PR CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45122376121)、[main CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45122775556) 全部通过。
+- [Production](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45122775575) 实际 SSH deploy 成功（不是 skipped），北京时间 14:21:30 记录数据库备份完成，14:21:56 记录目标 SHA 部署验证成功。
+- 对此前用户实际使用入口独立读取 `/version.json`，返回上述完整 SHA；部署接收脚本同时验证后端 `/actuator/health` 为 UP 和服务器前端版本。未使用本地旧运行 JAR。
+- V102–V106 随精确提交构建；生产 mysql 配置启用 Flyway 并在迁移时校验，成功启动与健康通过提供间接迁移证据。当前没有服务器管理身份，未直查生产 `flyway_schema_history`；CI 的 H2 V106 日志不当作生产数据库证据。
+- 完整证据与边界见 [发布记录](../../deliverables/pjm/OPERATIONS_RELEASE_RESULT_2026-11-23.md)。本节覆盖下方开发阶段的未提交、待验、待发布描述；后续纯文档提交不改变本次应用范围。
+
 ## 本次累计迭代发布交接（2026-11-23）
 
 用户已授权将辅料、供应商、采购及样品操作 UI 累计修改交项目经理提交远端 main 并部署。分支 `feature/ERP-100-material-closeout`，基线 `f87d7c98b9a32a1c73a4441abcfb8caad5f668d3`，Codex 交接前尚未提交。正式移交后唯一写入权归 PJM，Codex 停止修改和服务操作，不轮询、不等待线上发布。

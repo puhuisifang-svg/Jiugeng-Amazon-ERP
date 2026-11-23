@@ -1,10 +1,16 @@
 # 项目文档总索引
 
-## 当前接手入口（2026-11-20 更新）
+## 当前接手入口（2026-11-21 更新）
 
 先读 [README](../README.md) → [AGENTS](../AGENTS.md) → [项目接手指南](04-engineering/PROJECT_HANDOVER.md) → [当前状态报告](08-project-management/STATUS_REPORT.md)。界面任务同时读 [UI 规范](ui/UI_STANDARD.md)，跨会话使用 [交接模板](../templates/SESSION_HANDOFF_TEMPLATE.md)。
 
-当前未提交业务迭代：[产品管理 19 项收尾记录](../deliverables/pjm/PRODUCT_CLOSEOUT_LOCAL_2026-11-20.md)。其中库存、恢复、权限依赖和列表新 API 是本地新增，尚未发布；接手时先检查该记录的验证状态。
+最新发布授权与交接：[DEL-046 辅料/供应商/采购累计迭代（2026-11-23）](../deliverables/pjm/OPERATIONS_RELEASE_HANDOFF_2026-11-23.md)。已完成本地统一验证；提交、合并和发布由 PJM 执行，结果待其记录。下面保留各模块开发阶段入口。
+
+当前未提交业务迭代：[ERP-100 辅料管理 1–22 项收尾 / DEL-043](../deliverables/pjm/ERP-100_MATERIAL_CLOSEOUT.md)。用户明确排除 23、24；完整门禁在交接节点统一执行，发布由 PJM 负责。产品与样品累计修改已包含在本轮 main 基线，历史记录的未提交状态不再代表当前工作区。
+
+同迭代新增：[供应商第 1–20 项收尾 / DEL-044](../deliverables/pjm/SUPPLIER_CLOSEOUT_LOCAL_2026-11-21.md)，P3 不做；辅料改动继续保留，供应商阶段已同步 V104，尚未提交。
+
+同迭代新增：[采购第 1–22、24 项收尾 / DEL-045](../deliverables/pjm/PURCHASE_CLOSEOUT_LOCAL_2026-11-22.md)，23/25 不做；当前本地运行包已同步 V105/V106，完整验证待交接。
 
 下表保留原有文档登记和审批状态，不表示各历史文档已同步到最新代码。早期 MVP、Backlog、架构和编码规范的适用范围需结合当前实现与近期任务记录判断；差异交 PJM 确认，不静默覆盖历史批准。
 
@@ -48,7 +54,7 @@
 | 项管 | [项目状态报告](08-project-management/STATUS_REPORT.md) | PJM | Active |
 | 交付 | [交付物总账](DELIVERABLE_REGISTER.md) | PJM | Active |
 
-最新累计迭代发布交接：[DEL-042（2026-11-21）](../deliverables/pjm/CATALOG_RELEASE_HANDOFF_2026-11-21.md)。
+上一轮产品/样品发布交接：[DEL-042（2026-11-21）](../deliverables/pjm/CATALOG_RELEASE_HANDOFF_2026-11-21.md)。
 
 ## 权威性说明
 

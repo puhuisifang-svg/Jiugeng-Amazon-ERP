@@ -152,6 +152,7 @@ class RoleControllerTest {
             if(expected.contains("products.write")) expected.addAll(List.of("products.delete","samples.read","samples.write","samples.remove","development.read","development.write"));
             else if(expected.contains("products.read")) expected.addAll(List.of("samples.read","development.read"));
             if(expected.contains("customers.write")) expected.addAll(List.of("customers.delete","orders.read","orders.write","orders.transition","invoices.read","invoices.write"));
+            if(expected.contains("materials.write")) expected.add("materials.delete");
             if(expected.contains("suppliers.write")) expected.add("suppliers.delete");
             if(expected.contains("watch.write")) expected.addAll(List.of("watch.collect","watch.remove"));
             if(expected.contains("purchases.write")) expected.addAll(List.of("purchases.submit","purchases.cancel"));

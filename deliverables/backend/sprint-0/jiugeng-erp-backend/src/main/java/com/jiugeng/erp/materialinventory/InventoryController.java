@@ -62,7 +62,7 @@ class InventoryController {
     record TransactionRequest(@NotBlank @Size(max = 100) String requestId,
             @NotBlank @Size(max = 36) String materialId,
             @NotNull TransactionType type,
-            @Digits(integer = 15, fraction = 0) BigDecimal quantity,
+            @Digits(integer = 14, fraction = 4) BigDecimal quantity,
             @NotBlank @Size(max = 32) String unit,
             @NotBlank @Size(max = 500) String reason,
             @Size(max = 36) String referenceTransactionId) {
@@ -72,5 +72,5 @@ class InventoryController {
         }
     }
 
-    record SafetyStockRequest(@NotNull @DecimalMin("0") @Digits(integer = 15, fraction = 0) BigDecimal safetyStock) {}
+    record SafetyStockRequest(@NotNull @DecimalMin("0") @Digits(integer = 14, fraction = 4) BigDecimal safetyStock) {}
 }

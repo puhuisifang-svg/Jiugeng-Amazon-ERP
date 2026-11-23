@@ -5,7 +5,7 @@
 | 项目 | 九更亚马逊 ERP |
 | Owner | PJM（维护责任）；Codex（本次整理） |
 | 版本 / 状态 | v0.1 / In Review |
-| 更新时间 | 2026-11-21 |
+| 更新时间 | 2026-11-23 |
 | 审批人 | 待 PJM 复核；本文记录实现事实，不新增业务批准 |
 | 核实基线 | 见[当前状态报告](../08-project-management/STATUS_REPORT.md)；此指南不是实时线上状态 |
 
@@ -18,6 +18,38 @@
 5. 多文件或跨层变更先给出短计划，按 [AGENTS.md](../../AGENTS.md) 实施和交接。合并和线上发布/重启仍由任务授权及 PJM 流程决定；用户已于 2026-11-21 长期授权按开发需要自主重启本地持久服务，无需逐次确认。
 
 本次用户直接授权文档维护，没有新增 PJM ERP 编号；维护分支例外和当前未提交状态记在状态报告中，不应复制为后续业务任务的通用分支规则。
+
+## 2026-11-23 累计迭代交接入口
+
+用户已授权发布辅料、供应商、采购及样品操作 UI，最终统一验证与写入权移交见 [DEL-046](../../deliverables/pjm/OPERATIONS_RELEASE_HANDOFF_2026-11-23.md)。正式移交后提交/合并/CI/CD/发布核实归 PJM，Codex 不继续编辑或跟踪发布。以下开发阶段的未提交/待验描述需结合该记录读取。
+
+交接修复：`InventoryOpeningImportService` 对期初数量和安全库存按档案单位预校验，避免计数单位小数到提交才失败；`RowMoreActions` 等布局定位完成再聚焦，并只在滚动导致触发按钮位置变化时关闭，忽略弹层自身及已完成定位的排队滚动事件。保留菜单内部滚动和 Escape 焦点恢复。
+
+## 当前采购管理追加（2026-11-22，本地待统一验收）
+
+先读 [DEL-045 采购收尾](../../deliverables/pjm/PURCHASE_CLOSEOUT_LOCAL_2026-11-22.md)：1–22 与 24 已实现；23/25 排除。辅料、供应商、采购仍是同一未提交累计迭代，不新开写入槽。当前本地运行包和 V105/V106 证据以 DEL-045 为准。
+
+后端 `PurchaseManagementController` 承担 SQL 分页/保存去重/搜索选择/导出/批次/分页历史；`PurchaseCloseout` 管数量、留存图片和批次收货。`ProductPurchaseInventory` 是公开产品入库接口，新收货与库存同事务；旧产品收货不补账。档案停用不阻断原约定收货，但新增/增加数量继续验证有效关联。已有发货或收货后禁止编辑明细/删除；批次数量不可改，本轮不做退货纠错。
+
+前端 `PurchasesView`、`PurchaseOrderDetailView` 和首页共用 `PurchaseReceiveFlow`；`purchasePending` 按用户隔离原请求恢复，不能对结果不明操作生成新请求。`PurchaseShipmentsDialog` 管多运单及分项数量；`PurchasePicker` 分页搜索；`PurchaseRelatedItem` 复用只读关联档案/库存。`purchaseAmounts` 保留四位单价，行金额精确舍入；`.purchase-ui` 是本模块样式边界。外链图只留 URL，受控图独立复制；新产品单位件，旧单位不偷偷换算。完整验收留到用户要求交接时。
+
+## 当前供应商管理追加（2026-11-21，本地待统一验收）
+
+先读 [DEL-044 供应商收尾](../../deliverables/pjm/SUPPLIER_CLOSEOUT_LOCAL_2026-11-21.md)，范围 1–20、排除 P3；沿用当前辅料累计分支和 Codex 写入权，未提交。前端 `SuppliersView` 接入服务端分页，`SupplierEditor` 保留原请求与冲突草稿；`SupplierDetailDialog` 是列表、产品和辅料共用只读入口，`SupplierRelations` 按业务权限与类型分页，删除检查也复用。
+
+后端新增 `supplier/SupplierManagementController` `/manage` 接口与 V104 幂等表。旧 API 保留兼容，新增影响确认和原请求保护适用于新管理接口；历史电话/微信审计继续脱敏。`CatalogImageGateway.copyForSupplier` 独立复制受控图，不能共享来源资产。样式限定 `.supplier-ui`，备注展开而非撑高行。完整质量/回归在用户要求交接时执行；供应商阶段运行包和备份见 DEL-044，当前包已由 DEL-045 取代。
+
+## 当前辅料管理增量（ERP-100，2026-11-21，本地待统一验收）
+
+先读 [DEL-043 实施与待验记录](../../deliverables/pjm/ERP-100_MATERIAL_CLOSEOUT.md)。当前分支 `feature/ERP-100-material-closeout`，基线 `f87d7c98b9a32a1c73a4441abcfb8caad5f668d3`，用户批准 1–22、排除 23/24，Codex 独占写入，尚未提交。下方产品/样品增量已在该基线中，保留其技术地图，不继承历史未提交状态。
+
+`MaterialsView` 按认证模式分流 `MaterialsManagement` 与保留的 `MaterialsMockView`。新接口集中在 `api/materialManagement.ts`、后端 `materialinventory/MaterialManagementController`，通过 `/manage/capabilities` 避免旧运行包误写。编辑器用聚合资料与单事务保存，不恢复逐个供应商/成本分步保存；原请求恢复按用户隔离。版本覆盖新管理接口，旧选择器兼容 API 仍保留。
+
+`MaterialEditor/DetailDialog/InventoryDialog/SupplierDetail/Image` 使用 `.materials-ui` 紧凑样式；列表 SQL 分页及当前页余额/成本，供应商搜索和详情页签按需加载。`MaterialQuantity` 与前端 `ui/materialQuantity.ts` 明确测量单位四位/计数单位整数，包装换算使用精确字符串；基础单位使用后不得通过编辑或导入切换。
+
+V102 增加版本与幂等记录，V103 回填权限依赖及既有删除能力；不要把依赖补全理解成授予库存出入库/成本修改权限。`SupplierAssignmentGateway`、`CatalogImageGateway` 是公开跨模块接口。`PurchasesView` 只接收人工可修改的安全库存差额，不含已排除的报价/自动采购建议。完整验证与具体运行包见实施记录，不能把局部用例通过视为发布验收。
+
+用户最新协作规则：系统修改先本地累计，用户要求交接时统一验证；之后提交/合并/部署与发布结果由 PJM 处理，Codex 不轮询、不等待线上发布。本地持久服务可自主同步/重启，迁移前备份，保留业务数据和文件。
 
 ## 当前产品管理增量（2026-11-20，本地待验）
 

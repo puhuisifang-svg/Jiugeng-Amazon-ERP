@@ -59,7 +59,7 @@ class MaterialController {
     MaterialView material(@PathVariable String materialId) { return service.material(materialId); }
 
     @PostMapping("/batch-delete")
-    @PreAuthorize("hasAuthority('materials.write')")
+    @PreAuthorize("hasAuthority('materials.delete')")
     void delete(@Valid @RequestBody DeleteRequest request, @AuthenticationPrincipal AuthenticatedActor actor) {
         service.delete(request.ids(), actor);
     }

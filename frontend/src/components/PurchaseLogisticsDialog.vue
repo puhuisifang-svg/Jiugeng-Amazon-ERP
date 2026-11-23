@@ -2,7 +2,8 @@
 import SingleFileUpload from './SingleFileUpload.vue'
 import PurchaseItemImage from './PurchaseItemImage.vue'
 import { catalogApi } from '@/api/catalog'
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import {ApiError} from '@/api/client'
 import { purchaseApi, type PurchaseOrder } from '@/api/purchases'
 import AccessDialog from './AccessDialog.vue'
 const props = defineProps<{ order: PurchaseOrder; writable: boolean }>()
@@ -11,13 +12,19 @@ const dialog = ref<InstanceType<typeof AccessDialog>>()
 const carrier = ref(props.order.carrier ?? ''), tracking = ref(props.order.trackingNumber ?? ''), busy = ref(false), error = ref('')
 const waybill=ref(props.order.waybillImageId??null),uploading=ref(false)
 async function upload(file:File){uploading.value=true;error.value='';try{waybill.value=(await catalogApi.uploadImage('PURCHASE_WAYBILL',file)).id}catch(e){error.value=e instanceof Error?e.message:'上传失败';throw e}finally{uploading.value=false}}
+const version=ref(props.order.version),conflict=ref<PurchaseOrder>(),copied=ref(false)
+async function copy(){try{await navigator.clipboard.writeText(tracking.value);copied.value=true}catch{error.value='复制失败，请手动选择运单文字'}}
+function unload(e:BeforeUnloadEvent){if(dirty.value||busy.value||uploading.value){e.preventDefault();e.returnValue=''}}
+onMounted(()=>window.addEventListener('beforeunload',unload));onBeforeUnmount(()=>window.removeEventListener('beforeunload',unload))
+function keep(){if(conflict.value)version.value=conflict.value.version;conflict.value=undefined;error.value='草稿保留，请核对后再次保存'}
+function latest(){if(!conflict.value)return;carrier.value=conflict.value.carrier??'';tracking.value=conflict.value.trackingNumber??'';waybill.value=conflict.value.waybillImageId??null;keep()}
 const dirty = computed(() => waybill.value!==(props.order.waybillImageId??null) || carrier.value !== (props.order.carrier ?? '') || tracking.value !== (props.order.trackingNumber ?? ''))
 async function save() {
-  if (busy.value || uploading.value || !props.writable) return
+  if (busy.value || uploading.value || conflict.value || !props.writable) return
   if(!tracking.value.trim()&&!waybill.value){error.value='请填写运单号或上传物流单图片';return}
   busy.value = true; error.value = ''
-  try { emit('saved', await purchaseApi.logistics(props.order.id, props.order.version, carrier.value, tracking.value, waybill.value)) }
-  catch (e) { error.value = e instanceof Error ? e.message : '物流资料保存失败，请重试' }
+  try { emit('saved', await purchaseApi.logistics(props.order.id, version.value, carrier.value, tracking.value, waybill.value)) }
+  catch (e) { error.value = e instanceof Error ? e.message : '物流资料保存结果待确认';if(e instanceof ApiError&&e.code==='PURCHASE_VERSION_CONFLICT'){try{conflict.value=await purchaseApi.order(props.order.id)}catch{error.value+='；最新单据读取失败，请保留草稿'}} }
   finally { busy.value = false }
 }
 </script>
@@ -32,6 +39,23 @@ async function save() {
     <p class="access-muted">
       {{ order.orderNo }} · {{ order.supplierName }}
     </p>
+    <section
+      v-if="conflict"
+      class="purchase-warning"
+    >
+      单据已变化。最新物流：{{ conflict.carrier }} / {{ conflict.trackingNumber||'无运单号' }}<PurchaseItemImage
+        v-if="conflict.waybillImageId"
+        :image-asset-id="conflict.waybillImageId"
+        alt="最新运单"
+      /><button @click="latest">
+        采用最新资料
+      </button><button
+        :disabled="conflict.status==='CANCELLED'"
+        @click="keep"
+      >
+        保留草稿重新核对
+      </button>
+    </section>
     <form
       id="purchase-logistics-form"
       class="access-form"
@@ -84,9 +108,15 @@ async function save() {
     >
       {{ error }}
     </p>
-    <section class="purchase-tracking-state">
-      <strong>物流轨迹</strong><p>物流查询服务尚未接入，当前可保存运单资料；接入后将在此展示真实物流轨迹。</p>
-    </section>
+    <p class="access-muted">
+      当前记录运单资料，尚未接入实时物流轨迹。
+    </p><button
+      v-if="tracking"
+      type="button"
+      @click="copy"
+    >
+      {{ copied?'已复制':'复制运单号' }}
+    </button>
     <template #footer>
       <button
         type="button"
@@ -99,7 +129,7 @@ async function save() {
         type="submit"
         form="purchase-logistics-form"
         class="primary-button"
-        :disabled="busy || uploading || (!tracking.trim() && !waybill)"
+        :disabled="busy || uploading || !!conflict || (!tracking.trim() && !waybill)"
       >
         {{ busy ? '保存中…' : '保存运单' }}
       </button>

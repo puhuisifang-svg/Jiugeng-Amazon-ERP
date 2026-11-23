@@ -2,7 +2,7 @@ import { apiRequest } from './client'
 
 export type PurchaseOrderType = 'PRODUCT' | 'MATERIAL' | 'MANUAL'
 export type PurchaseStatus = 'DRAFT' | 'SUBMITTED' | 'PARTIALLY_RECEIVED' | 'COMPLETED' | 'CANCELLED'
-export interface PurchaseLine { packageCount?:number|null; taxIncluded?:boolean; taxRate?:number; specification?: string | null; imageAssetId?: string | null; imageUrl?: string | null; id: string; lineNo: number; itemId: string; itemCode: string; itemName: string; unit: string; orderedQuantity: number; receivedQuantity: number; remainingQuantity: number; unitPrice: number }
+export interface PurchaseLine { snapshotSaved?:boolean; packageCount?:number|null; taxIncluded?:boolean; taxRate?:number; specification?: string | null; imageAssetId?: string | null; imageUrl?: string | null; id: string; lineNo: number; itemId: string; itemCode: string; itemName: string; unit: string; orderedQuantity: number; receivedQuantity: number; remainingQuantity: number; unitPrice: number }
 export interface PurchaseOrder { waybillImageId?: string | null; carrier?: string | null; trackingNumber?: string | null; id: string; orderNo: string; orderType: PurchaseOrderType; supplierId: string; supplierName: string; status: PurchaseStatus; currency: string; remark?: string; version: number; lines: PurchaseLine[]; createdAt: string; updatedAt: string; expectedDeliveryDate?: string | null; deliveryAddress?: string | null; cancellationReason?: string | null }
 export interface PurchaseReceiptLine { orderLineId: string; itemCode: string; itemName: string; quantity: number; inventoryTransactionId?: string }
 export interface PurchaseReceipt { id: string; orderId: string; orderNo: string; requestId: string; receivedAt: string; remark?: string; actorLoginName: string; lines: PurchaseReceiptLine[]; createdAt: string; replayed: boolean }
@@ -28,6 +28,6 @@ export const purchaseApi = {
   update: (id: string, input: PurchaseOrderInput) => apiRequest<PurchaseOrder>(`/v1/purchases/orders/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
   submit: (id: string, version: number) => apiRequest<PurchaseOrder>(`/v1/purchases/orders/${id}/submit`, { method: 'POST', body: JSON.stringify({ version }) }),
   cancel: (id: string, version: number, reason: string) => apiRequest<PurchaseOrder>(`/v1/purchases/orders/${id}/cancel`, { method: 'POST', body: JSON.stringify({ version, reason }) }),
-  receive: (id: string, input: { requestId: string; receivedAt: string; remark?: string; lines: Array<{ orderLineId: string; quantity: number }> }) => apiRequest<PurchaseReceipt>(`/v1/purchases/orders/${id}/receipts`, { method: 'POST', body: JSON.stringify(input) }),
+  receive: (id: string, input: { shipmentId?:string; requestId: string; receivedAt: string; remark?: string; lines: Array<{ orderLineId: string; quantity: number }> }) => apiRequest<PurchaseReceipt>(`/v1/purchases/orders/${id}/receipts`, { method: 'POST', body: JSON.stringify(input) }),
   receipts: (orderId?: string) => apiRequest<PurchaseReceipt[]>(`/v1/purchases/receipts${orderId ? `?orderId=${encodeURIComponent(orderId)}` : ''}`),
 }

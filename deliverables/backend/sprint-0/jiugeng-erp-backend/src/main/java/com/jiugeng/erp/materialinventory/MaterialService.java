@@ -73,11 +73,15 @@ class MaterialService {
 
     @Transactional
     MaterialView update(String id, MaterialInput input, AuthenticatedActor actor) {
+        repository.lock(id);
         MaterialView before = material(id);
         if (before.status() == MaterialStatus.DISABLED) {
             throw new MaterialException(409, "MATERIAL_DISABLED", "停用辅料不可编辑");
         }
         ValidatedMaterial valid = validate(input, id);
+        if (!before.unit().equals(valid.unit()) && repository.unitLocked(id)) {
+            throw new MaterialException(409,"MATERIAL_UNIT_LOCKED","辅料已有库存、采购、产品用量或成本记录，不能直接修改基础单位；请按包装换算录入或新建辅料。");
+        }
         if (!MaterialRepository.normalize(before.materialCode()).equals(valid.normalizedCode())) {
             throw new MaterialException(409, "MATERIAL_CODE_IMMUTABLE", "已保存的辅料编码不可修改，请停用后新建");
         }
@@ -100,6 +104,7 @@ class MaterialService {
 
     @Transactional
     MaterialView disable(String id, AuthenticatedActor actor) {
+        repository.lock(id);
         MaterialView before = material(id);
         if (before.status() == MaterialStatus.DISABLED) return before;
         repository.disable(id, actor.userId());
@@ -110,6 +115,7 @@ class MaterialService {
 
     @Transactional
     MaterialView enable(String id, AuthenticatedActor actor) {
+        repository.lock(id);
         MaterialView before = material(id);
         if (before.status() == MaterialStatus.ACTIVE) return before;
         repository.enable(id, actor.userId());
@@ -137,7 +143,7 @@ class MaterialService {
 
     @Transactional
     void delete(List<String> ids, AuthenticatedActor actor) {
-        List<MaterialView> targets = ids.stream().distinct().sorted().map(this::material).toList();
+        List<MaterialView> targets = ids.stream().distinct().sorted().peek(repository::lock).map(this::material).toList();
         for (MaterialView target : targets) {
             if (repository.isReferenced(target.id())) {
                 throw new MaterialException(409, "MATERIAL_IN_USE", target.materialCode()
@@ -204,6 +210,13 @@ class MaterialService {
         value.put("materialCode", material.materialCode());
         value.put("name", material.name());
         value.put("status", material.status());
+        value.put("materialType", material.materialType());
+        value.put("specification", material.specification());
+        value.put("unit", material.unit());
+        value.put("imageAssetId", material.imageAssetId());
+        value.put("imageUrl", material.imageUrl());
+        value.put("remark", material.remark());
+        value.put("version", material.version());
         return value;
     }
 

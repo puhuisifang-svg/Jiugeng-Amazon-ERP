@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import JSZip from 'jszip'
 import { beijingDate } from '@/utils/dateTime'
 
 
@@ -7,19 +8,22 @@ import type { PurchaseOrder } from '@/api/purchases'
 import { exportPages,purchaseExportRows,renderPurchasePage } from '@/ui/purchaseImageExport'
 import AccessDialog from './AccessDialog.vue'
 const props=defineProps<{orders:PurchaseOrder[]}>();const emit=defineEmits<{close:[]}>()
+const controller=new AbortController(),blobs:Blob[]=[]
 const pages=ref<string[]>([]),warnings=ref<string[]>([]),busy=ref(true),error=ref(''),completed=ref(0),current=ref(0)
 const rows=purchaseExportRows(props.orders);let alive=true
 async function generate(){
-  try{await document.fonts.ready;for(const batch of exportPages(rows)){if(!alive)return;const result=await renderPurchasePage(batch,()=>completed.value++);if(!alive)return;pages.value.push(URL.createObjectURL(result.blob));warnings.value.push(...result.warnings)}}catch(e){error.value=e instanceof Error?e.message:'导出失败，请关闭重试'}finally{busy.value=false}
+  try{await document.fonts.ready;for(const batch of exportPages(rows)){if(!alive)return;const result=await renderPurchasePage(batch,()=>completed.value++,controller.signal);if(!alive)return;blobs.push(result.blob);pages.value.push(URL.createObjectURL(result.blob));warnings.value.push(...result.warnings)}}catch(e){error.value=e instanceof Error?e.message:'导出失败，请关闭重试'}finally{busy.value=false}
 }
 function download(){const url=pages.value[current.value];if(!url)return;const link=document.createElement('a');link.href=url;link.download=`采购清单-${beijingDate()}-${current.value+1}.png`;document.body.append(link);link.click();link.remove()}
-onMounted(generate);onBeforeUnmount(()=>{alive=false;pages.value.forEach(url=>URL.revokeObjectURL(url))})
+function close(){alive=false;controller.abort();emit('close')}
+async function downloadAll(){busy.value=true;try{const zip=new JSZip();blobs.forEach((b,i)=>zip.file(`采购清单-${i+1}.png`,b));const url=URL.createObjectURL(await zip.generateAsync({type:'blob'})),a=document.createElement('a');a.href=url;a.download='采购清单.zip';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}catch{error.value='打包失败，可逐张下载'}finally{busy.value=false}}
+onMounted(generate);onBeforeUnmount(()=>{alive=false;controller.abort();pages.value.forEach(url=>URL.revokeObjectURL(url))})
 </script>
 <template>
   <AccessDialog
     title="导出采购图片"
     wide
-    @close="!busy && emit('close')"
+    @close="close"
   >
     <p
       v-if="busy"
@@ -71,10 +75,14 @@ onMounted(generate);onBeforeUnmount(()=>{alive=false;pages.value.forEach(url=>UR
       </button>
       <button
         type="button"
-        :disabled="busy"
-        @click="emit('close')"
+        @click="close"
       >
-        关闭
+        {{ busy?'取消生成':'关闭' }}
+      </button><button
+        :disabled="busy||!pages.length"
+        @click="downloadAll"
+      >
+        打包下载全部
       </button>
       <button
         type="button"

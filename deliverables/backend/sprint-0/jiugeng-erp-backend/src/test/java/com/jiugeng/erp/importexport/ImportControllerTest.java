@@ -276,7 +276,7 @@ class ImportControllerTest {
 
     @Test void openingInventoryHandlerCreatesImmutableTransactionsBalancesAndDownloadableResult() throws Exception {
         String token=user("opening-owner","PRODUCT_MATERIAL");
-        seedMaterial("OPEN-MAT-1","PCS");seedMaterial("OPEN-MAT-2","KG");
+        seedMaterial("OPEN-MAT-1","KG");seedMaterial("OPEN-MAT-2","PCS");
         byte[] file=openingRows(new String[][]{
                 {"MAIN","OPEN-MAT-1","12.5000","3","2026-10-14","OPEN-REF-1","盘点"},
                 {"MAIN","OPEN-MAT-2","0","2","2026-10-14","OPEN-REF-2","零期初"}});
@@ -320,6 +320,20 @@ class ImportControllerTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.commitAllowed").value(false));
         mvc.perform(get("/api/v1/import-batches/{id}/issues",conflict).header("Authorization",bearer(token)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$[0].code").value("OPENING_INVENTORY_CONFLICT"));
+    }
+
+    @Test void openingInventoryRejectsFractionalCountUnitsBeforeCommit() throws Exception {
+        String token=user("opening-count-owner","PRODUCT_MATERIAL");
+        seedMaterial("COUNT-OPEN","PCS");
+        String batch=mapper.readTree(upload(token,"opening-count","AUXILIARY_MATERIAL_OPENING_INVENTORY",
+                openingRows(new String[][]{{"MAIN","COUNT-OPEN","1.5","0.5","2026-10-14","COUNT-REF","合成校验"}}),202))
+                .at("/batch/id").asText();
+        mvc.perform(get("/api/v1/import-batches/{id}",batch).header("Authorization",bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.commitAllowed").value(false));
+        String issues=mvc.perform(get("/api/v1/import-batches/{id}/issues",batch).header("Authorization",bearer(token)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(mapper.readTree(issues).findValuesAsText("code")).contains("INVENTORY_QUANTITY_INVALID");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM inventory_transaction WHERE transaction_type='OPENING'",Integer.class)).isZero();
     }
 
     @Test void openingInventoryValidatesWarehouseReferencesNumbersDatesAndDuplicates() throws Exception {

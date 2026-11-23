@@ -12,5 +12,5 @@ final class MaterialTypes {
 
     record MaterialView(String id, String materialCode, String name, String materialType, String specification,
             String unit, String imageUrl, String imageAssetId, String remark, MaterialStatus status,
-            Instant createdAt, Instant updatedAt) {}
+            Instant createdAt, Instant updatedAt, long version) {}
 }

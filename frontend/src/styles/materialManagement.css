@@ -1,0 +1,39 @@
+.materials-ui { --material-blue:#2864c5; font-size:13px; }
+.materials-ui .material-thumb,.materials-ui .material-thumb>button,.materials-ui .material-image-empty { width:72px;height:72px;flex:none; }
+.materials-ui .material-thumb>button { display:grid;place-items:center;padding:0;border:1px solid #e2e8f0;border-radius:6px;background:#fff;overflow:hidden; }
+.materials-ui .material-thumb img,.materials-ui .material-thumb .catalog-image { width:100%;height:100%;object-fit:contain; }
+.materials-ui .material-image-empty { display:grid;place-items:center;background:#f5f7fa;border:1px solid #e2e8f0;border-radius:6px;color:#8491a3;font-size:12px; }
+.materials-ui .material-image-error { font-size:12px;color:#a65414; }
+.materials-ui .material-link { background:transparent;border:0;color:var(--material-blue);padding:4px 0;min-height:28px;cursor:pointer;text-align:left; }
+.materials-ui .material-name { font-weight:600;overflow-wrap:anywhere;max-width:260px; }
+.materials-ui .data-table td { padding:6px 10px;vertical-align:middle;line-height:1.5; }
+.materials-ui small { display:block;color:var(--muted,#718096);font-size:12px;font-weight:400;margin-top:3px; }
+.materials-ui .material-number { text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap; }
+.materials-ui .material-number .material-link { text-align:right; }
+.materials-ui .material-selected>td { background:#eef5ff; }
+.materials-ui .material-table { min-width:900px; }.materials-ui .material-table .table-actions { display:flex;align-items:center;gap:10px;white-space:nowrap; }
+.materials-ui .material-status { display:inline-block;border-radius:4px;background:#edf7f1;color:#237344;padding:2px 6px;white-space:nowrap; }
+.materials-ui .material-status.is-disabled { color:#687180;background:#eef0f4; }
+.materials-ui .material-filter-tags { display:flex;gap:6px;flex-wrap:wrap; }.materials-ui .material-filter-tags button { padding:3px 8px;background:#edf4ff;border:1px solid #d3e3fb;color:#2864c5;font-size:12px;border-radius:4px;min-height:28px; }
+.materials-ui .material-filters { display:flex;align-items:center;flex-wrap:wrap;gap:8px; }.materials-ui .material-filters label { display:flex;align-items:center;gap:6px;flex:0 1 auto; }.materials-ui .material-filters input { width:180px; }.materials-ui .material-filters select { width:120px; }
+.materials-ui .material-warning { background:#fff9ed;color:#885b16;border:1px solid #f0dfb9;padding:8px 10px;border-radius:4px; }.materials-ui .material-warning-text { color:#a56416; }
+.materials-ui .material-danger,.materials-ui .material-decrease { color:#b42318; }.materials-ui .material-increase { color:#21834a; }
+.materials-ui.access-dialog { height:fit-content;min-height:0; }.materials-ui.access-dialog--wide { width:min(960px,calc(100vw - 24px)); }
+.materials-ui .access-dialog-body { padding:12px 14px; }.materials-ui .material-summary { display:flex;align-items:center;gap:12px;margin-bottom:12px; }.materials-ui .material-summary>div { min-width:0; }.materials-ui .material-summary strong { font-size:14px;overflow-wrap:anywhere; }.materials-ui .material-summary p { margin:4px 0;color:#56677e; }
+.materials-ui .material-tabs,.materials-ui .material-operation-tabs { display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px;border-bottom:1px solid var(--line);padding-bottom:6px; }.materials-ui .material-tabs button { border:0;background:transparent; }.materials-ui .material-tabs button[aria-pressed=true],.materials-ui .material-operation-tabs button[aria-pressed=true] { color:#2864c5;background:#edf4ff;border-color:#b9cff0; }
+.materials-ui .material-fields { margin:0;padding:0;border:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;min-width:0; }.materials-ui .material-fields>label { display:grid;gap:5px;font-size:13px;min-width:0; }.materials-ui .material-full { grid-column:1/-1; }
+.materials-ui .material-fields input:not([type=checkbox]):not([type=radio]),.materials-ui .material-fields textarea,.materials-ui .material-supplier-picker input,.materials-ui .material-safety input { width:100%;min-width:0;min-height:40px;border:1px solid var(--line);border-radius:4px;padding:8px;box-sizing:border-box;font:inherit; }.materials-ui .material-fields textarea { resize:vertical; }.materials-ui .material-check { display:flex!important;align-items:center;gap:8px; }.materials-ui input[type=checkbox],.materials-ui input[type=radio] { width:16px;height:16px;min-height:16px;flex:none; }
+.materials-ui .material-image-edit { display:grid;grid-template-columns:72px minmax(0,1fr);gap:12px;align-items:start; }.materials-ui .material-image-edit details { margin-top:6px;font-size:12px; }.materials-ui .material-image-edit details input { width:100%; }
+.materials-ui .material-section-heading { display:flex;gap:8px;justify-content:space-between;align-items:center;margin:14px 0 6px; }.materials-ui h3 { margin:8px 0;font-size:13px; }.materials-ui h3 small { display:inline; }.materials-ui .material-table-wrap { overflow:auto;max-width:100%; }.materials-ui .material-table-wrap table { min-width:550px; }.materials-ui .material-supplier-table { min-width:670px; }.materials-ui .material-supplier-table button { border:0;background:transparent;min-height:28px;font-size:12px; }.materials-ui .material-supplier-picker { display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px;background:#f6f8fb; }.materials-ui .material-supplier-picker label { display:flex;gap:6px;align-items:center; }.materials-ui .material-supplier-picker .list-pagination { flex:1 1 100%; }
+.materials-ui .material-facts { display:grid;grid-template-columns:100px minmax(0,1fr);gap:10px;margin:12px 0; }.materials-ui .material-facts dt { color:#758196; }.materials-ui .material-facts dd { margin:0;overflow-wrap:anywhere;white-space:pre-wrap; }
+.materials-ui .material-preview { background:#f4f7fb;padding:8px 10px;border-radius:4px; }.materials-ui .material-preview small { display:inline; }.materials-ui .material-safety { display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line); }.materials-ui .material-safety input { max-width:130px;min-height:32px; }
+.materials-ui .material-conflict { padding:10px;border:1px solid #e9cfa0;background:#fffcf4;margin-bottom:12px;overflow:auto; }
+.materials-ui.material-stock .table-viewport,.materials-ui.material-detail .table-viewport { max-height:280px!important;height:auto!important;min-height:0; }
+@media(max-width:700px){.materials-ui .material-fields{grid-template-columns:minmax(0,1fr)}.materials-ui .material-filters label{flex:1 1 140px;min-width:0}.materials-ui .material-filters input{width:100%;min-width:0}.materials-ui .material-image-edit{grid-template-columns:72px minmax(0,1fr)}.materials-ui .ui-action-table th:last-child,.materials-ui .ui-action-table td:last-child{position:static}.materials-ui .material-facts{grid-template-columns:75px minmax(0,1fr)}.materials-ui .material-table-wrap table{font-size:12px}}
+
+.materials-ui .material-table .material-thumb,.materials-ui .material-table .material-thumb>button,.materials-ui .material-table .material-image-empty{width:48px;height:48px}
+
+/* Explicit label width keeps the shared desktop width:0 inputs usable. */
+#main-content .materials-ui .material-filters label{flex:0 1 200px;width:200px;min-width:180px}
+#main-content .materials-ui .material-filters label:first-child{flex-basis:270px;width:270px}
+@media(max-width:700px){#main-content .materials-ui .material-filters label,#main-content .materials-ui .material-filters label:first-child{flex:1 1 180px;width:auto;min-width:0}}

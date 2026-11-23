@@ -15,6 +15,12 @@ public interface CatalogImageGateway {
     /** Independent sample snapshot; never shares storage keys with a replaceable source. */
     default String copyForSample(String imageId,String sampleId,AuthenticatedActor actor) { throw new UnsupportedOperationException("Sample image copy unavailable"); }
 
+    default String copyForMaterial(String imageId,String materialId,AuthenticatedActor actor) { throw new UnsupportedOperationException("Material image copy unavailable"); }
+
+    default String copyForSupplier(String imageId,String supplierId,AuthenticatedActor actor) { throw new UnsupportedOperationException("Supplier image copy unavailable"); }
+
+    default String copyForPurchase(String imageId,String orderId,AuthenticatedActor actor) { throw new UnsupportedOperationException("Purchase copy unavailable"); }
+
     void attach(String imageId, Purpose purpose, String resourceType, String resourceId,
             AuthenticatedActor actor);
 

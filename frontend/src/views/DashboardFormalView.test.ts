@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/config/runtime', () => ({ runtimeConfig: { apiBaseUrl: 'http://api.test/api', authMode: 'password' } }))
 vi.mock('@/state/session', () => ({ session: { canAccess: () => true } }))
-vi.mock('@/api/purchases', () => ({ purchaseApi: { orders: vi.fn(async (status:string) => status==='SUBMITTED' ? [{id:'synthetic-order',status:'SUBMITTED',orderNo:'SYN-PO',supplierName:'合成供应商',createdAt:'2026-11-10',lines:[]}] : []) } }))
+vi.mock('@/api/purchaseManagement', async importOriginal => ({...await importOriginal<typeof import('@/api/purchaseManagement')>(), purchaseManagementApi: { page: vi.fn(async () => ({items:[{id:'synthetic-order',status:'SUBMITTED',orderNo:'SYN-PO',supplierName:'合成供应商',createdAt:'2026-11-10',lines:[]}],total:1,page:0,size:10})) } }))
 vi.mock('vue-router', () => ({ onBeforeRouteLeave:vi.fn(), RouterLink: { name:'RouterLink', props: ['to'], template: '<a><slot /></a>' } }))
 
 describe('DashboardView in formal mode', () => {

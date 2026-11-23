@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import ImagePreviewDialog from './ImagePreviewDialog.vue'
 import AuthenticatedCatalogImage from './AuthenticatedCatalogImage.vue'
 defineProps<{ imageAssetId?: string | null | undefined; imageUrl?: string | null | undefined; alt: string }>()
-const preview = ref(false)
+const preview = ref(false),failed=ref(false),retry=ref(0)
 </script>
 <template>
   <button
@@ -17,12 +17,21 @@ const preview = ref(false)
       v-if="imageAssetId"
       :image-id="imageAssetId"
       :alt="alt"
-    /><img
+    /><span
+      v-else-if="failed"
+      role="button"
+      tabindex="0"
+      @click.stop="failed=false;retry++"
+      @keydown.enter.stop="failed=false;retry++"
+    >加载失败 · 重试</span><img
       v-else
+      :key="retry"
+      loading="lazy"
       class="catalog-image"
       :src="imageUrl ?? undefined"
       :alt="alt"
       referrerpolicy="no-referrer"
+      @error="failed=true"
     >
   </button>
   <span
@@ -43,11 +52,20 @@ const preview = ref(false)
       variant="original"
       :alt="alt"
     />
-    <img
+    <span
+      v-else-if="failed"
+      role="button"
+      tabindex="0"
+      @click.stop="failed=false;retry++"
+      @keydown.enter.stop="failed=false;retry++"
+    >加载失败 · 重试</span><img
       v-else
+      :key="retry"
+      loading="lazy"
       :src="imageUrl ?? undefined"
       :alt="alt"
       referrerpolicy="no-referrer"
+      @error="failed=true"
     >
   </ImagePreviewDialog>
 </template>

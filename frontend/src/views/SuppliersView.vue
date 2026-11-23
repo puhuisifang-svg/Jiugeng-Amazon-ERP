@@ -1,381 +1,337 @@
 <script setup lang="ts">
-import ImagePreviewDialog from '@/components/ImagePreviewDialog.vue'
-import { vPhone } from '@/directives/phone'
+import '@/styles/supplierManagement.css'
+import {computed,nextTick,onBeforeUnmount,onMounted,reactive,ref,watch} from 'vue'
+import {onBeforeRouteLeave} from 'vue-router'
+import {domainApi,type SupplierDto} from '@/api/domain'
+import {supplierManagementApi as api,type SupplierFilters,type SupplierImpact} from '@/api/supplierManagement'
+import {session} from '@/state/session'
+import {runtimeConfig} from '@/config/runtime'
+import {confirmAction} from '@/state/uiConfirmation'
+import {vSingleSelect} from '@/directives/singleSelect'
+import SupplierImage from '@/components/SupplierImage.vue'
+import SupplierContactValue from '@/components/SupplierContactValue.vue'
+import SupplierEditor from '@/components/SupplierEditor.vue'
+import SupplierDetailDialog from '@/components/SupplierDetailDialog.vue'
 import SupplierDeleteDialog from '@/components/SupplierDeleteDialog.vue'
-import SingleFileUpload from '@/components/SingleFileUpload.vue'
-import { vSingleSelect } from '@/directives/singleSelect'
-import { confirmAction } from '@/state/uiConfirmation'
-import SuccessToast from "@/components/SuccessToast.vue"
-import TableViewport from "@/components/TableViewport.vue"
-import { computed, onMounted, reactive, ref } from 'vue'
-import { catalogApi } from '@/api/catalog'
-import { ApiError } from '@/api/client'
-import { domainApi, type SupplierDto, type SupplierInput } from '@/api/domain'
-import AuthenticatedCatalogImage from '@/components/AuthenticatedCatalogImage.vue'
-import { session } from '@/state/session'
-
-type QrPreview = { kind: 'asset'; value: string } | { kind: 'url'; value: string }
-const items = ref<SupplierDto[]>([]); const query = ref(''); const status = ref(''); const loading = ref(true); const saving = ref(false); const error = ref(''); const success = ref(''); const editing = ref<SupplierDto | null>(null); const preview = ref<QrPreview>(); const showForm = ref(false)
-const formError = ref('')
-const form = reactive<SupplierInput>({ name: '', contactPerson: '', phone: '', wechatId: '', sourceUrl: '', qrImageUrl: '', qrImageId: '', remark: '', status: 'ACTIVE', categories: [] })
-const writable = computed(() => session.canAccess(['suppliers.write']))
-function reset() { formError.value = ''; Object.assign(form, { name: '', contactPerson: '', phone: '', wechatId: '', sourceUrl: '', qrImageUrl: '', qrImageId: '', remark: '', status: 'ACTIVE', categories: [], version: undefined }); editing.value = null; showForm.value = false }
-function openCreate() { reset(); showForm.value = true; error.value = ''; success.value = '' }
-function edit(item: SupplierDto) { formError.value = ''; editing.value = item; Object.assign(form, { name: item.name, contactPerson: item.contactPerson ?? '', phone: item.phone ?? '', wechatId: item.wechatId ?? '', sourceUrl: item.sourceUrl ?? '', qrImageUrl: item.qrImageUrl ?? '', qrImageId: item.qrImageId ?? '', remark: item.remark ?? '', status: item.status, categories: [...(item.categories ?? [])], version: item.version }); showForm.value = true; error.value = ''; success.value = '' }
-async function load() { loading.value = true; error.value = ''; try { const result = await domainApi.suppliers({ ...(query.value ? { q: query.value } : {}), ...(status.value ? { status: status.value as 'ACTIVE' | 'DISABLED' } : {}), size: 100 }); items.value = result.items } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '供应商加载失败。' } finally { loading.value = false } }
-async function upload(file: File) { if (saving.value) return false; saving.value = true; formError.value = ''; try { form.qrImageId = (await catalogApi.uploadImage('SUPPLIER_QR', file)).id; form.qrImageUrl = '' } catch (exception) { formError.value = exception instanceof Error ? exception.message : '图片上传失败。' ; return false } finally { saving.value = false } }
-function supplierInput(): SupplierInput {
-  return {
-    name: form.name.trim(), status: form.status, categories: [...(form.categories ?? [])],
-    ...(form.contactPerson?.trim() ? { contactPerson: form.contactPerson.trim() } : {}),
-    ...(form.phone?.trim() ? { phone: form.phone.trim() } : {}),
-    ...(form.wechatId?.trim() ? { wechatId: form.wechatId.trim() } : {}),
-    ...(form.sourceUrl?.trim() ? { sourceUrl: form.sourceUrl.trim() } : {}),
-    ...(form.qrImageUrl?.trim() ? { qrImageUrl: form.qrImageUrl.trim() } : {}),
-    ...(form.qrImageId ? { qrImageId: form.qrImageId } : {}),
-    ...(form.remark?.trim() ? { remark: form.remark.trim() } : {}),
-    ...(editing.value ? { version: editing.value.version } : {}),
-  }
-}
-async function save() { if(!form.categories?.length){formError.value='请选择至少一个供应商分类';return} saving.value = true; formError.value = ''; success.value = ''; try { const input = supplierInput(); const result = editing.value ? await domainApi.updateSupplier(editing.value.id, input) : await domainApi.createSupplier(input); items.value = editing.value ? items.value.map(item => item.id === result.id ? result : item) : [result, ...items.value]; success.value = editing.value ? '供应商已更新。' : '供应商已创建。'; reset() } catch (exception) { formError.value = exception instanceof ApiError ? exception.message : '供应商保存失败。' } finally { saving.value = false } }
-async function disable(item: SupplierDto) { if (!await confirmAction(`确认停用供应商 ${item.name}？`)) return; saving.value = true; try { const result = await domainApi.disableSupplier(item.id, item.version); items.value = items.value.map(value => value.id === item.id ? result : value); success.value = '供应商已停用。' } catch (exception) { error.value = exception instanceof ApiError ? exception.message : '供应商停用失败。' } finally { saving.value = false } }
-const deleteTarget=ref<SupplierDto>()
-function remove(item:SupplierDto){if(saving.value||!session.canAccess(['suppliers.delete']))return;deleteTarget.value=item}
-async function deleted(){deleteTarget.value=undefined;success.value='供应商已删除。';await load()}
-async function disabled(){deleteTarget.value=undefined;success.value='供应商已停用，历史记录保留。';await load()}
-
-onMounted(load)
+import SupplierImpactSummary from '@/components/SupplierImpactSummary.vue'
+import AccessDialog from '@/components/AccessDialog.vue'
+import RowMoreActions from '@/components/RowMoreActions.vue'
+import TableViewport from '@/components/TableViewport.vue'
+import ListPagination from '@/components/ListPagination.vue'
+import SuccessToast from '@/components/SuccessToast.vue'
+const defaults=():SupplierFilters=>({q:'',status:'',category:''}),filters=reactive(defaults()),applied=ref(defaults())
+const items=ref<SupplierDto[]>([]),page=ref(1),size=ref(20),total=ref(0),loading=ref(false),busy=ref(false),ready=ref(false),error=ref(''),capabilityError=ref(''),success=ref(''),host=ref<HTMLElement>()
+const writable=computed(()=>session.canAccess(['suppliers.write'])),deletable=computed(()=>session.canAccess(['suppliers.delete']))
+const editorState=ref<{id?:string;copy?:boolean;resume?:boolean}>(),editor=ref<InstanceType<typeof SupplierEditor>>(),detailId=ref(''),deleteTarget=ref<SupplierDto>(),statusTarget=ref<SupplierDto>(),impact=ref<SupplierImpact>(),impactError=ref(''),impactLoading=ref(false)
+const selected=ref<Record<string,SupplierDto>>({}),hasPending=ref(false),expanded=ref<string[]>([]),owner=session.user.value?.id??'current',stateKey=`jiugeng.supplier.view.${owner}`,pendingKey=`jiugeng.supplier.pending.${owner}`
+const selection=computed(()=>Object.values(selected.value)),allSelected=computed(()=>items.value.length>0&&items.value.every(s=>!!selected.value[s.id]))
+const tags=computed(()=>Object.entries(applied.value).filter(([,v])=>v).map(([key,value])=>({key:key as keyof SupplierFilters,label:({q:'关键词',status:'状态',category:'分类'})[key],value:({ACTIVE:'启用',DISABLED:'停用',PRODUCT:'产品',MATERIAL:'辅料'} as Record<string,string>)[value]??value})))
+let generation=0,scroll=0,impactGeneration=0
+function remember(){scroll=host.value?.querySelector('.table-viewport')?.scrollTop??scroll;try{sessionStorage.setItem(stateKey,JSON.stringify({filters:applied.value,page:page.value,size:size.value,scroll}))}catch{/* Optional preferences. */}}
+function pending(){try{hasPending.value=!!sessionStorage.getItem(pendingKey)}catch{hasPending.value=false}}
+async function load(){const seq=++generation;loading.value=true;error.value='';try{const f=applied.value;const r=await domainApi.suppliers({q:f.q,...(f.status?{status:f.status}:{}),...(f.category?{category:f.category}:{}),page:page.value-1,size:size.value});if(seq!==generation)return;if(page.value>1&&!r.items.length){page.value=Math.max(1,Math.ceil(r.totalCount/size.value));return}items.value=r.items;total.value=r.totalCount;await nextTick();const viewport=host.value?.querySelector('.table-viewport');if(viewport)viewport.scrollTop=scroll}catch(e){if(seq===generation)error.value=(items.value.length?'刷新失败，当前显示上次结果。':'')+(e instanceof Error?e.message:'供应商读取失败')}finally{if(seq===generation)loading.value=false}}
+async function initialize(){ready.value=false;capabilityError.value='';if(runtimeConfig.authMode==='mock'){capabilityError.value='演示模式不提供供应商维护，请使用本地正式登录';await load();return}try{ready.value=(await api.capabilities()).closeoutVersion>=1;if(!ready.value)throw new Error('本地后端尚未同步供应商收尾接口');await load()}catch(e){capabilityError.value=e instanceof Error?e.message:'后端能力读取失败，暂不可操作'}}
+function search(){applied.value={...filters};selected.value={};scroll=0;if(page.value!==1)page.value=1;else void load();remember()}
+function reset(){Object.assign(filters,defaults());search()}
+function removeTag(key:keyof SupplierFilters){filters[key]='';applied.value={...applied.value,[key]:''};selected.value={};scroll=0;if(page.value!==1)page.value=1;else void load()}
+function toggle(s:SupplierDto){if(selected.value[s.id]){const next={...selected.value};delete next[s.id];selected.value=next}else if(selection.value.length<100)selected.value={...selected.value,[s.id]:s};else error.value='一次最多勾选 100 家供应商'}
+function toggleAll(){if(allSelected.value){const next={...selected.value};for(const s of items.value)delete next[s.id];selected.value=next}else for(const s of items.value)if(!selected.value[s.id])toggle(s)}
+function openEditor(s?:SupplierDto,copy=false){pending();editorState.value=hasPending.value?{resume:true}:s?{id:s.id,copy}:{}}
+function closeEditor(){editorState.value=undefined;pending()}
+async function saved(s:SupplierDto){success.value='供应商已保存';selected.value={};await load();if(!items.value.some(i=>i.id===s.id))success.value='供应商已保存；当前筛选或页码未包含该记录，可按名称搜索'}
+async function status(s:SupplierDto){statusTarget.value=s;impact.value=undefined;await loadImpact()}
+async function loadImpact(){const s=statusTarget.value;if(!s)return;const seq=++impactGeneration;impactLoading.value=true;impactError.value='';try{const result=await api.impact(s.id);if(seq===impactGeneration)impact.value=result}catch(e){if(seq===impactGeneration)impactError.value=e instanceof Error?e.message:'影响读取失败'}finally{if(seq===impactGeneration)impactLoading.value=false}}
+async function confirmStatus(){if(!statusTarget.value||!impact.value||impactLoading.value||busy.value)return;busy.value=true;try{await api.status(statusTarget.value,statusTarget.value.status==='ACTIVE'?'DISABLED':'ACTIVE',true);statusTarget.value=undefined;success.value='供应商状态已更新';selected.value={};await load()}catch(e){impactError.value=(e instanceof Error?e.message:'状态修改失败')+'；请关闭并刷新列表后核对'}finally{busy.value=false}}
+async function changed(){deleteTarget.value=undefined;selected.value={};success.value='供应商资料已更新';await load()}
+async function exportRows(chosen=false){if(busy.value)return;busy.value=true;error.value='';try{const blob=await api.export(chosen?defaults():applied.value,chosen?selection.value.map(s=>s.id):[]);const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='供应商清单.csv';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}catch(e){error.value=e instanceof Error?e.message:'导出失败'}finally{busy.value=false}}
+watch([page,size],()=>{remember();if(ready.value)void load()})
+onBeforeRouteLeave(async()=>{remember();if(busy.value||editor.value?.busy)return false;if(editor.value?.dirty&&!editor.value.pending)return confirmAction('当前填写内容未保存，确定放弃并离开吗？');return true})
+onMounted(async()=>{try{const v=JSON.parse(sessionStorage.getItem(stateKey)??'null');if(v){filters.q=typeof v.filters?.q==='string'?v.filters.q:'';filters.status=['ACTIVE','DISABLED'].includes(v.filters?.status)?v.filters.status:'';filters.category=['PRODUCT','MATERIAL'].includes(v.filters?.category)?v.filters.category:'';applied.value={...filters};page.value=Math.max(1,Number(v.page)||1);size.value=[10,20,50,100].includes(v.size)?v.size:20;scroll=Math.max(0,Number(v.scroll)||0)}}catch{/* Defaults. */}pending();await initialize()})
+onBeforeUnmount(()=>{generation++;impactGeneration++;remember()})
 </script>
-
 <template>
-  <section class="page-stack">
+  <section
+    ref="host"
+    class="page-stack supplier-ui"
+  >
     <form
-      class="panel filter-panel supplier-filters"
+      class="panel filter-panel ui-filter-row supplier-filters"
       aria-label="供应商筛选"
-      @submit.prevent="load"
+      @submit.prevent="search"
     >
-      <label>搜索<input
-        v-model="query"
+      <label>关键词<input
+        v-model="filters.q"
         type="search"
-        placeholder="名称 / 电话 / 微信号"
-      ></label><label>状态<select
-        v-model="status"
+        maxlength="128"
+        placeholder="名称 / 联系人 / 电话 / 微信"
+      ></label><label>分类<select
+        v-model="filters.category"
         v-single-select
-      ><option value="">全部</option><option value="ACTIVE">启用</option><option value="DISABLED">停用</option></select></label><button
+      ><option value="">全部分类</option><option value="PRODUCT">产品</option><option value="MATERIAL">辅料</option></select></label><label>状态<select
+        v-model="filters.status"
+        v-single-select
+      ><option value="">全部状态</option><option value="ACTIVE">启用</option><option value="DISABLED">停用</option></select></label><button
         type="submit"
+        :disabled="loading||!ready"
       >
         查询
+      </button><button
+        class="filter-reset-button"
+        type="button"
+        :disabled="loading"
+        @click="reset"
+      >
+        重置
       </button>
-    </form>
-    <section
-      class="panel material-toolbar"
-      aria-label="供应商管理操作"
+    </form><div
+      v-if="tags.length"
+      class="supplier-filter-tags"
     >
+      <button
+        v-for="t in tags"
+        :key="t.key"
+        @click="removeTag(t.key)"
+      >
+        {{ t.label }}：{{ t.value }} ×
+      </button>
+    </div><section class="panel material-toolbar">
       <div>
         <button
           v-if="writable"
-          type="button"
-          @click="openCreate"
+          :disabled="!ready||busy"
+          @click="openEditor()"
         >
           新增供应商
+        </button><button
+          class="secondary-button"
+          :disabled="!ready||busy"
+          @click="exportRows()"
+        >
+          导出筛选结果
+        </button><button
+          v-if="selection.length"
+          class="secondary-button"
+          :disabled="!ready||busy"
+          @click="exportRows(true)"
+        >
+          导出勾选（{{ selection.length }}）
+        </button><button
+          v-if="selection.length"
+          class="supplier-link"
+          @click="selected={}"
+        >
+          清空勾选
         </button>
-      </div>
-      <span class="toolbar-hint">维护供应商档案、联系方式与采购来源</span>
-    </section>
-    <div
-      v-if="writable && showForm"
-      class="operation-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="supplier-dialog-title"
-      @keydown.esc="reset"
-    >
-      <form
-        class="panel operation-form operation-dialog__card"
-        @submit.prevent="save"
+      </div><button
+        class="supplier-link"
+        :disabled="loading||busy"
+        @click="initialize"
       >
-        <button
-          class="operation-dialog__close"
-          type="button"
-          aria-label="关闭供应商操作"
-          @click="reset"
-        >
-          ×
-        </button>
-        <h2 id="supplier-dialog-title">
-          {{ editing ? '编辑供应商' : '新增供应商' }}
-        </h2><label>供应商名称<input
-          v-model="form.name"
-          required
-          maxlength="128"
-        ></label><label>联系人<input
-          v-model="form.contactPerson"
-          maxlength="64"
-        ></label><label>电话<input
-          v-model="form.phone"
-          v-phone
-          maxlength="32"
-        ></label><label>微信号<input
-          v-model="form.wechatId"
-          maxlength="100"
-          autocomplete="off"
-        ></label><label>1688 链接<input
-          v-model="form.sourceUrl"
-          type="url"
-          maxlength="500"
-          placeholder="https://detail.1688.com/..."
-        ></label><fieldset class="supplier-category-field form-wide">
-          <legend>供应商分类 <span class="required">*</span></legend>
-          <label><input
-            v-model="form.categories"
-            type="checkbox"
-            value="MATERIAL"
-            :disabled="saving"
-          >辅料</label>
-          <label><input
-            v-model="form.categories"
-            type="checkbox"
-            value="PRODUCT"
-            :disabled="saving"
-          >产品</label>
-          <small class="muted">可多选，采购单按分类展示供应商</small>
-        </fieldset><SingleFileUpload
-          hint="图片立即上传，保存表单后关联"
-          title="图片"
-          accept=".png,.jpg,.jpeg,.webp"
-          :max-mb="5"
-          :disabled="saving"
-          :upload="upload"
-        /><label>状态<select
-          v-model="form.status"
-          v-single-select
-          class="status-select"
-        ><option value="ACTIVE">启用</option><option value="DISABLED">停用</option></select></label><label class="form-wide">备注<textarea
-          v-model="form.remark"
-          maxlength="500"
-        /></label><div
-          v-if="form.qrImageId"
-          class="form-wide catalog-image-editor"
-        >
-          <button
-            type="button"
-            class="image-button"
-            @click="preview = { kind: 'asset', value: form.qrImageId! }"
-          >
-            <AuthenticatedCatalogImage
-              :image-id="form.qrImageId"
-              alt="供应商图片"
-            />
-          </button><button
-            type="button"
-            class="secondary-button"
-            @click="form.qrImageId = undefined"
-          >
-            移除图片
-          </button>
-        </div><div
-          v-else-if="form.qrImageUrl"
-          class="form-wide catalog-image-editor material-image-editor"
-        >
-          <button
-            type="button"
-            class="image-button"
-            @click="preview = { kind: 'url', value: form.qrImageUrl! }"
-          >
-            <img
-              class="material-image"
-              :src="form.qrImageUrl"
-              alt="供应商图片"
-              referrerpolicy="no-referrer"
-            >
-          </button><button
-            type="button"
-            class="secondary-button"
-            @click="form.qrImageUrl = undefined"
-          >
-            移除图片
-          </button>
-        </div><div class="operation-form__actions ui-dialog-actions">
-          <p
-            v-if="formError"
-            class="supplier-form-error data-state data-state--error"
-            role="alert"
-          >
-            {{ formError }}
-          </p>
-          <button
-            type="button"
-            class="secondary-button"
-            @click="reset"
-          >
-            取消
-          </button><button
-            :disabled="saving"
-            type="submit"
-          >
-            {{ saving ? '保存中…' : '保存供应商' }}
-          </button>
-        </div>
-      </form>
-    </div>
-    <SuccessToast :message="success" /><p
-      v-if="error"
-      class="data-state data-state--error"
+        刷新
+      </button>
+    </section><p
+      v-if="hasPending&&writable"
+      class="supplier-warning"
+    >
+      有一笔供应商保存结果待确认。<button
+        :disabled="!ready"
+        @click="editorState={resume:true}"
+      >
+        恢复原请求
+      </button>
+    </p><p
+      v-if="capabilityError"
       role="alert"
     >
-      {{ error }}
+      {{ capabilityError }} <button @click="initialize">
+        重试
+      </button>
     </p><p
-      v-if="loading"
-      class="data-state"
+      v-if="error"
+      role="alert"
     >
+      {{ error }} <button @click="load">
+        重新读取
+      </button>
+    </p><p v-if="loading">
       正在加载…
-    </p>
-    <article
-      v-else
-      class="panel table-panel"
-    >
-      <div class="table-scroll">
-        <TableViewport>
-          <table
-            class="data-table supplier-list-table"
-            :class="{ 'ui-action-table': writable }"
-          >
-            <thead>
-              <tr>
-                <th>图片</th><th>名称</th><th>分类</th><th>联系人</th><th>电话</th><th>微信号</th><th>1688</th><th>状态</th><th>备注</th><th v-if="writable || session.canAccess(['suppliers.delete'])">
-                  操作
-                </th>
-              </tr>
-            </thead><tbody>
-              <tr
-                v-for="item in items"
-                :key="item.id"
+    </p><TableViewport v-else>
+      <table class="data-table supplier-table ui-action-table">
+        <thead>
+          <tr>
+            <th>
+              <input
+                type="checkbox"
+                aria-label="选择本页供应商"
+                :checked="allSelected"
+                :indeterminate="!allSelected&&items.some(s=>selected[s.id])"
+                @change="toggleAll"
               >
-                <td>
-                  <button
-                    v-if="item.qrImageId"
-                    type="button"
-                    class="image-button"
-                    @click="preview = { kind: 'asset', value: item.qrImageId }"
-                  >
-                    <AuthenticatedCatalogImage
-                      :image-id="item.qrImageId"
-                      :alt="`${item.name} 图片`"
-                    />
-                  </button><button
-                    v-else-if="item.qrImageUrl"
-                    type="button"
-                    class="image-button"
-                    @click="preview = { kind: 'url', value: item.qrImageUrl }"
-                  >
-                    <img
-                      class="material-image"
-                      :src="item.qrImageUrl"
-                      :alt="`${item.name} 图片`"
-                      referrerpolicy="no-referrer"
-                    >
-                  </button><span v-else>—</span>
-                </td><td>{{ item.name }}</td><td>
-                  <span v-if="item.categories?.length">{{ item.categories.map(c=>c==='MATERIAL'?'辅料':'产品').join('、') }}</span><span
-                    v-else
-                    class="muted"
-                  >待分类</span>
-                </td><td>{{ item.contactPerson || '—' }}</td><td>{{ item.phone || '—' }}</td><td>{{ item.wechatId || '—' }}</td><td>
-                  <a
-                    v-if="item.sourceUrl"
-                    :href="item.sourceUrl"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >打开</a><span v-else>—</span>
-                </td><td><span :class="['status-badge', `status-badge--${item.status.toLowerCase()}`]">{{ item.status === 'ACTIVE' ? '启用' : '停用' }}</span></td><td
-                  class="supplier-remark"
-                  :title="item.remark || undefined"
+            </th><th>联系图片</th><th>名称 / 分类</th><th>联系人 / 电话</th><th>微信 / 采购来源</th><th>状态</th><th>操作</th>
+          </tr>
+        </thead><tbody>
+          <template
+            v-for="s in items"
+            :key="s.id"
+          >
+            <tr :class="{'supplier-selected':selected[s.id]}">
+              <td>
+                <input
+                  type="checkbox"
+                  :aria-label="`选择${s.name}`"
+                  :checked="!!selected[s.id]"
+                  @change="toggle(s)"
                 >
-                  {{ item.remark || '—' }}
-                </td><td v-if="writable || session.canAccess(['suppliers.delete'])">
-                  <div class="table-actions supplier-row-actions">
+              </td><td>
+                <SupplierImage
+                  :name="s.name"
+                  :image-asset-id="s.qrImageId"
+                  :image-url="s.qrImageUrl"
+                />
+              </td><td>
+                <button
+                  class="supplier-link supplier-name"
+                  @click="detailId=s.id"
+                >
+                  {{ s.name }}
+                </button><small>{{ s.categories?.map(c=>c==='PRODUCT'?'产品':'辅料').join('、')||'待分类' }}</small><button
+                  v-if="s.remark"
+                  class="supplier-link"
+                  :aria-expanded="expanded.includes(s.id)"
+                  @click="expanded=expanded.includes(s.id)?expanded.filter(id=>id!==s.id):[...expanded,s.id]"
+                >
+                  {{ expanded.includes(s.id)?'收起备注':'查看备注' }}
+                </button>
+              </td><td>
+                {{ s.contactPerson||'未填联系人' }}<small><SupplierContactValue
+                  :value="s.phone"
+                  phone
+                /></small>
+              </td><td>
+                <SupplierContactValue :value="s.wechatId" /><small><a
+                  v-if="s.sourceUrl"
+                  :href="s.sourceUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >1688 采购来源 ↗</a><span v-else>未填采购来源</span></small>
+              </td><td>
+                <span
+                  class="supplier-status"
+                  :class="{'is-disabled':s.status==='DISABLED'}"
+                >{{ s.status==='ACTIVE'?'启用':'停用' }}</span>
+              </td><td>
+                <div class="table-actions">
+                  <button
+                    class="supplier-link"
+                    @click="detailId=s.id"
+                  >
+                    详情
+                  </button><button
+                    v-if="writable"
+                    class="supplier-link"
+                    :disabled="!ready||busy"
+                    @click="openEditor(s)"
+                  >
+                    编辑
+                  </button><RowMoreActions
+                    v-if="writable||deletable"
+                    :label="`${s.name}更多操作`"
+                  >
                     <button
-                      v-if="session.canAccess(['suppliers.write'])"
-                      type="button"
-                      :disabled="saving"
-                      @click="edit(item)"
+                      v-if="writable"
+                      :disabled="!ready||busy"
+                      @click="openEditor(s,true)"
                     >
-                      编辑
+                      复制
                     </button><button
-                      v-if="session.canAccess(['suppliers.write'])"
-                      type="button"
-                      class="supplier-action supplier-action--disable"
-                      :disabled="saving || item.status === 'DISABLED'"
-                      @click="disable(item)"
+                      v-if="writable"
+                      :disabled="!ready||busy"
+                      @click="status(s)"
                     >
-                      停用
+                      {{ s.status==='ACTIVE'?'停用':'启用' }}
                     </button><button
-                      v-if="session.canAccess(['suppliers.delete'])"
-                      type="button"
-                      class="supplier-action supplier-action--delete"
-                      :disabled="saving"
-                      @click="remove(item)"
+                      v-if="deletable"
+                      class="supplier-danger"
+                      :disabled="!ready||busy"
+                      @click="deleteTarget=s"
                     >
                       删除
                     </button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </TableViewport>
-      </div><p
-        v-if="!items.length"
-        class="data-state"
-      >
-        暂无供应商。
+                  </RowMoreActions>
+                </div>
+              </td>
+            </tr><tr v-if="expanded.includes(s.id)">
+              <td
+                colspan="7"
+                class="supplier-remark"
+              >
+                {{ s.remark }}
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table><p v-if="!items.length&&!error">
+        {{ tags.length?'没有符合条件的供应商。':'暂无供应商。' }}
       </p>
-    </article>
-    <ImagePreviewDialog
-      v-if="preview"
-      title="图片预览"
-      description="供应商图片"
-      @close="preview = undefined"
+    </TableViewport><ListPagination
+      :page="page"
+      :page-size="size"
+      :total="total"
+      :disabled="loading||!ready"
+      @update:page="page=$event"
+      @update:page-size="size=$event;page=1"
     >
-      <AuthenticatedCatalogImage
-        v-if="preview.kind === 'asset'"
-        :image-id="preview.value"
-        variant="original"
-        alt="供应商图片"
-      />
-      <img
-        v-else
-        :src="preview.value"
-        alt="供应商图片"
-        referrerpolicy="no-referrer"
-      >
-    </ImagePreviewDialog>
-  </section>
-  <SupplierDeleteDialog
+      <template #summary>
+        共 {{ total }} 家 · 已选 {{ selection.length }} 家
+      </template>
+    </ListPagination><SuccessToast :message="success" />
+  </section><SupplierEditor
+    v-if="editorState"
+    ref="editor"
+    v-bind="editorState"
+    @close="closeEditor"
+    @saved="saved"
+  /><SupplierDetailDialog
+    v-if="detailId"
+    :id="detailId"
+    @close="detailId=''"
+  /><SupplierDeleteDialog
     v-if="deleteTarget"
     :supplier="deleteTarget"
     @close="deleteTarget=undefined"
-    @deleted="deleted"
-    @disabled="disabled"
-  />
+    @deleted="changed"
+    @disabled="changed"
+  /><AccessDialog
+    v-if="statusTarget"
+    :title="statusTarget.status==='ACTIVE'?'停用供应商':'启用供应商'"
+    dialog-class="supplier-ui"
+    :busy="busy"
+    @close="statusTarget=undefined;impactGeneration++"
+  >
+    <strong>{{ statusTarget.name }}</strong><p v-if="impactLoading">
+      正在读取影响…
+    </p><SupplierImpactSummary
+      v-if="impact"
+      :impact="impact"
+    /><p
+      v-if="impactError"
+      role="alert"
+    >
+      {{ impactError }} <button @click="loadImpact">
+        重新读取影响
+      </button>
+    </p><template #footer>
+      <button
+        :disabled="busy"
+        @click="statusTarget=undefined"
+      >
+        取消
+      </button><button
+        :disabled="busy||impactLoading||!impact||!!impactError"
+        @click="confirmStatus"
+      >
+        确认{{ statusTarget.status==='ACTIVE'?'停用':'启用' }}
+      </button>
+    </template>
+  </AccessDialog>
 </template>
-
-<style scoped>
-.operation-form__actions { flex-wrap: wrap; }
-.supplier-form-error { flex: 1 1 100%; margin: 0; text-align: left; }
-#app .supplier-row-actions{display:flex;flex-wrap:nowrap;align-items:center;gap:4px;min-width:0}
-#app .supplier-row-actions button{display:inline-flex;align-items:center;justify-content:center;min-height:30px;padding:4px 7px;margin:0;border:1px solid #c9d9f0;background:#f1f6ff;color:#2864c5;border-radius:4px;font-size:13px;font-weight:400;white-space:nowrap;cursor:pointer}
-#app .supplier-row-actions .supplier-action--disable{color:#98630b;background:#fff8eb;border-color:#ead5aa}
-#app .supplier-row-actions .supplier-action--delete{color:#b42318;background:#fff7f6;border-color:#f1c5c1}
-#app .supplier-row-actions button:disabled{opacity:.45;cursor:not-allowed}
-#app .supplier-row-actions button:hover:not(:disabled){filter:brightness(.97)}
-</style>
-
-<style scoped>
-.supplier-category-field{display:flex;align-items:center;flex-wrap:wrap;gap:16px;border:1px solid var(--line);border-radius:4px;padding:10px 12px;margin:0;min-width:0}
-.supplier-category-field legend{font-size:13px;padding:0 4px}.supplier-category-field .required{color:#dc2626}
-.supplier-category-field label{display:inline-flex;align-items:center;gap:6px;margin:0}
-.supplier-category-field input[type=checkbox]{width:16px;height:16px;min-height:0;accent-color:var(--accent);margin:0}
-.supplier-remark{min-width:140px;max-width:280px;white-space:normal;overflow-wrap:anywhere}
-#app .supplier-list-table.ui-action-table > :is(thead,tbody) > tr > :last-child{width:1%;min-width:0;white-space:nowrap}
-</style>

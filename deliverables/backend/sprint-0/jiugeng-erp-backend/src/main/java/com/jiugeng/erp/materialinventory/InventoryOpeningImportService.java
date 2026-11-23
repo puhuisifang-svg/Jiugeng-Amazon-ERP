@@ -55,6 +55,18 @@ class InventoryOpeningImportService implements InventoryOpeningImportGateway {
                 errors.add(error(row, "material_code", "OPENING_INVENTORY_CONFLICT",
                         "该仓库与辅料已存在不同依据或载荷的期初流水", material));
             }
+            if (found != null) {
+                for (String field : List.of("opening_quantity", "safety_stock")) {
+                    String raw = value(row, field);
+                    try {
+                        MaterialQuantity.validate(new BigDecimal(raw), found.unit());
+                    } catch (MaterialException exception) {
+                        errors.add(error(row, field, "INVENTORY_QUANTITY_INVALID", exception.getMessage(), raw));
+                    } catch (NumberFormatException exception) {
+                        // The decimal validator already reported malformed input.
+                    }
+                }
+            }
             String materialKey = warehouseKey + "\u001f" + normalize(material);
             if (!warehouse.isBlank() && !material.isBlank() && !materialKeys.add(materialKey)) {
                 errors.add(error(row, "material_code", "OPENING_MATERIAL_DUPLICATED_IN_FILE",

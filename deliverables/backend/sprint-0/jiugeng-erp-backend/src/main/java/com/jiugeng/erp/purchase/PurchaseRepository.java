@@ -40,7 +40,7 @@ class PurchaseRepository {
     ItemRef existingItem(OrderType type,String supplierId,String id) { return item(type,supplierId,id,true); }
     private ItemRef item(OrderType type, String supplierId, String id, boolean existing) {
         String sql = type == OrderType.PRODUCT ? """
-                SELECT v.id, v.sku_code AS code, v.variant_name AS name, '套' AS unit
+                SELECT v.id, v.sku_code AS code, v.variant_name AS name, '件' AS unit
                 FROM product_variant v JOIN product p ON p.id=v.product_id
                 JOIN product_variant_supplier link ON link.variant_id=v.id AND link.supplier_id=:supplierId
                 WHERE v.id=:id AND v.status='ACTIVE' AND p.status='ACTIVE' AND p.deleted_at IS NULL AND v.deleted_at IS NULL
@@ -49,7 +49,7 @@ class PurchaseRepository {
                 JOIN auxiliary_material_supplier link ON link.auxiliary_material_id=m.id AND link.supplier_id=:supplierId
                 WHERE m.id=:id AND m.status='ACTIVE'
                 """;
-        if(existing && type==OrderType.PRODUCT) sql=sql.replace(" AND p.deleted_at IS NULL AND v.deleted_at IS NULL","");
+
         return jdbc.sql(sql+" FOR UPDATE").param("id", id).param("supplierId", supplierId).query((rs, row) -> new ItemRef(rs.getString("id"),
                 rs.getString("code"), rs.getString("name"), rs.getString("unit"))).optional()
                 .orElseThrow(() -> new PurchaseException(409, "SUPPLIER_ITEM_LINK_REQUIRED", "该供应商未关联所选商品或辅料"));
@@ -59,7 +59,7 @@ class PurchaseRepository {
         activeSupplier(supplierId);
         requireSupplierCategory(supplierId,type);
         String sql = type == OrderType.PRODUCT ? """
-                SELECT v.id,v.sku_code AS code,v.variant_name AS name,'套' AS unit,v.main_image_asset_id AS image_asset_id,v.main_image_url AS image_url,
+                SELECT v.id,v.sku_code AS code,v.variant_name AS name,'件' AS unit,v.main_image_asset_id AS image_asset_id,v.main_image_url AS image_url,
                        CASE WHEN link.primary_slot='PRIMARY' THEN TRUE ELSE FALSE END AS primary_supplier
                 FROM product_variant_supplier link
                 JOIN product_variant v ON v.id=link.variant_id
@@ -152,34 +152,39 @@ class PurchaseRepository {
     Optional<OrderView> find(String id, boolean lock) {
         String suffix = lock ? " FOR UPDATE" : "";
         return jdbc.sql("""
-                SELECT o.*,COALESCE(s.name,o.supplier_name,'未填写') AS resolved_supplier_name FROM purchase_order o LEFT JOIN supplier s ON s.id=o.supplier_id
+                SELECT o.*,CASE WHEN o.snapshot_saved THEN COALESCE(o.supplier_name,'未填写') ELSE COALESCE(s.name,o.supplier_name,'未填写') END AS resolved_supplier_name FROM purchase_order o LEFT JOIN supplier s ON s.id=o.supplier_id
                 WHERE o.id=:id
                 """ + suffix).param("id", id).query(this::mapOrder).optional().map(this::withLines);
     }
 
     List<OrderView> list(Status status) {
         String where = status == null ? "" : " WHERE o.status=:status";
-        var query = jdbc.sql("SELECT o.*,COALESCE(s.name,o.supplier_name,'未填写') AS resolved_supplier_name FROM purchase_order o LEFT JOIN supplier s ON s.id=o.supplier_id" +
+        var query = jdbc.sql("SELECT o.*,CASE WHEN o.snapshot_saved THEN COALESCE(o.supplier_name,'未填写') ELSE COALESCE(s.name,o.supplier_name,'未填写') END AS resolved_supplier_name FROM purchase_order o LEFT JOIN supplier s ON s.id=o.supplier_id" +
                 where + " ORDER BY o.updated_at DESC,o.id DESC");
         if (status != null) query = query.param("status", status.name());
         return query.query(this::mapOrder).list().stream().map(this::withLines).toList();
     }
 
-    List<LineView> lines(String orderId) {
-        return jdbc.sql("""
-                SELECT l.*,CASE WHEN o.order_type='PRODUCT' THEN v.main_image_asset_id WHEN o.order_type='MATERIAL' THEN m.image_asset_id ELSE l.image_asset_id END AS resolved_image_asset_id,
-                  CASE WHEN o.order_type='PRODUCT' THEN v.main_image_url ELSE m.image_url END AS image_url
+    List<LineView> lines(String orderId) { return linesFor(List.of(orderId)).getOrDefault(orderId,List.of()); }
+    java.util.Map<String,List<LineView>> linesFor(List<String> ids) {
+        if(ids.isEmpty())return java.util.Map.of();
+        java.util.Map<String,List<LineView>> result=new java.util.LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT l.*,CASE WHEN l.snapshot_saved THEN l.image_asset_id WHEN o.order_type='PRODUCT' THEN v.main_image_asset_id WHEN o.order_type='MATERIAL' THEN m.image_asset_id ELSE l.image_asset_id END AS resolved_image_asset_id,
+                  CASE WHEN l.snapshot_saved THEN l.snapshot_image_url WHEN o.order_type='PRODUCT' THEN v.main_image_url ELSE m.image_url END AS image_url
                 FROM purchase_order_line l JOIN purchase_order o ON o.id=l.order_id
                 LEFT JOIN product_variant v ON o.order_type='PRODUCT' AND v.id=l.item_id
                 LEFT JOIN auxiliary_material m ON o.order_type='MATERIAL' AND m.id=l.item_id
-                WHERE l.order_id=:id ORDER BY l.line_no
-                """).param("id", orderId).query((rs, row) -> {
+                WHERE l.order_id IN (:ids) ORDER BY l.order_id,l.line_no
+                """).param("ids", ids).query((rs, row) -> {
                     BigDecimal ordered = rs.getBigDecimal("ordered_quantity");
                     BigDecimal received = rs.getBigDecimal("received_quantity");
-                    return new LineView(rs.getString("id"), rs.getInt("line_no"), rs.getString("item_id"),
+                    var line=new LineView(rs.getString("id"), rs.getInt("line_no"), rs.getString("item_id"),
                             rs.getString("item_code"), rs.getString("item_name"), rs.getString("unit"), ordered,
-                            received, ordered.subtract(received), rs.getBigDecimal("unit_price"),rs.getString("resolved_image_asset_id"),rs.getString("image_url"),rs.getString("specification"),rs.getBoolean("tax_included"),rs.getBigDecimal("tax_rate"),(Integer)rs.getObject("package_count"));
+                            received, ordered.subtract(received), rs.getBigDecimal("unit_price"),rs.getString("resolved_image_asset_id"),rs.getString("image_url"),rs.getString("specification"),rs.getBoolean("tax_included"),rs.getBigDecimal("tax_rate"),(Integer)rs.getObject("package_count"),rs.getBoolean("snapshot_saved"));
+                    result.computeIfAbsent(rs.getString("order_id"),key->new java.util.ArrayList<>()).add(line);return line;
                 }).list();
+        return result;
     }
 
     void lockLine(String id) {
@@ -248,13 +253,14 @@ class PurchaseRepository {
                 .query(Long.class).single();
     }
 
-    private OrderView withLines(OrderView value) {
+    OrderView withLines(OrderView value) { return withLines(value,lines(value.id())); }
+    OrderView withLines(OrderView value,List<LineView> lines) {
         return new OrderView(value.id(), value.orderNo(), value.orderType(), value.supplierId(), value.supplierName(),
-                value.status(), value.currency(), value.remark(), value.version(), lines(value.id()), value.createdAt(),
+                value.status(), value.currency(), value.remark(), value.version(), lines, value.createdAt(),
                 value.updatedAt(), value.expectedDeliveryDate(), value.deliveryAddress(), value.cancellationReason(), value.carrier(), value.trackingNumber(),value.waybillImageId());
     }
 
-    private OrderView mapOrder(ResultSet rs, int row) throws SQLException {
+    OrderView mapOrder(ResultSet rs, int row) throws SQLException {
         return new OrderView(rs.getString("id"), rs.getString("order_no"), OrderType.valueOf(rs.getString("order_type")),
                 rs.getString("supplier_id"), rs.getString("resolved_supplier_name"), Status.valueOf(rs.getString("status")),
                 rs.getString("currency"), rs.getString("remark"), rs.getLong("version"), List.of(),

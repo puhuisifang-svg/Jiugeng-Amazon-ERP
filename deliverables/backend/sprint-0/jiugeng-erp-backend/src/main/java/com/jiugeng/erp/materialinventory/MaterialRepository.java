@@ -40,7 +40,7 @@ class MaterialRepository {
     List<MaterialView> findAll() {
         return jdbc.sql("""
                 SELECT id, material_code, name, material_type, specification, unit, image_url, image_asset_id, remark,
-                       status, created_at, updated_at
+                       status, created_at, updated_at, version
                 FROM auxiliary_material ORDER BY material_code_normalized
                 """).query(this::map).list();
     }
@@ -48,7 +48,7 @@ class MaterialRepository {
     Optional<MaterialView> findById(String id) {
         return jdbc.sql("""
                 SELECT id, material_code, name, material_type, specification, unit, image_url, image_asset_id, remark,
-                       status, created_at, updated_at
+                       status, created_at, updated_at, version
                 FROM auxiliary_material WHERE id = :id
                 """).param("id", id).query(this::map).optional();
     }
@@ -80,7 +80,7 @@ class MaterialRepository {
                 UPDATE auxiliary_material SET name = :name, material_type = :type, specification = :specification,
                     unit = :unit, image_url = :imageUrl, image_asset_id = :imageAssetId, remark = :remark,
                     updated_by = :actorId,
-                    updated_at = CURRENT_TIMESTAMP WHERE id = :id
+                    version=version+1, updated_at = CURRENT_TIMESTAMP WHERE id = :id
                 """).param("id", id).param("name", name).param("type", type).param("specification", specification)
                 .param("unit", unit).param("imageUrl", imageUrl).param("imageAssetId", imageAssetId)
                 .param("remark", remark)
@@ -90,17 +90,25 @@ class MaterialRepository {
     void disable(String id, String actorId) {
         jdbc.sql("""
                 UPDATE auxiliary_material SET status = 'DISABLED', updated_by = :actorId,
-                    updated_at = CURRENT_TIMESTAMP WHERE id = :id
+                    version=version+1, updated_at = CURRENT_TIMESTAMP WHERE id = :id
                 """).param("id", id).param("actorId", actorId).update();
     }
 
     void enable(String id, String actorId) {
         jdbc.sql("""
                 UPDATE auxiliary_material SET status = 'ACTIVE', updated_by = :actorId,
-                    updated_at = CURRENT_TIMESTAMP WHERE id = :id
+                    version=version+1, updated_at = CURRENT_TIMESTAMP WHERE id = :id
                 """).param("id", id).param("actorId", actorId).update();
     }
 
+    void lock(String id) {
+        jdbc.sql("SELECT id FROM auxiliary_material WHERE id=:id FOR UPDATE").param("id",id).query(String.class).optional()
+            .orElseThrow(() -> new MaterialException(404,"MATERIAL_NOT_FOUND","辅料不存在"));
+    }
+    boolean unitLocked(String id) {
+        return isReferenced(id) || jdbc.sql("SELECT COUNT(*) FROM inventory_balance WHERE auxiliary_material_id=:id").param("id",id).query(Long.class).single()>0
+            || jdbc.sql("SELECT COUNT(*) FROM material_standard_cost WHERE material_id=:id").param("id",id).query(Long.class).single()>0;
+    }
     boolean isReferenced(String id) {
         return jdbc.sql("""
                 SELECT (SELECT COUNT(*) FROM inventory_transaction WHERE auxiliary_material_id=:id)
@@ -122,7 +130,7 @@ class MaterialRepository {
                 rs.getString("material_type"), rs.getString("specification"), rs.getString("unit"),
                 rs.getString("image_url"), rs.getString("image_asset_id"), rs.getString("remark"),
                 MaterialStatus.valueOf(rs.getString("status")),
-                instant(rs, "created_at"), instant(rs, "updated_at"));
+                instant(rs, "created_at"), instant(rs, "updated_at"), rs.getLong("version"));
     }
 
     private Instant instant(ResultSet rs, String column) throws SQLException { return rs.getTimestamp(column).toInstant(); }

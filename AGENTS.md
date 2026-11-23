@@ -22,6 +22,7 @@ This repository is a shared working directory used by the Jiugeng project-manage
 
 ## Branch and Git policy
 
+- User release ownership update (2026-11-21): after local code validation and requested handoff, PJM alone owns submission/merge, CI/CD, deployment and release-status verification. Codex must not poll, wait for, or track online releases. Historical evidence requirements apply to PJM or a separately assigned investigation, not routine implementation.
 - User release instruction (2026-11-20): complete subsequent system changes and validation locally, then wait for the user's explicit release instruction. Only after that instruction should Codex hand the reviewed changes to the project-manager agent to submit/merge into `main` and deploy production. A request to implement or test is not release authorization. Do not independently push, merge, trigger production workflows, or ask the project manager to release before that instruction; merging to `main` can trigger production deployment automatically. Local commits still follow the existing “when requested” rule.
 - Start implementation from an up-to-date `origin/main` on a dedicated branch named `feature/ERP-<number>-<slug>` or `fix/ERP-<number>-<slug>`.
 - Because a branch switch affects every agent sharing this directory, switch branches only at the start of an assigned write slot and only from a clean worktree.

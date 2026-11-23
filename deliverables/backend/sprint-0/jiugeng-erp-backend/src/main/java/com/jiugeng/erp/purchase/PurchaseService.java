@@ -31,13 +31,16 @@ import org.springframework.transaction.annotation.Transactional;
 class PurchaseService {
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Shanghai");
     private final PurchaseRepository repository;
+    private final PurchaseCloseout closeout;
+    private final com.jiugeng.erp.product.ProductPurchaseInventory productInventory;
     private final InventoryInboundGateway inventory;
     private final AuditTrail audit;
     private final AuditHistoryLookup history;
     private final com.jiugeng.erp.catalogmedia.CatalogImageGateway images;
 
     PurchaseService(PurchaseRepository repository, InventoryInboundGateway inventory, AuditTrail audit,
-            AuditHistoryLookup history, com.jiugeng.erp.catalogmedia.CatalogImageGateway images) {
+            AuditHistoryLookup history, com.jiugeng.erp.catalogmedia.CatalogImageGateway images, PurchaseCloseout closeout, com.jiugeng.erp.product.ProductPurchaseInventory productInventory) {
+        this.closeout=closeout;this.productInventory=productInventory;
         this.images=images;
         this.repository = repository; this.inventory = inventory; this.audit = audit; this.history = history;
     }
@@ -95,6 +98,7 @@ class PurchaseService {
         repository.insertOrder(id, orderNo, valid.input(), actor.userId());
         repository.replaceLines(id, valid.lines());
         attachImages(id, valid.lines(), actor);
+        closeout.snapshot(id,valid.input(),null,actor);
         OrderView created = order(id);
         audit(actor, "PURCHASE_ORDER_CREATE", id, null, snapshot(created));
         return created;
@@ -106,11 +110,13 @@ class PurchaseService {
         if (before.status() != Status.DRAFT && before.status() != Status.SUBMITTED) throw state("只有草稿或待收货采购单可编辑");
         if (!repository.receipts(id).isEmpty()) throw state("已有收货记录的采购单不可编辑");
         if (raw == null || raw.orderType() != before.orderType()) throw invalid("采购类型保存后不可修改");
+        if(closeout.shipments(id)>0)throw state("已有发货批次，不能修改采购明细；请保留发货追溯依据");
         ValidatedOrder valid = validate(raw, before.orderType(),before);
         long version = requireVersion(raw.version());
         if (repository.updateDraft(id, valid.input(), actor.userId(), version) != 1) throw versionConflict();
         repository.replaceLines(id, valid.lines());
         attachImages(id, valid.lines(), actor);
+        closeout.snapshot(id,valid.input(),before,actor);
         OrderView after = order(id);
         releaseImages(before, after);
         audit(actor, "PURCHASE_ORDER_UPDATE", id, snapshot(before), snapshot(after));
@@ -121,6 +127,7 @@ class PurchaseService {
     void delete(String id, long version, AuthenticatedActor actor) {
         OrderView before = repository.find(id, true).orElseThrow(() -> missing(id));
         if (before.version() != version) throw versionConflict();
+        if(closeout.shipments(id)>0)throw state("已有发货批次的采购单不能删除，可关闭未收余量");
         if (repository.hasReceipts(id) || before.lines().stream().anyMatch(line -> line.receivedQuantity().signum() > 0)
                 || before.status() == Status.PARTIALLY_RECEIVED || before.status() == Status.COMPLETED)
             throw state("已有收货记录的采购单不能删除，请保留收货和库存追溯依据");
@@ -177,6 +184,7 @@ class PurchaseService {
         }
         if (locked.status() != Status.SUBMITTED && locked.status() != Status.PARTIALLY_RECEIVED)
             throw state("只有已提交或部分收货采购单可收货");
+        closeout.checkReceipt(locked,input);
         Set<String> requestedIds = new HashSet<>();
         input.lines().forEach(line -> {
             if (!requestedIds.add(line.orderLineId())) throw invalid("收货明细不可重复");
@@ -191,17 +199,20 @@ class PurchaseService {
             LineView line = lines.get(requested.orderLineId());
             if (line == null) throw new PurchaseException(409,"PURCHASE_LINE_ORDER_MISMATCH","收货明细不属于该采购单");
             BigDecimal quantity = positive(requested.quantity(), "收货数量");
+            PurchaseCloseout.quantity(locked.orderType(),line.unit(),quantity);
             if (quantity.compareTo(line.remainingQuantity()) > 0) throw new PurchaseException(409,"PURCHASE_OVER_RECEIPT","收货数量超过剩余数量");
             String inventoryId = null;
             if (locked.orderType() == OrderType.MATERIAL) {
                 InventoryInboundGateway.Result result = inventory.postInbound(new InventoryInboundGateway.Command(
-                        "PURCHASE:" + input.requestId() + ":" + line.id(), line.itemId(), quantity, line.unit(),
+                        "PURCHASE:" + receiptId + ":" + line.id(), line.itemId(), quantity, line.unit(),
                         "采购收货 " + locked.orderNo()), actor);
                 inventoryId = result.transactionId();
             }
+            if(locked.orderType()==OrderType.PRODUCT) inventoryId=productInventory.receive(line.itemId(),"PURCHASE:"+receiptId+":"+line.id(),quantity,"采购收货 "+locked.orderNo(),actor);
             repository.addReceived(line.id(), quantity);
             repository.insertReceiptLine(UUID.randomUUID().toString(), receiptId, line.id(), quantity, inventoryId);
         }
+        closeout.recordReceipt(receiptId,input);
         boolean complete = repository.lines(orderId).stream().allMatch(line -> line.remainingQuantity().signum() == 0);
         repository.setReceiptStatus(orderId, complete ? Status.COMPLETED : Status.PARTIALLY_RECEIVED, actor.userId());
         ReceiptView receipt = repository.receipt(receiptId, false);
@@ -218,7 +229,7 @@ class PurchaseService {
         if (raw == null || raw.orderType() == null) throw invalid("采购类型不能为空");
         if (expectedType != null && raw.orderType() != expectedType) throw invalid("采购类型不可修改");
         String supplierId = raw.orderType()==OrderType.MANUAL ? null : required(raw.supplierId(), "供应商", 36);
-        if(supplierId!=null){repository.activeSupplier(supplierId);if(before==null||!supplierId.equals(before.supplierId()))repository.requireSupplierCategory(supplierId,raw.orderType());}
+        if(supplierId!=null && (before==null||!supplierId.equals(before.supplierId()))){repository.activeSupplier(supplierId);repository.requireSupplierCategory(supplierId,raw.orderType());}
         String currency = required(raw.currency(), "币种", 3).toUpperCase(Locale.ROOT);
         if (!currency.matches("[A-Z]{3}")) throw invalid("币种必须为三位字母代码");
         String remark = optional(raw.remark(), 500);
@@ -236,9 +247,11 @@ class PurchaseService {
             var prior=before!=null && before.supplierId().equals(supplierId)?before.lines().stream().filter(v->v.itemId().equals(itemId)).findFirst():java.util.Optional.<LineView>empty();
             PurchaseRepository.ItemRef item;
             if(prior.isPresent()) {
-                repository.existingItem(raw.orderType(),supplierId,itemId);
+                // An unchanged historical line stays readable; increases still require a current relationship.
+                if(line.quantity()==null||line.quantity().compareTo(prior.get().orderedQuantity())>0){repository.activeSupplier(supplierId);repository.requireSupplierCategory(supplierId,raw.orderType());repository.existingItem(raw.orderType(),supplierId,itemId);}
                 var saved=prior.get();item=new PurchaseRepository.ItemRef(saved.itemId(),saved.itemCode(),saved.itemName(),saved.unit());
-            } else item=repository.activeItem(raw.orderType(), supplierId, itemId);
+            } else {repository.activeSupplier(supplierId);repository.requireSupplierCategory(supplierId,raw.orderType());item=repository.activeItem(raw.orderType(), supplierId, itemId);}
+            PurchaseCloseout.quantity(raw.orderType(),item.unit(),line.quantity());
             lines.add(new PurchaseRepository.ResolvedLine(UUID.randomUUID().toString(), number++, item,
                     positive(line.quantity(), "采购数量"), nonNegative(line.unitPrice(), "采购单价"),null,null,line.taxIncluded(),taxRate(line),packageCount(line.packageCount())));
         }
@@ -251,7 +264,7 @@ class PurchaseService {
         for(var line:lines) images.attach(line.imageAssetId(),com.jiugeng.erp.catalogmedia.CatalogImageGateway.Purpose.PURCHASE_ITEM,"PURCHASE",id,actor);
     }
     private void releaseImages(OrderView before,OrderView after){
-        if(before.orderType()!=OrderType.MANUAL)return;
+
         var retained=after==null?List.<String>of():after.lines().stream().map(LineView::imageAssetId).filter(java.util.Objects::nonNull).toList();
         for(var line:before.lines())if(line.imageAssetId()!=null&&!retained.contains(line.imageAssetId()))images.releaseReplaced(line.imageAssetId(),null,"PURCHASE",before.id());
     }
@@ -263,7 +276,7 @@ class PurchaseService {
         if (receivedAt.isAfter(Instant.now().plusSeconds(300))) throw invalid("收货时间不能在未来");
         if (raw.lines() == null || raw.lines().isEmpty() || raw.lines().size() > 200) throw invalid("收货明细需为 1 至 200 行");
         raw.lines().forEach(line -> { if (line == null) throw invalid("收货明细不能为空"); required(line.orderLineId(),"采购明细",36); positive(line.quantity(),"收货数量"); });
-        return new ReceiptInput(requestId, receivedAt, optional(raw.remark(),500), List.copyOf(raw.lines()));
+        return new ReceiptInput(requestId, receivedAt, optional(raw.remark(),500), List.copyOf(raw.lines()),optional(raw.shipmentId(),36));
     }
     private String nextOrderNo() {
         String date = LocalDate.now(BUSINESS_ZONE).format(DateTimeFormatter.BASIC_ISO_DATE);
@@ -275,6 +288,7 @@ class PurchaseService {
                 .append(input.remark()==null?"":input.remark());
         input.lines().stream().sorted(Comparator.comparing(ReceiptLineInput::orderLineId)).forEach(line -> value
                 .append('\u001f').append(line.orderLineId()).append('=').append(line.quantity().stripTrailingZeros().toPlainString()));
+        if(input.shipmentId()!=null)value.append("\u001fshipment=").append(input.shipmentId());
         try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.toString().getBytes(StandardCharsets.UTF_8)));}
         catch(NoSuchAlgorithmException error){throw new IllegalStateException(error);}
     }
@@ -282,7 +296,7 @@ class PurchaseService {
     private BigDecimal positive(BigDecimal value,String label){if(value==null||value.signum()<=0||value.scale()>4||value.compareTo(new BigDecimal("99999999999999.9999"))>0)throw invalid(label+"必须为有效范围内最多四位小数的正数");return value;}
     private BigDecimal nonNegative(BigDecimal value,String label){if(value==null||value.signum()<0||value.scale()>4||value.compareTo(new BigDecimal("99999999999999.9999"))>0)throw invalid(label+"必须为有效范围内最多四位小数的非负数");return value;}
     private String required(String value,String label,int max){String result=optional(value,max);if(result==null)throw invalid(label+"不能为空");return result;}
-    private String optional(String value,int max){if(value==null)return null;String result=value.trim();if(result.isEmpty())return null;if(result.length()>max||result.chars().anyMatch(c->c<32))throw invalid("字段格式或长度不正确");return result;}
+    private String optional(String value,int max){if(value==null)return null;String result=value.replace("\r\n","\n").trim();if(result.isEmpty())return null;if(result.length()>max||result.chars().anyMatch(c->c<32&&c!=10))throw invalid("字段格式或长度不正确");return result;}
     private PurchaseException invalid(String message){return new PurchaseException(400,"PURCHASE_FIELD_INVALID",message);}
     private PurchaseException state(String message){return new PurchaseException(409,"PURCHASE_STATE_INVALID",message);}
     private PurchaseException versionConflict(){return new PurchaseException(409,"PURCHASE_VERSION_CONFLICT","采购单已被其他用户更新");}
@@ -302,7 +316,7 @@ class PurchaseService {
             throw invalid("税率须为 0 至 100，最多两位小数");
         return rate;
     }
-    private Map<String,Object> snapshot(OrderView value){Map<String,Object> result=new LinkedHashMap<>();result.put("orderNo",value.orderNo());result.put("orderType",value.orderType());result.put("supplierId",value.supplierId());result.put("status",value.status());result.put("currency",value.currency());result.put("carrier",value.carrier());result.put("trackingNumber",value.trackingNumber());result.put("waybillImageId",value.waybillImageId());result.put("version",value.version());result.put("lines",value.lines().stream().map(line->Map.of("itemId",line.itemId(),"quantity",line.orderedQuantity(),"received",line.receivedQuantity(),"unitPrice",line.unitPrice(),"taxIncluded",line.taxIncluded(),"taxRate",line.taxRate(),"packageCount",line.packageCount()==null?"":line.packageCount())).toList());return result;}
+    private Map<String,Object> snapshot(OrderView value){Map<String,Object> result=new LinkedHashMap<>();result.put("orderNo",value.orderNo());result.put("orderType",value.orderType());result.put("supplierId",value.supplierId());result.put("status",value.status());result.put("currency",value.currency());result.put("supplierName",value.supplierName());result.put("expectedDeliveryDate",value.expectedDeliveryDate());result.put("deliveryAddress",value.deliveryAddress());result.put("remark",value.remark());result.put("cancellationReason",value.cancellationReason());result.put("carrier",value.carrier());result.put("trackingNumber",value.trackingNumber());result.put("waybillImageId",value.waybillImageId());result.put("version",value.version());result.put("lines",value.lines().stream().map(line->Map.of("itemName",line.itemName(),"quantity",line.orderedQuantity(),"received",line.receivedQuantity(),"unitPrice",line.unitPrice(),"taxIncluded",line.taxIncluded(),"taxRate",line.taxRate(),"packageCount",line.packageCount()==null?"":line.packageCount())).toList());return result;}
     private void audit(AuthenticatedActor actor,String action,String id,Map<String,?>before,Map<String,?>after){audit.record(new AuditTrail.BusinessOperation(actor.userId(),actor.loginName(),actor.displayName(),action,"PURCHASE",id,true,before,after,"采购管理业务变更"));}
     private record ValidatedOrder(OrderInput input,List<PurchaseRepository.ResolvedLine> lines){}
 }

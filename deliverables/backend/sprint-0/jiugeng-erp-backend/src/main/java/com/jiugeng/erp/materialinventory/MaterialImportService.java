@@ -27,10 +27,12 @@ class MaterialImportService implements MaterialImportGateway {
 
     private final JdbcClient jdbc;
     private final AuditTrail audit;
+    private final MaterialRepository repository;
 
-    MaterialImportService(JdbcClient jdbc, AuditTrail audit) {
+    MaterialImportService(JdbcClient jdbc, AuditTrail audit, MaterialRepository repository) {
         this.jdbc = jdbc;
         this.audit = audit;
+        this.repository=repository;
     }
 
     @Override
@@ -87,6 +89,8 @@ class MaterialImportService implements MaterialImportGateway {
         for (ImportRow row : dataRows(rows)) {
             MaterialData next = material(row);
             MaterialData current = findMaterial(next.normalizedCode());
+            if(current!=null){repository.lock(current.id());current=findMaterial(next.normalizedCode());
+                if(!current.unit().equals(next.unit())&&repository.unitLocked(current.id()))throw new MaterialException(409,"MATERIAL_UNIT_LOCKED","已使用辅料不能通过导入改变基础单位");}
             if (current == null) {
                 String id = UUID.randomUUID().toString();
                 jdbc.sql("""
@@ -106,7 +110,7 @@ class MaterialImportService implements MaterialImportGateway {
                 jdbc.sql("""
                         UPDATE auxiliary_material SET name=:name,material_type=:type,specification=:specification,
                             unit=:unit,image_url=:imageUrl,remark=:remark,status=:status,updated_by=:actor,
-                            updated_at=CURRENT_TIMESTAMP WHERE id=:id
+                            version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=:id
                         """).param("id", current.id()).param("name", next.name()).param("type", next.type())
                         .param("specification", next.specification()).param("unit", next.unit())
                         .param("imageUrl", next.imageUrl()).param("remark", next.remark())

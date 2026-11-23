@@ -48,6 +48,10 @@
 | DEL-044 | 2026-11-21 | Codex | 供应商管理 1–20 项收尾（P3 不做，同累计迭代） | v0.1 | In Review | 待用户 / PJM 复核 | [实施与待验记录](../deliverables/pjm/SUPPLIER_CLOSEOUT_LOCAL_2026-11-21.md)；未提交，关键局部检查通过，本地已备份并同步 V104，完整验证待交接 |
 | DEL-045 | 2026-11-22 | Codex | 采购管理 1–22、24 项收尾（排除 23/25，同累计迭代） | v0.1 | In Review | 待用户 / PJM 复核 | [实施与待验记录](../deliverables/pjm/PURCHASE_CLOSEOUT_LOCAL_2026-11-22.md)；本地未提交，关键局部检查通过，已备份并同步 V105/V106，完整验证待交接 |
 | DEL-046 | 2026-11-23 | Codex → PJM | 辅料、供应商、采购及样品操作 UI 累计发布交接 | v0.1 | In Review | 用户已授权提交 main / 部署；PJM 执行与核实 | [发布交接记录](../deliverables/pjm/OPERATIONS_RELEASE_HANDOFF_2026-11-23.md)；本地统一门禁通过，提交/线上结果由 PJM 更新 |
+| DEL-047 | 2026-11-23 | Codex | ERP-101 图片性能 1–7 项、外链受控镜像与匿名测速 | v0.1 | In Review | 待用户 / PJM 复核；无发布授权 | [本地实施与待验记录](../deliverables/pjm/ERP-101_IMAGE_PERFORMANCE_LOCAL_2026-11-23.md)；未提交，局部检查通过，本地备份并同步 V107，完整验证待交接 |
+| DEL-048 | 2026-11-23 | Codex | PDF 编辑清单 3、5、6、8、9、10、12、15、19 收尾 | v0.1 | In Review | 待用户 / PJM 复核；无发布授权 | [本地实施与待验记录](../deliverables/pjm/PDF_CLOSEOUT_LOCAL_2026-11-23.md)；同迭代未提交，局部检查通过，完整验证待交接 |
+
+| DEL-049 | 2026-11-23 | Codex → PJM | 图片性能、PDF 命名与选定九项累计发布交接 | v1.0 | In Review | 用户已授权提交 main / 部署；PJM 执行核实 | [发布交接记录](../deliverables/pjm/IMAGE_PDF_RELEASE_HANDOFF_2026-11-23.md)；统一门禁通过，最终 lease 防护定向通过，未提交，线上结果由 PJM 更新 |
 
 ## 登记要求
 

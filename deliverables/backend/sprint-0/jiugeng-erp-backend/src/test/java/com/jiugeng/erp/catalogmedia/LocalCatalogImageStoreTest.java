@@ -65,6 +65,18 @@ class LocalCatalogImageStoreTest {
         store.delete(image.thumbnailKey());org.mockito.Mockito.when(objects.read("catalog-images",image.thumbnailKey())).thenReturn(java.util.Optional.empty());
         assertThatThrownBy(()->store.read(image.thumbnailKey())).isInstanceOf(java.io.IOException.class);
     }
+    @Test void remoteReadCacheSurvivesRestartAndEvictsOnlyCachedCopies(@TempDir java.nio.file.Path directory)throws Exception {
+        var store=new LocalCatalogImageStore(directory.toString());var objects=org.mockito.Mockito.mock(com.jiugeng.erp.objectstorage.PrivateObjectStorage.class);store.configureStorage(objects);
+        String key=java.util.UUID.randomUUID()+"-thumbnail.png";
+        org.mockito.Mockito.when(objects.read("catalog-images",key)).thenReturn(java.util.Optional.of(new byte[]{1,2,3}));
+        store.read(key);
+        var restarted=new LocalCatalogImageStore(directory.toString());restarted.configureStorage(objects);assertThat(restarted.read(key)).containsExactly(1,2,3);
+        org.mockito.Mockito.verify(objects,org.mockito.Mockito.times(1)).read("catalog-images",key);
+        var local=restarted.store(ONE_PIXEL_WEBP);restarted.diskCacheLimit(4);
+        String another=java.util.UUID.randomUUID()+"-thumbnail.png";
+        org.mockito.Mockito.when(objects.read("catalog-images",another)).thenReturn(java.util.Optional.of(new byte[]{4,5,6}));restarted.read(another);
+        assertThat(Files.exists(directory.resolve("read-cache").resolve(key))).isFalse();assertThat(Files.exists(directory.resolve(local.originalKey()))).isTrue();
+    }
     @Test void waitsForBothWritesBeforeCleaningFailure(@TempDir java.nio.file.Path directory)throws Exception {
         var store=new LocalCatalogImageStore(directory.toString());var objects=org.mockito.Mockito.mock(com.jiugeng.erp.objectstorage.PrivateObjectStorage.class);
         var finished=new java.util.concurrent.atomic.AtomicBoolean();
@@ -72,6 +84,6 @@ class LocalCatalogImageStoreTest {
         org.mockito.Mockito.doAnswer(call->{assertThat(finished.get()).isTrue();return null;}).when(objects).delete(org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString());
         store.configureStorage(objects);assertThatThrownBy(()->store.store(ONE_PIXEL_WEBP)).isInstanceOf(java.io.IOException.class);
         org.mockito.Mockito.verify(objects,org.mockito.Mockito.times(2)).delete(org.mockito.ArgumentMatchers.eq("catalog-images"),org.mockito.ArgumentMatchers.anyString());
-        try(var files=Files.list(directory)){assertThat(files.count()).isZero();}
+        try(var files=Files.list(directory)){assertThat(files.filter(Files::isRegularFile).count()).isZero();}
     }
 }

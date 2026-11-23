@@ -30,17 +30,13 @@ watch(()=>[props.imageId,props.imageUrl],()=>{failed.value=false;preview.value=f
       :image-id="imageId"
       :alt="alt"
     />
-    <img
+    <AuthenticatedCatalogImage
       v-else
       :key="attempt"
-      :src="imageUrl ?? undefined"
+      :image-url="imageUrl ?? undefined"
       :alt="alt"
       class="catalog-image"
-      loading="lazy"
-      decoding="async"
-      referrerpolicy="no-referrer"
-      @error="failed=true"
-    >
+    />
   </button>
   <span
     v-else
@@ -60,11 +56,11 @@ watch(()=>[props.imageId,props.imageUrl],()=>{failed.value=false;preview.value=f
       variant="original"
       :alt="alt"
     />
-    <img
+    <AuthenticatedCatalogImage
       v-else
-      :src="imageUrl ?? undefined"
+      variant="original"
+      :image-url="imageUrl ?? undefined"
       :alt="alt"
-      referrerpolicy="no-referrer"
-    >
+    />
   </ImagePreviewDialog>
 </template>

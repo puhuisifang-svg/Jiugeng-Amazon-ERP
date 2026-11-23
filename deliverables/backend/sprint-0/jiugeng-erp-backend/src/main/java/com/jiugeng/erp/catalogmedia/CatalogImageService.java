@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 class CatalogImageService implements CatalogImageGateway {
     private final CatalogImageRepository repository;private final CatalogImageStore store;private final AuditTrail audit;
     private final long orphanHours;
+    @org.springframework.beans.factory.annotation.Autowired private CatalogImageVariants variants;
     CatalogImageService(CatalogImageRepository repository,CatalogImageStore store,AuditTrail audit,
             @Value("${app.catalog.image-orphan-hours:24}")long orphanHours){this.repository=repository;this.store=store;this.audit=audit;this.orphanHours=orphanHours;}
     @Transactional
@@ -25,14 +26,18 @@ class CatalogImageService implements CatalogImageGateway {
         var asset=new CatalogImageRepository.Asset(id,purpose,"PENDING",stored.originalKey(),stored.thumbnailKey(),name,
                 stored.sourceMediaType(),stored.storedMediaType(),stored.sourceSize(),stored.sha256(),stored.width(),stored.height(),actor.userId(),null,null,Instant.now());
         try{repository.insert(asset);}catch(RuntimeException e){delete(stored.originalKey());delete(stored.thumbnailKey());throw e;}
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization(){
+            @Override public void afterCompletion(int status){if(status!=STATUS_COMMITTED){delete(stored.originalKey());delete(stored.thumbnailKey());}}
+        });
+        variants.generate(id);
         audit.record(new AuditTrail.BusinessOperation(actor.userId(),actor.loginName(),actor.displayName(),"CATALOG_IMAGE_UPLOAD","CATALOG_IMAGE",id,true,null,
                 Map.of("id",id,"purpose",purpose,"byteSize",stored.sourceSize(),"sha256",stored.sha256()),"上传受控目录图片"));
         return new Receipt(id,purpose,name,stored.storedMediaType(),stored.sourceSize(),stored.width(),stored.height(),stored.sha256(),java.util.Base64.getEncoder().encodeToString(stored.thumbnailBytes()));}
     @Transactional(readOnly=true)
-    Content read(String id,boolean thumbnail,AuthenticatedActor actor,boolean productsRead,boolean materialsRead,boolean suppliersRead,boolean samplesRead,boolean customersRead,boolean purchasesRead)throws IOException{
+    CatalogImageRepository.Asset authorize(String id,boolean thumbnail,AuthenticatedActor actor,boolean productsRead,boolean materialsRead,boolean suppliersRead,boolean samplesRead,boolean customersRead,boolean purchasesRead)throws IOException{
         var image=asset(id);if("PENDING".equals(image.status())&&!image.uploadedBy().equals(actor.userId()))throw missing();
         boolean allowed=switch(image.purpose()){case PRODUCT_MAIN, SKU_MAIN->productsRead;case MATERIAL_IMAGE->materialsRead;case SUPPLIER_QR->suppliersRead;case SAMPLE_STORAGE, SAMPLE_IMAGE->samplesRead;case CUSTOMER_WECHAT->customersRead;case PURCHASE_ITEM, PURCHASE_WAYBILL->purchasesRead;};if(!allowed)throw missing();
-        return new Content(store.read(thumbnail?image.thumbnailKey():image.originalKey()),image.storedMediaType());}
+        return image;}
     @Override @Transactional
     public String copyForSample(String imageId,String sampleId,AuthenticatedActor actor) {
         if(imageId==null)return null;
@@ -112,7 +117,7 @@ class CatalogImageService implements CatalogImageGateway {
     @Override @Transactional
     public void releaseReplaced(String oldId,String newId,String type,String resourceId){if(oldId!=null&&!oldId.equals(newId))repository.release(oldId,type,resourceId);}
     @Scheduled(cron="${app.catalog.image-cleanup-cron:0 45 4 * * *}") @Transactional
-    public void cleanup(){Instant cutoff=Instant.now().minus(Duration.ofHours(orphanHours));for(var image:repository.orphans(cutoff)){try{store.delete(image.originalKey());store.delete(image.thumbnailKey());repository.deletePending(image.id());}catch(IOException ignored){}}}
+    public void cleanup(){Instant cutoff=Instant.now().minus(Duration.ofHours(orphanHours));for(var image:repository.orphans(cutoff)){try{variants.delete(image.id());store.delete(image.originalKey());store.delete(image.thumbnailKey());repository.deletePending(image.id());}catch(IOException ignored){}}}
     private CatalogImageRepository.Asset asset(String id){return repository.find(id).orElseThrow(this::missing);}
     private CatalogImageException missing(){return new CatalogImageException(404,"CATALOG_IMAGE_NOT_FOUND","图片不存在");}
     private String text(String value,int max){String result=value==null?null:value.trim();if(result==null||result.isEmpty()||result.length()>max)throw new CatalogImageException(400,"CATALOG_IMAGE_FILE_NAME_INVALID","文件名不正确");return result;}

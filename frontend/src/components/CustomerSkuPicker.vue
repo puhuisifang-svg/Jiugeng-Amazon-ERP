@@ -101,13 +101,12 @@ onMounted(load)
                 v-if="row.variant.imageAssetId || !row.variant.imageUrl"
                 :image-id="row.variant.imageAssetId"
                 :alt="row.variant.variantName"
-              /><img
+              /><AuthenticatedCatalogImage
                 v-else
                 class="catalog-image"
-                :src="row.variant.imageUrl"
+                :image-url="row.variant.imageUrl"
                 :alt="row.variant.variantName"
-                referrerpolicy="no-referrer"
-              >
+              />
             </td><td>{{ row.variant.variantName }}<small v-if="showCodes">{{ row.variant.skuCode }}</small></td><td>{{ row.productName }}<small v-if="showCodes">{{ row.productCode }}</small></td>
           </tr>
           <tr v-if="!rows.length">

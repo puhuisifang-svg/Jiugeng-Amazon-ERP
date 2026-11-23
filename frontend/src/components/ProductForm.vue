@@ -363,14 +363,13 @@ const formElement = ref<HTMLFormElement>()
                 v-if="variant.imageAssetId"
                 :image-id="variant.imageAssetId"
                 alt="SKU 主图"
-              /><img
+              /><AuthenticatedCatalogImage
                 v-else-if="variant.imageUrl"
+                draft-permission="products.read"
                 class="sku-image-preview"
-                :src="variant.imageUrl"
+                :image-url="variant.imageUrl"
                 alt="SKU 主图"
-                loading="lazy"
-                referrerpolicy="no-referrer"
-              ><span
+              /><span
                 v-else
                 class="catalog-image catalog-image--placeholder"
                 role="img"

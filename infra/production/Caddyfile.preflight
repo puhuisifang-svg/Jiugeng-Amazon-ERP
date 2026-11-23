@@ -9,7 +9,7 @@ http://127.0.0.1:4173 {
  header X-Content-Type-Options nosniff
  header X-Robots-Tag none
  handle /api/* {
-  header Cache-Control "no-store"
+  header ?Cache-Control "no-store"
   reverse_proxy 127.0.0.1:8080
  }
  handle /assets/* {

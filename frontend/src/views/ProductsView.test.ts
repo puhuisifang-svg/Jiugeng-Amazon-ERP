@@ -6,7 +6,7 @@ const product: import('@/api/domain').ProductDetailDto = { nameZh: '测试产品
 
 vi.mock('@/config/runtime', () => ({ runtimeConfig: { authMode: 'password' } }))
 vi.mock('@/state/session', () => ({ session: { user: { value: { id: 'user-1' } }, canAccess: () => true } }))
-vi.mock('@/api/catalog', () => ({ catalogApi: { uploadImage: vi.fn(), imageBlob: vi.fn(), documents: vi.fn(async () => []) } }))
+vi.mock('@/api/catalog', () => ({ catalogApi: { uploadImage: vi.fn(), imageBlob: vi.fn(), externalImageBlob: vi.fn(async () => new Blob(['synthetic-image'])), documents: vi.fn(async () => []) } }))
 vi.mock('@/api/domain', () => ({
   domainApi: {
     products: vi.fn(async () => ({ items: [product], mockData: false })),
@@ -28,6 +28,7 @@ vi.mock('@/api/productManagement', () => ({ productManagementApi: { page: vi.fn(
 import { productManagementApi, type ProductPage } from '@/api/productManagement'
 
 import ProductsView from './ProductsView.vue'
+import { catalogApi } from '@/api/catalog'
 import { domainApi } from '@/api/domain'
 import ProductForm from '@/components/ProductForm.vue'
 
@@ -112,14 +113,17 @@ describe('ProductsView', () => {
     const wrapper = mount(ProductsView, { global: { stubs: { Teleport: true, RouterLink } } })
     await flushPromises()
     await wrapper.get('.parent-toggle').trigger('click')
-    await wrapper.get('[aria-label="查看标准款大图"]').trigger('click')
+    await wrapper.get('[aria-label="查看标准款大图"]').trigger('click'); await flushPromises()
     const preview = wrapper.get('[aria-label="标准款图片预览"]')
-    expect(preview.get('img').attributes('src')).toBe(product.variants[0]!.imageUrl)
+    expect(preview.get('img').attributes('src')).toBe('blob:synthetic-controlled')
+    expect(catalogApi.externalImageBlob).toHaveBeenCalledWith(product.variants[0]!.imageUrl, 'original', expect.any(AbortSignal), 'preview', undefined)
     await preview.get('[aria-label="关闭图片预览"]').trigger('click')
     expect(wrapper.find('[aria-label="标准款图片预览"]').exists()).toBe(false)
   })
   beforeEach(() => {
     localStorage.clear(); sessionStorage.clear()
+    URL.createObjectURL = vi.fn(() => 'blob:synthetic-controlled'); URL.revokeObjectURL = vi.fn()
+    vi.mocked(catalogApi.externalImageBlob).mockClear()
     vi.mocked(productManagementApi.page).mockReset().mockImplementation(async () => pageOf((await domainApi.products()).items))
     vi.mocked(productManagementApi.updateSku).mockReset().mockResolvedValue(product)
     vi.mocked(domainApi.products).mockReset().mockResolvedValue({ items: [product], mockData: false } as never)
@@ -198,11 +202,12 @@ describe('ProductsView', () => {
     expect(wrapper.get('.material-toolbar').text()).toContain('列设置')
     expect(wrapper.find('.product-child-row').exists()).toBe(false)
     await wrapper.get('.parent-toggle').trigger('click')
+    await flushPromises()
     const row = wrapper.get('.product-child-row')
     expect(row.get('.hierarchy-cell').text()).toContain('标准款')
     expect(wrapper.text()).not.toContain('产品类型')
     expect(row.text()).toContain('详情')
-    expect(row.get('img').attributes('src')).toBe('https://images.example.com/sku-1.png')
+    expect(row.get('img').attributes('src')).toBe('blob:synthetic-controlled')
   })
 
   it('creates a draft product in the centered editor without replacing the list', async () => {

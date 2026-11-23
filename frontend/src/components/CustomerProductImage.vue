@@ -22,13 +22,11 @@ const hasImage=computed(()=>Boolean(variant.value?.imageAssetId||variant.value?.
       :image-id="variant.imageAssetId"
       :alt="alt"
     />
-    <img
+    <AuthenticatedCatalogImage
       v-else
-      :src="variant?.imageUrl"
+      :image-url="variant?.imageUrl"
       :alt="alt"
-      loading="lazy"
-      referrerpolicy="no-referrer"
-    >
+    />
   </button>
   <span
     v-else
@@ -46,12 +44,12 @@ const hasImage=computed(()=>Boolean(variant.value?.imageAssetId||variant.value?.
       variant="original"
       :alt="alt"
     />
-    <img
+    <AuthenticatedCatalogImage
       v-else
-      :src="variant?.imageUrl"
+      variant="original"
+      :image-url="variant?.imageUrl"
       :alt="alt"
-      referrerpolicy="no-referrer"
-    >
+    />
   </ImagePreviewDialog>
 </template>
 <style scoped>

@@ -2,6 +2,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PDFDocument } from 'pdf-lib'
 import PdfToolsView from './PdfToolsView.vue'
+vi.mock('@/components/PdfTextLayer.vue', () => ({ default: { props: ['layer', 'scale'], template: '<span>{{ layer.text }}</span>' } }))
 vi.mock('@/components/PdfPagePreview.vue', () => ({ default: { props: ['bytes','page'], template: '<div class="preview-stub"><slot /></div>' } }))
 vi.mock('@/utils/labelContentBounds', () => ({ labelContentBounds: vi.fn(async () => undefined) }))
 vi.mock('@/directives/singleSelect', () => ({ vSingleSelect: {} }))
@@ -123,6 +124,35 @@ describe('PDF tools workspace', () => {
     expect(parseFloat(layer.style.width)).toBeCloseTo(55)
     pointer(window, 'pointermove', 400, 400); await w.vm.$nextTick()
     expect(parseFloat(layer.style.width)).toBeCloseTo(55)
+  })
+
+  it('summarizes overlapping ranges without silently removing separate output pages', async () => {
+    const w = setup(); await selectPdf(w)
+    await w.get('input[placeholder="例如：1-3,5,7-9"]').setValue('1-2,2')
+    expect(w.get('#pdf-split-summary').text()).toContain('已选 2 页 · 生成 2 个文件')
+    expect(w.get('#pdf-split-summary').text()).toContain('重复输出 1 页')
+    await w.get('.pdf-settings select').setValue('merge')
+    expect(w.get('#pdf-split-summary').text()).toContain('生成 1 个文件')
+    expect(w.get('#pdf-split-summary').text()).toContain('已去重')
+    await w.get('input[placeholder="例如：1-3,5,7-9"]').setValue('3')
+    expect(w.find('[aria-invalid=true]').exists()).toBe(true)
+    expect(w.get('#pdf-split-summary').text()).toContain('页码必须')
+  })
+  it('copies and reorders only the current page layers and supports keyboard nudging', async () => {
+    const w = setup(); await w.findAll('.pdf-tabs button')[2]!.trigger('click'); await selectPdf(w)
+    await w.findAll('.pdf-edit-actions button')[0]!.trigger('click'); await w.get('textarea').setValue('第一层')
+    await w.findAll('.pdf-edit-actions button')[0]!.trigger('click'); await w.get('textarea').setValue('第二层')
+    await w.findAll('.pdf-layer-controls button')[0]!.trigger('click'); await flushPromises()
+    expect(w.findAll('.pdf-layer')).toHaveLength(3)
+    await w.get('textarea').setValue('复制层')
+    await w.findAll('.pdf-layer-controls button')[2]!.trigger('click')
+    expect(w.findAll('.pdf-layer-list button').map(b => b.text())).toEqual(['第二层', '复制层', '第一层'])
+    const layer = w.get('.pdf-layer.selected')
+    await layer.trigger('keydown', { key: 'ArrowRight' })
+    expect(parseFloat((layer.element as HTMLElement).style.left)).toBeGreaterThan(10)
+    await w.get('.pdf-pagebar select').setValue('1')
+    expect(w.find('.pdf-layer-panel').exists()).toBe(false)
+    expect(w.find('.layer-settings').exists()).toBe(false)
   })
 
 })

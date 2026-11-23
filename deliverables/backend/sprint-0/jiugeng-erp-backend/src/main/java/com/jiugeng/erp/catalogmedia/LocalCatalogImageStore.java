@@ -43,16 +43,24 @@ class LocalCatalogImageStore implements CatalogImageStore {
     private void timing(String stage,long start){metrics.timer("catalog.image.duration","stage",stage).record(System.nanoTime()-start,java.util.concurrent.TimeUnit.NANOSECONDS);}
     private synchronized byte[] cached(String key){return cache.get(key);}
     private synchronized void remember(String key,byte[] bytes){
-        if(bytes.length>CACHE_BYTES)return;
+        if(bytes.length>CACHE_BYTES||(!key.contains("thumbnail")&&bytes.length>2*1024*1024))return;
         byte[] previous=cache.put(key,bytes);if(previous!=null)cacheBytes-=previous.length;cacheBytes+=bytes.length;
         var it=cache.entrySet().iterator();while(cacheBytes>CACHE_BYTES&&it.hasNext()){cacheBytes-=it.next().getValue().length;it.remove();}
     }
     private synchronized void forget(String key){byte[] old=cache.remove(key);if(old!=null)cacheBytes-=old.length;}
 
     private final Path root;
+    private final Path readCache;
+    private long diskCacheLimit = 256L * 1024 * 1024;
+    @org.springframework.beans.factory.annotation.Value("${app.catalog.image-read-cache-bytes:268435456}")
+    void diskCacheLimit(long bytes) { diskCacheLimit = Math.max(0, bytes); }
+
     LocalCatalogImageStore(@Value("${app.catalog.image-dir}") String directory){try{
         root=Path.of(directory).toAbsolutePath().normalize();Files.createDirectories(root);
         if(Files.isSymbolicLink(root))throw new IllegalStateException("Catalog image directory cannot be symlink");
+        readCache=root.resolve("read-cache");Files.createDirectories(readCache);
+        if(Files.isSymbolicLink(readCache))throw new IllegalStateException("Invalid read cache directory");
+        permissions(readCache,Set.of(PosixFilePermission.OWNER_READ,PosixFilePermission.OWNER_WRITE,PosixFilePermission.OWNER_EXECUTE));
         permissions(root,Set.of(PosixFilePermission.OWNER_READ,PosixFilePermission.OWNER_WRITE,PosixFilePermission.OWNER_EXECUTE));
     }catch(IOException e){throw new IllegalStateException("Cannot initialize catalog image directory",e);}}
     public StoredImage store(byte[] source)throws IOException{return store(source,true);}
@@ -86,24 +94,64 @@ class LocalCatalogImageStore implements CatalogImageStore {
             if(Files.isRegularFile(file,LinkOption.NOFOLLOW_LINKS)&&!Files.isSymbolicLink(file)){
                 byte[] bytes=Files.readAllBytes(file);remember(key,bytes);metrics.counter("catalog.image.read","source","disk").increment();return bytes;
             }
-            var remote=objects.read("catalog-images",key);if(remote.isPresent()){byte[] bytes=remote.get();remember(key,bytes);metrics.counter("catalog.image.read","source","oss").increment();return bytes;}
+            Path cachedFile=readCache.resolve(key);
+            if(Files.isRegularFile(cachedFile,LinkOption.NOFOLLOW_LINKS)){
+                try {
+                    byte[] bytes=Files.readAllBytes(cachedFile);remember(key,bytes);
+                    try{Files.setLastModifiedTime(cachedFile,java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis()));}catch(java.nio.file.NoSuchFileException ignored){}
+                    metrics.counter("catalog.image.read","source","disk-cache").increment();return bytes;
+                }catch(java.nio.file.NoSuchFileException evicted){/* A concurrent read-through fill may evict this copy. */}
+            }
+            var remote=objects.read("catalog-images",key);if(remote.isPresent()){byte[] bytes=remote.get();remember(key,bytes);cacheRemote(key,bytes);metrics.counter("catalog.image.read","source","oss").increment();return bytes;}
             throw new IOException("Image missing");
         }}finally{timing("read",start);}
     }
-    public void delete(String key)throws IOException{try{synchronized(readLocks[Math.floorMod(key.hashCode(),readLocks.length)]){resolve(key);forget(key);objects.delete("catalog-images",key);Files.deleteIfExists(resolve(key));}}catch(IllegalArgumentException e){throw new IOException("Invalid image key",e);}}
+    public void delete(String key)throws IOException{try{synchronized(readLocks[Math.floorMod(key.hashCode(),readLocks.length)]){resolve(key);forget(key);objects.delete("catalog-images",key);Files.deleteIfExists(resolve(key));Files.deleteIfExists(readCache.resolve(key));}}catch(IllegalArgumentException e){throw new IOException("Invalid image key",e);}}
+    // Only remote read-through copies are evicted; authoritative uploads are never trimmed.
+    private synchronized void cacheRemote(String key,byte[] bytes) {
+        if(bytes.length>diskCacheLimit)return;
+        try {
+            try(var paths=Files.list(readCache)) {
+                var files=paths.filter(p->Files.isRegularFile(p,LinkOption.NOFOLLOW_LINKS)).sorted(java.util.Comparator.comparingLong(p->{try{return Files.getLastModifiedTime(p).toMillis();}catch(IOException e){return 0;}})).toList();
+                long size=0;for(var p:files)size+=Files.size(p);
+                for(var p:files){if(size+bytes.length<=diskCacheLimit)break;long old=Files.size(p);Files.deleteIfExists(p);size-=old;}
+            }
+            Path tmp=Files.createTempFile(readCache,"read-",".tmp");
+            try{Files.write(tmp,bytes);permissions(tmp,Set.of(PosixFilePermission.OWNER_READ,PosixFilePermission.OWNER_WRITE));Files.move(tmp,readCache.resolve(key),StandardCopyOption.REPLACE_EXISTING,StandardCopyOption.ATOMIC_MOVE);}
+            finally{Files.deleteIfExists(tmp);}
+        }catch(IOException ignored){metrics.counter("catalog.image.read-cache.failure").increment();}
+    }
+    @Override public Variant thumbnail(String originalKey,boolean lossless)throws IOException {
+        Decoded decoded=decode(read(originalKey));
+        BufferedImage small=thumbnail(decoded.image,lossless?320:160);
+        boolean jpeg=!lossless&&!hasTransparency(small)&&(long)small.getWidth()*small.getHeight()>4096;
+        byte[] bytes=jpeg?encode(small,true,.80f):png(small);
+        String key=UUID.randomUUID()+"-thumbnail."+(jpeg?"jpg":"png");
+        try{write(key,bytes);}catch(IOException e){try{delete(key);}catch(IOException cleanup){e.addSuppressed(cleanup);}throw e;}
+        return new Variant(key,jpeg?"image/jpeg":"image/png",sha(bytes));
+    }
+    private boolean hasTransparency(BufferedImage image){
+        if(!image.getColorModel().hasAlpha())return false;
+        for(int y=0;y<image.getHeight();y++)for(int x=0;x<image.getWidth();x++)if((image.getRGB(x,y)>>>24)!=255)return true;
+        return false;
+    }
     private Decoded decode(byte[] source)throws IOException{try(ImageInputStream stream=ImageIO.createImageInputStream(new ByteArrayInputStream(source))){
         if(stream==null)throw invalid();var readers=ImageIO.getImageReaders(stream);if(!readers.hasNext())throw invalid();ImageReader reader=readers.next();try{
             reader.setInput(stream,true,true);String format=reader.getFormatName().toLowerCase(Locale.ROOT);String media=switch(format){case"jpeg","jpg"->"image/jpeg";case"png"->"image/png";case"webp"->"image/webp";default->throw invalid();};
             int width=reader.getWidth(0),height=reader.getHeight(0);if(width<=0||height<=0||width>MAX_DIMENSION||height>MAX_DIMENSION||(long)width*height>MAX_PIXELS)throw new CatalogImageException(400,"CATALOG_IMAGE_DIMENSIONS_INVALID","图片宽高不得超过 4096 像素且总像素不得超过 1600 万");
             BufferedImage image=reader.read(0);if(image==null)throw invalid();return new Decoded(image,media);}finally{reader.dispose();}}
         catch(CatalogImageException e){throw e;}catch(RuntimeException e){throw invalid();}}
-    private BufferedImage thumbnail(BufferedImage source){double scale=Math.min(1d,(double)THUMBNAIL_BOUND/Math.max(source.getWidth(),source.getHeight()));int w=Math.max(1,(int)Math.round(source.getWidth()*scale)),h=Math.max(1,(int)Math.round(source.getHeight()*scale));BufferedImage out=new BufferedImage(w,h,BufferedImage.TYPE_INT_ARGB);Graphics2D g=out.createGraphics();try{g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,RenderingHints.VALUE_INTERPOLATION_BICUBIC);g.drawImage(source,0,0,w,h,null);}finally{g.dispose();}return out;}
+    private BufferedImage thumbnail(BufferedImage source){return thumbnail(source,THUMBNAIL_BOUND);}
+    private BufferedImage thumbnail(BufferedImage source,int bound){double scale=Math.min(1d,(double)bound/Math.max(source.getWidth(),source.getHeight()));int w=Math.max(1,(int)Math.round(source.getWidth()*scale)),h=Math.max(1,(int)Math.round(source.getHeight()*scale));BufferedImage out=new BufferedImage(w,h,BufferedImage.TYPE_INT_ARGB);Graphics2D g=out.createGraphics();try{g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,RenderingHints.VALUE_INTERPOLATION_BICUBIC);g.drawImage(source,0,0,w,h,null);}finally{g.dispose();}return out;}
     private byte[] encode(BufferedImage image,boolean jpeg)throws IOException{
+        return encode(image,jpeg,.95f);
+    }
+    private byte[] encode(BufferedImage image,boolean jpeg,float quality)throws IOException{
         if(!jpeg)return png(image);
         BufferedImage rgb=new BufferedImage(image.getWidth(),image.getHeight(),BufferedImage.TYPE_INT_RGB);
         Graphics2D g=rgb.createGraphics();try{g.drawImage(image,0,0,null);}finally{g.dispose();}
         var writer=ImageIO.getImageWritersByFormatName("jpeg").next();ByteArrayOutputStream bytes=new ByteArrayOutputStream();
-        try(var stream=ImageIO.createImageOutputStream(bytes)){writer.setOutput(stream);var params=writer.getDefaultWriteParam();params.setCompressionMode(javax.imageio.ImageWriteParam.MODE_EXPLICIT);params.setCompressionQuality(.95f);writer.write(null,new javax.imageio.IIOImage(rgb,null,null),params);}
+        try(var stream=ImageIO.createImageOutputStream(bytes)){writer.setOutput(stream);var params=writer.getDefaultWriteParam();params.setCompressionMode(javax.imageio.ImageWriteParam.MODE_EXPLICIT);params.setCompressionQuality(quality);writer.write(null,new javax.imageio.IIOImage(rgb,null,null),params);}
         finally{writer.dispose();}return bytes.toByteArray();
     }
     private byte[] png(BufferedImage image)throws IOException{ByteArrayOutputStream out=new ByteArrayOutputStream();if(!ImageIO.write(image,"png",out))throw new IOException("PNG writer unavailable");return out.toByteArray();}

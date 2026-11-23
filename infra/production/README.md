@@ -20,6 +20,16 @@ Environment secrets: `PRODUCTION_SSH_HOST`, `PRODUCTION_SSH_KEY`, and
 The environment must restrict deployment branches to main, with no required
 reviewers or wait timer. Keep the main branch PR and required-check protections.
 
+## Image cache proxy configuration (ERP-101)
+
+The API handles in the checked-in Caddy templates use `?Cache-Control "no-store"`
+as a default only. Preserve explicit backend private revalidation headers for
+ordinary catalog images; other API responses still default to no-store. An older
+unconditional proxy header defeats ETag caching. During an authorized release,
+PJM must compare the actual host configuration, validate it with Caddy, and reload
+it as needed. Deploying the application JAR does not itself update host Caddy
+configuration. Never turn authenticated images into a shared/public cache.
+
 ## Host setup
 
 Install `openjdk-21-jre-headless mysql-server caddy python3 curl ca-certificates rsync`.

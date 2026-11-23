@@ -24,7 +24,7 @@
 		path /api/*
 	}
 	handle @fallback_api {
-		header Cache-Control "no-store"
+		header ?Cache-Control "no-store"
 		reverse_proxy 127.0.0.1:8080 {
 			header_up -Forwarded
 			header_up X-Forwarded-Proto https
@@ -33,7 +33,7 @@
 		}
 	}
 	handle /api/* {
-		header Cache-Control "no-store"
+		header ?Cache-Control "no-store"
 		reverse_proxy 127.0.0.1:8080
 	}
 	handle /assets/* {

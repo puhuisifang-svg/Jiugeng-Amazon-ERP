@@ -1,12 +1,16 @@
-import { PDFDocument, degrees, PrintScaling } from 'pdf-lib'
+import { PDFDocument, degrees, PrintScaling, EncryptedPDFError } from 'pdf-lib'
 
 export const MM = 72 / 25.4
 export const MAX_PDF_BYTES = 50 * 1024 * 1024
 export async function loadPdf(bytes: Uint8Array) {
-  if (!bytes.length || bytes.length > MAX_PDF_BYTES) throw new Error('请选择不超过50 MB的PDF文件')
+  if (!bytes.length) throw new Error('PDF文件为空，请重新选择文件')
+  if (bytes.length > MAX_PDF_BYTES) throw new Error('PDF超过50 MB，请分批处理或压缩后重试')
   let doc: PDFDocument
   try { doc = await PDFDocument.load(bytes) }
-  catch { throw new Error('PDF无法读取，请检查文件是否损坏或有密码保护') }
+  catch (error) {
+    if (error instanceof Error && error.message === new EncryptedPDFError().message) throw new Error('PDF有密码保护，请先解锁并另存为普通PDF后处理', { cause: error })
+    throw new Error('PDF无法读取，文件可能已损坏或不是有效PDF；请更换文件', { cause: error })
+  }
   if (!doc.getPageCount() || doc.getPageCount() > 500) throw new Error('支持1～500页的PDF')
   return doc
 }

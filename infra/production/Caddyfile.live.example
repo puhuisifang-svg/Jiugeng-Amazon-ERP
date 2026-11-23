@@ -7,7 +7,7 @@
  header X-Robots-Tag none
  header Referrer-Policy same-origin
  handle /api/* {
-  header Cache-Control "no-store"
+  header ?Cache-Control "no-store"
   reverse_proxy 127.0.0.1:8080
  }
  handle /assets/* {

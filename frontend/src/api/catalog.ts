@@ -1,4 +1,4 @@
-import { cachedImage } from '@/utils/catalogImageCache'
+import { cachedImage, type ImagePriority } from '@/utils/catalogImageCache'
 import { queueImageUpload, uploadImageRequest, type UploadProgress } from '@/utils/imageUpload'
 import { ApiError, getSessionToken, SESSION_EXPIRED_EVENT } from './client'
 import { runtimeConfig } from '@/config/runtime'
@@ -72,19 +72,26 @@ export const catalogApi = {
   downloadImage: async (image: { imageAssetId?: string | undefined; imageUrl?: string | undefined; variantName: string }) => {
     const blob = image.imageAssetId
       ? await catalogApi.imageBlob(image.imageAssetId, 'original')
-      : await (async () => {
-          if (!image.imageUrl || !/^https?:\/\//i.test(image.imageUrl)) throw new Error('图片地址不可用。')
-          const response = await fetch(image.imageUrl, { credentials: 'omit', referrerPolicy: 'no-referrer' })
-          if (!response.ok) throw new Error('图片下载失败。')
-          return response.blob()
-        })()
+      : await catalogApi.externalImageBlob(image.imageUrl ?? '', 'original')
     const name = imageFileName(image.variantName, blob.type)
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a'); link.href = url; link.download = name
     document.body.append(link); link.click(); link.remove()
     window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   },
-  imageBlob: (id: string, variant: 'thumbnail' | 'original' = 'thumbnail', signal?: AbortSignal) =>
+  externalImageBlob: (url: string, variant: 'thumbnail' | 'original' = 'thumbnail', signal?: AbortSignal, priority: ImagePriority = variant === 'original' ? 'preview' : 'visible', draftPermission?: string) =>
+    cachedImage(getSessionToken() ?? '', `external:${url}/${variant}`, async sharedSignal => {
+      if (runtimeConfig.authMode === 'mock') {
+        if (!/^https?:\/\//i.test(url)) throw new Error('图片地址不可用。')
+        const response = await fetch(url, { credentials: 'omit', referrerPolicy: 'no-referrer', signal: sharedSignal })
+        if (!response.ok) throw new Error('图片下载失败。')
+        return response.blob()
+      }
+      const resolved = await request('/v1/catalog-images/external/resolve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, draftPermission }), signal: sharedSignal })
+      const { id } = await resolved.json() as { id: string }
+      return await (await request(`/v1/catalog-images/external/${id}/${variant}`, { method: 'GET', cache: 'no-cache', signal: sharedSignal })).blob()
+    }, signal, priority),
+  imageBlob: (id: string, variant: 'thumbnail' | 'original' = 'thumbnail', signal?: AbortSignal, priority: ImagePriority = variant === 'original' ? 'preview' : 'visible') =>
     cachedImage(getSessionToken() ?? '', `${id}/${variant}`, async sharedSignal =>
-      (await request(`/v1/catalog-images/${id}/${variant}`, { method: 'GET', signal: sharedSignal })).blob(), signal),
+      (await request(`/v1/catalog-images/${id}/${variant}`, { method: 'GET', cache: 'no-cache', signal: sharedSignal })).blob(), signal, priority),
 }

@@ -19,15 +19,13 @@ watch(()=>[props.imageUrl,props.imageAssetId],()=>{failed.value=false;attempt.va
         :image-id="imageAssetId"
         :alt="name"
       />
-      <img
+      <AuthenticatedCatalogImage
         v-else
         :key="attempt"
-        :src="imageUrl"
+        draft-permission="materials.read"
+        :image-url="imageUrl"
         :alt="name"
-        loading="lazy"
-        referrerpolicy="no-referrer"
-        @error="failed=true"
-      >
+      />
     </button>
     <button
       v-else-if="failed"
@@ -51,12 +49,13 @@ watch(()=>[props.imageUrl,props.imageAssetId],()=>{failed.value=false;attempt.va
         :image-id="imageAssetId"
         :alt="name"
         variant="original"
-      /><img
+      /><AuthenticatedCatalogImage
         v-else
-        :src="imageUrl"
+        variant="original"
+        draft-permission="materials.read"
+        :image-url="imageUrl"
         :alt="name"
-        referrerpolicy="no-referrer"
-      >
+      />
     </ImagePreviewDialog>
   </div>
 </template>

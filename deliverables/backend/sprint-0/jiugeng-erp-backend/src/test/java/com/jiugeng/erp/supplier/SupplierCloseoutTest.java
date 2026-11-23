@@ -15,7 +15,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest(properties="spring.datasource.url=jdbc:h2:mem:supplier-closeout;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1") @AutoConfigureMockMvc @ActiveProfiles("test")
 class SupplierCloseoutTest {
- private static final String PASSWORD="Supplier-Test-42";
+ private static final String PASSWORD="Supplier-Test-42"; // gitleaks:allow -- synthetic credential for isolated H2 test users only
  @Autowired MockMvc mvc; @Autowired ObjectMapper objectMapper; @Autowired JdbcTemplate jdbc;
  private String admin() throws Exception{return createUserAndLogin("s-"+UUID.randomUUID().toString().substring(0,8),"ADMIN");}
  private Map<String,Object> master(String name){return new LinkedHashMap<>(Map.of("name",name,"wechatId","synthetic_wechat","contactPerson","合成联系人","remark","第一行\n第二行","status","ACTIVE","categories",List.of("MATERIAL","PRODUCT")));}

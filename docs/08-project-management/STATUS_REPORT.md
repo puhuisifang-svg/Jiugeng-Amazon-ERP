@@ -11,9 +11,13 @@
 
 本报告是带日期的快照，不是实时监控。接手时重新检查 HEAD、工作区及当前任务归属；发布状态由 PJM 维护，Codex 不跟踪线上发布。[2026-10-15 原报告](archive/STATUS_REPORT_2026-10-15.md)已归档，保留原始事实及当时风险，不再作为今天的待办清单。
 
-## PJM 当前执行状态（2026-11-24）
+## PJM 最新发布结果：ERP-103 / DEL-053（2026-11-24）
 
-PJM 已独占接手 ERP-103 / DEL-053，81 项授权改动及既有验证日志复核完成，正在按五项 main 保护提交/发布。V108/V109 范围和迁移前备份失败中止机制已核对。上一轮 Production 45383897405 占锁失败仍待本轮实查；不宣称新版本已上线。精确结果见 [DEL-053 发布执行复核](../../deliverables/pjm/ERP-103_CUSTOMS_FILES_LOCAL_2026-11-24.md) 与本地进度 `/tmp/jiugeng-pjm-release-progress.md`。
+[PR #26](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/pull/26) 五项检查全通过，23:12:34正常合入 main `0a58e771d9cee076f18d3d72c234bff4b90cf658`；原子功能提交 `5ef6d7bfdab2fd933a2ecfa0f7c9dfe0f2075c5f`。[PR CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45422203080)、[main CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45422825153) 与 [Production](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45422824958) 均成功，实际 SSH deploy 非跳过。
+
+北京时间23:19:50迁移前数据库备份完成，23:20:19接收器验证后端健康UP与服务端完整SHA，23:21独立真实入口version.json返回相同完整SHA、首页200。V108/V109范围与备份机制已核对；生产迁移仅有精确构建/启用Flyway/健康启动的间接证据，未直查迁移表、删除计数或本次备份恢复。只回退JAR不能恢复历史，恢复须从迁移前备份提取限定范围，不能覆盖后续业务写入。
+
+旧Production占锁未在本轮重现，无当前部署阻断；未删锁或绕过受限SSH。既有Caddy管理限制、Safari/实物打印/业务验收边界保留。完整证据见 [DEL-053实际发布结果](../../deliverables/pjm/ERP-103_CUSTOMS_FILES_LOCAL_2026-11-24.md)。仅归档一次，本归档提交最终部署状态记录在 `/tmp/jiugeng-pjm-release-progress.md`，不为文档自身SHA递归创建PR。下文为实施阶段快照，不能据此恢复旧写入锁或未发布结论。
 
 ## 当前发布交接：ERP-103 多模块体验修复（2026-11-24，DEL-053）
 

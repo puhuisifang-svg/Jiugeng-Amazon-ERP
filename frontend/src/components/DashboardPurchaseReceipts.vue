@@ -17,7 +17,7 @@ let seq=0
 async function reload(){if(!canRead.value)return;const n=++seq;loading.value=true;error.value='';try{const r=await api.page({...blankPurchaseFilters(),type:'',status:'OPEN',q:applied.value},page.value-1,size.value);if(n===seq){orders.value=r.items;total.value=r.total;emit('count',r.total)}}catch(e){if(n===seq)error.value=(e instanceof Error?e.message:'读取失败')+(orders.value.length?'；保留上次读取结果':'')}finally{if(n===seq)loading.value=false}}
 async function completed(){target.value='';await reload()}
 watch([page,size],reload);watch(()=>props.visible,visible=>{if(visible)void reload()});watch(()=>!!flow.value?.busy,v=>emit('busy',v))
-onBeforeRouteLeave(async()=>!flow.value?.busy&&(!flow.value?.dirty||!!flow.value?.pending||await confirmAction('收货资料尚未保存，确定离开？')))
+onBeforeRouteLeave(async()=>!flow.value?.busy&&(!flow.value?.dirty||!!flow.value?.pending||await confirmAction('收货资料尚未保存，确定离开？', { unsaved: true, discardLabel: '放弃并离开' })))
 onMounted(reload);onBeforeUnmount(()=>seq++);defineExpose({reload})
 </script>
 <template>

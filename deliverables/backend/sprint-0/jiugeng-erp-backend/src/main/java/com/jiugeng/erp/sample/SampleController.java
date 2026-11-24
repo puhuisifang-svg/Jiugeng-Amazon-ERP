@@ -144,7 +144,7 @@ class SampleController {
             .param("spec",text(in.specification(),500,false)).param("remark",text(in.remark(),1000,false)).param("photo",photo).param("samplePhoto",samplePhoto).param("url",imageUrl).update();
         images.attach(photo,CatalogImageGateway.Purpose.SAMPLE_STORAGE,"SAMPLE_LOCATION",id,actor);
         images.attach(samplePhoto,CatalogImageGateway.Purpose.SAMPLE_IMAGE,"SAMPLE_LOCATION",id,actor);
-        Row result=get(id);record(actor,copy==null?"SAMPLE_CREATE":"SAMPLE_COPY",null,result);remember(key,"CREATE",in,id,actor);return present(List.of(result)).getFirst();
+        Row result=get(id);remember(key,"CREATE",in,id,actor);return present(List.of(result)).getFirst();
     }
     @PutMapping("/{id}") @PreAuthorize("hasAuthority('samples.write')")
     Row update(@PathVariable String id,@RequestBody Input in,@RequestHeader(value="Idempotency-Key",required=false)String key,@AuthenticationPrincipal AuthenticatedActor actor){
@@ -166,21 +166,20 @@ class SampleController {
         images.attach(samplePhoto,CatalogImageGateway.Purpose.SAMPLE_IMAGE,"SAMPLE_LOCATION",id,actor);
         images.releaseReplaced(before.storageImageId(),photo,"SAMPLE_LOCATION",id);
         images.releaseReplaced(before.sampleImageId(),samplePhoto,"SAMPLE_LOCATION",id);
-        Row result=get(id);record(actor,"SAMPLE_UPDATE",before,result);remember(key,"UPDATE:"+id,in,id,actor);return present(List.of(result)).getFirst();
+        Row result=get(id);recordLocationChange(actor,before,result);remember(key,"UPDATE:"+id,in,id,actor);return present(List.of(result)).getFirst();
     }
     @DeleteMapping("/{id}") @PreAuthorize("hasAuthority('samples.remove')")
     void remove(@PathVariable String id,@RequestParam long version,@AuthenticationPrincipal AuthenticatedActor actor){
-        Row before=active(id);
+        active(id);
         int changed=jdbc.sql("UPDATE sample_location SET deleted_at=CURRENT_TIMESTAMP,deleted_by=:actor,deletion_key=id,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=:id AND version=:v AND deletion_key=''").param("actor",actor.userId()).param("id",id).param("v",version).update();
         if(changed!=1)throw conflict();
         // Keep attachments active: a soft-deleted sample must remain fully recoverable.
-        record(actor,"SAMPLE_REMOVE",before,get(id));
     }
     @PostMapping("/{id}/restore") @PreAuthorize("hasAuthority('samples.remove') and hasAuthority('samples.write')")
     Row restore(@PathVariable String id,@RequestBody Version input,@AuthenticationPrincipal AuthenticatedActor actor){
         Row before=get(id);require(before.deletedAt()!=null,"该样品未移除");
         int changed=jdbc.sql("UPDATE sample_location SET deleted_at=NULL,deleted_by=NULL,deletion_key='',version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=:id AND version=:v AND deletion_key<>''").param("id",id).param("v",input.version()).update();
-        if(changed!=1)throw conflict();Row after=get(id);record(actor,"SAMPLE_RESTORE",before,after);return present(List.of(after)).getFirst();
+        if(changed!=1)throw conflict();Row after=get(id);return present(List.of(after)).getFirst();
     }
     private Row get(String id){return jdbc.sql("SELECT * FROM sample_location WHERE id=:id").param("id",id).query(mapper).optional().orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"样品库位记录不存在"));}
     private Row active(String id){var row=get(id);if(row.deletedAt()!=null)throw new ResponseStatusException(HttpStatus.CONFLICT,"该样品已移除，请刷新列表");return row;}
@@ -192,13 +191,18 @@ class SampleController {
     private static ResponseStatusException conflict(){return new ResponseStatusException(HttpStatus.CONFLICT,"记录已变化，请加载最新资料并对照草稿后重试");}
     private static String text(String value,int max,boolean required){String clean=value==null?"":value.strip();require((!required||!clean.isEmpty())&&clean.length()<=max&&!clean.chars().anyMatch(c->Character.isISOControl(c)&&c!='\n'),"必填项不能为空，字段不能超出长度限制或包含控制字符");return clean;}
     private static String photo(String value){String clean=text(value,36,false);return clean.isEmpty()?null:clean;}
-    private Map<String,Object> snapshot(Row r){if(r==null)return Map.of();Map<String,Object> value=new LinkedHashMap<>();value.put("sampleName",r.skuName());value.put("locationCode",r.locationCode());value.put("storageImageId",r.storageImageId());value.put("sampleImageId",r.sampleImageId());value.put("specification",r.specification());value.put("remark",r.remark());value.put("removed",r.deletedAt()!=null);return value;}
+
     record Parent(String id,String name){}
     @GetMapping("/parents") @PreAuthorize("hasAuthority('samples.read')") @Transactional(readOnly=true)
     List<Parent> parents(){return jdbc.sql("SELECT product_id,MAX(product_name) product_name FROM sample_location WHERE product_id IS NOT NULL AND deletion_key='' GROUP BY product_id ORDER BY product_name,product_id").query((r,n)->new Parent(r.getString("product_id"),r.getString("product_name"))).list();}
     @ExceptionHandler(CatalogImageGateway.AttachmentException.class)
     ResponseEntity<Map<String,String>> imageError(CatalogImageGateway.AttachmentException e){return ResponseEntity.status(e.status()).body(Map.of("code",e.code(),"detail",e.getMessage()));}
-    private void record(AuthenticatedActor a,String action,Row before,Row after){audit.record(new AuditTrail.BusinessOperation(a.userId(),a.loginName(),a.displayName(),action,"SAMPLE_LOCATION",after==null?before.id():after.id(),true,snapshot(before),snapshot(after),"维护样品库位"));}
+    private void recordLocationChange(AuthenticatedActor actor,Row before,Row after){
+        if(Objects.equals(before.locationCode(),after.locationCode()))return;
+        audit.record(new AuditTrail.BusinessOperation(actor.userId(),actor.loginName(),actor.displayName(),
+                "SAMPLE_UPDATE","SAMPLE_LOCATION",after.id(),true,
+                Map.of("locationCode",before.locationCode()),Map.of("locationCode",after.locationCode()),"修改样品库位"));
+    }
     @ExceptionHandler(ResponseStatusException.class)
     ResponseEntity<Map<String,String>> error(ResponseStatusException e){return ResponseEntity.status(e.getStatusCode()).body(Map.of("detail",Objects.requireNonNullElse(e.getReason(),"请求失败")));}
     @ExceptionHandler(org.springframework.dao.DuplicateKeyException.class)

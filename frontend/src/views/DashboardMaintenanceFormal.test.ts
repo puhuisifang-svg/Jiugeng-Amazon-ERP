@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const { createShipment, transferToToday, transferToPending, archive } = vi.hoisted(() => ({ createShipment: vi.fn(), transferToToday: vi.fn(), transferToPending: vi.fn(), archive: vi.fn() }))
 vi.mock('@/config/runtime', () => ({ runtimeConfig: { authMode: 'password' } }))
 vi.mock('@/api/dashboard', () => ({ dashboardApi: {
@@ -15,6 +15,7 @@ vi.mock('@/components/ShipmentCustomerPicker.vue', () => ({ default: {
 } }))
 import DashboardMaintenanceView from './DashboardMaintenanceView.vue'
 import { dashboardApi, type PendingShipment, type TodayShipment } from '@/api/dashboard'
+beforeEach(() => { HTMLDialogElement.prototype.showModal = function () { this.open = true }; HTMLDialogElement.prototype.close = function () { this.open = false } })
 describe('today shipment dates', () => {
   it.each(['today-shipments','pending-shipments'] as const)('adds multiple %s products and retries only failures with the original key',async kind=>{
     createShipment.mockReset();createShipment.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({})
@@ -81,16 +82,16 @@ describe('today shipment dates', () => {
     }
     assertRetained()
     await wrapper.get('[aria-label="关闭发货弹窗"]').trigger('click')
-    expect(wrapper.get('[role="alertdialog"]').text()).toContain('放弃未保存的修改')
-    expect(wrapper.get('[role="alertdialog"] button').text()).toBe('继续填写')
+    expect(wrapper.get('[role="alertdialog"]').text()).toContain('要放弃本次填写吗？')
+    expect(wrapper.get('.unsaved-keep').text()).toBe('继续填写')
     await wrapper.get('[role="alertdialog"]').trigger('click')
     expect(wrapper.find('[role="alertdialog"]').exists()).toBe(true)
-    await wrapper.get('[role="alertdialog"] button').trigger('click'); assertRetained()
+    await wrapper.get('.unsaved-keep').trigger('click'); assertRetained()
     await wrapper.get('[aria-label="发货记录"]').trigger('keydown', { key: 'Escape' })
     expect(wrapper.find('[role="alertdialog"]').exists()).toBe(true)
-    await wrapper.get('[role="alertdialog"]').trigger('keydown', { key: 'Escape' }); assertRetained()
+    await wrapper.get('[role="alertdialog"]').trigger('cancel'); assertRetained()
     await wrapper.findAll('.operation-form button').find(button => button.text() === '取消')!.trigger('click')
-    await wrapper.get('[role="alertdialog"] .danger-button').trigger('click')
+    await wrapper.get('.unsaved-discard').trigger('click')
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
     expect(createShipment).not.toHaveBeenCalled()
     await wrapper.get('.material-toolbar button').trigger('click')

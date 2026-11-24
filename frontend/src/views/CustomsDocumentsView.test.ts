@@ -6,10 +6,11 @@ vi.mock('@/state/session',()=>({session:{canAccess:api.canAccess}}))
 vi.mock('@/state/uiConfirmation',()=>({confirmAction:api.confirm}))
 vi.mock('@/components/CustomsDocumentEditor.vue',()=>({default:{template:'<div />'}}))
 import View from './CustomsDocumentsView.vue'
-const row={id:'syn',documentNo:'SYN-DELETE',status:'VOID',seller:'Synthetic',buyer:'',destination:'',itemCount:1,version:4,updatedAt:'2026-11-04T00:00:00Z'}
+const row={id:'syn',documentNo:'SYN-DELETE',status:'VOID',seller:'Synthetic',buyer:'',destination:'',itemCount:1,version:4,createdAt:'2026-10-01T00:00:00Z',screenshotUploaded:true,invoiceUploaded:false,updatedAt:'2026-11-04T00:00:00Z'}
 beforeEach(()=>{vi.clearAllMocks();api.canAccess.mockReturnValue(true);api.confirm.mockResolvedValue(true);api.remove.mockResolvedValue(undefined);api.list.mockResolvedValue({items:[row],totalCount:1})})
 const removeButton=(w:ReturnType<typeof mount>)=>w.findAll('tbody button').find(b=>b.text()==='删除')!
 describe('报关单据删除',()=>{
+ it('shows category status and creation time instead of the later update time',async()=>{const w=mount(View);await flushPromises();expect(w.get('thead').text()).toContain('创建时间');expect(w.get('tbody').text()).toContain('2026-10-01');expect(w.get('tbody').text()).not.toContain('2026-11-04');expect(w.get('.customs-file-badge.uploaded').text()).toContain('申报订单截图');expect(w.get('.customs-file-badge.pending').text()).toContain('发票');w.unmount()})
  it('confirms deletion and removes the row after success',async()=>{
   const w=mount(View);await flushPromises();api.confirm.mockResolvedValueOnce(false);await removeButton(w).trigger('click');await flushPromises();expect(api.remove).not.toHaveBeenCalled()
   api.list.mockResolvedValue({items:[],totalCount:0});await removeButton(w).trigger('click');await flushPromises()

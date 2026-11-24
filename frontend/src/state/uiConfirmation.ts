@@ -1,6 +1,6 @@
 import { shallowRef } from 'vue'
 
-export interface UiConfirmation { title: string; message: string; input?: boolean }
+export interface UiConfirmation { title: string; message: string; input?: boolean; unsaved?: boolean; discardLabel?: string }
 export const uiConfirmation = shallowRef<UiConfirmation>()
 let resolvePending: ((value: string | null) => void) | undefined
 function request(options: UiConfirmation): Promise<string | null> {
@@ -12,5 +12,5 @@ function request(options: UiConfirmation): Promise<string | null> {
 export function settleConfirmation(value: string | null) {
   const resolve = resolvePending; resolvePending = undefined; uiConfirmation.value = undefined; resolve?.(value)
 }
-export async function confirmAction(message: string) { return (await request({ title: '请确认操作', message })) !== null }
+export async function confirmAction(message: string, options: { unsaved?: boolean; discardLabel?: string } = {}) { return (await request({ title: '请确认操作', message, ...options })) !== null }
 export function promptReason(message: string) { return request({ title: '填写操作原因', message, input: true }) }

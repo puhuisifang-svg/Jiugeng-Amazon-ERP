@@ -15,3 +15,13 @@ describe('material aggregate editor',()=>{
  it('blocks saving when aggregate detail fails, preserving associations',async()=>{mocks.detail.mockRejectedValue(new Error('关系不可用'));const w=mount(MaterialEditor,{props:{id:'m1'},global});await flushPromises();expect(w.text()).toContain('关系不可用');await w.get('form').trigger('submit');expect(mocks.save).not.toHaveBeenCalled();w.unmount()})
  it('persists and reuses the original save after timeout',async()=>{mocks.save.mockRejectedValueOnce(new Error('timeout')).mockResolvedValue(material);const w=mount(MaterialEditor,{props:{id:'m1'},global});await flushPromises();await w.get('form').trigger('submit');await flushPromises();const command=JSON.parse(JSON.stringify(mocks.save.mock.calls[0]![0]));expect(w.text()).toContain('保存结果待确认');await w.get('form').trigger('submit');await flushPromises();expect(mocks.save.mock.calls[1]![0]).toEqual(command);expect(sessionStorage.getItem('jiugeng.material.pending.editor-test')).toBeNull();w.unmount()})
 })
+
+it('confirms a legacy continue request once and closes without clearing into another draft',async()=>{
+ const input={requestId:'legacy-material-request',id:null,material:{name:'合成纸箱',materialType:'包装',unit:'件'},suppliers:[]}
+ sessionStorage.setItem('jiugeng.material.pending.editor-test',JSON.stringify({input,again:true}))
+ const w=mount(MaterialEditor,{props:{resume:true},global});await flushPromises()
+ expect(w.text()).not.toContain('保存并继续')
+ await w.get('form').trigger('submit');await flushPromises()
+ expect(mocks.save).toHaveBeenCalledWith(input);expect(mocks.save).toHaveBeenCalledTimes(1)
+ expect(w.emitted('close')).toHaveLength(1);expect(sessionStorage.getItem('jiugeng.material.pending.editor-test')).toBeNull();w.unmount()
+})

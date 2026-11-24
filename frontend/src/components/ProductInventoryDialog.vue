@@ -19,7 +19,7 @@ const operations = [
   { key: 'ADJUST_IN', label: '盘盈', sign: '+', verb: '确认盘盈' },
   { key: 'ADJUST_OUT', label: '盘亏', sign: '−', verb: '确认盘亏' },
 ]
-const types = computed(() => operations.filter(item => ['INBOUND', 'ADJUST_IN'].includes(item.key) ? inbound.value : outbound.value))
+const types = computed(() => operations.filter(item => item.key === 'INBOUND' ? inbound.value : item.key === 'OUTBOUND' && outbound.value))
 const type = ref(inbound.value ? 'INBOUND' : 'OUTBOUND'), quantity = ref<number>(), reason = ref('')
 const current = ref<number>(), initialized = ref(false), busy = ref(false), loading = ref(false)
 const error = ref(''), loadError = ref(''), notice = ref(''), submitted = ref(false)
@@ -45,9 +45,9 @@ const quantityError = computed(() => {
   if (projected.value != null && projected.value > 999999999999999) return '操作后库存超过可记录上限'
   return ''
 })
-const reasonError = computed(() => submitted.value && !reason.value.trim() ? '请填写本次操作原因' : '')
 const action = computed(() => operations.find(item => item.key === type.value)!)
-const maySubmit = computed(() => types.value.some(item => item.key === type.value))
+// Existing adjustment requests must remain confirmable with their original idempotency key.
+const maySubmit = computed(() => pending.value ? (['INBOUND', 'ADJUST_IN'].includes(pending.value.type) ? inbound.value : outbound.value) : types.value.some(item => item.key === type.value))
 function format(value?: number) { return value == null ? '—' : value.toLocaleString('zh-CN') }
 function typeLabel(value: string) { return operations.find(item => item.key === value)?.label ?? value }
 function guardUnload(event: BeforeUnloadEvent) { if (dirty.value || busy.value) { event.preventDefault(); event.returnValue = '' } }
@@ -71,7 +71,7 @@ async function submit() {
   if (busy.value || !maySubmit.value || (!pending.value && (loading.value || loadError.value || current.value == null))) return
   submitted.value = true
   if (!pending.value) {
-    if (!validQuantity.value || quantityError.value || !reason.value.trim()) return
+    if (!validQuantity.value || quantityError.value) return
     pending.value = { requestId: crypto.randomUUID(), type: type.value, quantity: Number(quantity.value), reason: reason.value.trim() }
   }
   busy.value = true; error.value = ''; notice.value = ''
@@ -80,7 +80,7 @@ async function submit() {
     const entry = result.item
     notice.value = result.replayed ? '已确认该操作此前成功，没有重复记账。' : `已${typeLabel(entry.type)} ${format(entry.quantity)} 件，操作后库存 ${format(entry.balanceAfter)} 件。`
     current.value = entry.balanceAfter; initialized.value = true
-    pending.value = undefined; quantity.value = undefined; reason.value = ''; submitted.value = false; page.value = 1
+    pending.value = undefined; type.value = types.value[0]?.key ?? 'INBOUND'; quantity.value = undefined; reason.value = ''; submitted.value = false; page.value = 1
     emit('changed'); await load()
   } catch (e) {
     error.value = e instanceof Error ? e.message : '网络异常，请确认上次操作结果'
@@ -160,19 +160,12 @@ onMounted(load)
           id="stock-quantity-error"
           class="product-field-error"
         >{{ quantityError }}</span></label>
-        <label>操作原因<input
+        <label>操作原因（选填）<input
           v-model="reason"
           maxlength="500"
-          required
           :disabled="locked"
-          :aria-invalid="!!reasonError"
-          aria-describedby="stock-reason-error"
-          placeholder="如：期初入库、领用出库、盘点差异"
-        ><span
-          v-if="reasonError"
-          id="stock-reason-error"
-          class="product-field-error"
-        >{{ reasonError }}</span></label>
+          placeholder="选填，如：期初入库、领用出库"
+        ></label>
       </div>
       <div class="stock-command-bottom">
         <div

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import '@/styles/materialManagement.css'
 import { computed, onMounted, onBeforeUnmount, reactive, ref } from 'vue'
 import AccessDialog from './AccessDialog.vue'
 import EditableSelect from './EditableSelect.vue'
@@ -26,7 +27,7 @@ const supplierQuery=ref(''),supplierPage=ref(1),supplierTotal=ref(0),supplierOpt
 const canReadPrice=computed(()=>session.canAccess(['costs.read'])),canWritePrice=computed(()=>session.canAccess(['costs.read','costs.write','materials.write']))
 const canEditSuppliers=computed(()=>session.canAccess(['suppliers.read','suppliers.write','materials.write']))
 const pendingKey=`jiugeng.material.pending.${session.user.value?.id??'current'}`
-interface Pending {input:MaterialSave;again:boolean}
+interface Pending {input:MaterialSave}
 const pending=ref<Pending>()
 const locked=computed(()=>busy.value||uploading.value||!!pending.value||loading.value||!!loadError.value||!!conflict.value)
 const skippedSuppliers=computed(()=>props.copy?data.value?.suppliers.filter(s=>s.status!=='ACTIVE'||!s.materialEligible)??[]:[])
@@ -48,7 +49,7 @@ function unlink(id:string){const was=links.value.find(l=>l.supplierId===id)?.pri
 function toggleNote(id:string){notes.value=notes.value.includes(id)?notes.value.filter(v=>v!==id):[...notes.value,id]}
 async function upload(file:File){uploading.value=true;error.value='';try{const r=await catalogApi.uploadImage('MATERIAL_IMAGE',file);if(alive){form.imageAssetId=r.id;form.imageUrl=''}}catch(e){error.value=e instanceof Error?e.message:'上传失败';return false}finally{uploading.value=false}}
 async function checkDuplicates(){duplicate.value='';if(editing.value||!form.name.trim())return;try{const r=await materialManagementApi.page({...emptyMaterialFilters(),q:form.name.trim()},0,20);if(alive&&r.items.some(r=>r.material.name===form.name.trim()&&(r.material.specification??'')===form.specification.trim()))duplicate.value='已有同名同规格辅料，请确认是否确需新增。'}catch{/* Optional hint does not block saving. */}}
-async function submit(again=false){
+async function submit(){
  if(busy.value||uploading.value||loading.value||loadError.value||conflict.value)return
  error.value=''
  if(!pending.value){
@@ -58,10 +59,10 @@ async function submit(again=false){
   if(priceChanged.value&&(!/^\d{1,12}(\.\d{1,6})?$/.test(netPrice.value)||!confirmedNet.value||!priceReason.value.trim())){error.value='成本价最多六位小数，请确认人民币不含税口径并填写核定原因';return}
   const input:MaterialInput={materialCode:form.materialCode,name:form.name.trim(),materialType:form.materialType.trim(),unit:form.unit.trim(),specification:form.specification.trim(),remark:form.remark.trim(),...(form.imageAssetId?{imageAssetId:form.imageAssetId}:form.imageUrl.trim()?{imageUrl:form.imageUrl.trim()}:{})}
   if(priceChanged.value)input.costPrice={netPrice:netPrice.value,unit:form.unit,source:'MANUAL',referenceId:null,reason:priceReason.value.trim(),confirmedNet:true,version:editing.value?data.value?.price?.version??-1:-1}
-  pending.value={input:{requestId:crypto.randomUUID(),id:editing.value?props.id??null:null,version:editing.value?data.value?.material.version??null:null,material:input,...(canEditSuppliers.value?{suppliers:links.value.map(l=>({...l}))}:{}),...(props.copy&&props.id?{copyFromId:props.id}:{})},again};persist()
+  pending.value={input:{requestId:crypto.randomUUID(),id:editing.value?props.id??null:null,version:editing.value?data.value?.material.version??null:null,material:input,...(canEditSuppliers.value?{suppliers:links.value.map(l=>({...l}))}:{}),...(props.copy&&props.id?{copyFromId:props.id}:{})}};persist()
  }
  const command=pending.value;busy.value=true
- try{const saved=await materialManagementApi.save(command.input);pending.value=undefined;persist();emit('saved',saved);if(command.again){Object.assign(form,{materialCode:'',name:'',specification:'',imageUrl:'',imageAssetId:'',remark:''});data.value=undefined;links.value=[];netPrice.value='';confirmedNet.value=false;priceReason.value='';duplicate.value='';initial.value=snapshot()}else emit('close')}
+ try{const saved=await materialManagementApi.save(command.input);pending.value=undefined;persist();emit('saved',saved);emit('close')}
  catch(e){error.value=e instanceof Error?e.message:'保存失败';if(e instanceof ApiError&&e.status<500&&![401,403,408,429].includes(e.status)){pending.value=undefined;persist();if(e.code==='MATERIAL_VERSION_CONFLICT'&&command.input.id){try{conflict.value=await materialManagementApi.detail(command.input.id)}catch{error.value+='；最新资料读取失败，草稿已保留，请再次保存以重新核对版本' }}}else error.value='保存结果待确认，原请求已保留，请重试确认。'+error.value}
  finally{busy.value=false}
 }
@@ -137,7 +138,7 @@ defineExpose({dirty,busy:computed(()=>busy.value||uploading.value),pending})
     </section>
     <form
       id="material-editor-form"
-      @submit.prevent="submit(false)"
+      @submit.prevent="submit()"
     >
       <fieldset
         :disabled="locked"
@@ -259,48 +260,66 @@ defineExpose({dirty,busy:computed(()=>busy.value||uploading.value),pending})
             v-if="canEditSuppliers"
             type="button"
             :disabled="locked"
+            :aria-expanded="supplierOpen"
             @click="supplierOpen=!supplierOpen;supplierOpen&&searchSuppliers(true)"
           >
-            添加供应商
+            {{ supplierOpen?'收起选择':'添加供应商' }}
           </button>
         </div>
         <div
           v-if="supplierOpen"
           class="material-supplier-picker"
         >
-          <label>搜索供应商<input
-            v-model="supplierQuery"
-            :disabled="locked"
-            @keydown.enter.prevent="searchSuppliers(true)"
-          ></label><button
-            type="button"
-            :disabled="locked||supplierLoading"
-            @click="searchSuppliers(true)"
-          >
-            搜索
-          </button><p
+          <div class="material-supplier-search">
+            <input
+              v-model="supplierQuery"
+              type="search"
+              aria-label="搜索供应商"
+              placeholder="搜索供应商名称"
+              :disabled="locked"
+              @keydown.enter.prevent="searchSuppliers(true)"
+            ><button
+              type="button"
+              :disabled="locked||supplierLoading"
+              @click="searchSuppliers(true)"
+            >
+              {{ supplierLoading?'搜索中…':'搜索' }}
+            </button>
+          </div>
+          <div class="material-supplier-choice">
+            <select
+              v-single-select
+              class="ui-supplier-select"
+              aria-label="添加辅料供应商"
+              value=""
+              :disabled="locked||supplierLoading||!!supplierError"
+              @change="addSupplier"
+            >
+              <option value="">
+                {{ supplierLoading?'正在加载…':'选择供应商并关联' }}
+              </option><option
+                v-for="s in supplierOptions.filter(s=>!links.some(l=>l.supplierId===s.id))"
+                :key="s.id"
+                :value="s.id"
+              >
+                {{ s.name }}
+              </option>
+            </select>
+          </div>
+          <p
             v-if="supplierError"
             role="alert"
+            class="material-supplier-feedback"
           >
             {{ supplierError }}
-          </p><select
-            v-single-select
-            class="ui-supplier-select"
-            aria-label="添加辅料供应商"
-            value=""
-            :disabled="locked||supplierLoading"
-            @change="addSupplier"
+          </p><p
+            v-else-if="!supplierLoading&&!supplierTotal"
+            class="material-supplier-feedback"
           >
-            <option value="">
-              {{ supplierLoading?'加载中…':'选择供应商' }}
-            </option><option
-              v-for="s in supplierOptions.filter(s=>!links.some(l=>l.supplierId===s.id))"
-              :key="s.id"
-              :value="s.id"
-            >
-              {{ s.name }}
-            </option>
-          </select><ListPagination
+            暂无匹配的启用供应商，请尝试其他关键词。
+          </p>
+          <ListPagination
+            v-if="supplierTotal>20"
             :page="supplierPage"
             :page-size="20"
             :sizes="[20]"
@@ -401,13 +420,6 @@ defineExpose({dirty,busy:computed(()=>busy.value||uploading.value),pending})
         @click="dialog?.requestClose()"
       >
         {{ pending?'稍后确认':'取消' }}
-      </button><button
-        v-if="!editing&&!pending&&!resume"
-        type="button"
-        :disabled="locked"
-        @click="submit(true)"
-      >
-        保存并继续
       </button><button
         class="ui-button-primary"
         type="submit"

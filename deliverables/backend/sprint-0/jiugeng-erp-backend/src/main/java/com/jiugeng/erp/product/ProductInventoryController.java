@@ -23,5 +23,5 @@ class ProductInventoryController {
     ProductInventoryService.Result transact(@PathVariable String variantId,@Valid @RequestBody Command request,@AuthenticationPrincipal AuthenticatedActor actor) {
         return service.transact(variantId,request.requestId(),request.type(),request.quantity(),request.reason(),actor);
     }
-    record Command(@NotBlank @Size(max=100) String requestId,@NotBlank String type,@NotNull @Digits(integer=15,fraction=0) BigDecimal quantity,@NotBlank @Size(max=500) String reason) {}
+    record Command(@NotBlank @Size(max=100) String requestId,@NotBlank String type,@NotNull @Digits(integer=15,fraction=0) BigDecimal quantity,@Size(max=500) String reason) {}
 }

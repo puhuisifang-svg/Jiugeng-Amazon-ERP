@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import '@/styles/purchaseManagement.css'
 import {ref,onMounted,onBeforeUnmount} from 'vue'
 import AccessDialog from './AccessDialog.vue'
 import ListPagination from './ListPagination.vue'
@@ -15,7 +16,7 @@ onMounted(load);onBeforeUnmount(()=>seq++)
   <AccessDialog
     :title="supplierId?'选择采购项目':'选择供应商'"
     wide
-    dialog-class="purchase-ui"
+    dialog-class="purchase-ui purchase-picker-dialog"
     @close="emit('close')"
   >
     <form
@@ -30,60 +31,75 @@ onMounted(load);onBeforeUnmount(()=>seq++)
         搜索
       </button>
     </form>
-    <p
-      v-if="error"
-      role="alert"
-    >
-      {{ error }} <button @click="load">
-        重试
-      </button>
-    </p><p v-else-if="loading">
-      正在读取…
-    </p>
-    <table
-      v-else
-      class="data-table"
-    >
-      <thead>
-        <tr>
-          <th v-if="supplierId">
-            图片
-          </th><th>名称 / 单位</th><th>操作</th>
-        </tr>
-      </thead><tbody>
-        <tr
-          v-for="item in items"
-          :key="item.id"
-        >
-          <td>
-            <PurchaseItemImage
-              :image-asset-id="item.imageAssetId"
-              :image-url="item.imageUrl"
-              :alt="item.name"
-            />
-          </td><td>{{ item.name }}<small>{{ item.unit }} {{ item.primarySupplier?'· 主供应商':'' }}</small></td><td>
-            <button @click="emit('item',item)">
-              选择
-            </button>
-          </td>
-        </tr>
-        <tr
-          v-for="supplier in suppliers"
-          :key="supplier.id"
-        >
-          <td>{{ supplier.name }}</td><td>
-            <button @click="emit('supplier',supplier)">
-              选择
-            </button>
-          </td>
-        </tr>
-        <tr v-if="!total">
-          <td :colspan="supplierId?3:2">
-            没有匹配的启用档案
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="purchase-picker-results">
+      <p
+        v-if="error"
+        role="alert"
+      >
+        {{ error }} <button @click="load">
+          重试
+        </button>
+      </p><p v-else-if="loading">
+        正在读取…
+      </p>
+      <table
+        v-else
+        class="data-table"
+      >
+        <thead>
+          <tr>
+            <th
+              v-if="supplierId"
+              class="purchase-picker-image"
+            >
+              图片
+            </th><th>{{ supplierId?'项目名称 / 单位':'供应商名称' }}</th><th class="purchase-picker-action">
+              操作
+            </th>
+          </tr>
+        </thead><tbody>
+          <tr
+            v-for="item in items"
+            :key="item.id"
+          >
+            <td>
+              <PurchaseItemImage
+                :image-asset-id="item.imageAssetId"
+                :image-url="item.imageUrl"
+                :alt="item.name"
+              />
+            </td><td>{{ item.name }}<small>{{ item.unit }} {{ item.primarySupplier?'· 主供应商':'' }}</small></td><td>
+              <button
+                type="button"
+                class="purchase-picker-select"
+                @click="emit('item',item)"
+              >
+                选择
+              </button>
+            </td>
+          </tr>
+          <tr
+            v-for="supplier in suppliers"
+            :key="supplier.id"
+          >
+            <td>{{ supplier.name }}</td><td>
+              <button
+                type="button"
+                class="purchase-picker-select"
+                @click="emit('supplier',supplier)"
+              >
+                选择
+              </button>
+            </td>
+          </tr>
+          <tr v-if="!total">
+            <td :colspan="supplierId?3:2">
+              没有匹配的启用档案
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
     <template #pagination>
       <ListPagination
         :page="page"

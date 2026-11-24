@@ -21,7 +21,7 @@ async function load(){loading.value=true;formError.value='';try{
  arranging.value=fresh;recipient.value=fresh.details.recipient;phone.value=fresh.details.phone;address.value=fresh.details.address
  arrangeItems.value=fresh.lines.map(l=>{const available=Math.max(0,Number(l.details.quantity)-Number(l.allocatedQuantity)-Number(l.shippedQuantity));return {lineId:l.id,selected:available>0,name:l.details.name,unit:l.details.unit,available,quantity:available,boxCount:1,plannedDate:l.details.deliveryDate||fresh.details.deliveryDate,latestDate:l.details.deliveryDate||fresh.details.deliveryDate,remark:l.details.remark}})
 }catch(e){formError.value=e instanceof Error?e.message:'订单加载失败，请重试'}finally{loading.value=false}}
-async function close(){if(saving.value)return;if(arranging.value&&!await confirmAction('关闭后未保存的发货安排将丢失，是否关闭？'))return;emit('close')}
+async function close(){if(saving.value)return;if(arranging.value&&!await confirmAction('关闭后未保存的发货安排将丢失，是否关闭？', { unsaved: true, discardLabel: '放弃并关闭' }))return;emit('close')}
 async function submitArrange(){
  if(!arranging.value||saving.value)return
  const selected=arrangeItems.value.filter(i=>i.selected)

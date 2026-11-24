@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { samplesApi, emptySampleFilters, type SampleLocation, type SampleInput, type SampleFilters } from '@/api/samples'
 import { ApiError } from '@/api/client'
@@ -10,7 +10,6 @@ import { confirmAction } from '@/state/uiConfirmation'
 import { runtimeConfig } from '@/config/runtime'
 import { beijingDateTime } from '@/utils/dateTime'
 import { sampleSpecification } from '@/utils/sampleSpecification'
-import { sampleLinkedStatus } from '@/utils/sampleHistory'
 import { vSingleSelect } from '@/directives/singleSelect'
 import SampleLabelDialog from '@/components/SampleLabelDialog.vue'
 import SampleDetailDialog from '@/components/SampleDetailDialog.vue'
@@ -37,8 +36,9 @@ const selectedIds=ref<string[]>([]),detailId=ref(''),printSample=ref<SampleLocat
 const dialog=ref<HTMLDialogElement>(),locationInput=ref<HTMLInputElement>(),open=ref(false),busy=ref(false),editing=ref<SampleLocation>(),copying=ref<SampleLocation>(),location=ref(''),selected=ref<SkuListItemDto>(),initial=ref(''),formError=ref(''),discard=ref(false)
 const skuPickerOpen=ref(false),manual=ref(false),sampleName=ref(''),sampleCode=ref(''),specification=ref(''),remark=ref(''),sampleImageId=ref<string|null>(null),storageImageId=ref<string|null>(null),uploading=ref(false)
 const editorRevision=ref(0)
-const locationOptions=ref<string[]>([]),locationError=ref(''),conflictRow=ref<SampleLocation>(),duplicateRow=ref<SampleLocation>(),checkingConflict=ref(false)
-interface Pending { key:string;input:SampleInput;editing?:SampleLocation|undefined;copying?:SampleLocation|undefined;selected?:SkuListItemDto|undefined;again:boolean }
+const conflictRow=ref<SampleLocation>(),duplicateRow=ref<SampleLocation>(),checkingConflict=ref(false)
+// Keep copying metadata only to recover requests submitted before the copy action was removed.
+interface Pending { key:string;input:SampleInput;editing?:SampleLocation|undefined;copying?:SampleLocation|undefined;selected?:SkuListItemDto|undefined }
 const owner=session.user?.value?.id??'current',pendingKey=`jiugeng.samples.pending.${owner}`,stateKey=`jiugeng.samples.view.${owner}`
 const pending=ref<Pending>()
 try{const p=JSON.parse(sessionStorage.getItem(pendingKey)??'null') as Pending|null;if(p&&typeof p.key==='string'&&p.input&&typeof p.input.locationCode==='string')pending.value=p}catch{/* Optional recovery storage unavailable. */}
@@ -50,7 +50,7 @@ const chips=computed(()=>[
  {key:'photo',label:'存放照片',value:({YES:'有照片',NO:'未上传'} as Record<string,string>)[appliedFilters.value.photo]??''},
  {key:'location',label:appliedFilters.value.locationMode==='exact'?'库位精确':'库位前缀',value:appliedFilters.value.location},
 ].filter(x=>x.value))
-let listSequence=0,locationsSequence=0,scrollTop=0,locationsTimer:ReturnType<typeof setTimeout>|undefined
+let listSequence=0,scrollTop=0
 const snapshot=()=>JSON.stringify([selected.value?.variant.id??'',location.value,manual.value,sampleName.value,sampleCode.value,specification.value,remark.value,storageImageId.value,sampleImageId.value])
 const dirty=computed(()=>open.value&&snapshot()!==initial.value)
 function persistPending(){try{if(pending.value)sessionStorage.setItem(pendingKey,JSON.stringify(pending.value));else sessionStorage.removeItem(pendingKey)}catch{/* In-memory original request remains locked and retryable. */}}
@@ -71,13 +71,11 @@ function toggleDeleted(){filters.deleted=!appliedFilters.value.deleted;search()}
 function changePage(value:number){page.value=value;scrollTop=0;void load()}
 function toggle(id:string,value:boolean){if(value&&!selectedIds.value.includes(id)){if(selectedIds.value.length>=500){actionError.value='一次最多选择 500 条';return}selectedIds.value.push(id)}else if(!value)selectedIds.value=selectedIds.value.filter(v=>v!==id)}
 function togglePage(value:boolean){for(const r of rows.value)toggle(r.id,value)}
-async function loadLocations(){const seq=++locationsSequence;try{const values=await samplesApi.locations(location.value);if(seq===locationsSequence){locationOptions.value=values;locationError.value=''}}catch{if(seq===locationsSequence)locationError.value='库位建议加载失败，可继续手动填写'}}
-watch(location,()=>{if(!open.value)return;clearTimeout(locationsTimer);locationsTimer=setTimeout(()=>void loadLocations(),250)})
 async function uploadStorage(file:File){uploading.value=true;formError.value='';try{storageImageId.value=(await catalogApi.uploadImage('SAMPLE_STORAGE',file)).id}catch(e){formError.value=message(e);throw e}finally{uploading.value=false}}
 async function uploadSample(file:File){uploading.value=true;formError.value='';try{sampleImageId.value=(await catalogApi.uploadImage('SAMPLE_IMAGE',file)).id}catch(e){formError.value=message(e);throw e}finally{uploading.value=false}}
-async function edit(row?:SampleLocation,copy=false){
+async function edit(row?:SampleLocation){
  if(blocked.value||!writable.value)return
- editorRevision.value++;editing.value=copy?undefined:row;copying.value=copy?row:undefined;manual.value=!!row&&!row.variantId;sampleName.value=row?.skuName??'';sampleCode.value=row?.skuCode??'';specification.value=row?.specification??'';remark.value=row?.remark??'';storageImageId.value=copy?null:row?.storageImageId??null;sampleImageId.value=copy?null:row?.sampleImageId??null;location.value=copy?'':row?.locationCode??'';selected.value=undefined;formError.value='';conflictRow.value=undefined;duplicateRow.value=undefined;skuPickerOpen.value=false;open.value=true;initial.value=snapshot();await nextTick();dialog.value?.showModal();locationInput.value?.focus();void loadLocations()
+ editorRevision.value++;editing.value=row;copying.value=undefined;manual.value=!!row&&!row.variantId;sampleName.value=row?.skuName??'';sampleCode.value=row?.skuCode??'';specification.value=row?.specification??'';remark.value=row?.remark??'';storageImageId.value=row?.storageImageId??null;sampleImageId.value=row?.sampleImageId??null;location.value=row?.locationCode??'';selected.value=undefined;formError.value='';conflictRow.value=undefined;duplicateRow.value=undefined;skuPickerOpen.value=false;open.value=true;initial.value=snapshot();await nextTick();dialog.value?.showModal();locationInput.value?.focus()
 }
 function chooseSku(sku:SkuListItemDto){if(selected.value?.variant.id!==sku.variant.id)specification.value=sampleSpecification(sku.variant);selected.value=sku;skuPickerOpen.value=false}
 function preventEnterSave(event:KeyboardEvent){if(event.key==='Enter'&&event.target instanceof HTMLInputElement&&!event.isComposing)event.preventDefault()}
@@ -87,16 +85,16 @@ function input():SampleInput{
  const original=editing.value??copying.value
  return {productId:manual.value?null:original?.productId??selected.value?.productId??null,variantId:manual.value?null:original?.variantId??selected.value?.variant.id??null,locationCode:location.value,sampleName:sampleName.value,sampleCode:sampleCode.value,specification:specification.value,remark:remark.value,storageImageId:storageImageId.value,sampleImageId:manual.value?sampleImageId.value:null,...(editing.value?{version:editing.value.version}:{}),...(copying.value?{copyFromId:copying.value.id}:{})}
 }
-async function save(again=false){
+async function save(){
  if(working.value||!writable.value||!backendReady.value)return
  if(!pending.value){const payload=input();if(!manual.value&&(!payload.productId||!payload.variantId)){formError.value='请先选择 SKU';return}if(manual.value&&!sampleName.value.trim()){formError.value='请输入样品名称';return}if(!location.value.trim()){formError.value='请输入库位编码';return}
- pending.value={key:crypto.randomUUID(),input:payload,editing:editing.value,copying:copying.value,selected:selected.value,again};persistPending()}
+ pending.value={key:crypto.randomUUID(),input:payload,editing:editing.value,copying:copying.value,selected:selected.value};persistPending()}
  const command=pending.value;busy.value=true;formError.value=''
  try{
   const result=command.editing?await samplesApi.update(command.editing.id,command.input,command.key):await samplesApi.create(command.input,command.key)
   if(!result || typeof result.id!=='string' || !Number.isFinite(result.version))throw new Error('保存响应不完整，需确认原请求')
-  pending.value=undefined;persistPending();success.value=result.deletedAt?'原请求已确认，该登记随后已移除，请在已移除列表查看。':'样品库位已保存'
-  if(command.again&&!result.deletedAt){editorRevision.value++;editing.value=undefined;copying.value=result;manual.value=!result.variantId;sampleName.value=result.skuName;sampleCode.value=result.skuCode;location.value='';storageImageId.value=null;sampleImageId.value=null;initial.value=snapshot();await nextTick();locationInput.value?.focus()}else close()
+  pending.value=undefined;persistPending();success.value=result.deletedAt?'原请求已确认，该登记随后已移除，请在回收站查看。':'样品库位已保存'
+  close()
   await Promise.all([load(),loadParents()])
  }catch(e){
   if(e instanceof ApiError&&e.status<500&&![401,403,408,429].includes(e.status)){pending.value=undefined;persistPending();formError.value=message(e)
@@ -109,15 +107,15 @@ async function checkConflict(){if(!editing.value||checkingConflict.value)return;
 function useLatest(){const r=conflictRow.value;if(!r||r.deletedAt)return;editing.value=r;sampleName.value=r.skuName;sampleCode.value=r.skuCode;location.value=r.locationCode;specification.value=r.specification??'';remark.value=r.remark??'';storageImageId.value=r.storageImageId??null;sampleImageId.value=r.sampleImageId??null;conflictRow.value=undefined;initial.value=snapshot();formError.value='已采用最新资料，请核对后保存。'}
 function acceptVersion(){if(!conflictRow.value||conflictRow.value.deletedAt)return;editing.value=conflictRow.value;conflictRow.value=undefined;formError.value='已保留草稿并采用最新版本，请核对后保存。'}
 const comparison=computed(()=>{if(!conflictRow.value)return [];const latest=conflictRow.value;return [{label:'样品名称',saved:latest.skuName,draft:manual.value?sampleName.value:latest.skuName},{label:'库位',saved:latest.locationCode,draft:location.value},{label:'规格',saved:latest.specification??'',draft:specification.value},{label:'备注',saved:latest.remark??'',draft:remark.value},{label:'存放照片',saved:latest.storageImageId,draft:storageImageId.value},{label:'样品图片',saved:latest.sampleImageId,draft:manual.value?sampleImageId.value:latest.sampleImageId}].filter(v=>v.saved!==v.draft)})
-async function remove(row:SampleLocation){if(blocked.value||!removable.value||!await confirmAction(`移除“${row.skuName}”在 ${row.locationCode} 的登记？可在“已移除”中恢复，产品和 SKU 不受影响。`))return;busy.value=true;actionError.value='';try{await samplesApi.remove(row.id,row.version);selectedIds.value=selectedIds.value.filter(id=>id!==row.id);success.value='登记已移除，可恢复';await Promise.all([load(),loadParents()])}catch(e){actionError.value=message(e)}finally{busy.value=false}}
+async function remove(row:SampleLocation){if(blocked.value||!removable.value||!await confirmAction(`移除“${row.skuName}”在 ${row.locationCode} 的登记？可在“回收站”中恢复，产品和 SKU 不受影响。`))return;busy.value=true;actionError.value='';try{await samplesApi.remove(row.id,row.version);selectedIds.value=selectedIds.value.filter(id=>id!==row.id);success.value='登记已移除，可恢复';await Promise.all([load(),loadParents()])}catch(e){actionError.value=message(e)}finally{busy.value=false}}
 async function restore(row:SampleLocation){if(blocked.value||!writable.value||!removable.value||!await confirmAction(`恢复“${row.skuName}”到 ${row.locationCode}？同一 SKU 在该库位已有登记时无法恢复。`))return;busy.value=true;actionError.value='';try{await samplesApi.restore(row.id,row.version);success.value='样品登记已恢复';await Promise.all([load(),loadParents()])}catch(e){actionError.value=message(e)}finally{busy.value=false}}
 async function batchPrint(){if(!selectedIds.value.length||blocked.value)return;if(selectedIds.value.length>100){actionError.value='一次最多打印 100 条样品，请减少勾选';return}busy.value=true;actionError.value='';try{printRows.value=await samplesApi.selection(selectedIds.value)}catch(e){actionError.value=message(e)}finally{busy.value=false}}
 async function exportRows(){exporting.value=true;actionError.value='';try{const blob=await samplesApi.export(applied.value,appliedParent.value,appliedFilters.value,exportSelection.value?selectedIds.value:[]);const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='样品盘点清单.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);exportOpen.value=false;success.value='盘点清单已导出'}catch(e){actionError.value=message(e)}finally{exporting.value=false}}
 function message(e:unknown){return e instanceof Error?e.message:'操作失败，请重试'}
 function beforeUnload(e:BeforeUnloadEvent){if(dirty.value||working.value||pending.value){e.preventDefault();e.returnValue=''}}
-onBeforeRouteLeave(async()=>{saveView();return working.value?false:(!dirty.value&&!pending.value)||await confirmAction(pending.value?'保存结果待确认，原请求将保留，可返回确认。确定离开吗？':'样品尚未保存，确定放弃并离开吗？')})
+onBeforeRouteLeave(async()=>{saveView();return working.value?false:(!dirty.value&&!pending.value)||await confirmAction(pending.value?'保存结果待确认，原请求将保留，可返回确认。确定离开吗？':'样品尚未保存，确定放弃并离开吗？', { unsaved: !pending.value, discardLabel: '放弃并离开' })})
 onMounted(async()=>{try{const saved=JSON.parse(sessionStorage.getItem(stateKey)??'null');if(saved){query.value=applied.value=typeof saved.q==='string'?saved.q:'';parent.value=appliedParent.value=typeof saved.parent==='string'?saved.parent:'';for(const key of Object.keys(filters) as (keyof SampleFilters)[])if(typeof saved.filters?.[key]===typeof filters[key])Object.assign(filters,{[key]:saved.filters[key]});appliedFilters.value={...filters};page.value=Math.max(1,Number(saved.page)||1);size.value=[10,20,50,100].includes(saved.size)?saved.size:20;scrollTop=Math.max(0,Number(saved.scrollTop)||0)}}catch{/* Use defaults. */}await checkBackend();if(!backendReady.value){appliedFilters.value=emptySampleFilters();Object.assign(filters,emptySampleFilters())}void load();void loadParents();window.addEventListener('beforeunload',beforeUnload)})
-onBeforeUnmount(()=>{saveView();++listSequence;++locationsSequence;clearTimeout(locationsTimer);window.removeEventListener('beforeunload',beforeUnload);dialog.value?.close()})
+onBeforeUnmount(()=>{saveView();++listSequence;window.removeEventListener('beforeunload',beforeUnload);dialog.value?.close()})
 </script>
 <template>
   <section
@@ -240,17 +238,10 @@ onBeforeUnmount(()=>{saveView();++listSequence;++locationsSequence;clearTimeout(
           :disabled="blocked || loading || !!error"
           @click="exportSelection=!!selectedIds.length;exportOpen=true"
         >
-          导出盘点清单
+          导出
         </button>
       </template>
       <button
-        type="button"
-        :disabled="blocked"
-        :class="{active:appliedFilters.deleted}"
-        @click="toggleDeleted"
-      >
-        {{ appliedFilters.deleted?'返回在库登记':'已移除' }}
-      </button><button
         type="button"
         :disabled="loading || busy"
         @click="load"
@@ -266,9 +257,19 @@ onBeforeUnmount(()=>{saveView();++listSequence;++locationsSequence;clearTimeout(
         @click="selectedIds=[]"
       >清空</button></span>
       <span
-        v-else
+        v-else-if="appliedFilters.deleted"
         class="sample-toolbar-hint"
-      >{{ appliedFilters.deleted?'已移除记录保留照片和历史；恢复需要维护及移除权限。':'登记样品与库位，照片与产品资料分别留存' }}</span>
+      >回收站记录保留照片和历史；恢复需要维护及移除权限。</span>
+      <button
+        type="button"
+        :disabled="blocked"
+        class="secondary-action sample-removed-toggle"
+        :class="{active:appliedFilters.deleted}"
+        :aria-pressed="appliedFilters.deleted"
+        @click="toggleDeleted"
+      >
+        {{ appliedFilters.deleted?'返回在库登记':'回收站' }}
+      </button>
     </div>
     <p
       v-if="pending && !open"
@@ -327,7 +328,7 @@ onBeforeUnmount(()=>{saveView();++listSequence;++locationsSequence;clearTimeout(
                 :disabled="loading || !!error"
                 @change="togglePage(($event.target as HTMLInputElement).checked)"
               >
-            </th><th>图片</th><th>品名 / 规格</th><th>来源 / 所属产品</th><th>库位</th><th>存放照片</th><th>备注</th><th>更新时间</th><th>操作</th>
+            </th><th>图片</th><th>品名 / 规格</th><th>库位</th><th>存放照片</th><th>备注</th><th>更新时间</th><th>操作</th>
           </tr>
         </thead>
         <tbody>
@@ -366,16 +367,7 @@ onBeforeUnmount(()=>{saveView();++listSequence;++locationsSequence;clearTimeout(
                 @click="saveView();detailId=row.id"
               >
                 {{ row.skuName }}
-              </button><small class="sample-spec">{{ row.specification || '规格未填写' }}</small><small
-                v-if="row.imageSource==='CURRENT_PRODUCT'"
-                class="sample-hint"
-              >当前产品图 · 历史未留图</small>
-            </td>
-            <td>
-              <span class="sample-source-tag">{{ row.variantId?'关联 SKU':'手动录入' }}</span><small>{{ row.productName || '独立样品' }}</small><small
-                v-if="row.variantId && row.linkedStatus!=='ACTIVE'"
-                class="sample-warning"
-              >{{ sampleLinkedStatus(row.linkedStatus) }}</small>
+              </button><small class="sample-spec">{{ row.specification || '规格未填写' }}</small>
             </td>
             <td>
               <button
@@ -432,13 +424,6 @@ onBeforeUnmount(()=>{saveView();++listSequence;++locationsSequence;clearTimeout(
                   >
                     编辑
                   </button><button
-                    v-if="writable"
-                    type="button"
-                    :disabled="blocked || loading || !!error || ['DELETED','UNAVAILABLE'].includes(row.linkedStatus??'')"
-                    @click="edit(row,true)"
-                  >
-                    复制到其他库位
-                  </button><button
                     v-if="removable"
                     type="button"
                     class="sample-remove"
@@ -468,7 +453,7 @@ onBeforeUnmount(()=>{saveView();++listSequence;++locationsSequence;clearTimeout(
             </td>
           </tr><tr v-if="!rows.length">
             <td
-              :colspan="appliedFilters.deleted?8:9"
+              :colspan="appliedFilters.deleted?7:8"
               class="data-state"
             >
               {{ hasFilters?'没有匹配的样品记录':appliedFilters.deleted?'暂无已移除记录':'暂无样品库位登记' }} <button
@@ -653,24 +638,20 @@ onBeforeUnmount(()=>{saveView();++listSequence;++locationsSequence;clearTimeout(
             </p>
           </template>
           <div class="sample-field-grid">
-            <label class="location-field">库位 <span class="required">*</span><input
+            <label class="location-field"><span>库位 <span class="required">*</span></span><input
               ref="locationInput"
               v-model="location"
-              list="sample-location-options"
+              autocomplete="off"
               maxlength="100"
               placeholder="例如 A-01-02"
               :disabled="blocked"
               required
-            ><datalist id="sample-location-options"><option
-              v-for="value in locationOptions"
-              :key="value"
-              :value="value"
-            /></datalist><small>忽略大小写与全角差异，支持选择已有库位。</small></label><label>规格说明<input
+            ><small>直接输入库位编码，保存时统一大小写与全角字符。</small></label><label><span>规格说明</span><input
               v-model="specification"
               maxlength="500"
               :disabled="blocked"
               placeholder="选填，如颜色、尺寸"
-            ></label><label class="sample-field-wide">备注<textarea
+            ></label><label class="sample-field-wide"><span>备注</span><textarea
               v-model="remark"
               maxlength="1000"
               :disabled="blocked"
@@ -678,18 +659,6 @@ onBeforeUnmount(()=>{saveView();++listSequence;++locationsSequence;clearTimeout(
               placeholder="选填"
             /></label>
           </div>
-          <p
-            v-if="locationError"
-            role="alert"
-            class="sample-hint"
-          >
-            {{ locationError }} <button
-              type="button"
-              @click="loadLocations"
-            >
-              重试
-            </button>
-          </p>
           <div
             class="sample-photo-grid"
             :class="{'sample-photo-grid-single':!manual}"
@@ -775,13 +744,6 @@ onBeforeUnmount(()=>{saveView();++listSequence;++locationsSequence;clearTimeout(
           >
             {{ pending?'稍后确认':'取消' }}
           </button><button
-            v-if="!editing && !pending"
-            type="button"
-            :disabled="blocked"
-            @click="save(true)"
-          >
-            保存并继续
-          </button><button
             type="submit"
             class="primary-action"
             :disabled="working"
@@ -825,7 +787,7 @@ onBeforeUnmount(()=>{saveView();++listSequence;++locationsSequence;clearTimeout(
   />
   <AccessDialog
     v-if="exportOpen"
-    title="导出盘点清单"
+    title="导出"
     dialog-class="samples-ui"
     :busy="exporting"
     @close="exportOpen=false"

@@ -43,7 +43,7 @@ const locked=computed(()=>saving.value||uploading.value||!!pendingSave.value||!!
 let listSequence=0,alive=true
 const listKey=`jiugeng.purchase.list.${session.user.value?.id??'current'}`
 function remember(){try{sessionStorage.setItem(listKey,JSON.stringify({filters:{...appliedFilters.value},page:page.value,size:size.value,scroll:window.scrollY}))}catch{/* optional */}}
-async function mayLeave(){return !saving.value&&!uploading.value&&(!dirty.value||!!pendingSave.value||await confirmAction('采购资料尚未保存，确定离开？'))}
+async function mayLeave(){return !saving.value&&!uploading.value&&(!dirty.value||!!pendingSave.value||await confirmAction('采购资料尚未保存，确定离开？', { unsaved: true, discardLabel: '放弃并离开' }))}
 onBeforeRouteLeave(mayLeave)
 function unload(e:BeforeUnloadEvent){if(dirty.value||saving.value||uploading.value){e.preventDefault();e.returnValue=''}}
 onBeforeUnmount(()=>{alive=false;listSequence++;referenceSequence++;window.removeEventListener('beforeunload',unload);window.removeEventListener('scroll',remember)})

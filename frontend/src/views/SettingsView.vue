@@ -40,7 +40,7 @@ function closeEditor() {
 }
 async function cancelEditor() {
   if (loading.value) return
-  if (snapshot() !== initialEditor.value && !await confirmAction('放弃尚未保存的填写内容？')) return
+  if (snapshot() !== initialEditor.value && !await confirmAction('放弃尚未保存的填写内容？', { unsaved: true, discardLabel: '放弃并关闭' })) return
   closeEditor()
 }
 onBeforeUnmount(() => editorDialog.value?.close())

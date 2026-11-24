@@ -113,11 +113,14 @@ it('blocks writes when the old backend does not advertise recoverable removal',a
  h.capabilities.mockRejectedValue(new ApiError(404,'NOT_FOUND','old backend'));const w=view();await flushPromises()
  expect(button(w,'新增样品').attributes('disabled')).toBeDefined();expect(w.text()).toContain('新接口尚不可用');expect(w.text()).not.toContain('复制到其他库位');expect(h.remove).not.toHaveBeenCalled();w.unmount()
 })
-it('copies the source without retaining the old shelf or storage photo',async()=>{
- h.list.mockResolvedValue({items:[{...row,storageImageId:'old-storage',sampleImageId:'old-sample'}],totalCount:1});const w=view();await flushPromises()
- await button(w,'复制到其他库位').trigger('click');await flushPromises();expect((w.get('.location-field input').element as HTMLInputElement).value).toBe('')
- await w.get('.location-field input').setValue('B-09');await w.get('dialog form').trigger('submit');await flushPromises()
- expect(h.create).toHaveBeenCalledWith(expect.objectContaining({copyFromId:'s1',locationCode:'B-09',storageImageId:null,sampleImageId:null}),expect.any(String));w.unmount()
+it('recovers an existing copy request without offering new copy actions',async()=>{
+ const input={copyFromId:'s1',productId:row.productId,variantId:row.variantId,locationCode:'B-09',storageImageId:null,sampleImageId:null}
+ sessionStorage.setItem('jiugeng.samples.pending.current',JSON.stringify({key:'original-copy-key',input,copying:row,again:true}))
+ const w=view();await flushPromises()
+ expect(w.findAll('.sample-actions button').some(b=>b.text()==='复制到其他库位')).toBe(false)
+ await button(w,'继续确认原请求').trigger('click');await flushPromises()
+ await w.get('dialog form').trigger('submit');await flushPromises()
+ expect(h.create).toHaveBeenCalledWith(input,'original-copy-key');expect(w.find('dialog form').exists()).toBe(false);w.unmount()
 })
 it('preserves the draft until a user explicitly adopts the new version',async()=>{
  const w=view();await flushPromises();await button(w,'编辑').trigger('click');await w.get('.location-field input').setValue('DRAFT-01')
@@ -133,13 +136,29 @@ it('keeps selected rows across pages and refreshes them before batch printing',a
  expect(h.selection).toHaveBeenCalledWith(['s1']);expect(w.findComponent({name:'SampleLabelDialog'}).props('samples')[0].skuName).toBe('Fresh name');w.unmount()
 })
 
-it('save and continue retains sample information but clears shelf and storage photo',async()=>{
- const w=view();await flushPromises();await button(w,'新增样品').trigger('click');await button(w,'手动录入').trigger('click')
- await w.get('input[placeholder="输入未建立 SKU 的产品名称"]').setValue('Synthetic next');await w.get('.location-field input').setValue('NEXT-01')
- await w.get('input[placeholder="选填，如颜色、尺寸"]').setValue('saved dimensions')
- h.create.mockResolvedValue({...row,productId:null,variantId:null,skuName:'Synthetic next',specification:'saved dimensions',storageImageId:'old-storage'})
- await button(w,'保存并继续').trigger('click');await flushPromises()
- expect((w.get('.location-field input').element as HTMLInputElement).value).toBe('');expect((w.get('input[placeholder="选填，如颜色、尺寸"]').element as HTMLInputElement).value).toBe('saved dimensions');expect(w.text()).not.toContain('移除照片')
- await w.get('.location-field input').setValue('NEXT-02');await w.get('dialog form').trigger('submit');await flushPromises()
- expect(h.create).toHaveBeenLastCalledWith(expect.objectContaining({copyFromId:'s1',storageImageId:null,locationCode:'NEXT-02'}),expect.any(String));w.unmount()
+it('offers one save action and closes the editor after successful creation',async()=>{
+ const w=view();await flushPromises()
+ expect(button(w,'导出')).toBeDefined();expect(w.text()).not.toContain('导出盘点清单')
+ await button(w,'新增样品').trigger('click');await button(w,'手动录入').trigger('click')
+ expect(w.text()).not.toContain('保存并继续')
+ await w.get('input[placeholder="输入未建立 SKU 的产品名称"]').setValue('Synthetic sample');await w.get('.location-field input').setValue('NEW-01')
+ await w.get('dialog form').trigger('submit');await flushPromises()
+ expect(h.create).toHaveBeenCalledTimes(1);expect(w.find('dialog form').exists()).toBe(false);w.unmount()
+})
+
+it('uses free-text location input without native suggestions', async () => {
+ const w=view();await flushPromises()
+ await button(w,'新增样品').trigger('click');await flushPromises()
+ expect(w.get('.location-field input').attributes('list')).toBeUndefined()
+ expect(w.find('datalist').exists()).toBe(false)
+ expect(h.locations).not.toHaveBeenCalled()
+ expect(w.get('.location-field > span').text()).toBe('库位 *')
+ w.unmount()
+})
+
+it('omits the source / parent product column and keeps empty-state cells aligned', async () => {
+ const w=view();await flushPromises()
+ expect(w.findAll('.sample-table th').map(th=>th.text())).not.toContain('来源 / 所属产品')
+ expect(w.findAll('.sample-table tbody tr')[0]!.findAll('td')).toHaveLength(w.findAll('.sample-table th').length)
+ w.unmount()
 })

@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import UnsavedChangesDialog from './UnsavedChangesDialog.vue'
 import { useRoute } from 'vue-router'
 import { uiConfirmation, settleConfirmation } from '@/state/uiConfirmation'
 const dialog = ref<HTMLDialogElement>(), cancel = ref<HTMLButtonElement>(), input = ref<HTMLInputElement>()
 const reason = ref(''), route = useRoute()
 let previousFocus: HTMLElement | undefined
-watch(uiConfirmation, async value => {
+watch(uiConfirmation, async (value, previous) => {
   reason.value = ''
-  if (!value) { dialog.value?.close(); previousFocus?.focus(); return }
+  if (!value) { dialog.value?.close(); if (!previous?.unsaved) previousFocus?.focus(); return }
+  if (value.unsaved) return
   previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : undefined
   await nextTick()
   if (uiConfirmation.value !== value) return
@@ -19,6 +21,13 @@ function submit() { if (uiConfirmation.value?.input && !reason.value.trim()) ret
 </script>
 <template>
   <Teleport to="body">
+    <UnsavedChangesDialog
+      v-if="uiConfirmation?.unsaved"
+      :message="uiConfirmation.message"
+      :discard-label="uiConfirmation.discardLabel ?? '放弃并关闭'"
+      @keep="settleConfirmation(null)"
+      @discard="settleConfirmation('')"
+    />
     <dialog
       ref="dialog"
       class="ui-confirm-dialog"
@@ -27,7 +36,7 @@ function submit() { if (uiConfirmation.value?.input && !reason.value.trim()) ret
       @cancel.prevent="settleConfirmation(null)"
     >
       <form
-        v-if="uiConfirmation"
+        v-if="uiConfirmation && !uiConfirmation.unsaved"
         @submit.prevent="submit"
       >
         <header>

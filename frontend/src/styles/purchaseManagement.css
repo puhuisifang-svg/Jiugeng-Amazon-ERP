@@ -7,3 +7,22 @@
 .purchase-ui .purchase-list-product .image-button,.purchase-ui .purchase-list-product .catalog-image{width:48px;height:48px;min-width:48px;min-height:48px;border-radius:5px}
 .purchase-ui .purchase-list-product .image-button{padding:0;background:transparent;border:0}
 .purchase-ui .purchase-list-note{padding:0 4px;margin:4px 12px 8px}
+
+
+/* Keep supplier/item pickers usable while loading, filtering or showing few rows. */
+#app .access-dialog.purchase-ui.purchase-picker-dialog{width:min(1000px,calc(100vw - 24px));height:min(720px,calc(100dvh - 24px));max-height:calc(100dvh - 24px);overflow:hidden}
+#app .purchase-picker-dialog > .access-dialog-body{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;padding:12px 14px;gap:10px}
+#app .purchase-picker-dialog .purchase-search{flex:none;margin:0;align-items:center}
+#app .purchase-picker-dialog .purchase-search input{height:var(--ui-control-height,32px);min-height:var(--ui-control-height,32px)}
+#app .purchase-picker-dialog .purchase-picker-results{flex:1;min-height:0;overflow:auto;border:1px solid var(--line);border-radius:5px}
+#app .purchase-picker-dialog .purchase-picker-results > p{margin:0;padding:16px;color:var(--muted)}
+#app .purchase-picker-dialog .data-table{width:100%;table-layout:fixed}
+#app .purchase-picker-dialog .data-table thead{position:sticky;top:0;z-index:1;background:#f6f8fb}
+#app .purchase-picker-dialog .data-table th,#app .purchase-picker-dialog .data-table td{padding:10px 12px;overflow-wrap:anywhere}
+#app .purchase-picker-dialog .purchase-picker-image{width:80px}
+#app .purchase-picker-dialog .purchase-picker-action{width:88px}
+#app .purchase-picker-dialog .purchase-picker-select{min-width:64px;color:#2864c5;background:#f1f6ff;border-color:#d1dff3}
+#app .purchase-picker-dialog .image-button,#app .purchase-picker-dialog .catalog-image{width:48px;height:48px;min-height:48px;object-fit:contain;border-radius:4px}
+#app .purchase-picker-dialog .image-button{padding:0;overflow:hidden}
+#app .purchase-picker-dialog > .access-dialog-pagination{flex:none}
+@media(max-width:600px){#app .purchase-picker-dialog > .access-dialog-body{padding:10px}#app .purchase-picker-dialog .purchase-picker-image{width:56px}#app .purchase-picker-dialog .purchase-picker-action{width:72px}#app .purchase-picker-dialog .data-table th,#app .purchase-picker-dialog .data-table td{padding:8px}}

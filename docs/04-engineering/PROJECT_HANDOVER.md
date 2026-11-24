@@ -9,6 +9,10 @@
 | 审批人 | 待 PJM 复核；本文记录实现事实，不新增业务批准 |
 | 核实基线 | 见[当前状态报告](../08-project-management/STATUS_REPORT.md)；此指南不是实时线上状态 |
 
+## 当前 ERP-103 报关文件入口（2026-11-24，本地）
+
+先读 [DEL-053](../../deliverables/pjm/ERP-103_CUSTOMS_FILES_LOCAL_2026-11-24.md) 确认当前 Codex 写入槽与运行包；此前 PJM 发布已结束。`CustomsDocuments` 列表返回创建时间及截图/发票标记并按创建时间倒序；`CustomsFileStatus` 统一两处标签。`CustomsAttachmentPreview` 在 `#app` 内显示鉴权图/PDF/Excel，PDF 复用连续只读文档。Excel 由 customs 内部 `CustomsSpreadsheetPreview` 提取缓存值，不调用外部预览服务；预览接口只读，现有下载接口继续保留。完整验证与发布等待本轮交接指令。
+
 ## 2026-11-24 累计发布交接入口
 
 PJM 更新：DEL-052 已经受保护 PR #24 合并并完成应用生产发布；精确 SHA、CI/实际部署/入口版本及限制集中在[状态报告](../08-project-management/STATUS_REPORT.md)与 DEL-052 发布核验附录。按维护主题归档，不新增 ERP 编号。以下“本地未提交/待验证”是阶段快照；不代表当前锁或发布状态。归档文档 PR 的最终部署由同一 PJM 会话闭合，不要求 Codex 等待。
@@ -193,3 +197,27 @@ Vitest 测试多数与源码同目录；浏览器冒烟在 `frontend/e2e/`，使
 每个任务的实施者负责在交接前更新记录，PJM 负责复核与验收。入口保持简短，版本事实集中到状态报告。旧报告归档；已批准的历史文档保留原文和审批状态，新发现的差异以带日期的说明补充。不得把历史报告中的未解决风险原样复制成今天仍然存在的故障。
 
 这些规则依赖后续任务执行者遵守，目前没有新增定时自动维护或强制 CI 文档同步检查。
+
+
+### 样品库位历史新规则（2026-11-24，本地 ERP-103 同迭代追加）
+
+`sample/SampleController.recordLocationChange` 是样品记录的唯一写入口：仅库位实际修改时追加 `SAMPLE_UPDATE`，快照只有 `locationCode`。新增、复制、移除、恢复及其他字段不记入样品变更记录。前端 `sampleHistory.ts` 只解释库位；列表不展示来源/所属产品列，详情不展示来源标记，关联产品查看入口仍保留。
+
+V108 是用户明确要求的一次性旧样品历史清理，限定共用 `audit_event` 的样品 BUSINESS 五类动作，不清空整个审计表。迁移前必须备份；本地已应用，生产未应用，PJM 发布时需审查清理范围并确认备份。旧历史无法通过回退 JAR 恢复，只能从迁移前备份恢复对应范围，不能整库覆盖后续业务。实施与验证证据见 [DEL-053](../../deliverables/pjm/ERP-103_CUSTOMS_FILES_LOCAL_2026-11-24.md)。
+
+
+### 供应商详情精简与旧记录清理（2026-11-24，本地同迭代）
+
+供应商详情仅保留基础资料/关联业务；SupplierEditor 成功保存统一关闭，不再保存并继续；SupplierDeleteDialog 仅做删除及关联检查，停用走列表独立入口。删除菜单 Teleport 到 body，红字样式须覆盖该位置。
+
+V109 用户授权一次性清除 SUPPLIER_CREATE/UPDATE/DELETE/ARCHIVED_LINK_REMOVE 的 BUSINESS 旧记录；不能仅按 resource_type SUPPLIER 清表，因为 `MATERIAL_SUPPLIERS_REPLACE` 辅料记录也使用该资源类型。后台未来操作审计与接口保留。本地已备份/应用，生产待 PJM 获授权后备份并迁移。详见 [DEL-053](../../deliverables/pjm/ERP-103_CUSTOMS_FILES_LOCAL_2026-11-24.md)。
+
+
+### SKU 编辑布局与库存原因选填（2026-11-24，本地同迭代）
+
+单 SKU 编辑 `ProductForm` 多一个父体上下文，`productManagement.css` 用三行 grid 防止顶部被撑开；供应商维护链接使用同页路由保留 sessionStorage，既有离开路由的草稿保护仍有效。`ProductInventoryDialog` 隐藏新盘盈/盘亏入口，但 operations 字典/旧 pending 恢复保留；`ProductInventoryController/Service` 允许原因 null/空白并归一为空串，仍校验最多 500 字与请求重复一致性，无 schema 变更。当前本地运行包为 product-sku-fixes-20261124，证据见 [DEL-053](../../deliverables/pjm/ERP-103_CUSTOMS_FILES_LOCAL_2026-11-24.md)。
+
+
+### 未保存确认入口（2026-11-24，本地 ERP-103 追加）
+
+关闭草稿使用 `frontend/src/components/UnsavedChangesDialog.vue`（AccessDialog 已接入）。异步路由/刷新/返回保护通过 `frontend/src/state/uiConfirmation.ts` 的 `confirmAction(message, { unsaved: true, discardLabel })`，由 UiConfirmationHost 呈现同一组件；不用页面私有确认卡或自动按文本猜测类型。原表单保持挂载、Esc/继续不丢输入；结果不明的幂等 pending 请求仍按独立语义确认。本地未提交状态和局部验证见 DEL-053，完整门禁留交接。

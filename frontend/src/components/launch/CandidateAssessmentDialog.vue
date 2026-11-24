@@ -36,7 +36,7 @@ async function load(){loading.value=true;error.value='';try{const result=await a
 const message=(e:unknown)=>e instanceof Error?e.message:'操作失败，请重试'
 async function initialize(){busy.value=true;try{accept(await api.initialize(props.candidateId))}catch(e){error.value=message(e)}finally{busy.value=false}}
 function edit(section:Section,row?:Row,basic=false){editError.value='';const isRows=!!section.rows&&!basic;editor.value={title:`${row?'编辑':isRows?'新增':'编辑'}${section.title}`,fields:isRows?columns(section):fields(section).filter(f=>f.key!=='asin'),key:isRows?section.rows:undefined,id:row?.id};draft.value=isRows?{id:createRequestId(),...row}:Object.fromEntries(fields(section).map(f=>[f.key,doc.value[f.key] as Value??'']));initial.value=JSON.stringify(draft.value)}
-async function closeEditor(){if(!busy.value&&(!dirty.value||await confirmAction('放弃未保存的修改？')))editor.value=undefined}
+async function closeEditor(){if(!busy.value&&(!dirty.value||await confirmAction('放弃未保存的修改？', { unsaved: true, discardLabel: '放弃并关闭' })))editor.value=undefined}
 async function saveEditor(){if(!editor.value||!workspace.value)return;busy.value=true;editError.value='';try{const next=structuredClone(doc.value),edit=editor.value;if(edit.key){const list=rows(next,edit.key);next[edit.key]=edit.id?list.map(r=>r.id===edit.id?{...r,...draft.value}:r):[...list,{...draft.value}]}else Object.assign(next,draft.value);accept(await api.save(props.candidateId,workspace.value.version,next));editor.value=undefined;notice.value='资料已保存'}catch(e){editError.value=message(e)}finally{busy.value=false}}
 async function remove(section:Section,row:Row){if(section.rows==='needs'&&rows(doc.value,'requirements').some(r=>r.needId===row.id)){error.value='该需求已关联改进建议，请先修改关联后再移除。';return}if(!workspace.value||!await confirmAction('移除此条评估明细？'))return;busy.value=true;try{accept(await api.save(props.candidateId,workspace.value.version,{...doc.value,[section.rows!]:rows(doc.value,section.rows!).filter(r=>r.id!==row.id)}))}catch(e){error.value=message(e)}finally{busy.value=false}}
 function ask(value:string){error.value='';if(value==='SUBMIT'&&workspace.value?.issues.length){tab.value='overview';error.value='请先完成下方待补充事项，再提交审核。';return}editError.value='';action.value=value;reason.value='';selfConfirmed.value=false}
@@ -47,7 +47,7 @@ async function adopt(){if(!workspace.value||!await confirmAction('将最新采�
 async function files(){try{attachments.value=await attachmentList('CANDIDATE',props.candidateId)}catch(e){error.value=message(e)}}
 async function upload(file:File){if(busy.value)return false;busy.value=true;try{await uploadAttachment('CANDIDATE',props.candidateId,file);await files();notice.value='附件已上传，可在评估依据中引用附件名称。'}catch(e){error.value=message(e); return false }finally{busy.value=false}}
 async function download(file:LaunchAttachment){try{await downloadAttachment('CANDIDATE',props.candidateId,file)}catch(e){error.value=message(e)}}
-async function guard(){return !busy.value&&(!dirty.value||await confirmAction('放弃未保存的评估修改？'))}
+async function guard(){return !busy.value&&(!dirty.value||await confirmAction('放弃未保存的评估修改？', { unsaved: true, discardLabel: '放弃并关闭' }))}
 async function close(){if(await guard())emit('close')}
 function unload(e:BeforeUnloadEvent){if(dirty.value){e.preventDefault();e.returnValue=''}}
 onBeforeRouteLeave(guard);onBeforeRouteUpdate(guard)

@@ -46,6 +46,15 @@ class CustomsAttachments {
  }
  @GetMapping("/{id}") @PreAuthorize("hasAuthority('products.read')") @Transactional(readOnly=true)
  ResponseEntity<byte[]> download(@PathVariable String documentId,@PathVariable String id){documents.get(documentId);return jdbc.sql("SELECT file_data,file_name,media_type FROM customs_attachment WHERE id=:id AND document_id=:doc").param("id",id).param("doc",documentId).query((r,n)->ResponseEntity.ok().header("Cache-Control","no-store").header("X-Content-Type-Options","nosniff").header("Content-Disposition",ContentDisposition.attachment().filename(r.getString(2),StandardCharsets.UTF_8).build().toString()).contentType(MediaType.parseMediaType(r.getString(3))).body(r.getBytes(1))).optional().orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"文件不存在"));}
+ @GetMapping("/{id}/preview") @PreAuthorize("hasAuthority('products.read')") @Transactional(readOnly=true)
+ ResponseEntity<CustomsSpreadsheetPreview.Preview> preview(@PathVariable String documentId,@PathVariable String id){
+  documents.get(documentId);
+  var data=jdbc.sql("SELECT file_data,media_type FROM customs_attachment WHERE id=:id AND document_id=:doc").param("id",id).param("doc",documentId).query((r,n)->{
+   require(Set.of("application/vnd.ms-excel","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet").contains(r.getString("media_type")),"该文件请使用图片或 PDF 预览");
+   return r.getBytes("file_data");
+  }).optional().orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"文件不存在"));
+  return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(CustomsSpreadsheetPreview.read(data));
+ }
  @DeleteMapping("/{id}") @PreAuthorize("hasAuthority('products.write')")
  ResponseEntity<Void> remove(@PathVariable String documentId,@PathVariable String id,@AuthenticationPrincipal AuthenticatedActor actor){lock(documentId);int count=jdbc.sql("DELETE FROM customs_attachment WHERE document_id=:doc AND id=:id").param("doc",documentId).param("id",id).update();if(count!=1)throw new ResponseStatusException(HttpStatus.NOT_FOUND,"文件不存在");changed(documentId,actor,"CUSTOMS_ATTACHMENT_REMOVE");return ResponseEntity.noContent().build();}
  private void lock(String id){jdbc.sql("SELECT id FROM customs_document WHERE id=:id AND deleted_at IS NULL FOR UPDATE").param("id",id).query(String.class).optional().orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"单据不存在"));require(!documents.get(id).status().equals("VOID"),"已作废单据不可修改文件");}

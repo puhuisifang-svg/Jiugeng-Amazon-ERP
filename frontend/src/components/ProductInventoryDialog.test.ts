@@ -86,5 +86,24 @@ it('does not treat a failed balance load as zero stock or allow a new operation'
 it('exposes only operations permitted for the current account', async () => {
   vi.mocked(session.canAccess).mockImplementation(permissions => permissions?.includes('inventory.outbound') ?? false)
   const wrapper = await setup()
-  expect(wrapper.findAll('.stock-operation-types button').map(button => button.text())).toEqual(['− 出库', '− 盘亏'])
+  expect(wrapper.findAll('.stock-operation-types button').map(button => button.text())).toEqual(['− 出库'])
+})
+
+it('allows an empty reason and only offers inbound / outbound actions', async () => {
+ vi.mocked(productManagementApi.transact).mockResolvedValue({replayed:false,item:{type:'INBOUND',quantity:2,balanceAfter:10} as never})
+ const w=await setup()
+ expect(w.findAll('.stock-operation-types button').map(b=>b.text())).toEqual(['+ 入库','− 出库'])
+ expect(w.get('input[maxlength="500"]').attributes('required')).toBeUndefined()
+ await w.get('input[type="number"]').setValue(2);await w.get('form').trigger('submit');await flushPromises()
+ expect(productManagementApi.transact).toHaveBeenCalledWith('v1',expect.objectContaining({type:'INBOUND',quantity:2,reason:''}))
+})
+it('confirms a legacy adjustment without offering new adjustment buttons', async () => {
+ const request={requestId:'legacy-adjustment',type:'ADJUST_OUT',quantity:1,reason:'合成旧请求'}
+ sessionStorage.setItem('jiugeng.product-stock.pending.synthetic-user.v1',JSON.stringify(request))
+ vi.mocked(productManagementApi.transact).mockResolvedValue({replayed:true,item:{type:'ADJUST_OUT',quantity:1,balanceAfter:7} as never})
+ const w=await setup();expect(w.text()).toContain('盘亏 1 件')
+ expect(w.findAll('.stock-operation-types button').map(b=>b.text())).toEqual(['+ 入库','− 出库'])
+ await w.get('form').trigger('submit');await flushPromises()
+ expect(productManagementApi.transact).toHaveBeenCalledWith('v1',request)
+ expect(w.get('button[type="submit"]').text()).toBe('确认入库')
 })

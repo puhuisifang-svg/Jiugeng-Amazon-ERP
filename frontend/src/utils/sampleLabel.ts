@@ -15,6 +15,15 @@ export function sampleLabelsDocument(rows: SampleLabelData[]) {
   const base = sampleLabelDocument(rows[0]!)
   const labels = rows.map(row => sampleLabelDocument(row).split('<body>')[1]!.split('</body>')[0]!).join('')
   return base.replace('height:30mm;background:', 'height:auto;background:')
-    .replace('</style>', '.label{break-after:page;page-break-after:always;overflow:hidden}.label:last-child{break-after:auto;page-break-after:auto}</style>')
+    .replace('</style>', '.label{break-after:page;page-break-after:always;overflow:hidden}.label:last-child{break-after:auto;page-break-after:auto}@media screen{html,body{background:#f1f4f8;overflow:hidden}.label{background:white;margin-bottom:12px}.label:last-child{margin-bottom:0}}</style>')
     .replace(/<body>[\s\S]*<\/body>/, () => `<body>${labels}</body>`)
+}
+
+export function sampleLabelFilename(rows: SampleLabelData[]) {
+  const safe = (value: string) => [...value].map(c => c.charCodeAt(0) < 32 ? '-' : c).join('').replace(/[\\/:*?"<>|]/g, '-').trim().slice(0, 80)
+  const name = safe(rows[0]?.skuName ?? '') || '未命名样品'
+  const location = safe(rows[0]?.locationCode ?? '')
+  return rows.length > 1
+    ? `样品标签-${name}等${rows.length}款.pdf`
+    : `样品标签-${name}${location ? `-${location}` : ''}.pdf`
 }

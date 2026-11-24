@@ -4,7 +4,7 @@ import { onBeforeRouteLeave } from 'vue-router'
 import { confirmAction } from '@/state/uiConfirmation'
 defineOptions({inheritAttrs:false})
 const props=defineProps<{dirty?:boolean;busy?:boolean;actionsVisible?:boolean}>()
-onBeforeRouteLeave(async()=>!props.busy&&(!props.dirty||await confirmAction('仓库资料尚未保存，确定放弃修改并离开？')))
+onBeforeRouteLeave(async()=>!props.busy&&(!props.dirty||await confirmAction('仓库资料尚未保存，确定放弃修改并离开？', { unsaved: true, discardLabel: '放弃并离开' })))
 function beforeUnload(event:BeforeUnloadEvent){if(props.dirty){event.preventDefault();event.returnValue=''}}
 onMounted(()=>window.addEventListener('beforeunload',beforeUnload))
 onBeforeUnmount(()=>window.removeEventListener('beforeunload',beforeUnload))

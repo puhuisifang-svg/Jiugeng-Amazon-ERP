@@ -471,7 +471,7 @@ onMounted(async()=>{
           class="secondary-button"
           @click="showDeleted = true"
         >
-          已删除
+          回收站
         </button>
         <button
           class="secondary-button"
@@ -506,7 +506,7 @@ onMounted(async()=>{
       v-if="deleteTarget"
       :title="deleteTarget.variant ? '删除 SKU' : '删除父体'"
       :name="deleteTarget.variant ? deleteTarget.variant.variantName : deleteTarget.product.productName"
-      notice="采用逻辑删除，保留图片、资料和历史单据；已有采购及发货仍可继续处理，不再用于新建业务。误删可从“已删除”中恢复目录资料。"
+      notice="采用逻辑删除，保留图片、资料和历史单据；已有采购及发货仍可继续处理，不再用于新建业务。误删可从“回收站”中恢复目录资料。"
       :description="deleteTarget.variant ? '将从列表隐藏此 SKU 及对应客户商品，不影响父体或其他 SKU。' : '仅删除已无子体的父体资料，保留历史单据。'"
       :busy="deleting"
       :error="deleteBlockedReason || deleteError"

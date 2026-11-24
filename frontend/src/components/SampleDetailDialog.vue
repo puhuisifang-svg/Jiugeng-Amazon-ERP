@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { samplesApi, type SampleLocation } from '@/api/samples'
 import type { ProductHistoryDto } from '@/api/domain'
 import { sampleActions, sampleHistoryChanges, sampleLinkedStatus } from '@/utils/sampleHistory'
@@ -18,6 +18,8 @@ const emit=defineEmits<{close:[];edit:[row:SampleLocation];print:[row:SampleLoca
 const row=ref<SampleLocation>(),loading=ref(false),error=ref(''),tab=ref('basic')
 const entries=ref<ProductHistoryDto[]>([]),historyError=ref(''),historyLoading=ref(false),page=ref(1),size=ref(20),total=ref(0)
 const parentOpen=ref(false),sku=ref<SkuListItemDto>(),linkBusy=ref(false),linkError=ref('')
+const skuDialog = ref<HTMLDialogElement>()
+watch(sku, async value => { if (value) { await nextTick(); if (sku.value && !skuDialog.value?.open) skuDialog.value?.showModal() } })
 let sequence=0,historySequence=0,linkSequence=0
 async function load(){const seq=++sequence;loading.value=true;error.value='';try{const r=await samplesApi.detail(props.id);if(seq===sequence)row.value=r}catch(e){if(seq===sequence)error.value=String(e instanceof Error?e.message:e)}finally{if(seq===sequence)loading.value=false}}
 async function loadHistory(){const seq=++historySequence;historyLoading.value=true;historyError.value='';try{const r=await samplesApi.history(props.id,page.value-1,size.value);if(seq===historySequence){entries.value=r.items;total.value=r.total}}catch(e){if(seq===historySequence)historyError.value=String(e instanceof Error?e.message:e)}finally{if(seq===historySequence)historyLoading.value=false}}
@@ -57,7 +59,7 @@ onBeforeUnmount(()=>{++sequence;++historySequence;++linkSequence})
           :image-url="row.displayImageUrl"
           :alt="row.skuName"
         /><div>
-          <h3>{{ row.skuName }}</h3><span class="sample-shelf">{{ row.locationCode }}</span><span class="sample-source-tag">{{ row.variantId?'关联 SKU':'手动录入' }}</span><span
+          <h3>{{ row.skuName }}</h3><span class="sample-shelf">{{ row.locationCode }}</span><span
             v-if="row.deletedAt"
             class="access-danger"
           >已移除</span>
@@ -147,7 +149,7 @@ onBeforeUnmount(()=>{++sequence;++historySequence;++linkSequence})
           v-else-if="!entries.length"
           class="data-state"
         >
-          暂无变更记录
+          暂无库位变更记录
         </p>
         <TableViewport v-else>
           <table class="data-table sample-history">
@@ -162,7 +164,7 @@ onBeforeUnmount(()=>{++sequence;++historySequence;++linkSequence})
                       v-for="change in sampleHistoryChanges(event)"
                       :key="change.key"
                     >
-                      <dt>{{ change.label }}</dt><dd><span>{{ change.before }}</span> → <strong>{{ change.after }}</strong><small v-if="change.key.endsWith('ImageId') && change.before===change.after">已更换图片</small></dd>
+                      <dt>{{ change.label }}</dt><dd><span>{{ change.before }}</span> → <strong>{{ change.after }}</strong></dd>
                     </template>
                   </dl>
                 </td>
@@ -209,10 +211,17 @@ onBeforeUnmount(()=>{++sequence;++historySequence;++linkSequence})
     @close="parentOpen=false"
     @sku="sku=$event"
   />
-  <SkuDetailDialog
+  <dialog
     v-if="sku"
-    :detail-row="sku"
-    :writable="false"
-    @close="sku=undefined"
-  />
+    ref="skuDialog"
+    class="sample-linked-dialog"
+    aria-label="关联子体详情"
+    @cancel.prevent.stop="sku=undefined"
+  >
+    <SkuDetailDialog
+      :detail-row="sku"
+      :writable="false"
+      @close="sku=undefined"
+    />
+  </dialog>
 </template>

@@ -10,15 +10,15 @@ const access = vi.hoisted(() => ({ write: true }))
 vi.mock('@/state/session', () => ({ session: { canAccess: (caps: string[]) => caps.every(c => c === 'costs.read' || access.write) } }))
 const row: CostRow = { sku: { id: 's1', productId: 'p1', name: '合成四方罩', code: 'SYN-SKU', productName: '合成产品', imageId: null }, current: null, draft: null, stale: false }
 const input = { unit: '件', baseQuantity: 1, materials: [], labor: [], noMaterialReason: '', noLaborReason: '' }
-beforeEach(() => { vi.clearAllMocks(); access.write = true; vi.mocked(costsApi.list).mockResolvedValue({ items: [row], totalCount: 1 }); vi.mocked(costsApi.history).mockResolvedValue([]); vi.mocked(costsApi.versions).mockResolvedValue([]); vi.mocked(costsApi.initial).mockResolvedValue(input); vi.mocked(costsApi.operations).mockResolvedValue([]); vi.mocked(domainApi.materials).mockResolvedValue({ items: [], mockData: false }) })
+beforeEach(() => { HTMLDialogElement.prototype.showModal = function () { this.open = true }; HTMLDialogElement.prototype.close = function () { this.open = false }; vi.clearAllMocks(); access.write = true; vi.mocked(costsApi.list).mockResolvedValue({ items: [row], totalCount: 1 }); vi.mocked(costsApi.history).mockResolvedValue([]); vi.mocked(costsApi.versions).mockResolvedValue([]); vi.mocked(costsApi.initial).mockResolvedValue(input); vi.mocked(costsApi.operations).mockResolvedValue([]); vi.mocked(domainApi.materials).mockResolvedValue({ items: [], mockData: false }) })
 function setup() { return mount(ProductCostsView, { global: { stubs: { TableViewport: { template: '<div><slot /></div>' }, ListPagination: true, AuthenticatedCatalogImage: true } } }) }
 it('keeps draft input on backdrop and confirms explicit discard', async () => {
   const w = setup(); await flushPromises(); await w.findAll('button').find(b => b.text() === '详情 / 维护')!.trigger('click'); await flushPromises()
   await w.findAll('button').find(b => b.text() === '新建成本草稿')!.trigger('click'); await flushPromises()
   const label = w.findAll('label').find(l => l.text().startsWith('成品单位'))!; await label.get('input').setValue('套')
   await w.get('[aria-label="产品成本详情"]').trigger('click'); expect(label.get('input').element).toHaveProperty('value', '套')
-  await w.findAll('button').find(b => b.text() === '关闭')!.trigger('click'); expect(w.text()).toContain('放弃未保存修改？')
-  await w.findAll('button').find(b => b.text() === '取消')!.trigger('click'); expect(label.get('input').element).toHaveProperty('value', '套'); w.unmount()
+  await w.findAll('button').find(b => b.text() === '关闭')!.trigger('click'); expect(w.text()).toContain('要放弃本次填写吗？')
+  await w.get('.unsaved-keep').trigger('click'); expect(label.get('input').element).toHaveProperty('value', '套'); w.unmount()
 })
 it('requires recalculation after edits and preserves draft after failed save', async () => {
   vi.mocked(costsApi.preview).mockResolvedValue({ name: '合成产品', sku: 'SYN-SKU', materials: [], labor: [], input, materialTotal: '0', laborTotal: '0', total: '0', sourceHash: 'hash', errors: ['无物料须填写原因'] } satisfies CostSnapshot)

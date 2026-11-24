@@ -26,7 +26,7 @@ async function load(){const n=++seq;loading.value=true;error.value='';try{const 
 async function completed(){showReceive.value=false;if(props.action)emit('completed');else await load()}
 async function cancel(){if(!order.value||saving.value||!cancelReason.value.trim())return;saving.value=true;error.value='';try{await purchaseApi.cancel(id.value,order.value.version,cancelReason.value);showCancel.value=false;if(props.action)emit('completed');else await load()}catch(e){error.value=e instanceof Error?e.message:'关闭结果待确认，请刷新核对'}finally{saving.value=false}}
 async function submit(){if(!order.value||!await confirmAction('确认下单后进入待收货；尚未发货或收货前仍可编辑，系统不会自动向供应商发送订单。'))return;saving.value=true;try{await purchaseApi.submit(id.value,order.value.version);await load()}catch(e){error.value=e instanceof Error?e.message:'下单结果待确认'}finally{saving.value=false}}
-async function mayLeave(){return !saving.value&&!receiveFlow.value?.busy&&(!receiveFlow.value?.dirty||!!receiveFlow.value?.pending||await confirmAction('收货资料未保存，确定离开？'))}
+async function mayLeave(){return !saving.value&&!receiveFlow.value?.busy&&(!receiveFlow.value?.dirty||!!receiveFlow.value?.pending||await confirmAction('收货资料未保存，确定离开？', { unsaved: true, discardLabel: '放弃并离开' }))}
 onBeforeRouteLeave(mayLeave);defineExpose({mayLeave})
 watch(id,async()=>{order.value=undefined;showReceive.value=false;showCancel.value=false;await load();if(props.action==='receive')showReceive.value=true;if(props.action==='cancel'&&order.value)showCancel.value=true},{immediate:true})
 watch([tab,page,size],load);onBeforeUnmount(()=>seq++)

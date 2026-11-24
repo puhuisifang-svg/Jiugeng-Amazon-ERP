@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sampleLabelDocument, sampleLabelsDocument } from './sampleLabel'
+import { sampleLabelDocument, sampleLabelsDocument, sampleLabelFilename } from './sampleLabel'
 describe('sample label', () => {
   it('uses 70x30mm, shows all fields and renders location bold without executing supplied markup', () => {
     const doc = new DOMParser().parseFromString(sampleLabelDocument({skuName:'测试样品<img src=x>',specification:'30×20cm\n黑色',locationCode:'A-01'}),'text/html')
@@ -17,4 +17,10 @@ it('builds separate printable labels without interpreting replacement characters
  const doc=new DOMParser().parseFromString(sampleLabelsDocument(rows),'text/html')
  expect(doc.querySelectorAll('.label')).toHaveLength(2);expect(doc.querySelector('.name')?.textContent).toBe(rows[0]!.skuName);expect(doc.querySelector('b')).toBeNull()
  expect(()=>sampleLabelsDocument([])).toThrow();expect(()=>sampleLabelsDocument(Array.from({length:501},()=>rows[0]!))).toThrow()
+})
+
+it('includes the sample name and location in safe single-label filenames', () => {
+  expect(sampleLabelFilename([{skuName:'合成样品',locationCode:'A-01'}])).toBe('样品标签-合成样品-A-01.pdf')
+  expect(sampleLabelFilename([{skuName:'样品/名称',locationCode:'A:01'}])).toBe('样品标签-样品-名称-A-01.pdf')
+  expect(sampleLabelFilename([{skuName:'合成样品',locationCode:'A-01'},{skuName:'另一款',locationCode:'B-01'}])).toBe('样品标签-合成样品等2款.pdf')
 })

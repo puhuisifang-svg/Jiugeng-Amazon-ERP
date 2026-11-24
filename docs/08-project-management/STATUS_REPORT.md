@@ -11,7 +11,19 @@
 
 本报告是带日期的快照，不是实时监控。接手时重新检查 HEAD、工作区及当前任务归属；发布状态由 PJM 维护，Codex 不跟踪线上发布。[2026-10-15 原报告](archive/STATUS_REPORT_2026-10-15.md)已归档，保留原始事实及当时风险，不再作为今天的待办清单。
 
-## 当前发布交接：PDF 连续工作区与 HS 历史引用（2026-11-24，DEL-052）
+## PJM 发布核验：PDF 连续工作区与 HS 历史引用（2026-11-24，DEL-052）
+
+- 维护主题按 DEL-052 归档，不新增或推断 ERP 编号。PJM 独占写入；全部 27 项经原子提交 `7dcf216a30695c7b13d3e597268a84a617beefa5` 发布，无共同作者推断。
+- [PR #24](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/pull/24) 在五项必需检查成功后按保护规则合并（北京时间 19:10:33），应用 main SHA：`45242af63d2d53bf4ed36bfa63f5f0c845419fdb`。无强推、无管理员绕过。
+- [PR CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45381237422)、[main CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45381744243) 成功；[Production](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45381744230) 从精确 main SHA 重新构建，后端 443 项（0 失败/错误、1 外部 OSS 条件跳过）、前端 169 文件/778 项及全套 17 个浏览器场景通过。
+- Production 实际 `Deploy through restricted SSH command` 成功，非 skipped：19:16:12 包 SHA-256 校验 OK，19:16:16 `Database backup completed`，19:16:40 `Deployment verified: 45242af63d2d53bf4ed36bfa63f5f0c845419fdb`。未使用本地开发 JAR。
+- 19:17 独立请求既有线上入口 `/version.json`，HTTP 200 且完整 revision 匹配应用 main；首页 HTTP 200。服务健康为部署接收脚本检查 loopback `/actuator/health` UP 及前端版本的流水线证据；公网 `/actuator/health` 是 HTML，`/api/actuator/health` 为 404，不冒充公开健康 JSON 或直接服务器检查。
+- 无新增迁移、依赖或生产代理配置；未直查生产 DB，不宣称迁移表核验。本地 mysql、上传文件、`jiugeng-mvp` 未重启或清理。ERP-101 Caddy 管理权限问题仍未解决，本轮不改代理。
+- 本次发布证据以独立受保护文档 PR 归档；该 PR 合并会再次发布文档 SHA，PJM 须在同一执行会话验证最终实际部署、入口版本及 main 一致后结案。最终回执保存在执行进度/当日记忆及用户报告，不递归提交仅为记录自身 SHA 的文档。功能业务验收不由上线成功代替。
+
+完整范围、直接/间接证据与限制见 [DEL-052 发布核验附录](../../deliverables/pjm/PDF_HS_RELEASE_HANDOFF_2026-11-24.md#pjm-发布核验附录2026-11-24)。以下均为开发/交接阶段快照，不能沿用历史未提交状态或写入权。
+
+## 发布前交接快照：PDF 连续工作区与 HS 历史引用（2026-11-24，DEL-052）
 
 用户已明确授权累计修改提交远端 main 并部署。分支 `codex/pdf-continuous-workspace`，HEAD/基线 `9954ef8bd15465ed82b545b98411e9cf07e2f892`，全部修改未提交、未暂存，均属本轮。任务编号协调异常和分支例外见实施记录；PJM 接管时补归档。
 

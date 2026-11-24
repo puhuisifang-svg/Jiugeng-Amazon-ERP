@@ -11,6 +11,8 @@
 
 ## 2026-11-24 累计发布交接入口
 
+PJM 更新：DEL-052 已经受保护 PR #24 合并并完成应用生产发布；精确 SHA、CI/实际部署/入口版本及限制集中在[状态报告](../08-project-management/STATUS_REPORT.md)与 DEL-052 发布核验附录。按维护主题归档，不新增 ERP 编号。以下“本地未提交/待验证”是阶段快照；不代表当前锁或发布状态。归档文档 PR 的最终部署由同一 PJM 会话闭合，不要求 Codex 等待。
+
 先读 [DEL-052](../../deliverables/pjm/PDF_HS_RELEASE_HANDOFF_2026-11-24.md) 和状态报告最新节：PDF 连续工作区、快捷操作/原图保真及客户商品 HS 历史引用已完成统一验证，用户授权提交 main / 部署。正式发送后 PJM 唯一写入并负责发布；Codex 不跟踪上线。下文“待交接”是开发阶段记录，不能沿用其写入锁或发布状态。
 
 HS 核对弹窗 Teleport 到 `#app`，保持统一控件主题作用域。切勿直接移到 body：会导致原生 select 未隐藏、自定义触发器样式丢失；真实页面浏览器场景在 `frontend/e2e/customs-history.smoke.ts`，验证确认后只保存当前商品。PDF 全页/复制/缩放/导出场景在 `frontend/e2e/pdf-closeout.smoke.ts`。

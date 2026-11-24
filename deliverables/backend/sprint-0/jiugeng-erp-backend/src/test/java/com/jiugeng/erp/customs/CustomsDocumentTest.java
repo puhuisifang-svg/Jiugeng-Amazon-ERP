@@ -41,6 +41,41 @@ class CustomsDocumentTest {
   try(var w=new XSSFWorkbook(new ByteArrayInputStream(exporter.export(new CustomsDocuments.Document("id","SYN","DRAFT",in.fields(),in.items(),0,""))))){assertThat(w.getSheet("装箱单").getRow(10).getCell(8).getStringCellValue()).isEqualTo("30 days after invoice");assertThat(w.getSheet("合同").getRow(21).getCell(2).getNumericCellValue()).isZero();assertThat(w.getSheet("报关单").getRow(18).getCell(6).getNumericCellValue()).isEqualTo(7);assertThat(w.getSheet("报关单").getRow(18).getCell(7).getStringCellValue()).isEqualTo("kg");}
   String admin=user("ADMIN"),id=create(admin,input(1));mvc.perform(get("/api/v1/customs-documents/"+id).header("Authorization",admin)).andExpect(jsonPath("$.fields.tolerance").value("5")).andExpect(jsonPath("$.fields.payment").value("T/T"));
  }
+ @Test void listUsesCreationTimeAndIndependentAttachmentFlags()throws Exception{
+  String token=user("ADMIN"),old=create(token,input(1)),newest=create(token,input(1));
+  jdbc.update("UPDATE customs_document SET created_at='2026-01-01 00:00:00',updated_at='2026-12-01 00:00:00' WHERE id=?",old);
+  jdbc.update("UPDATE customs_document SET created_at='2026-02-01 00:00:00',updated_at='2026-02-01 00:00:00' WHERE id=?",newest);
+  var image=new org.springframework.mock.web.MockMultipartFile("file","synthetic.png","image/png",new byte[]{(byte)137,80,78,71,13,10,26,10,0});
+  mvc.perform(multipart("/api/v1/customs-documents/"+old+"/attachments").file(image).param("category","SCREENSHOT").header("Authorization",token)).andExpect(status().isOk());
+  mvc.perform(get("/api/v1/customs-documents").param("size","1").header("Authorization",token)).andExpect(status().isOk())
+   .andExpect(jsonPath("$.items[0].id").value(newest)).andExpect(jsonPath("$.items[0].createdAt").isNotEmpty())
+   .andExpect(jsonPath("$.items[0].screenshotUploaded").value(false)).andExpect(jsonPath("$.items[0].invoiceUploaded").value(false));
+  mvc.perform(get("/api/v1/customs-documents").param("size","1").param("page","1").header("Authorization",token)).andExpect(status().isOk())
+   .andExpect(jsonPath("$.items[0].id").value(old)).andExpect(jsonPath("$.items[0].screenshotUploaded").value(true)).andExpect(jsonPath("$.items[0].invoiceUploaded").value(false));
+  assertThat(jdbc.queryForObject("SELECT created_at FROM customs_document WHERE id=?",java.sql.Timestamp.class,old)).isEqualTo(java.sql.Timestamp.valueOf("2026-01-01 00:00:00"));
+ }
+ @Test void spreadsheetPreviewIsReadOnlyBoundedAndPermissionProtected()throws Exception{
+  String admin=user("ADMIN"),none=user("NONE"),id=create(admin,input(1)),other=create(admin,input(1));
+  for(boolean xlsx:new boolean[]{true,false}){
+   byte[] bytes;
+   try(org.apache.poi.ss.usermodel.Workbook book=xlsx?new XSSFWorkbook():new org.apache.poi.hssf.usermodel.HSSFWorkbook();var out=new ByteArrayOutputStream()){
+    var sheet=book.createSheet("Synthetic Invoice");sheet.createRow(0).createCell(0).setCellValue("Synthetic item");sheet.getRow(0).createCell(1).setCellValue(12.5);
+    sheet.getRow(0).createCell(2).setCellFormula("B1*2");book.getCreationHelper().createFormulaEvaluator().evaluateAll();
+    sheet.createRow(201).createCell(0).setCellValue("outside preview");book.createSheet("Details").createRow(0).createCell(0).setCellValue("<script>plain text</script>");book.write(out);bytes=out.toByteArray();
+   }
+   String base="/api/v1/customs-documents/"+id+"/attachments";
+   var file=new org.springframework.mock.web.MockMultipartFile("file",xlsx?"synthetic.xlsx":"synthetic.xls","application/octet-stream",bytes);
+   String attachment=json.readTree(mvc.perform(multipart(base).file(file).param("category","INVOICE").header("Authorization",admin)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("id").asText();
+   Long before=jdbc.queryForObject("SELECT version FROM customs_document WHERE id=?",Long.class,id);
+   mvc.perform(get(base+"/"+attachment+"/preview").header("Authorization",admin)).andExpect(status().isOk()).andExpect(header().string("Cache-Control","no-store"))
+    .andExpect(jsonPath("$.sheets[0].rows[0][0]").value("Synthetic item")).andExpect(jsonPath("$.sheets[0].rows[0][2]").value("25"))
+    .andExpect(jsonPath("$.sheets[0].rows.length()").value(200)).andExpect(jsonPath("$.sheets.length()").value(2)).andExpect(jsonPath("$.truncated").value(true));
+   assertThat(jdbc.queryForObject("SELECT version FROM customs_document WHERE id=?",Long.class,id)).isEqualTo(before);
+   mvc.perform(get(base+"/"+attachment+"/preview").header("Authorization",none)).andExpect(status().isForbidden());
+   mvc.perform(get(base+"/"+attachment+"/preview")).andExpect(status().isUnauthorized());
+   mvc.perform(get("/api/v1/customs-documents/"+other+"/attachments/"+attachment+"/preview").header("Authorization",admin)).andExpect(status().isNotFound());
+  }
+ }
  @Test void filesDetermineCompletionAndFilterAcrossPages()throws Exception{
   String admin=user("ADMIN"),none=user("NONE");var in=input(1);in.fields().put("fbaNo","SYN-FBA-1234");in.fields().put("sellerPrefix","SYN");String id=create(admin,in),base="/api/v1/customs-documents/"+id+"/attachments";
   mvc.perform(get("/api/v1/customs-documents").param("fba","fba-1234").param("status","PENDING_FILES").header("Authorization",admin)).andExpect(jsonPath("$.totalCount").value(1)).andExpect(jsonPath("$.items[0].fileStatus").value("PENDING_FILES"));

@@ -1,7 +1,7 @@
 import { apiRequest, ApiError, getSessionToken, SESSION_EXPIRED_EVENT } from './client'
 import { runtimeConfig } from '@/config/runtime'
 export interface CustomsDocument {id:string;documentNo:string;status:'DRAFT'|'READY'|'VOID';fileStatus?:'PENDING_FILES'|'COMPLETED';fields:Record<string,string>;items:Record<string,string>[];version:number;updatedAt:string}
-export interface CustomsSummary {id:string;documentNo:string;status:CustomsDocument['status'];seller:string;buyer:string;destination:string;fbaNo:string;warehouse:string;cartonCount:string|null;freight:string;fileStatus:'PENDING_FILES'|'COMPLETED';itemCount:number;version:number;updatedAt:string}
+export interface CustomsSummary {id:string;documentNo:string;status:CustomsDocument['status'];seller:string;buyer:string;destination:string;fbaNo:string;warehouse:string;cartonCount:string|null;freight:string;fileStatus:'PENDING_FILES'|'COMPLETED';itemCount:number;version:number;updatedAt:string;createdAt:string;screenshotUploaded:boolean;invoiceUploaded:boolean}
 export type CustomsInput=Pick<CustomsDocument,'documentNo'|'fields'|'items'> & {status:'DRAFT'|'READY';version?:number|undefined}
 const base='/v1/customs-documents'
 export const customsDocumentsApi={
@@ -31,7 +31,10 @@ export const customsWarehousesApi={
 export function exportFilename(header:string|null,fallback:string){const encoded=header?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];if(encoded){try{return decodeURIComponent(encoded).replace(/[\\/:*?"<>|]/g,'_')}catch{/* fallback for malformed headers */}}return `报关单资料-${fallback.replace(/[\\/:*?"<>|]/g,'_')}.xlsx`}
 export interface CustomsAttachment {id:string;category:'SCREENSHOT'|'INVOICE'|'OTHER';name:string;size:number;mediaType:string;createdAt:string}
 export async function customsFileRequest(path:string,init:RequestInit={}){const token=getSessionToken();const r=await fetch(`${runtimeConfig.apiBaseUrl}${base}/${path}`,{...init,headers:token?{Authorization:`Bearer ${token}`}:{}});if(!r.ok){if(r.status===401)window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));const p=await r.json().catch(()=>null) as {detail?:string}|null;throw new Error(p?.detail||'文件操作失败，请重试')}return r}
+export interface CustomsSpreadsheetPreview { sheets: { name:string; columns:string[]; rows:string[][]; truncated:boolean }[]; truncated:boolean }
 export const customsFilesApi={
+ blob:async(id:string,fileId:string,signal?:AbortSignal)=>(await customsFileRequest(`${id}/attachments/${fileId}`,signal?{signal}:{})).blob(),
+ spreadsheetPreview:async(id:string,fileId:string,signal?:AbortSignal):Promise<CustomsSpreadsheetPreview>=>(await customsFileRequest(`${id}/attachments/${fileId}/preview`,signal?{signal}:{})).json(),
  list:(id:string)=>apiRequest<CustomsAttachment[]>(`${base}/${id}/attachments`),
  upload:async(id:string,category:string,file:File)=>{const body=new FormData();body.append('category',category);body.append('file',file);await customsFileRequest(`${id}/attachments`,{method:'POST',body})},
  remove:(id:string,fileId:string)=>apiRequest<void>(`${base}/${id}/attachments/${fileId}`,{method:'DELETE'}),

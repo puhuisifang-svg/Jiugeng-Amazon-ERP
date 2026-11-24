@@ -38,7 +38,7 @@ function resize(value:number){size.value=value;page.value=1;void load()}
 function openCreate(){createDraft.value={type:'AMAZON',title:'',asinOrUrl:'',owner:session.user.value?.displayName??'',reason:'',sourceUrl:'',requestId:createRequestId()};initial.value=JSON.stringify(createDraft.value);createError.value='';createOpen.value=true}
 async function create(){creating.value=true;createError.value='';try{const result=await api.create(createDraft.value);createOpen.value=false;creating.value=false;success.value='已打开候选评估；相同 ASIN 自动复用已有候选。';await router.push(`/selection/candidates/${result.id}`);void load()}catch(e){createError.value=e instanceof Error?e.message:'创建失败，请重试'}finally{creating.value=false}}
 function closeDetail(){void router.push('/selection/candidates')}
-async function guard(){return !creating.value&&(!createDirty.value||await confirmAction('放弃未保存的候选信息？'))}
+async function guard(){return !creating.value&&(!createDirty.value||await confirmAction('放弃未保存的候选信息？', { unsaved: true, discardLabel: '放弃并关闭' }))}
 onBeforeRouteLeave(guard);onBeforeRouteUpdate(guard)
 function beforeUnload(e:BeforeUnloadEvent){if(createDirty.value){e.preventDefault();e.returnValue=''}}
 window.addEventListener('beforeunload',beforeUnload);onBeforeUnmount(()=>window.removeEventListener('beforeunload',beforeUnload))

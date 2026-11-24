@@ -3,10 +3,12 @@
 #app .samples-ui .sample-filter-chips button{min-height:26px;height:auto;background:#eef4fc;border:1px solid #dce7f7;color:#2864c5;padding:2px 8px;font-size:12px}
 #app .samples-ui .filter-panel label{flex:0 1 265px;min-width:180px}
 #app .samples-ui .sample-toolbar{justify-content:flex-start;gap:6px;flex-wrap:wrap}
-#app .samples-ui .sample-toolbar-hint{margin-left:auto;color:var(--muted);font-size:12px}
+#app .samples-ui .sample-toolbar button.sample-removed-toggle{margin-left:auto;color:#64748b;background:#f8fafc;border-color:#e2e8f0}
+#app .samples-ui .sample-toolbar button.sample-removed-toggle:hover:not(:disabled),#app .samples-ui .sample-toolbar button.sample-removed-toggle.active{color:#475569;background:#e9eef4;border-color:#cbd5e1}
+#app .samples-ui .sample-toolbar-hint{color:var(--muted);font-size:12px}
 #app .samples-ui .sample-notice{padding:7px 10px;margin:0;background:#f7f9fc;border:1px solid var(--line);border-radius:4px;font-size:13px;line-height:1.5}
 #app .samples-ui .sample-notice.access-danger{background:#fff8f6}
-#app .samples-ui .sample-table{min-width:1040px;width:100%;table-layout:auto}
+#app .samples-ui .sample-table{min-width:900px;width:100%;table-layout:auto}
 #app .samples-ui .sample-table th{white-space:nowrap}
 #app .samples-ui .sample-table td{vertical-align:middle;padding:8px 10px;font-size:13px}
 #app .samples-ui .sample-table small{display:block;margin-top:4px;line-height:1.5}
@@ -17,7 +19,7 @@
 #app .samples-ui .sample-name-link:hover{color:#2864c5;text-decoration:underline}
 #app .samples-ui .sample-spec{color:var(--muted)}
 #app .samples-ui .sample-source-tag{display:inline-block;background:#edf2f7;border:1px solid #e3e9f1;color:#53677f;padding:1px 5px;border-radius:3px;font-size:11px;margin-right:6px}
-#app .samples-ui .sample-shelf{display:inline-block;background:#eef4fc;color:#245894;border:1px solid #dce7f7;border-radius:4px;padding:4px 8px;font-size:13px;font-weight:650;letter-spacing:.3px;overflow-wrap:anywhere;max-width:180px;cursor:pointer}
+#app .samples-ui .sample-shelf{display:inline-block;background:#fff3f1;color:#b42318;border:1px solid #f2d4cf;border-radius:4px;padding:4px 8px;font-size:13px;font-weight:650;letter-spacing:.3px;overflow-wrap:anywhere;max-width:180px;cursor:pointer}
 #app .samples-ui .sample-remark{max-width:230px;min-width:120px;white-space:pre-wrap;overflow-wrap:anywhere;color:#58677b}
 #app .samples-ui .sample-remark details summary{cursor:pointer;line-height:1.5}
 #app .samples-ui .sample-remark details p{margin:6px 0}
@@ -42,11 +44,9 @@
 #app .samples-ui.sample-dialog header{justify-content:space-between}
 #app .samples-ui.sample-dialog header button{width:32px;min-height:32px;padding:0;font-size:22px;background:transparent;color:var(--muted);border:0}
 #app .samples-ui .sample-dialog-body{padding:12px 14px;overflow:auto;min-height:0;display:grid;gap:10px}
-#app .samples-ui .sample-field-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
-#app .samples-ui .sample-field-grid label,#app .samples-ui .sample-manual-fields label{display:grid;gap:5px;font-size:13px;min-width:0}
-#app .samples-ui .sample-field-grid .location-field{display:block}
-#app .samples-ui .location-field input{display:block;margin-top:5px}
-#app .samples-ui .location-field small{font-size:11px;color:var(--muted);display:block;margin-top:3px}
+#app .samples-ui .sample-field-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start;gap:10px 14px}
+#app .samples-ui .sample-field-grid label,#app .samples-ui .sample-manual-fields label{display:grid;align-content:start;grid-template-rows:20px auto;gap:5px;font-size:13px;line-height:20px;min-width:0}
+#app .samples-ui .location-field small{font-size:11px;color:var(--muted);display:block;margin:0;line-height:1.5}
 #app .samples-ui .sample-field-wide{grid-column:1/-1}
 #app .samples-ui.sample-dialog input:not([type=checkbox]),#app .samples-ui.sample-dialog textarea{width:100%;min-height:40px;box-sizing:border-box;border:1px solid var(--line);border-radius:4px;padding:8px 10px;font-size:13px;min-width:0}
 #app .samples-ui.sample-dialog textarea{resize:vertical;max-height:180px}
@@ -86,3 +86,7 @@
 @media(max-width:700px){#app .samples-ui .sample-photo-grid,#app .samples-ui .sample-field-grid{grid-template-columns:1fr}#app .samples-ui .sample-toolbar-hint{display:none}#app .samples-ui .sample-table th:last-child,#app .samples-ui .sample-table td:last-child{position:static}#app .samples-ui .filter-panel label{flex:1 1 180px;min-width:0}}
 
 #app .samples-ui .sample-upload-label{font-size:13px;font-weight:500;line-height:1.5;margin:0 0 6px}
+
+/* Local top-layer host: shared SKU overlay must stay above the sample native dialog. */
+#app dialog.sample-linked-dialog{position:fixed;inset:0;width:100vw;height:100dvh;max-width:none;max-height:none;margin:0;padding:0;border:0;background:transparent;color:var(--ink);overflow:visible}
+#app dialog.sample-linked-dialog::backdrop{background:transparent}

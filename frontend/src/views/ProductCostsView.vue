@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UnsavedChangesDialog from '@/components/UnsavedChangesDialog.vue'
 import ImagePreviewDialog from '@/components/ImagePreviewDialog.vue'
 import { beijingDateTime } from '@/utils/dateTime'
 
@@ -878,8 +879,14 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
       @close="costMaterial = undefined"
       @saved="costMaterial = undefined; preview = undefined; success = '成本价已保存，请重新核算。'"
     />
+    <UnsavedChangesDialog
+      v-if="confirm === 'close'"
+      message="尚未保存的输入将被放弃，已保存的成本版本不会受影响。"
+      @keep="confirm = undefined"
+      @discard="confirmed"
+    />
     <div
-      v-if="confirm"
+      v-if="confirm && confirm !== 'close'"
       class="operation-dialog cost-modal"
       role="dialog"
       aria-modal="true"
@@ -887,7 +894,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
     >
       <section class="operation-dialog__card cost-sheet cost-sheet--confirm">
         <header class="cost-sheet__header">
-          <h2>{{ confirm === 'close' ? '放弃未保存修改？' : confirm === 'delete' ? '删除成本草稿？' : '确认成本生效？' }}</h2>
+          <h2>{{ confirm === 'delete' ? '删除成本草稿？' : '确认成本生效？' }}</h2>
         </header><div class="cost-sheet__body cost-compact-body">
           <p class="cost-confirm-product">
             <span>产品名</span><strong>{{ target?.sku.name }}</strong>
@@ -895,7 +902,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
             class="cost-notice"
             :class="confirm === 'publish' ? 'cost-notice--info' : 'cost-notice--warning'"
           >
-            {{ confirm === 'publish' ? '新版本将替换当前生效版本，并同步每件成品的辅料用量到现有 SKU 辅料清单。历史快照保持不变。' : confirm === 'close' ? '尚未保存的输入将被放弃，已保存的成本版本不会受影响。' : '仅删除当前草稿，历史生效成本保持不变。' }}
+            {{ confirm === 'publish' ? '新版本将替换当前生效版本，并同步每件成品的辅料用量到现有 SKU 辅料清单。历史快照保持不变。' : '仅删除当前草稿，历史生效成本保持不变。' }}
           </div><label
             v-if="confirm === 'publish'"
             class="cost-inline-reason"

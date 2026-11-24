@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import type { MaterialDetailDto } from '@/api/domain'
 import AccessDialog from './AccessDialog.vue'
 import ListPagination from './ListPagination.vue'
+import MaterialImage from './MaterialImage.vue'
 import { vSingleSelect } from '@/directives/singleSelect'
 const props = defineProps<{ materials: MaterialDetailDto[]; selectedIds: string[]; stockLabel: (material: MaterialDetailDto) => string }>()
 const emit = defineEmits<{ close: []; select: [ids: string[]] }>()
@@ -17,16 +18,17 @@ function confirm() { emit('select', selected.value.filter(id => available.value.
 <template>
   <AccessDialog
     title="选择辅料"
+    dialog-class="product-material-picker"
     wide
     @close="emit('close')"
   >
     <div class="material-picker-filters">
-      <label>搜索辅料<input
+      <label class="material-picker-search"><span>搜索辅料</span><input
         v-model="keyword"
         type="search"
         placeholder="名称或规格"
       ></label>
-      <label>类型<select
+      <label class="material-picker-category"><span>类型</span><select
         v-model="category"
         v-single-select
       ><option value="">全部类型</option><option
@@ -40,7 +42,13 @@ function confirm() { emit('select', selected.value.filter(id => available.value.
     </p>
     <div class="material-picker-table">
       <table class="data-table">
-        <thead><tr><th>选择</th><th>辅料编码 / 名称</th><th>类型</th><th>规格</th><th>单位</th><th>库存</th></tr></thead><tbody>
+        <thead>
+          <tr>
+            <th>选择</th><th class="material-picker-image">
+              图片
+            </th><th>辅料名称</th><th>类型</th><th>规格</th><th>单位</th><th>库存</th>
+          </tr>
+        </thead><tbody>
           <tr
             v-for="item in rows"
             :key="item.id"
@@ -52,11 +60,17 @@ function confirm() { emit('select', selected.value.filter(id => available.value.
                 :value="item.id"
                 :aria-label="`选择 ${item.name}`"
               >
+            </td><td class="material-picker-image">
+              <MaterialImage
+                :name="item.name"
+                :image-asset-id="item.imageAssetId"
+                :image-url="item.imageUrl"
+              />
             </td><td><strong>{{ item.name }}</strong></td><td>{{ item.materialType }}</td><td>{{ item.specification || '—' }}</td><td>{{ item.unit }}</td><td>{{ stockLabel(item) }}</td>
           </tr>
           <tr v-if="!rows.length">
             <td
-              colspan="6"
+              colspan="7"
               class="empty-state"
             >
               没有符合条件的可选辅料
@@ -90,5 +104,25 @@ function confirm() { emit('select', selected.value.filter(id => available.value.
   </AccessDialog>
 </template>
 <style scoped>
-.material-picker-filters{display:flex;flex-wrap:wrap;gap:12px}.material-picker-filters label{display:flex;align-items:center;gap:8px;min-width:0;font-size:13px}.material-picker-filters input{width:260px;max-width:100%;min-width:0;height:32px;border:1px solid var(--line);border-radius:4px;padding:0 10px;font-size:13px}.material-picker-table{overflow:auto;min-height:240px}.material-picker-table table{min-width:650px;width:100%}.material-picker-table small{display:block;color:var(--muted);margin-top:4px}.material-picker-table input{width:16px;height:16px;accent-color:var(--accent)}.material-picker-actions{display:flex;align-items:center;gap:10px;padding:10px 14px;width:100%}.material-picker-actions span{margin-right:auto;font-size:13px;color:var(--muted)}
+.material-picker-filters{display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px}
+.material-picker-filters label{display:flex;align-items:center;gap:8px;min-width:0;font-size:13px}
+.material-picker-filters label>span{flex:none;white-space:nowrap;color:var(--ui-label-color)}
+.material-picker-search{flex:1 1 280px}
+.material-picker-category{flex:0 1 220px}
+.material-picker-table{overflow:auto;min-height:240px}
+.material-picker-table table{min-width:700px;width:100%}
+.material-picker-table td{vertical-align:middle;padding:8px 10px}
+.material-picker-table input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent)}
+.material-picker-image{width:64px}
+.material-picker-image :deep(.material-thumb),.material-picker-image :deep(.material-thumb>button),.material-picker-image :deep(.material-image-empty){width:48px;height:48px;box-sizing:border-box}
+.material-picker-image :deep(.material-thumb>button){display:grid;place-items:center;padding:0;overflow:hidden;border:1px solid var(--line);border-radius:4px;background:#fff}
+.material-picker-image :deep(.catalog-image){width:100%;height:100%;object-fit:contain;border-radius:3px}
+.material-picker-image :deep(.material-image-empty){display:grid;place-items:center;border:1px solid var(--line);border-radius:4px;background:#f7f9fc;color:var(--muted);font-size:10px;white-space:nowrap}
+.material-picker-actions{display:flex;align-items:center;gap:10px;padding:10px 14px;width:100%}
+.material-picker-actions span{margin-right:auto;font-size:13px;color:var(--muted)}
+@media(max-width:600px){.material-picker-search,.material-picker-category{flex:1 1 100%}.material-picker-filters label>span{width:52px}}
+</style>
+<style>
+/* Match the shared compact filter height, including the directive-created trigger. */
+#app .product-material-picker .material-picker-filters :is(input,.single-select-trigger){flex:1;width:100%;min-width:0;max-width:100%;height:var(--ui-control-height,32px);min-height:var(--ui-control-height,32px);box-sizing:border-box;border:1px solid var(--ui-field-border);border-radius:var(--ui-field-radius);padding:0 10px;font-size:var(--ui-text-size,13px);font-weight:400}
 </style>

@@ -4,6 +4,8 @@ import { beijingDateTime } from '@/utils/dateTime'
 
 import { computed,onMounted,ref } from 'vue'
 import AccessDialog from './AccessDialog.vue'
+import CustomsFileStatus from './CustomsFileStatus.vue'
+import CustomsAttachmentPreview from './CustomsAttachmentPreview.vue'
 import SingleFileUpload from './SingleFileUpload.vue'
 import { customsFilesApi,type CustomsAttachment } from '@/api/customsDocuments'
 import { confirmAction } from '@/state/uiConfirmation'
@@ -13,8 +15,8 @@ const tabs=[{key:'SCREENSHOT',label:'申报订单截图'},{key:'INVOICE',label:'
 const tab=ref<CustomsAttachment['category']>('SCREENSHOT'),files=ref<CustomsAttachment[]>([]),busy=ref(false),loading=ref(true),error=ref('')
 const visible=computed(()=>files.value.filter(f=>f.category===tab.value))
 const has=(category:string)=>files.value.some(f=>f.category===category)
-const completed=computed(()=>has('SCREENSHOT')&&has('INVOICE'))
-async function load(){loading.value=true;try{files.value=await customsFilesApi.list(props.id)}catch(e){error.value=e instanceof Error?e.message:'文件加载失败';throw e}finally{loading.value=false}}
+const loaded=ref(false),preview=ref<CustomsAttachment>()
+async function load(){loading.value=true;error.value='';try{files.value=await customsFilesApi.list(props.id);loaded.value=true}catch(e){error.value=e instanceof Error?e.message:'文件加载失败';throw e}finally{loading.value=false}}
 async function upload(file:File){busy.value=true;error.value='';try{await customsFilesApi.upload(props.id,tab.value,file);emit('changed');await load()}catch(e){error.value=e instanceof Error?e.message:'上传失败';throw e}finally{busy.value=false}}
 async function remove(file:CustomsAttachment){if(!await confirmAction(`移除文件「${file.name}」？移除最后一份申报截图或发票后，单据将恢复为文档待上传。`))return;busy.value=true;error.value='';try{await customsFilesApi.remove(props.id,file.id);emit('changed');await load()}catch(e){error.value=e instanceof Error?e.message:'移除失败'}finally{busy.value=false}}
 async function download(file:CustomsAttachment){busy.value=true;error.value='';try{await customsFilesApi.download(props.id,file)}catch(e){error.value=e instanceof Error?e.message:'下载失败'}finally{busy.value=false}}
@@ -30,8 +32,11 @@ onMounted(()=>void load().catch(()=>{}))
     @close="emit('close')"
   >
     <div class="customs-files-summary">
-      <strong :class="{complete:completed}">{{ loading?'正在加载文件…':completed?'已完成':'文档待上传' }}</strong>
-      <span>申报订单截图 {{ has('SCREENSHOT')?'✓ 已上传':'待上传' }}</span><span>发票 {{ has('INVOICE')?'✓ 已上传':'待上传' }}</span>
+      <CustomsFileStatus
+        :loading="loading"
+        :screenshot-uploaded="loaded?has('SCREENSHOT'):undefined"
+        :invoice-uploaded="loaded?has('INVOICE'):undefined"
+      />
     </div>
     <p class="customs-files-help">
       上传跨境通申报订单截图及实际发票后自动完成；其他文件为选填。上传后立即保存。
@@ -104,11 +109,17 @@ onMounted(()=>void load().catch(()=>{}))
             <button
               class="file-name"
               :disabled="busy"
-              @click="download(file)"
+              @click="preview=file"
             >
               {{ file.name }}
             </button><small>{{ (file.size/1024).toFixed(1) }} KB · {{ beijingDateTime(file.createdAt) }}</small>
           </div>
+          <button
+            :disabled="busy"
+            @click="preview=file"
+          >
+            预览
+          </button>
           <button
             :disabled="busy"
             @click="download(file)"
@@ -132,9 +143,15 @@ onMounted(()=>void load().catch(()=>{}))
       </p>
     </section>
   </AccessDialog>
+  <CustomsAttachmentPreview
+    v-if="preview"
+    :document-id="id"
+    :file="preview"
+    @close="preview=undefined"
+  />
 </template>
 <style scoped>
 .customs-files-actions{display:flex;justify-content:flex-start;margin-bottom:8px}.customs-portal-link{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:32px;padding:0 12px;border:1px solid var(--accent);border-radius:5px;color:var(--accent);background:white;font-size:13px;text-decoration:none;white-space:nowrap}.customs-portal-link:hover{background:#f0f5ff}.customs-portal-link:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
-.customs-files-summary{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:12px;background:#f5f8fc;border:1px solid var(--line);border-radius:6px;font-size:13px}.customs-files-summary strong{color:#986b16}.customs-files-summary .complete{color:#21834a}.customs-files-help{font-size:12px;color:var(--muted);line-height:1.6}.customs-files-tabs{display:flex;gap:20px;border-bottom:1px solid var(--line);margin-bottom:14px;overflow-x:auto}.customs-files-tabs button{border:0;border-bottom:2px solid transparent;background:none;border-radius:0;white-space:nowrap;font-size:13px}.customs-files-tabs [aria-selected=true]{border-bottom-color:var(--accent);color:var(--accent)}.customs-files-tabs small{margin-left:5px}.customs-file-list{list-style:none;padding:0;margin:12px 0}.customs-file-list li{display:flex;align-items:center;gap:8px;padding:12px 0;border-bottom:1px solid var(--line)}.customs-file-list li>div{flex:1;min-width:0}.customs-file-list small{display:block;font-size:12px;color:var(--muted);margin-top:4px}.customs-file-list button{font-size:13px;flex-shrink:0;background:white}.customs-file-list .file-name{border:0;padding:0;color:var(--accent);text-align:left;word-break:break-all}.customs-file-list .file-remove{color:#b42318}@media(max-width:420px){.customs-files-summary{gap:8px}.customs-file-list li{flex-wrap:wrap}.customs-file-list li>div{flex-basis:100%}.customs-files-tabs{gap:6px}}
+.customs-files-summary{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:0 0 8px;border-bottom:1px solid var(--line);font-size:13px}.customs-files-help{font-size:12px;color:var(--muted);line-height:1.6}.customs-files-tabs{display:flex;gap:20px;border-bottom:1px solid var(--line);margin-bottom:14px;overflow-x:auto}.customs-files-tabs button{border:0;border-bottom:2px solid transparent;background:none;border-radius:0;white-space:nowrap;font-size:13px}.customs-files-tabs [aria-selected=true]{border-bottom-color:var(--accent);color:var(--accent)}.customs-files-tabs small{margin-left:5px}.customs-file-list{list-style:none;padding:0;margin:12px 0}.customs-file-list li{display:flex;align-items:center;gap:8px;padding:12px 0;border-bottom:1px solid var(--line)}.customs-file-list li>div{flex:1;min-width:0}.customs-file-list small{display:block;font-size:12px;color:var(--muted);margin-top:4px}.customs-file-list button{font-size:13px;flex-shrink:0;background:white}.customs-file-list .file-name{border:0;padding:0;color:var(--accent);text-align:left;word-break:break-all}.customs-file-list .file-remove{color:#b42318}@media(max-width:420px){.customs-files-summary{gap:8px}.customs-file-list li{flex-wrap:wrap}.customs-file-list li>div{flex-basis:100%}.customs-files-tabs{gap:6px}}
 </style>

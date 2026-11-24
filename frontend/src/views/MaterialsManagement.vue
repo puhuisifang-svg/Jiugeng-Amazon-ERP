@@ -62,7 +62,7 @@ async function exportRows(chosen=false){if(busy.value)return;busy.value=true;err
 async function openLinked(){const view=route.query.viewMaterial;if(typeof view==='string'&&ready.value){detailId.value=view;const query={...route.query};delete query.viewMaterial;await router.replace({query});return}const id=route.query.editMaterial;if(typeof id==='string'&&writable.value&&ready.value){editorState.value={id};const query={...route.query};delete query.editMaterial;await router.replace({query})}}
 watch([page,size],()=>{saveView();if(ready.value)void load()})
 watch(()=>[route.query.editMaterial,route.query.viewMaterial],openLinked)
-onBeforeRouteLeave(async()=>{saveView();if(editor.value?.busy||stockDialog.value?.busy||busy.value)return false;if(editor.value?.dirty||stockDialog.value?.dirty)return await confirmAction('当前填写内容未保存，确定放弃并离开吗？');return true})
+onBeforeRouteLeave(async()=>{saveView();if(editor.value?.busy||stockDialog.value?.busy||busy.value)return false;if(editor.value?.dirty||stockDialog.value?.dirty)return await confirmAction('当前填写内容未保存，确定放弃并离开吗？', { unsaved: true, discardLabel: '放弃并离开' });return true})
 onMounted(async()=>{try{const saved=JSON.parse(sessionStorage.getItem(stateKey)??'null');if(saved){for(const key of Object.keys(filters) as (keyof MaterialFilters)[])if(typeof saved.filters?.[key]==='string')filters[key]=saved.filters[key];applied.value={...filters};page.value=Math.max(1,Number(saved.page)||1);size.value=[10,20,50,100].includes(saved.size)?saved.size:20;scrollTop=Math.max(0,Number(saved.scrollTop)||0)}}catch{/* Defaults. */}checkPending();void loadOptions();await initialize();await openLinked()})
 onBeforeUnmount(()=>{sequence++;saveView()})
 </script>

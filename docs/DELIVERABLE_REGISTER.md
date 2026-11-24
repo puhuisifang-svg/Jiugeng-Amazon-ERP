@@ -59,6 +59,8 @@
 
 | DEL-052 | 2026-11-24 | Codex → PJM | PDF 连续工作区与客户商品 HS 历史引用累计发布交接 | v1.1 | Released（应用核验；非业务验收） | 用户授权；PJM 经受保护 PR #24 发布 | [交接及发布核验附录](../deliverables/pjm/PDF_HS_RELEASE_HANDOFF_2026-11-24.md)；应用 main 45242af63d2d53bf4ed36bfa63f5f0c845419fdb，CI/实际 Production/入口版本通过；文档归档后最终发布由 PJM 同会话核实 |
 
+| DEL-053 | 2026-11-24 | Codex / PJM | ERP-103 报关、样品、供应商、产品、采购、辅料与未保存确认累计修复 | v0.2 | Ready for PJM Review | 用户已授权提交 main/部署，PJM 接管；代码未提交 | [最终交接](../deliverables/pjm/ERP-103_CUSTOMS_FILES_LOCAL_2026-11-24.md)；前端 793 测试及修正复验/构建通过，后端 448 通过/1 外部探测跳过，E2E 9 + 窄屏组件 12 通过，V108/V109 发布前确认备份 |
+
 ## 登记要求
 
 - 成员交付后必须登记，不得只在聊天中汇报。

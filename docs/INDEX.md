@@ -10,6 +10,8 @@
 
 当前本地追加：[PDF 连续页面工作区](../deliverables/pjm/PDF_CONTINUOUS_WORKSPACE_LOCAL_2026-11-24.md)；2026-11-24，默认提取合并、全部页连续勾选、连续编辑及缩放，未提交，统一验证待交接。
 
+当前发布交接：[ERP-103 多模块体验修复 / DEL-053](../deliverables/pjm/ERP-103_CUSTOMS_FILES_LOCAL_2026-11-24.md)。用户已授权交项目经理提交 main/部署；本地统一验证完成，全部未提交，发送交接后由 PJM 独占接管。Codex 不跟踪线上发布。
+
 当前授权发布交接：[DEL-049 图片性能与 PDF](../deliverables/pjm/IMAGE_PDF_RELEASE_HANDOFF_2026-11-23.md)；统一验证完成，正式移交后由 PJM 独占写入、提交 main 和部署，Codex 不跟踪上线。下述是开发阶段记录。
 
 开发阶段累计迭代：[ERP-101 图片性能 1–7 项 / DEL-047](../deliverables/pjm/ERP-101_IMAGE_PERFORMANCE_LOCAL_2026-11-23.md)。显示尺寸不变，外链转受控存储并更新；本地已同步 V107，完整验证与发布授权状态已由 DEL-049 更新。

@@ -63,7 +63,7 @@ async function selectPermissions(codes: string[]) { const all=codes.every(code=>
 async function review() { if (!current.value) return; busy.value = true; error.value = ''; try { preview.value = await rolesApi.preview(current.value.id, draft.value) } catch (e) { error.value = fail(e) } finally { busy.value = false } }
 async function save() { if (!current.value) return; busy.value = true; error.value = ''; try { await rolesApi.save(current.value.id, draft.value); preview.value = undefined; await load(); success.value = '角色已保存；权限或状态变更已对成员生效。' } catch (e) { error.value = fail(e); preview.value = undefined } finally { busy.value = false } }
 async function remove(role: Role) { const reason = await promptReason(`删除“${role.name}”？历史记录会保留。请填写原因。`); if (!reason) return; busy.value = true; try { await rolesApi.remove(role.id, role.version, reason); await load(); success.value = '角色已删除。' } catch (e) { error.value = fail(e) } finally { busy.value = false } }
-async function reload() { if (dirty.value && !await confirmAction('放弃未保存的角色修改并重新加载？')) return; await load() }
+async function reload() { if (dirty.value && !await confirmAction('放弃未保存的角色修改并重新加载？', { unsaved: true, discardLabel: '放弃并重新加载' })) return; await load() }
 const roleTabs = computed(() => [{ key: 'basics', label: '基本信息' }, { key: 'permissions', label: '权限配置' }, { key: 'members', label: `角色成员（${current.value?.memberCount ?? 0}）` }, { key: 'history', label: '变更记录' }])
 function selectTab(key: string) { tabs.value = key }
 function tabKeydown(event: KeyboardEvent, key: string) {
@@ -76,8 +76,8 @@ async function chooseMember() { try { allUsers.value = await usersApi.list(); me
 function editMember(user: AppUser) { addMember.value = false; assignment.value = user }
 watch(() => route.params.id, () => { tabs.value = route.query.tab === 'members' ? 'members' : 'permissions'; void load() })
 watch([size, filtered], () => { page.value = Math.max(1, Math.min(page.value, Math.ceil(filtered.value.length / size.value))) })
-onBeforeRouteUpdate(async () => !dirty.value || await confirmAction('放弃未保存的角色权限修改？'))
-onBeforeRouteLeave(async () => !dirty.value || await confirmAction('放弃未保存的角色权限修改？'))
+onBeforeRouteUpdate(async () => !dirty.value || await confirmAction('放弃未保存的角色权限修改？', { unsaved: true, discardLabel: '放弃并离开' }))
+onBeforeRouteLeave(async () => !dirty.value || await confirmAction('放弃未保存的角色权限修改？', { unsaved: true, discardLabel: '放弃并离开' }))
 onMounted(() => { tabs.value = route.query.tab === 'members' ? 'members' : 'permissions'; void load() })
 </script>
 <template>

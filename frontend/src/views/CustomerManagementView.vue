@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UnsavedChangesDialog from '@/components/UnsavedChangesDialog.vue'
 import CustomerCustomsFields from '@/components/CustomerCustomsFields.vue'
 import { blankCustoms, customsInput, type CustomsProfile } from '@/api/customs'
 import { vPhone } from '@/directives/phone'
@@ -47,7 +48,7 @@ async function confirmDelete() {
   finally { deleting.value = false }
 }
 const opened = ref(false), discard = ref(false), editingId = ref<string>()
-const dialog = ref<HTMLDialogElement>(), continueButton = ref<HTMLButtonElement>()
+const dialog = ref<HTMLDialogElement>()
 const selectionSummary = ref(''), initial = ref('')
 const blankTitle = (): InvoiceTitle => ({ invoiceTitle: '', taxNumber: '', registeredAddress: '', registeredPhone: '', bankName: '', bankAccount: '' })
 const titleFields = [['invoiceTitle', '开票抬头', 200], ['taxNumber', '纳税人识别号', 64], ['registeredAddress', '注册地址', 500], ['registeredPhone', '注册电话', 32], ['bankName', '开户银行', 200], ['bankAccount', '银行账号', 64]] as const
@@ -139,9 +140,9 @@ function close() { skuPickerOpen.value = false; dialog.value?.close(); opened.va
 async function requestClose() {
   if (saving.value) return
   if (snapshot() === initial.value) { close(); return }
-  discard.value = true; await nextTick(); continueButton.value?.focus()
+  discard.value = true
 }
-async function keepEditing() { discard.value = false; await nextTick(); dialog.value?.querySelector<HTMLInputElement>('input')?.focus() }
+function keepEditing() { discard.value = false }
 function escape() { if (discard.value) void keepEditing(); else void requestClose() }
 function guardNavigation() {
   if (!opened.value) return true
@@ -468,33 +469,10 @@ watch(()=>[props.kind,route.query.editCustomer,route.query.section],async()=>{
       ref="dialog"
       class="customer-dialog"
       :class="{'customer-dialog--batch':isProduct && !editingId}"
-      :aria-label="discard ? '放弃未保存的修改？' : `${editingId ? '编辑' : '新增'}${title}`"
+      :aria-label="`${editingId ? '编辑' : '新增'}${title}`"
       @cancel.prevent="escape"
     >
-      <div
-        v-if="discard"
-        class="panel operation-form operation-dialog__card operation-dialog__card--compact"
-      >
-        <h2 class="form-wide">
-          放弃未保存的修改？
-        </h2><p class="form-wide">
-          已填写的内容尚未保存，放弃后需要重新填写。
-        </p><button
-          ref="continueButton"
-          type="button"
-          @click="keepEditing"
-        >
-          继续填写
-        </button><button
-          type="button"
-          class="danger-button"
-          @click="close"
-        >
-          放弃修改
-        </button>
-      </div>
       <form
-        v-else
         class="panel operation-form operation-dialog__card"
         @submit.prevent="save"
         @invalid.capture="showInvalidProductField"
@@ -967,6 +945,12 @@ watch(()=>[props.kind,route.query.editCustomer,route.query.section],async()=>{
         </div>
       </form>
     </dialog>
+    <UnsavedChangesDialog
+      v-if="discard"
+      @keep="discard = false"
+      @discard="close"
+    />
+
     <CustomerSkuPicker
       v-if="skuPickerOpen"
       :selected-id="productForm.variantId"

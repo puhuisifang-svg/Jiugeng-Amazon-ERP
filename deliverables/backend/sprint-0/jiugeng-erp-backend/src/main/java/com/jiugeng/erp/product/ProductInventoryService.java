@@ -43,14 +43,16 @@ class ProductInventoryService implements ProductPurchaseInventory {
     @Transactional Result transact(String variantId,String requestId,String type,BigDecimal quantity,String reason,AuthenticatedActor actor) {
         if(!Set.of("INBOUND","OUTBOUND","ADJUST_IN","ADJUST_OUT").contains(type)) throw invalid("库存操作类型无效");
         if(quantity==null||quantity.signum()<=0||quantity.stripTrailingZeros().scale()>0||quantity.compareTo(new BigDecimal("999999999999999"))>0) throw invalid("数量必须为不超过 15 位的正整数");
-        if(requestId==null||requestId.isBlank()||requestId.length()>100||reason==null||reason.isBlank()||reason.length()>500) throw invalid("请求编号和操作原因不能为空或超长");
+        if(requestId==null||requestId.isBlank()||requestId.length()>100) throw invalid("请求编号不能为空或超长");
+        if(reason!=null&&reason.length()>500) throw invalid("操作原因不能超过500字");
+        String normalizedReason=reason==null?"":reason.trim();
         String parent=jdbc.sql("SELECT product_id FROM product_variant WHERE id=:id").param("id",variantId).query(String.class).optional().orElseThrow(()->new ProductException(404,"SKU_NOT_FOUND","子体不存在"));
         jdbc.sql("SELECT id FROM product WHERE id=:id AND deleted_at IS NULL FOR UPDATE").param("id",parent).query(String.class).optional().orElseThrow(()->new ProductException(409,"PRODUCT_DELETED","父体已删除"));
         jdbc.sql("SELECT id FROM product_variant WHERE id=:id AND deleted_at IS NULL FOR UPDATE").param("id",variantId).query(String.class).optional().orElseThrow(()->new ProductException(409,"SKU_DELETED","子体已删除"));
         var previous=jdbc.sql("SELECT * FROM product_inventory_transaction WHERE variant_id=:id AND request_id=:request").param("id",variantId).param("request",requestId).query(this::entry).optional();
         if(previous.isPresent()) {
             var old=previous.get();
-            if(!old.actorUserId().equals(actor.userId())||!old.type().equals(type)||old.quantity().compareTo(quantity)!=0||!old.reason().equals(reason.trim())) throw new ProductException(409,"REQUEST_ID_CONFLICT","同一请求编号不能用于不同库存操作");
+            if(!old.actorUserId().equals(actor.userId())||!old.type().equals(type)||old.quantity().compareTo(quantity)!=0||!old.reason().equals(normalizedReason)) throw new ProductException(409,"REQUEST_ID_CONFLICT","同一请求编号不能用于不同库存操作");
             return new Result(old,true);
         }
         BigDecimal before=jdbc.sql("SELECT quantity FROM product_inventory_balance WHERE variant_id=:id").param("id",variantId).query(BigDecimal.class).optional().orElse(null);
@@ -62,8 +64,8 @@ class ProductInventoryService implements ProductPurchaseInventory {
         else jdbc.sql("UPDATE product_inventory_balance SET quantity=:q,updated_at=CURRENT_TIMESTAMP WHERE variant_id=:id").param("id",variantId).param("q",after).update();
         String id=UUID.randomUUID().toString();
         jdbc.sql("INSERT INTO product_inventory_transaction(id,request_id,variant_id,transaction_type,quantity,signed_quantity,balance_after,reason,actor_user_id,actor_login_name) VALUES (:id,:request,:variant,:type,:quantity,:signed,:after,:reason,:actor,:login)")
-            .param("id",id).param("request",requestId).param("variant",variantId).param("type",type).param("quantity",quantity).param("signed",signed).param("after",after).param("reason",reason.trim()).param("actor",actor.userId()).param("login",actor.loginName()).update();
-        audit.record(new AuditTrail.BusinessOperation(actor.userId(),actor.loginName(),actor.displayName(),"PRODUCT_STOCK_"+type,"PRODUCT_VARIANT",variantId,true,Map.of("quantity",before==null?BigDecimal.ZERO:before),Map.of("quantity",after),reason.trim()));
+            .param("id",id).param("request",requestId).param("variant",variantId).param("type",type).param("quantity",quantity).param("signed",signed).param("after",after).param("reason",normalizedReason).param("actor",actor.userId()).param("login",actor.loginName()).update();
+        audit.record(new AuditTrail.BusinessOperation(actor.userId(),actor.loginName(),actor.displayName(),"PRODUCT_STOCK_"+type,"PRODUCT_VARIANT",variantId,true,Map.of("quantity",before==null?BigDecimal.ZERO:before),Map.of("quantity",after),normalizedReason));
         return new Result(jdbc.sql("SELECT * FROM product_inventory_transaction WHERE id=:id").param("id",id).query(this::entry).single(),false);
     }
     private ProductException invalid(String message) { return new ProductException(400,"PRODUCT_STOCK_INVALID",message); }

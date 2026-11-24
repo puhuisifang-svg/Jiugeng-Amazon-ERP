@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 class ProductCloseoutTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired ProductInventoryService inventory;
+    @Autowired jakarta.validation.Validator validator;
     @Autowired ProductPageService pages;
     @Autowired ProductService products;
     @Autowired ProductInventoryController inventoryController;
@@ -46,6 +47,19 @@ class ProductCloseoutTest {
         assertThat(inventory.history(f.first(),0,20).total()).isEqualTo(1);
         inventory.transact(f.first(),"out-ok","OUTBOUND",new BigDecimal("2"),"合成出库",actor);
         assertThat(inventory.balances(List.of(f.first())).getFirst().quantity()).isEqualByComparingTo("3");
+    }
+    @Test void inventoryReasonIsOptionalButBoundedAndRetriesRemainIdempotent(){
+        var f=fixture();
+        var command=new ProductInventoryController.Command("optional-reason","INBOUND",BigDecimal.ONE,null);
+        assertThat(validator.validate(command)).isEmpty();
+        assertThat(validator.validate(new ProductInventoryController.Command("long-reason","INBOUND",BigDecimal.ONE,"x".repeat(501)))).isNotEmpty();
+        assertThat(inventory.transact(f.first(),command.requestId(),command.type(),command.quantity(),command.reason(),actor).item().reason()).isEmpty();
+        assertThat(inventory.transact(f.first(),"optional-reason","INBOUND",BigDecimal.ONE,"  ",actor).replayed()).isTrue();
+        assertThatThrownBy(()->inventory.transact(f.first(),"optional-reason","INBOUND",BigDecimal.ONE,"different",actor)).isInstanceOf(ProductException.class);
+        assertThatThrownBy(()->inventory.transact(f.first(),"long-reason","INBOUND",BigDecimal.ONE,"x".repeat(501),actor)).isInstanceOf(ProductException.class);
+        inventory.transact(f.first(),"optional-outbound","OUTBOUND",BigDecimal.ONE,"",actor);
+        assertThat(inventory.balances(List.of(f.first())).getFirst().quantity()).isEqualByComparingTo("0");
+        assertThat(inventory.history(f.first(),0,20).total()).isEqualTo(2);
     }
     @Test void filteredParentsKeepAllChildrenForInventoryTotals(){
         var f=fixture();inventory.transact(f.first(),"a","INBOUND",new BigDecimal("3"),"合成",actor);inventory.transact(f.second(),"b","INBOUND",new BigDecimal("7"),"合成",actor);

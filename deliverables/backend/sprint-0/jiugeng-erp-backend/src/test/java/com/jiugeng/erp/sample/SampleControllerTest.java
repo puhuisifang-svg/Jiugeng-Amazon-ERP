@@ -33,7 +33,7 @@ class SampleControllerTest {
   mvc.perform(delete("/api/v1/samples/"+id).param("version","0").header("Authorization",token)).andExpect(status().isConflict());
   mvc.perform(delete("/api/v1/samples/"+id).param("version","1").header("Authorization",token)).andExpect(status().isOk());
   assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product_variant WHERE id=?",Integer.class,ids.get(1))).isEqualTo(1);
-  assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE resource_id=? AND action IN ('SAMPLE_CREATE','SAMPLE_UPDATE','SAMPLE_REMOVE')",Integer.class,id)).isEqualTo(3);
+  assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE resource_id=? AND action IN ('SAMPLE_CREATE','SAMPLE_UPDATE','SAMPLE_REMOVE')",Integer.class,id)).isEqualTo(1);
  }
  @Test void supportsSearchAndPaginationWithoutWildcardExpansion()throws Exception{
   var ids=sku();String token=user("ADMIN");for(int i=0;i<12;i++)create(ids,"SHELF-"+i,token,200);
@@ -79,14 +79,14 @@ class SampleControllerTest {
   String id=json.readTree(mvc.perform(request).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("id").asText();
   mvc.perform(post("/api/v1/samples").header("Authorization",token).header("Idempotency-Key",key).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isOk()).andExpect(jsonPath("$.id").value(id));
   assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM sample_location WHERE id=?",Integer.class,id)).isEqualTo(1);
-  assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE resource_id=? AND action='SAMPLE_CREATE'",Integer.class,id)).isEqualTo(1);
+  assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE resource_id=? AND action='SAMPLE_CREATE'",Integer.class,id)).isZero();
   mvc.perform(post("/api/v1/samples").header("Authorization",token).header("Idempotency-Key",key).contentType(MediaType.APPLICATION_JSON).content(body.replace("R-01","R-02"))).andExpect(status().isConflict());
   mvc.perform(get("/api/v1/samples").param("q","searchable").param("source","MANUAL").param("location","r-").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(1));
   mvc.perform(delete("/api/v1/samples/"+id).param("version","0").header("Authorization",token)).andExpect(status().isOk());
   mvc.perform(get("/api/v1/samples").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(0));
   mvc.perform(get("/api/v1/samples").param("deleted","true").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.items[0].id").value(id));
   mvc.perform(post("/api/v1/samples/"+id+"/restore").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content("{\"version\":1}")).andExpect(status().isOk());
-  mvc.perform(get("/api/v1/samples/"+id+"/history").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(3));
+  mvc.perform(get("/api/v1/samples/"+id+"/history").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
   JsonNode linked=create(ids,"LINKED",token,200);String linkedId=linked.path("id").asText();
   mvc.perform(delete("/api/v1/samples/"+linkedId).param("version","0").header("Authorization",token)).andExpect(status().isOk());
   create(ids,"linked",token,200);
@@ -110,6 +110,21 @@ class SampleControllerTest {
   assertThat(jdbc.queryForObject("SELECT original_storage_key FROM catalog_image_asset WHERE id=?",String.class,copied)).isNotEqualTo(jdbc.queryForObject("SELECT original_storage_key FROM catalog_image_asset WHERE id=?",String.class,image));
   var ids=sku();create(ids,"LINKED-IMAGE",token,200);
   mvc.perform(get("/api/v1/samples").param("source","LINKED").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.items[0].currentSkuName").value("Synthetic sample SKU")).andExpect(jsonPath("$.items[0].imageSource").value("SNAPSHOT"));
+ }
+ @Test void recordsOnlyActualLocationChangesAndKeepsHistoryReadOnly()throws Exception{
+  String token=user("ADMIN"),reader=user("SELECTION");
+  var payload=new LinkedHashMap<String,Object>(Map.of("sampleName","Synthetic history","locationCode","A-01","remark","first"));
+  String id=json.readTree(mvc.perform(post("/api/v1/samples").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(payload))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("id").asText();
+  payload.put("version",0);payload.put("remark","changed");payload.put("sampleName","Renamed");payload.put("specification","New specification");
+  mvc.perform(put("/api/v1/samples/"+id).header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(payload))).andExpect(status().isOk());
+  mvc.perform(get("/api/v1/samples/"+id+"/history").header("Authorization",reader)).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
+  payload.put("version",1);payload.put("locationCode","B-02");payload.put("remark","changed again");String key=UUID.randomUUID().toString();
+  for(int i=0;i<2;i++)mvc.perform(put("/api/v1/samples/"+id).header("Authorization",token).header("Idempotency-Key",key).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(payload))).andExpect(status().isOk());
+  mvc.perform(put("/api/v1/samples/"+id).header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(payload))).andExpect(status().isConflict());
+  mvc.perform(get("/api/v1/samples/"+id+"/history")).andExpect(status().isUnauthorized());
+  var result=json.readTree(mvc.perform(get("/api/v1/samples/"+id+"/history").header("Authorization",reader)).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1)).andReturn().getResponse().getContentAsString());
+  assertThat(result.path("items").get(0).path("beforeValue")).isEqualTo(json.valueToTree(Map.of("locationCode","A-01")));
+  assertThat(result.path("items").get(0).path("afterValue")).isEqualTo(json.valueToTree(Map.of("locationCode","B-02")));
  }
  private JsonNode create(List<String> ids,String location,String token,int expected)throws Exception{return json.readTree(mvc.perform(post("/api/v1/samples").header("Authorization",token).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("productId",ids.get(0),"variantId",ids.get(1),"locationCode",location)))).andExpect(status().is(expected)).andReturn().getResponse().getContentAsString());}
  private List<String> sku(){String p=UUID.randomUUID().toString(),v=UUID.randomUUID().toString();jdbc.update("INSERT INTO product(id,product_code,product_code_normalized,name_zh,product_name,status,created_by,updated_by) VALUES(?,?,?,?,?,'ACTIVE','test','test')",p,p,p,"Synthetic sample product","Synthetic sample product");jdbc.update("INSERT INTO product_variant(id,product_id,sku_code,sku_code_normalized,variant_name,attribute_signature,status) VALUES(?,?,?,?,?,'SYNTHETIC','ACTIVE')",v,p,v,v,"Synthetic sample SKU");return List.of(p,v);}

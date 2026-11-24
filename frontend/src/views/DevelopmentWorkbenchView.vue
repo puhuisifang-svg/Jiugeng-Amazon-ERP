@@ -34,7 +34,7 @@ function chooseState(value:string){state.value=value;page.value=1;void load()}
 function resize(value:number){size.value=value;page.value=1;void load()}
 function openCreate(){createDraft.value={title:'',owner:session.user.value?.displayName??'',reason:'',requestId:createRequestId()};initial.value=JSON.stringify(createDraft.value);createError.value='';createOpen.value=true}
 async function create(){creating.value=true;createError.value='';try{const result=await api.create(createDraft.value);createOpen.value=false;creating.value=false;success.value='开发草稿已创建，完善立项资料后提交审核。';await router.push(`/product-development/${result.id}`);void load()}catch(e){createError.value=e instanceof Error?e.message:'创建失败'}finally{creating.value=false}}
-async function guard(){return !creating.value&&(!createDirty.value||await confirmAction('放弃未保存的项目资料？'))}
+async function guard(){return !creating.value&&(!createDirty.value||await confirmAction('放弃未保存的项目资料？', { unsaved: true, discardLabel: '放弃并关闭' }))}
 async function closeCreate(){if(await guard()){createOpen.value=false;if(route.path.endsWith('/new'))void router.push('/product-development')}}
 onBeforeRouteLeave(guard);onBeforeRouteUpdate(guard)
 function beforeUnload(e:BeforeUnloadEvent){if(createDirty.value){e.preventDefault();e.returnValue=''}}

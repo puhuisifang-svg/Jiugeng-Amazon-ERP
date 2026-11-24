@@ -351,7 +351,10 @@ const formElement = ref<HTMLFormElement>()
               关联辅料
             </button>
           </nav>
-          <div class="sku-editor-grid">
+          <div
+            v-show="['basic', 'specs'].includes(activeTab(variantIndex))"
+            class="sku-editor-grid"
+          >
             <div
               v-show="activeTab(variantIndex) === 'basic'"
               data-editor-tab="basic"
@@ -533,10 +536,8 @@ const formElement = ref<HTMLFormElement>()
               <RouterLink
                 class="relation-master-link"
                 to="/suppliers"
-                target="_blank"
-                rel="noopener"
               >
-                维护供应商档案 ↗
+                维护供应商档案
               </RouterLink>
             </div>
             <p class="relation-editor-hint">
@@ -745,7 +746,7 @@ const formElement = ref<HTMLFormElement>()
                       <td class="relation-edit-action">
                         <button
                           type="button"
-                          class="relation-note-toggle"
+                          class="relation-note-toggle relation-note-toggle--material"
                           :aria-expanded="openRelationNotes.has(link)"
                           :aria-controls="`material-note-${variantIndex}-${link.materialId}`"
                           :aria-label="`${openRelationNotes.has(link) ? '收起' : '编辑'}${materialName(link.materialId)}的关系备注`"

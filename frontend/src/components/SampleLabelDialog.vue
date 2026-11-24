@@ -3,16 +3,16 @@ import { computed, ref, watch } from 'vue'
 import { sampleLabelPdf } from '@/utils/sampleLabelPdf'
 import { downloadPdf } from '@/utils/pdfTools'
 import AccessDialog from './AccessDialog.vue'
-import { sampleLabelsDocument, type SampleLabelData } from '@/utils/sampleLabel'
+import { sampleLabelsDocument, sampleLabelFilename, type SampleLabelData } from '@/utils/sampleLabel'
 const props = defineProps<{ sample?: SampleLabelData; samples?: SampleLabelData[] }>()
 const emit = defineEmits<{ close: [] }>()
 const frame = ref<HTMLIFrameElement>(), ready = ref(false), error = ref(''), exporting = ref(false)
-const rows=computed(()=>props.samples ?? (props.sample?[props.sample]:[])), copies=ref<Record<number,number>>({})
-watch(rows,value=>{copies.value=Object.fromEntries(value.map((_row,i)=>[i,1]))},{immediate:true})
-const total=computed(()=>rows.value.reduce((sum,_row,i)=>sum+(copies.value[i]??1),0))
-const valid=computed(()=>rows.value.length>0&&rows.value.length<=100&&total.value<=500&&rows.value.every((_r,i)=>Number.isInteger(copies.value[i]??1)&&(copies.value[i]??1)>0&&(copies.value[i]??1)<=100))
-const expanded=computed(()=>valid.value?rows.value.flatMap((r,i)=>Array.from({length:copies.value[i]??1},()=>r)):[])
-const documentHtml = computed(() => expanded.value.length?sampleLabelsDocument(expanded.value):'')
+const rows = computed(() => props.samples ?? (props.sample ? [props.sample] : []))
+const total = computed(() => rows.value.length)
+const valid = computed(() => total.value > 0 && total.value <= 100)
+const documentHtml = computed(() => valid.value ? sampleLabelsDocument(rows.value) : '')
+const previewHeight = computed(() => `calc(${30 * total.value}mm + ${12 * Math.max(0, total.value - 1)}px)`)
+watch(documentHtml, () => { ready.value = false; error.value = '' })
 async function fit() {
   ready.value = false; error.value = ''
   const doc = frame.value?.contentDocument
@@ -25,20 +25,19 @@ async function fit() {
     const style=doc.defaultView!.getComputedStyle(label), available=label.clientHeight-parseFloat(style.paddingTop)-parseFloat(style.paddingBottom)
     let fits=false
     for(let size=12;size>=8;size-=.25){content.style.fontSize=`${size}px`;if(content.scrollHeight<=available&&content.scrollWidth<=content.clientWidth){fits=true;break}}
-    if(!fits)bad.push(`${expanded.value[i]?.skuName}（${expanded.value[i]?.locationCode}）`)
+    if(!fits)bad.push(`${rows.value[i]?.skuName}（${rows.value[i]?.locationCode}）`)
   })
   if(bad.length)error.value=`以下样品内容过长，70×30毫米无法清晰展示，请精简品名或规格：${[...new Set(bad)].join('、')}`
-  else ready.value=labels.length===expanded.value.length&&labels.length>0
+  else ready.value=labels.length===rows.value.length&&labels.length>0
 }
 async function exportPdf() {
   if (!ready.value || exporting.value || !frame.value?.contentDocument) return
   exporting.value = true; error.value = ''
-  try { downloadPdf(await sampleLabelPdf(frame.value.contentDocument), `样品标签-${total.value}张.pdf`) }
+  try { downloadPdf(await sampleLabelPdf(frame.value.contentDocument), sampleLabelFilename(rows.value)) }
   catch (e) { error.value = e instanceof Error ? e.message : '导出失败，请重试' }
   finally { exporting.value = false }
 }
 function print() {if(!ready.value||exporting.value)return;try{frame.value?.contentWindow?.focus();frame.value?.contentWindow?.print()}catch{error.value='无法打开打印窗口，请重试。'}}
-function change(){ready.value=false;error.value=''}
 </script>
 <template>
   <AccessDialog
@@ -50,27 +49,12 @@ function change(){ready.value=false;error.value=''}
     <div class="sample-label-meta">
       <strong>70 × 30 mm</strong><span>{{ rows.length }} 条样品 · {{ total }} 张标签</span>
     </div>
-    <div class="sample-label-quantities">
-      <label
-        v-for="(row,i) in rows"
-        :key="i"
-      ><span>{{ row.skuName }} · {{ row.locationCode }}</span><input
-        v-model.number="copies[i]"
-        type="number"
-        min="1"
-        max="100"
-        :placeholder="'1'"
-        :aria-label="`${row.skuName} 标签份数`"
-        :disabled="exporting"
-        @input="change"
-      >份</label>
-    </div>
     <p
       v-if="!valid"
       role="alert"
       class="access-danger"
     >
-      每条 1～100 份，最多 100 条样品、合计 500 张标签。
+      每条样品打印 1 张，一次最多选择 100 条样品。
     </p>
     <div
       v-else
@@ -80,6 +64,7 @@ function change(){ready.value=false;error.value=''}
         ref="frame"
         title="样品标签预览"
         :srcdoc="documentHtml"
+        :style="{ height: previewHeight }"
         @load="fit"
       />
     </div>
@@ -118,5 +103,9 @@ function change(){ready.value=false;error.value=''}
   </AccessDialog>
 </template>
 <style scoped>
-.sample-label-meta{display:flex;gap:12px;color:var(--muted);font-size:13px;margin-bottom:10px}.sample-label-quantities{max-height:150px;overflow:auto;margin-bottom:10px}.sample-label-quantities label{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px}.sample-label-quantities label span{flex:1}.sample-label-quantities input{width:64px;min-height:32px;border:1px solid var(--line);padding:4px;text-align:right}.sample-label-preview{padding:14px;background:#f1f4f8;border-radius:6px;overflow:auto}.sample-label-preview iframe{display:block;width:calc(70mm + 18px);height:240px;max-width:100%;border:0;margin:auto;background:white}.sample-label-hint{font-size:12px;color:var(--muted);line-height:1.6;margin:10px 0 0}
+.sample-label-meta{display:flex;align-items:center;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:13px;margin-bottom:10px}
+.sample-label-meta strong{color:var(--ink)}
+.sample-label-preview{padding:14px;background:#f1f4f8;border:1px solid var(--line);border-radius:6px;overflow:auto;max-height:360px}
+.sample-label-preview iframe{display:block;width:70mm;min-width:70mm;border:0;margin:auto;background:transparent}
+.sample-label-hint{font-size:12px;color:var(--muted);line-height:1.6;margin:10px 0 0}
 </style>

@@ -45,7 +45,7 @@ async function confirmStatus(){if(!statusTarget.value||!impact.value||impactLoad
 async function changed(){deleteTarget.value=undefined;selected.value={};success.value='供应商资料已更新';await load()}
 async function exportRows(chosen=false){if(busy.value)return;busy.value=true;error.value='';try{const blob=await api.export(chosen?defaults():applied.value,chosen?selection.value.map(s=>s.id):[]);const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='供应商清单.csv';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}catch(e){error.value=e instanceof Error?e.message:'导出失败'}finally{busy.value=false}}
 watch([page,size],()=>{remember();if(ready.value)void load()})
-onBeforeRouteLeave(async()=>{remember();if(busy.value||editor.value?.busy)return false;if(editor.value?.dirty&&!editor.value.pending)return confirmAction('当前填写内容未保存，确定放弃并离开吗？');return true})
+onBeforeRouteLeave(async()=>{remember();if(busy.value||editor.value?.busy)return false;if(editor.value?.dirty&&!editor.value.pending)return confirmAction('当前填写内容未保存，确定放弃并离开吗？', { unsaved: true, discardLabel: '放弃并离开' });return true})
 onMounted(async()=>{try{const v=JSON.parse(sessionStorage.getItem(stateKey)??'null');if(v){filters.q=typeof v.filters?.q==='string'?v.filters.q:'';filters.status=['ACTIVE','DISABLED'].includes(v.filters?.status)?v.filters.status:'';filters.category=['PRODUCT','MATERIAL'].includes(v.filters?.category)?v.filters.category:'';applied.value={...filters};page.value=Math.max(1,Number(v.page)||1);size.value=[10,20,50,100].includes(v.size)?v.size:20;scroll=Math.max(0,Number(v.scroll)||0)}}catch{/* Defaults. */}pending();await initialize()})
 onBeforeUnmount(()=>{generation++;impactGeneration++;remember()})
 </script>
@@ -300,7 +300,6 @@ onBeforeUnmount(()=>{generation++;impactGeneration++;remember()})
     :supplier="deleteTarget"
     @close="deleteTarget=undefined"
     @deleted="changed"
-    @disabled="changed"
   /><AccessDialog
     v-if="statusTarget"
     :title="statusTarget.status==='ACTIVE'?'停用供应商':'启用供应商'"

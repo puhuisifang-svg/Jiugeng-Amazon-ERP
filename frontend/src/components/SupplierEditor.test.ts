@@ -16,3 +16,13 @@ describe('supplier editor recovery',()=>{
  it('requires impact confirmation for removed categories',async()=>{const w=mount(SupplierEditor,{props:{id:'s1'},global});await flushPromises();await w.get('input[value="PRODUCT"]').setValue(false);await w.get('form').trigger('submit');await flushPromises();expect(h.save).not.toHaveBeenCalled();expect(w.text()).toContain('采购草稿');const checks=w.findAll('input[type="checkbox"]');await checks[checks.length-1]!.setValue(true);await w.get('form').trigger('submit');await flushPromises();expect(h.save).toHaveBeenCalledWith(expect.objectContaining({id:'s1',impactConfirmed:true,supplier:expect.objectContaining({categories:['MATERIAL']})}));w.unmount()})
  it('resolves a conflict without losing the draft',async()=>{h.save.mockRejectedValueOnce(new ApiError(409,'SUPPLIER_VERSION_CONFLICT','版本冲突'));const w=mount(SupplierEditor,{props:{id:'s1'},global});await flushPromises();await w.get('input[required]').setValue('我的草稿');h.supplier.mockResolvedValue({...item,name:'其他人修改',version:4});await w.get('form').trigger('submit');await flushPromises();expect(w.text()).toContain('其他人修改');await w.findAll('button').find(b=>b.text()==='保留草稿，重新核对')!.trigger('click');await w.get('form').trigger('submit');await flushPromises();expect(h.save.mock.calls[1]![0].supplier).toEqual(expect.objectContaining({name:'我的草稿',version:4}));w.unmount()})
 })
+
+it('confirms a legacy save-and-continue request once and closes without starting another draft',async()=>{
+ const input={requestId:'legacy-supplier-request',supplier:item,impactConfirmed:false}
+ sessionStorage.setItem('jiugeng.supplier.pending.supplier-test',JSON.stringify({input,again:true}))
+ const w=mount(SupplierEditor,{props:{resume:true},global});await flushPromises()
+ expect(w.text()).not.toContain('保存并继续')
+ await w.get('form').trigger('submit');await flushPromises()
+ expect(h.save).toHaveBeenCalledWith(input);expect(h.save).toHaveBeenCalledTimes(1)
+ expect(w.emitted('close')).toHaveLength(1);expect(sessionStorage.getItem('jiugeng.supplier.pending.supplier-test')).toBeNull();w.unmount()
+})

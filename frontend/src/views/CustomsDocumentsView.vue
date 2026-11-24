@@ -11,12 +11,12 @@ import CustomsDocumentEditor from '@/components/CustomsDocumentEditor.vue'
 import TableViewport from '@/components/TableViewport.vue'
 import ListPagination from '@/components/ListPagination.vue'
 import CustomsFilesDialog from '@/components/CustomsFilesDialog.vue'
+import CustomsFileStatus from '@/components/CustomsFileStatus.vue'
 import RowMoreActions from '@/components/RowMoreActions.vue'
 import SuccessToast from '@/components/SuccessToast.vue'
 const fileRow=ref<CustomsSummary>(),fba=ref('')
 const query=ref(''),status=ref(''),applied=ref({q:'',status:'',fba:''}),page=ref(1),size=ref(20),rows=ref<CustomsSummary[]>([]),total=ref(0),loading=ref(false),busy=ref(false),error=ref(''),success=ref(''),editor=ref(false),current=ref<CustomsDocument>(),copy=ref(false),deleting=ref('')
 const writable=computed(()=>session.canAccess(['products.write'])),exportable=computed(()=>session.canAccess(['products.export']))
-const labels={DRAFT:'草稿',READY:'资料已核对',VOID:'已作废'}
 let sequence=0
 const message=(e:unknown)=>e instanceof Error?e.message:'操作失败，请重试'
 async function load(){const seq=++sequence;loading.value=true;error.value='';try{const r=await customsDocumentsApi.list(applied.value.q,applied.value.status,page.value-1,size.value,applied.value.fba);if(seq===sequence){rows.value=r.items;total.value=r.totalCount;const last=Math.max(1,Math.ceil(r.totalCount/size.value));if(page.value>last){page.value=last;await load()}}}catch(e){if(seq===sequence)error.value=message(e)}finally{if(seq===sequence)loading.value=false}}
@@ -80,7 +80,7 @@ onMounted(load);onBeforeUnmount(()=>++sequence)
         <table class="data-table">
           <thead>
             <tr>
-              <th>单据编号</th><th>FBA编号</th><th>FBA 仓库代码</th><th>件数</th><th>运费</th><th>境内发货人</th><th>境外收货人</th><th>运抵国</th><th>商品项数</th><th>状态</th><th>更新时间</th><th class="customs-doc-actions">
+              <th>单据编号</th><th>FBA编号</th><th>FBA 仓库代码</th><th>件数</th><th>运费</th><th>境内发货人</th><th>境外收货人</th><th>运抵国</th><th>商品项数</th><th>状态</th><th>创建时间</th><th class="customs-doc-actions">
                 操作
               </th>
             </tr>
@@ -104,10 +104,15 @@ onMounted(load);onBeforeUnmount(()=>++sequence)
                 {{ r.cartonCount ?? '—' }}
               </td><td>{{ r.freight || '—' }}</td><td>{{ r.seller || '—' }}</td><td>{{ r.buyer || '—' }}</td><td>{{ r.destination || '—' }}</td><td>{{ r.itemCount }}</td><td>
                 <span
-                  class="customs-status"
-                  :class="r.status==='VOID'?'void':r.fileStatus==='COMPLETED'?'ready':'draft'"
-                >{{ r.status==='VOID'?labels.VOID:r.fileStatus==='COMPLETED'?'已完成':'文档待上传' }}</span>
-              </td><td>{{ beijingDateTime(r.updatedAt) }}</td><td class="customs-doc-actions">
+                  v-if="r.status==='VOID'"
+                  class="customs-status void"
+                >已作废</span>
+                <CustomsFileStatus
+                  :screenshot-uploaded="r.screenshotUploaded"
+                  :invoice-uploaded="r.invoiceUploaded"
+                  stacked
+                />
+              </td><td>{{ beijingDateTime(r.createdAt) }}</td><td class="customs-doc-actions">
                 <button
                   type="button"
                   :disabled="busy"

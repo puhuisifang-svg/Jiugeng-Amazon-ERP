@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UnsavedChangesDialog from '@/components/UnsavedChangesDialog.vue'
 import { vPhone } from '@/directives/phone'
 import { vSingleSelect } from '@/directives/singleSelect'
 import ListPagination from '@/components/ListPagination.vue'
@@ -203,29 +204,7 @@ onMounted(load)
       aria-label="发票信息"
       @cancel.prevent="discard ? discard = false : requestClose()"
     >
-      <div
-        v-if="discard"
-        class="panel operation-form operation-dialog__card"
-      >
-        <h2 class="form-wide">
-          放弃未保存的修改？
-        </h2><p class="form-wide">
-          已填写的信息尚未保存。
-        </p><button
-          type="button"
-          @click="discard = false"
-        >
-          继续填写
-        </button><button
-          type="button"
-          class="danger-button"
-          @click="close"
-        >
-          放弃修改
-        </button>
-      </div>
       <form
-        v-show="!discard"
         class="panel operation-form operation-dialog__card"
         @submit.prevent="save"
       >
@@ -356,6 +335,11 @@ onMounted(load)
         </div>
       </form>
     </dialog>
+    <UnsavedChangesDialog
+      v-if="discard"
+      @keep="discard = false"
+      @discard="close"
+    />
   </section>
 </template>
 

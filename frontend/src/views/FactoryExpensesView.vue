@@ -46,7 +46,7 @@ async function show(row:FactoryRecord){error.value='';try{detail.value=await fac
 async function history(){if(!detail.value)return;historyBusy.value=true;historyError.value='';try{const result=await factoryApi.history('expenses',detail.value.id,historyPage.value-1,10);events.value=result.items;historyTotal.value=result.totalCount}catch(e){historyError.value=message(e)}finally{historyBusy.value=false}}
 function message(e:unknown){return e instanceof Error?e.message:'操作失败，请重试'}
 function beforeUnload(e:BeforeUnloadEvent){if(busy.value||(editor.value&&dirty.value)){e.preventDefault();e.returnValue=''}}
-onBeforeRouteLeave(async()=>busy.value?false:!editor.value||!dirty.value||await confirmAction('开销尚未保存，确定放弃并离开吗？'))
+onBeforeRouteLeave(async()=>busy.value?false:!editor.value||!dirty.value||await confirmAction('开销尚未保存，确定放弃并离开吗？', { unsaved: true, discardLabel: '放弃并离开' }))
 onMounted(()=>{void load();window.addEventListener('beforeunload',beforeUnload)})
 onBeforeUnmount(()=>{sequence++;window.removeEventListener('beforeunload',beforeUnload)})
 </script>

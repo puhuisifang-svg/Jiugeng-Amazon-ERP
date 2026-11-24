@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UnsavedChangesDialog from '@/components/UnsavedChangesDialog.vue'
 import { beijingDateTime, beijingDate, beijingDateTimeInput } from '@/utils/dateTime'
 
 
@@ -16,7 +17,7 @@ const listSize = ref(20)
 import CartonLabelExport from '@/components/CartonLabelExport.vue'
 import SuccessToast from "@/components/SuccessToast.vue"
 import TableViewport from "@/components/TableViewport.vue"
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { ApiError } from '@/api/client'
@@ -60,19 +61,14 @@ const formOpen = ref(false)
 const discardOpen = ref(false)
 const initialForm = ref('')
 const shipmentForm = ref<HTMLFormElement>()
-const continueButton = ref<HTMLButtonElement>()
 function formSnapshot() { return JSON.stringify([shipment, latestShipDate.value, correctionReason.value, shipmentLines.value]) }
 function openNew() { if(props.kind==='pending-shipments'&&route?.query.orderId){orderArrangeOpen.value=true;return} reset(); error.value = ''; initialForm.value = formSnapshot(); formOpen.value = true }
 async function requestClose() {
   if (saving.value) return
   if (isProduct.value || formSnapshot() === initialForm.value) { reset(); return }
   discardOpen.value = true
-  await nextTick(); continueButton.value?.focus()
 }
-async function continueEditing() {
-  discardOpen.value = false
-  await nextTick(); shipmentForm.value?.querySelector<HTMLElement>('select, input')?.focus()
-}
+function continueEditing() { discardOpen.value = false }
 function escapeForm() {
   if (isProduct.value || saving.value) return
   if (discardOpen.value) void continueEditing()
@@ -338,38 +334,12 @@ onMounted(async () => {
       <div
         v-if="isProduct || formOpen"
         :class="isProduct ? '' : 'operation-dialog'"
-        :role="isProduct ? undefined : discardOpen ? 'alertdialog' : 'dialog'"
+        :role="isProduct ? undefined : 'dialog'"
         :aria-modal="isProduct ? undefined : true"
-        :aria-label="discardOpen ? '放弃未保存的修改？' : '发货记录'"
+        aria-label="发货记录"
         @keydown.esc.stop.prevent="escapeForm"
       >
-        <div
-          v-if="discardOpen"
-          class="panel operation-form operation-dialog__card operation-dialog__card--compact"
-        >
-          <h2 class="form-wide">
-            放弃未保存的修改？
-          </h2>
-          <p class="form-wide">
-            当前填写的内容尚未保存。放弃后内容将丢失，是否继续填写？
-          </p>
-          <button
-            ref="continueButton"
-            type="button"
-            @click="continueEditing"
-          >
-            继续填写
-          </button>
-          <button
-            type="button"
-            class="danger-button"
-            @click="reset"
-          >
-            放弃修改
-          </button>
-        </div>
         <form
-          v-show="!discardOpen"
           ref="shipmentForm"
           class="panel operation-form"
           :class="{ 'operation-dialog__card shipping-editor': !isProduct }"
@@ -1085,6 +1055,11 @@ onMounted(async () => {
         </button>
       </form>
     </div>
+    <UnsavedChangesDialog
+      v-if="discardOpen"
+      @keep="discardOpen = false"
+      @discard="reset"
+    />
   </section>
 </template>
 

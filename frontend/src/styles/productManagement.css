@@ -212,3 +212,7 @@
 #app .product-ui.product-editor-form .sku-image-controls > .product-upload-note { order: 3; flex-basis: 100%; }
 #app .product-ui.product-editor-form .product-primary-supplier { display: block; width: fit-content; margin-top: 3px; color: #426792; font-size: 11px; font-weight: 400; }
 #app .product-ui.sku-detail-dialog .sku-identity .status-badge { min-width: 0; padding: 2px 6px; font-size: 12px; }
+
+/* Single-SKU forms include a context row before the scrolling body and footer. */
+#app .product-ui.product-editor-form--single.product-create-form{grid-template-rows:auto minmax(0,1fr) auto}
+#app .product-ui.product-editor-form .relation-edit-action .relation-note-toggle{color:#21834a}

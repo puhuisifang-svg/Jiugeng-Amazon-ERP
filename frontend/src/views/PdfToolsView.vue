@@ -4,6 +4,7 @@ import JSZip from 'jszip'
 import { labelContentBounds } from '@/utils/labelContentBounds'
 import PdfPagePreview from '@/components/PdfPagePreview.vue'
 import PdfTextLayer from '@/components/PdfTextLayer.vue'
+import PdfContinuousDocument from '@/components/PdfContinuousDocument.vue'
 import SuccessToast from '@/components/SuccessToast.vue'
 import { normalizePdfImage, MAX_PDF_IMAGE_TOTAL, MAX_PDF_IMAGE_PIXELS } from '@/utils/pdfImageInput'
 import { drawPdfText } from '@/utils/pdfTextLayout'
@@ -24,9 +25,9 @@ const tab = ref<Tab>('split'), fileInput = ref<HTMLInputElement>(), overlayInput
 function createTabState() {
   return {
     source: shallowRef<Uint8Array>(), result: shallowRef<Uint8Array>(), name: ref(''), pageCount: ref(0), page: ref(0),
-    message: ref(''), error: ref(''), ranges: ref(''), splitMode: ref('ranges'),
-    fitContent: ref(true), margin: ref(2), imageMargin: ref(2), paper: ref<'a4' | 'square' | 'original'>('a4'), landscape: ref(false),
-    images: ref<ImageItem[]>([]), layers: ref<Layer[]>([]), selectedId: ref<number>(), dimensions: ref({ width: 595, height: 842 }),
+    message: ref(''), error: ref(''), ranges: ref(''), splitMode: ref('merge'),
+    fitContent: ref(true), margin: ref(2), imageMargin: ref(2), paper: ref<'a4' | 'square' | 'original'>('original'), landscape: ref(false),
+    pageSizes: ref<{ width: number; height: number }[]>([]), images: ref<ImageItem[]>([]), layers: ref<Layer[]>([]), selectedId: ref<number>(), dimensions: ref({ width: 595, height: 842 }),
   }
 }
 const states = { split: createTabState(), images: createTabState(), edit: createTabState(), fba: createTabState() }
@@ -39,7 +40,9 @@ const busy = ref(false), message = activeRef(s => s.message), error = activeRef(
 const fitContent = activeRef(s => s.fitContent)
 const margin = activeRef(s => s.margin), imageMargin = activeRef(s => s.imageMargin), paper = activeRef(s => s.paper), landscape = activeRef(s => s.landscape)
 const images = activeRef<ImageItem[]>(s => s.images), layers = activeRef<Layer[]>(s => s.layers), selectedId = activeRef(s => s.selectedId), dimensions = activeRef(s => s.dimensions)
-const thumbnailPage = ref(0)
+const pageSizes = activeRef(s => s.pageSizes)
+const fbaPageSizes = computed(() => result.value ? Array.from({ length: pageCount.value }, () => ({ width: 100 * MM, height: 100 * MM })) : pageSizes.value)
+const editorSize = computed(() => pageSizes.value[page.value] || dimensions.value)
 const extraction = computed(() => tab.value === 'split' && splitMode.value === 'merge')
 const selectedPages = computed(() => { try { return [...new Set(pageGroups(ranges.value, pageCount.value).flat())].sort((a,b) => a-b) } catch { return [] } })
 const splitSummary = computed(() => {
@@ -51,16 +54,20 @@ const splitSummary = computed(() => {
     return { groups, error: '', pages: unique.size, duplicates: all.length - unique.size }
   } catch (error) { return { groups: [] as number[][], error: error instanceof Error ? error.message : '页码范围无效', pages: 0, duplicates: 0 } }
 })
-const thumbnailPages = computed(() => Array.from({ length: Math.min(12, Math.max(0, pageCount.value - thumbnailPage.value * 12)) }, (_, i) => thumbnailPage.value * 12 + i))
+const thumbnailPages = computed(() => Array.from({ length: pageCount.value }, (_, i) => i))
 function togglePage(index: number) {
   const pages = new Set(selectedPages.value)
   if (pages.has(index)) pages.delete(index); else pages.add(index)
   ranges.value = [...pages].sort((a,b) => a-b).map(i => i+1).join(',')
 }
-const stage = ref<HTMLElement>(), stageWidth = ref(600)
-let sequence = 0, observer: ResizeObserver | undefined
+const stage = ref<HTMLElement>()
+let sequence = 0
 const selected = computed(() => layers.value.find(l => l.id === selectedId.value))
 const visibleLayers = computed(() => layers.value.filter(l => l.page === page.value))
+const copyTargetPage = ref(1)
+watch([page, pageCount, source], () => {
+  copyTargetPage.value = page.value + 1 < pageCount.value ? page.value + 1 : Math.max(0, page.value - 1)
+}, { flush: 'sync' })
 const preview = computed(() => result.value || source.value)
 const title = computed(() => tabs.find(t => t.id === tab.value)!)
 const baseName = computed(() => tab.value === 'images'
@@ -75,11 +82,7 @@ for (const state of Object.values(states)) {
     state.result.value = undefined; state.message.value = ''; state.error.value = ''
   }, { flush: 'sync' })
 }
-watch([tab, page], () => { endDrag?.() })
-watch(stage, element => {
-  observer?.disconnect()
-  if (element) { observer = new ResizeObserver(() => { stageWidth.value = element.clientWidth }); observer.observe(element); stageWidth.value = element.clientWidth }
-}, { flush: 'post' })
+watch([tab, page], () => { endDrag?.() }, { flush: 'sync' })
 async function run(action: () => Promise<void>) {
   if (busy.value) return
   busy.value = true; error.value = ''; message.value = ''
@@ -113,7 +116,11 @@ async function acceptFiles(files: File[]) {
       ensurePrintable(doc)
       resetResult()
       source.value = bytes; pageCount.value = doc.getPageCount(); page.value = 0; name.value = file.name
-      ranges.value = `1-${pageCount.value}`; thumbnailPage.value = 0; clearLayers()
+      pageSizes.value = doc.getPages().map(p => {
+        const box = p.getCropBox(), rotated = Math.abs(p.getRotation().angle % 180) === 90
+        return { width: rotated ? box.height : box.width, height: rotated ? box.width : box.height }
+      })
+      ranges.value = `1-${pageCount.value}`; clearLayers()
       if (tab.value === 'fba') result.value = await convertLabels(bytes)
     }
   })
@@ -137,12 +144,18 @@ async function addOverlay(event: Event) {
     try {
       const bitmap = await createImageBitmap(new Blob([new Uint8Array(image.bytes)]))
       try {
-        const layer = addLayer('image'); layer.url = image.url; layer.height = Math.min(.8, layer.width * dimensions.value.width / dimensions.value.height * bitmap.height / bitmap.width)
+        const layer = addLayer('image'); layer.url = image.url; layer.height = Math.min(.8, layer.width * editorSize.value.width / editorSize.value.height * bitmap.height / bitmap.width)
       } finally { bitmap.close() }
     } catch (error) { URL.revokeObjectURL(image.url); throw error }
   })
 }
-function removeLayer() { if (busy.value) return; const l = selected.value; if (l?.url) URL.revokeObjectURL(l.url); layers.value = layers.value.filter(i => i.id !== selectedId.value); selectedId.value = undefined; resetResult() }
+function deleteSelectedLayer(event: KeyboardEvent) {
+  if (tab.value !== 'edit' || busy.value || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || !['Delete', 'Backspace'].includes(event.key) || !selected.value || selected.value.page !== page.value) return
+  const target = event.target
+  if (target instanceof Element && target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return
+  event.preventDefault(); event.stopPropagation(); removeLayer()
+}
+function removeLayer() { if (busy.value) return; endDrag?.(); const l = selected.value; if (l?.url) URL.revokeObjectURL(l.url); layers.value = layers.value.filter(i => i.id !== selectedId.value); selectedId.value = undefined; resetResult() }
 function layerName(layer: Layer) { return layer.kind === 'text' ? layer.text || '空文字' : ({ image: '图片', highlight: '高亮', rectangle: '矩形' })[layer.kind] }
 function reorderLayer(delta: number) {
   if (busy.value || !selected.value) return
@@ -152,32 +165,41 @@ function reorderLayer(delta: number) {
   ;[layers.value[from], layers.value[to]] = [layers.value[to]!, layers.value[from]!]
   resetResult()
 }
-async function duplicateLayer() {
-  if (!selected.value) return
+async function duplicateLayer(targetPage = page.value) {
+  if (busy.value || !selected.value || selected.value.page !== page.value || !Number.isInteger(targetPage) || targetPage < 0 || targetPage >= pageCount.value) return
   const original = selected.value
+  let copiedId: number | undefined
   await run(async () => {
     const url = original.url ? URL.createObjectURL(await (await fetch(original.url)).blob()) : undefined
-    const copy: Layer = { ...original, id: ++sequence, x: original.x, y: original.y }
+    const copy: Layer = { ...original, id: ++sequence, page: targetPage }
     if (url) copy.url = url
-    layers.value.splice(layers.value.indexOf(original) + 1, 0, copy); selectedId.value = copy.id; resetResult()
+    if (targetPage === original.page) layers.value.splice(layers.value.indexOf(original) + 1, 0, copy)
+    else layers.value.push(copy)
+    copiedId = copy.id; resetResult()
   })
+  // Navigate after the busy lock has cleared, so the continuous document can scroll to the copy.
+  if (copiedId !== undefined) {
+    page.value = targetPage; selectedId.value = copiedId
+    if (targetPage !== original.page) message.value = `已复制到第 ${targetPage + 1} 页，可继续编辑`
+  }
 }
 function nudgeLayer(event: KeyboardEvent, layer: Layer) {
   if (busy.value || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
-  event.preventDefault(); selectedId.value = layer.id
+  event.preventDefault(); page.value = layer.page; selectedId.value = layer.id
+  const size = pageSizes.value[layer.page] || dimensions.value
   const step = event.shiftKey ? 10 : 1
-  layer.x = Math.max(0, Math.min(1 - (layer.kind === 'text' ? 0 : layer.width), layer.x + (event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0) / dimensions.value.width))
-  layer.y = Math.max(0, Math.min(1 - (layer.kind === 'text' ? 0 : layer.height), layer.y + (event.key === 'ArrowDown' ? step : event.key === 'ArrowUp' ? -step : 0) / dimensions.value.height))
+  layer.x = Math.max(0, Math.min(1 - (layer.kind === 'text' ? 0 : layer.width), layer.x + (event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0) / size.width))
+  layer.y = Math.max(0, Math.min(1 - (layer.kind === 'text' ? 0 : layer.height), layer.y + (event.key === 'ArrowDown' ? step : event.key === 'ArrowUp' ? -step : 0) / size.height))
   resetResult()
 }
-function layerStyle(l: Layer) {
-  return { left: `${l.x * 100}%`, top: `${l.y * 100}%`, width: l.kind === 'text' ? undefined : `${l.width * 100}%`, height: l.kind === 'text' ? undefined : `${l.height * 100}%`, fontSize: `${l.fontSize * stageWidth.value / dimensions.value.width}px`, color: l.color, background: l.kind === 'highlight' ? `${l.color}66` : l.kind === 'rectangle' && l.filled ? l.color : undefined, borderColor: l.kind === 'rectangle' ? l.color : undefined, borderWidth: l.kind === 'rectangle' ? `${stageWidth.value / dimensions.value.width}px` : undefined }
+function layerStyle(l: Layer, width: number, size: { width: number; height: number }) {
+  return { left: `${l.x * 100}%`, top: `${l.y * 100}%`, width: l.kind === 'text' ? undefined : `${l.width * 100}%`, height: l.kind === 'text' ? undefined : `${l.height * 100}%`, fontSize: `${l.fontSize * width / size.width}px`, color: l.color, background: l.kind === 'highlight' ? `${l.color}66` : l.kind === 'rectangle' && l.filled ? l.color : undefined, borderColor: l.kind === 'rectangle' ? l.color : undefined, borderWidth: l.kind === 'rectangle' ? `${width / size.width}px` : undefined }
 }
 let endDrag: (() => void) | undefined
 function drag(event: PointerEvent, layer: Layer) {
   if (busy.value || event.button !== 0) return
-  event.preventDefault(); selectedId.value = layer.id; resetResult(); endDrag?.()
-  const rect = stage.value!.getBoundingClientRect(), target = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  event.preventDefault(); selectedId.value = layer.id; (event.currentTarget as HTMLElement).focus({ preventScroll: true }); resetResult(); endDrag?.()
+  const rect = (event.currentTarget as HTMLElement).closest('.pdf-stage')!.getBoundingClientRect(), target = (event.currentTarget as HTMLElement).getBoundingClientRect()
   const startX = event.clientX, startY = event.clientY, x = layer.x, y = layer.y
   const move = (e: PointerEvent) => { layer.x = Math.max(0, Math.min(1 - target.width / rect.width, x + (e.clientX - startX) / rect.width)); layer.y = Math.max(0, Math.min(1 - target.height / rect.height, y + (e.clientY - startY) / rect.height)) }
   const end = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end); endDrag = undefined }
@@ -186,9 +208,9 @@ function drag(event: PointerEvent, layer: Layer) {
 type Corner = 'nw' | 'ne' | 'sw' | 'se'
 const resizeCorners: { corner: Corner; label: string }[] = [{ corner: 'nw', label: '左上' }, { corner: 'ne', label: '右上' }, { corner: 'sw', label: '左下' }, { corner: 'se', label: '右下' }]
 function resizeLayer(event: PointerEvent, layer: Layer, corner: Corner) {
-  if (busy.value || event.button !== 0 || !stage.value) return
+  if (busy.value || event.button !== 0 ) return
   event.preventDefault(); endDrag?.(); selectedId.value = layer.id; resetResult()
-  const rect = stage.value.getBoundingClientRect()
+  const rect = (event.currentTarget as HTMLElement).closest('.pdf-stage')!.getBoundingClientRect()
   if (!rect.width || !rect.height) return
   const startX = event.clientX, startY = event.clientY
   const left = layer.x, top = layer.y, right = left + layer.width, bottom = top + layer.height
@@ -268,10 +290,13 @@ function paste(event: ClipboardEvent) {
   if (files.length) { event.preventDefault(); void acceptFiles(files) }
 }
 onMounted(() => { window.addEventListener('paste', paste); if (typeof window.matchMedia === 'function') settingsCollapsed.value = window.matchMedia('(max-width:850px)').matches })
-onBeforeUnmount(() => { observer?.disconnect(); endDrag?.(); window.removeEventListener('paste', paste); for (const state of Object.values(states)) { state.images.value.forEach(i => URL.revokeObjectURL(i.url)); state.layers.value.forEach(l => { if (l.url) URL.revokeObjectURL(l.url) }) } })
+onBeforeUnmount(() => { endDrag?.(); window.removeEventListener('paste', paste); for (const state of Object.values(states)) { state.images.value.forEach(i => URL.revokeObjectURL(i.url)); state.layers.value.forEach(l => { if (l.url) URL.revokeObjectURL(l.url) }) } })
 </script>
 <template>
-  <section class="pdf-tools">
+  <section
+    class="pdf-tools"
+    @keydown="deleteSelectedLayer"
+  >
     <div class="pdf-command-bar">
       <nav
         class="pdf-tabs"
@@ -343,7 +368,7 @@ onBeforeUnmount(() => { observer?.disconnect(); endDrag?.(); window.removeEventL
     </button>
     <div
       class="pdf-workspace"
-      :class="{ 'settings-collapsed': settingsCollapsed }"
+      :class="{ 'settings-collapsed': settingsCollapsed, 'editor-workspace': tab === 'edit' && source }"
     >
       <aside
         id="pdf-tool-settings"
@@ -372,7 +397,7 @@ onBeforeUnmount(() => { observer?.disconnect(); endDrag?.(); window.removeEventL
             v-model="splitMode"
             v-single-select
             :disabled="busy"
-          ><option value="ranges">按范围拆分为多个PDF</option><option value="merge">提取页面，合为一个PDF</option><option value="each">每页拆分为一个PDF</option></select></label>
+          ><option value="merge">提取页面，合为一个PDF</option><option value="ranges">按范围拆分为多个PDF</option><option value="each">每页拆分为一个PDF</option></select></label>
           <label v-if="splitMode !== 'each'">页面范围<input
             v-model="ranges"
             :disabled="busy"
@@ -405,7 +430,7 @@ onBeforeUnmount(() => { observer?.disconnect(); endDrag?.(); window.removeEventL
             v-model="paper"
             v-single-select
             :disabled="busy"
-          ><option value="a4">A4</option><option value="square">100 × 100毫米</option><option value="original">跟随图片尺寸（96 DPI）</option></select></label>
+          ><option value="a4">A4</option><option value="square">100 × 100毫米</option><option value="original">跟随图片尺寸（保留原图像素）</option></select></label>
           <label v-if="paper === 'a4'">方向<select
             v-model="landscape"
             v-single-select
@@ -419,7 +444,7 @@ onBeforeUnmount(() => { observer?.disconnect(); endDrag?.(); window.removeEventL
             :disabled="busy"
           ></label>
           <p class="pdf-hint">
-            每张图片一页，可调整顺序。图片保持原比例，不裁切。最多50张，每张20 MB；原文件与转换后各不超过100 MB，累计不超过1亿像素。
+            每张图片一页，可调整顺序。保留原图像素，不做有损重压缩；跟随尺寸按96 DPI换算纸张大小，不降低分辨率。打印A4可选A4纸张或在打印窗口适合纸张。最多50张，每张20 MB；原文件与转换后各不超过100 MB，累计不超过1亿像素。
           </p>
           <button
             v-if="result"
@@ -459,30 +484,6 @@ onBeforeUnmount(() => { observer?.disconnect(); endDrag?.(); window.removeEventL
           </p>
         </template>
         <template v-if="tab === 'edit'">
-          <div class="pdf-edit-actions">
-            <button
-              :disabled="!source || busy"
-              @click="addLayer('text')"
-            >
-              ＋文字
-            </button><button
-              :disabled="!source || busy"
-              @click="overlayInput?.click()"
-            >
-              ＋图片
-            </button>
-            <button
-              :disabled="!source || busy"
-              @click="addLayer('highlight')"
-            >
-              高亮标注
-            </button><button
-              :disabled="!source || busy"
-              @click="addLayer('rectangle')"
-            >
-              矩形框
-            </button>
-          </div>
           <p class="pdf-hint">
             拖动内容调整位置，拖动矩形四角调整大小。支持中英文；新增内容以高清图层保存，原有文字不可直接改写。
           </p>
@@ -490,7 +491,7 @@ onBeforeUnmount(() => { observer?.disconnect(); endDrag?.(); window.removeEventL
             v-if="visibleLayers.length"
             class="pdf-layer-panel"
           >
-            <strong>当前页图层 · {{ visibleLayers.length }} <small>上方在前</small></strong>
+            <strong>第 {{ page + 1 }} 页图层 · {{ visibleLayers.length }} <small>上方在前</small></strong>
             <ol
               class="pdf-layer-list"
               aria-label="当前页图层"
@@ -518,7 +519,8 @@ onBeforeUnmount(() => { observer?.disconnect(); endDrag?.(); window.removeEventL
               <button
                 type="button"
                 :disabled="busy"
-                @click="duplicateLayer"
+                title="在当前页复制"
+                @click="duplicateLayer()"
               >
                 复制
               </button>
@@ -535,6 +537,30 @@ onBeforeUnmount(() => { observer?.disconnect(); endDrag?.(); window.removeEventL
                 @click="reorderLayer(-1)"
               >
                 下移一层
+              </button>
+            </div>
+            <div
+              v-if="selected && selected.page === page && pageCount > 1"
+              class="pdf-layer-copy-target"
+            >
+              <label>复制到<select
+                v-model.number="copyTargetPage"
+                v-single-select
+                aria-label="复制目标页"
+                :disabled="busy"
+              ><option
+                v-for="index in thumbnailPages"
+                :key="index"
+                :value="index"
+                :disabled="index === page"
+              >第 {{ index + 1 }} 页{{ index === page ? '（当前页）' : '' }}</option></select></label>
+              <button
+                type="button"
+                class="secondary"
+                :disabled="busy || copyTargetPage === page"
+                @click="duplicateLayer(copyTargetPage)"
+              >
+                复制到该页
               </button>
             </div>
             <small>方向键微调 1pt，Shift＋方向键 10pt</small>
@@ -592,7 +618,7 @@ onBeforeUnmount(() => { observer?.disconnect(); endDrag?.(); window.removeEventL
             v-if="layers.length"
             class="pdf-hint"
           >
-            已添加{{ layers.length }}项内容，切换页面可继续编辑。
+            已添加{{ layers.length }}项内容，滚动或点击缩略图继续编辑。
           </p>
         </template>
       </aside>
@@ -683,27 +709,104 @@ onBeforeUnmount(() => { observer?.disconnect(); endDrag?.(); window.removeEventL
               <PdfPagePreview
                 :bytes="source"
                 :page="index"
+                :size="pageSizes[index]"
                 thumbnail
               />
               <span>第 {{ index + 1 }} 页</span>
             </div>
           </div>
-          <div class="pdf-pagebar">
-            <button
-              :disabled="thumbnailPage === 0 || busy"
-              @click="thumbnailPage--"
-            >
-              上一组
-            </button>
-            <span>{{ thumbnailPage + 1 }} / {{ Math.ceil(pageCount / 12) }}</span>
-            <button
-              :disabled="(thumbnailPage+1)*12 >= pageCount || busy"
-              @click="thumbnailPage++"
-            >
-              下一组
-            </button>
-          </div>
         </template>
+        <PdfContinuousDocument
+          v-else-if="tab === 'edit' && source"
+          v-model:page="page"
+          :bytes="source"
+          :sizes="pageSizes"
+          :busy="busy"
+        >
+          <template #tools>
+            <div class="pdf-edit-actions">
+              <button
+                :disabled="!source || busy"
+                @click="addLayer('text')"
+              >
+                ＋文字
+              </button><button
+                :disabled="!source || busy"
+                @click="overlayInput?.click()"
+              >
+                ＋图片
+              </button>
+              <button
+                :disabled="!source || busy"
+                @click="addLayer('highlight')"
+              >
+                高亮标注
+              </button><button
+                :disabled="!source || busy"
+                @click="addLayer('rectangle')"
+              >
+                矩形框
+              </button>
+              <button
+                type="button"
+                class="pdf-danger"
+                :disabled="busy || !selected || selected.page !== page"
+                @click="removeLayer"
+              >
+                删除选中
+              </button>
+            </div>
+          </template>
+          <template #default="{ page: index, size, width }">
+            <div
+              v-for="layer in layers.filter(item => item.page === index)"
+              :key="layer.id"
+              class="pdf-layer"
+              :class="[layer.kind, { selected: page === index && selectedId === layer.id }]"
+              :style="layerStyle(layer, width, size)"
+              role="button"
+              tabindex="0"
+              :aria-label="`选择${layer.kind === 'text' ? layer.text : '标注'}`"
+              @pointerdown="drag($event, layer)"
+              @keydown="nudgeLayer($event, layer)"
+              @keydown.enter="selectedId = layer.id"
+            >
+              <img
+                v-if="layer.kind === 'image'"
+                :src="layer.url"
+                alt="新增图片"
+                draggable="false"
+              ><PdfTextLayer
+                v-if="layer.kind === 'text'"
+                :layer="layer"
+                :scale="width / size.width"
+              />
+              <template v-if="layer.kind === 'rectangle' && page === index && selectedId === layer.id">
+                <span
+                  v-for="handle in resizeCorners"
+                  :key="handle.corner"
+                  class="pdf-resize-handle"
+                  :class="handle.corner"
+                  :aria-label="`${handle.label}缩放手柄`"
+                  :title="`拖动${handle.label}调整大小`"
+                  @pointerdown.stop="resizeLayer($event, layer, handle.corner)"
+                />
+              </template>
+            </div>
+          </template>
+        </PdfContinuousDocument>
+        <PdfContinuousDocument
+          v-else-if="tab === 'fba' && preview"
+          v-model:page="page"
+          :bytes="preview"
+          :sizes="fbaPageSizes"
+          :busy="busy"
+          readonly
+        >
+          <template #tools>
+            <span class="pdf-hint">{{ result ? '转换后 · 100 × 100 mm' : '原文件' }} · 共 {{ pageCount }} 页</span>
+          </template>
+        </PdfContinuousDocument>
         <template v-else-if="preview">
           <div class="pdf-pagebar">
             <button
@@ -743,46 +846,7 @@ onBeforeUnmount(() => { observer?.disconnect(); endDrag?.(); window.removeEventL
                 :bytes="preview"
                 :page="page"
                 @dimensions="dimensions = $event"
-              >
-                <template v-if="tab === 'edit'">
-                  <div
-                    v-for="layer in visibleLayers"
-                    :key="layer.id"
-                    class="pdf-layer"
-                    :class="[layer.kind, { selected: selectedId === layer.id }]"
-                    :style="layerStyle(layer)"
-                    role="button"
-                    tabindex="0"
-                    :aria-label="`选择${layer.kind === 'text' ? layer.text : '标注'}`"
-                    @pointerdown="drag($event, layer)"
-                    @keydown="nudgeLayer($event, layer)"
-                    @keydown.enter="selectedId = layer.id"
-                    @keydown.delete="selectedId = layer.id; removeLayer()"
-                  >
-                    <img
-                      v-if="layer.kind === 'image'"
-                      :src="layer.url"
-                      alt="新增图片"
-                      draggable="false"
-                    ><PdfTextLayer
-                      v-if="layer.kind === 'text'"
-                      :layer="layer"
-                      :scale="stageWidth / dimensions.width"
-                    />
-                    <template v-if="layer.kind === 'rectangle' && selectedId === layer.id">
-                      <span
-                        v-for="handle in resizeCorners"
-                        :key="handle.corner"
-                        class="pdf-resize-handle"
-                        :class="handle.corner"
-                        :aria-label="`${handle.label}缩放手柄`"
-                        :title="`拖动${handle.label}调整大小`"
-                        @pointerdown.stop="resizeLayer($event, layer, handle.corner)"
-                      />
-                    </template>
-                  </div>
-                </template>
-              </PdfPagePreview>
+              />
             </div>
           </div>
         </template>
@@ -833,7 +897,7 @@ onBeforeUnmount(() => { observer?.disconnect(); endDrag?.(); window.removeEventL
 .pdf-pagebar label { display:flex; align-items:center; gap:6px; white-space:nowrap; }.pdf-pagebar :deep(.single-select-trigger) { width:62px; min-height:30px; }.pdf-pagebar>span { margin-left:auto; color:#8190a2; font-size:12px; }
 .pdf-pagebar button, .pdf-edit-actions button, .secondary, .pdf-image-card button, .layer-settings button { background:white; border:1px solid #d9e2ee; border-radius:5px; color:#47729f; padding:6px 10px; font-size:12px; min-height:32px; }
 .pdf-paper-area { overflow:auto; max-height:calc(100vh - 255px); min-height:280px; padding:12px; }.pdf-stage { max-width:620px; width:100%; margin:auto; position:relative; overflow:hidden; }.pdf-stage.square { max-width:560px; }
-.pdf-edit-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.pdf-edit-actions { display:flex; flex-wrap:wrap; gap:4px; }
 .layer-settings { display:flex; flex-direction:column; gap:8px; margin:0; padding:8px; border:1px solid #e0e7f0; border-radius:6px; min-width:0; }.layer-settings legend { color:#697e99; font-size:12px; padding:0 4px; }
 .pdf-layer { position:absolute; cursor:move; touch-action:none; box-sizing:border-box; line-height:1.3; font-family:"PingFang SC","Microsoft YaHei",sans-serif; user-select:none; }.pdf-resize-handle { position:absolute; width:24px; height:24px; touch-action:none; z-index:2; }
 .pdf-resize-handle::after { content:''; position:absolute; inset:8px; background:#fff; border:1px solid #2580ed; box-sizing:border-box; }
@@ -854,8 +918,21 @@ onBeforeUnmount(() => { observer?.disconnect(); endDrag?.(); window.removeEventL
 .pdf-layer-list button { width:100%; min-height:28px; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; border:1px solid var(--line); background:white; color:var(--ink); border-radius:4px; padding:3px 6px; }
 .pdf-layer-list button[aria-pressed=true] { background:#edf5ff; border-color:#91b8ec; color:var(--accent); }
 .pdf-layer-controls { display:flex; flex-wrap:wrap; gap:4px; }.pdf-layer-controls button { min-height:28px; padding:3px 6px; font-size:12px; background:white; border:1px solid var(--line); color:var(--accent); border-radius:4px; }
+.pdf-layer-copy-target { display:flex; align-items:end; gap:6px; }
+.pdf-layer-copy-target label { flex:1; min-width:0; }
+.pdf-layer-copy-target button { flex:none; padding:4px 8px; }
+.pdf-layer-copy-target :deep(.single-select-trigger) { width:100%; min-width:0; }
 .pdf-error { display:flex; align-items:start; gap:8px; }.pdf-error span { flex:1; }.pdf-error button { border:0; background:none; color:inherit; }
 @media(min-width:851px) { .pdf-settings { position:sticky; top:calc(var(--ui-sticky-top,0px) + 84px); max-height:calc(100dvh - 220px); overflow:auto; } }
 @media(max-width:850px) { .pdf-settings-toggle { display:block; text-align:left; }.settings-collapsed .pdf-settings { display:none; }.pdf-workspace { grid-template-columns:1fr; }.pdf-settings { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }.pdf-tabs { gap:14px; }.pdf-tabs>span { display:none; }.pdf-paper-area { max-height:65dvh; }.pdf-empty { min-height:300px; } }
 @media(max-width:480px) { .pdf-settings { grid-template-columns:1fr; }.pdf-actions span { display:none; }.pdf-paper-area { padding:12px; } }
+.editor-workspace { grid-template-columns:minmax(0,1fr) 224px; }
+.editor-workspace>.pdf-settings { grid-column:2; grid-row:1; }
+.editor-workspace>.pdf-content { grid-column:1; grid-row:1; }
+.pdf-thumbnail-grid { align-items:start; }
+@media(max-width:850px) {
+  .editor-workspace { grid-template-columns:1fr; }
+  .editor-workspace>.pdf-settings { grid-column:1; grid-row:auto; }
+  .editor-workspace>.pdf-content { grid-column:1; grid-row:auto; }
+}
 </style>

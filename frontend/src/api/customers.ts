@@ -33,6 +33,9 @@ export interface CustomerProduct extends CustomerProductInput {
   id: string; customerName: string; customerStatus: CustomerStatus; skuCode: string; productName: string
   version: number; updatedAt: string
 }
+export interface CustomsHistoryItem {
+  id: string; customerName: string; productName: string; skuCode: string; status: CustomerStatus; updatedAt: string; customs: CustomsProfile
+}
 export interface CustomerPage<T> { items: T[]; totalCount: number; page: number; size: number }
 interface Filters { q?: string; status?: CustomerStatus | ''; customerId?: string; page?: number; size?: number }
 function query(filters: Filters) {
@@ -41,6 +44,7 @@ function query(filters: Filters) {
   return params.toString()
 }
 export const customersApi = {
+  customsHistory: (hsCode: string, excludeId = '', page = 0, size = 20) => apiRequest<CustomerPage<CustomsHistoryItem>>(`/v1/customers/products/customs-history?${new URLSearchParams({ hsCode, excludeId, page: String(page), size: String(size) })}`),
   get:(id:string)=>apiRequest<Customer>(`/v1/customers/${encodeURIComponent(id)}`),
   defaultCustomer: () => apiRequest<Customer | null>('/v1/customers/default'),
   list: (filters: Filters = {}) => apiRequest<CustomerPage<Customer>>(`/v1/customers?${query(filters)}`),

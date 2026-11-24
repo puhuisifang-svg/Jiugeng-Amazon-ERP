@@ -9,7 +9,7 @@ beforeEach(() => {
   mocks.acquire.mockImplementation(() => ({ document: Promise.resolve({ getPage: mocks.getPage }), release: mocks.release }))
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ drawImage: vi.fn() } as unknown as CanvasRenderingContext2D)
 })
-afterEach(() => { wrappers.splice(0).forEach(w => w.unmount()); vi.restoreAllMocks(); vi.clearAllMocks() })
+afterEach(() => { wrappers.splice(0).forEach(w => w.unmount()); vi.restoreAllMocks(); vi.clearAllMocks(); vi.unstubAllGlobals() })
 it('cancels the obsolete render on rapid page change and retains the shared document', async () => {
   let reject!: (reason: Error) => void
   const old = new Promise<void>((_resolve, fail) => { reject = fail })
@@ -30,4 +30,25 @@ it('retries a failed document in place without asking the parent to replace byte
   await w.get('button').trigger('click'); await flushPromises()
   expect(mocks.acquire).toHaveBeenNthCalledWith(2, bytes)
   expect(w.find('[role=alert]').exists()).toBe(false)
+})
+
+it('only renders nearby pages and releases offscreen canvases while keeping page geometry', async () => {
+  let intersect!: (entries: { isIntersecting: boolean }[]) => void
+  const disconnect = vi.fn()
+  vi.stubGlobal('IntersectionObserver', class {
+    constructor(callback: typeof intersect) { intersect = callback }
+    observe() {} disconnect = disconnect
+  })
+  mocks.getPage.mockResolvedValue(page(() => ({ promise: Promise.resolve(), cancel: vi.fn() })))
+  const w = mount(PdfPagePreview, { props: { bytes: new Uint8Array([1]), page: 0, lazy: true, size: { width: 600, height: 800 } } }); wrappers.push(w)
+  await flushPromises(); expect(mocks.acquire).not.toHaveBeenCalled()
+  intersect([{ isIntersecting: true }]); await flushPromises()
+  expect(mocks.acquire).toHaveBeenCalledTimes(1)
+  expect((w.get('canvas').element as HTMLCanvasElement).width).toBeGreaterThan(0)
+  intersect([{ isIntersecting: false }]); await flushPromises()
+  expect(mocks.release).toHaveBeenCalledTimes(1)
+  expect((w.get('canvas').element as HTMLCanvasElement).width).toBe(0)
+  expect(w.attributes('style')).toContain('aspect-ratio: 600 / 800')
+  intersect([{ isIntersecting: true }]); await flushPromises()
+  expect((w.get('canvas').element as HTMLCanvasElement).width).toBeGreaterThan(0)
 })

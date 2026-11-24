@@ -40,5 +40,7 @@ final class CustomerTypes {
         String productId, String variantId, String skuCode, String productName,
         BigDecimal supplyPrice, String priceUnit, String customerProductCode, String requirements,
         Status status, long version, Instant updatedAt, String specification, CustomsProfile customs) {}
+    record CustomsHistoryView(String id, String customerName, String productName, String skuCode,
+        Status status, Instant updatedAt, CustomsProfile customs) {}
     record Page<T>(List<T> items, long totalCount, int page, int size) {}
 }

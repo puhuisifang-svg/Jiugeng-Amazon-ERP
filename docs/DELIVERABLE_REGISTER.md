@@ -57,7 +57,7 @@
 
 | DEL-051 | 2026-11-24 | Codex | 客户商品相同 HS 历史资料查询、弹窗核对与带入 | v0.1 | In Review | 用户授权本地开发；无发布授权 | [实施记录](../deliverables/pjm/CUSTOMER_HS_HISTORY_LOCAL_2026-11-24.md)；局部 11＋1 项及静态检查通过，本地 mysql 已同步，完整验证待交接 |
 
-| DEL-052 | 2026-11-24 | Codex → PJM | PDF 连续工作区与客户商品 HS 历史引用累计发布交接 | v1.0 | In Review | 用户已授权提交 main / 部署；PJM 复核执行 | [正式交接记录](../deliverables/pjm/PDF_HS_RELEASE_HANDOFF_2026-11-24.md)；前后端完整门禁及 7 个浏览器场景通过，未提交，发布结果由 PJM 更新 |
+| DEL-052 | 2026-11-24 | Codex → PJM | PDF 连续工作区与客户商品 HS 历史引用累计发布交接 | v1.1 | Released（应用核验；非业务验收） | 用户授权；PJM 经受保护 PR #24 发布 | [交接及发布核验附录](../deliverables/pjm/PDF_HS_RELEASE_HANDOFF_2026-11-24.md)；应用 main 45242af63d2d53bf4ed36bfa63f5f0c845419fdb，CI/实际 Production/入口版本通过；文档归档后最终发布由 PJM 同会话核实 |
 
 ## 登记要求
 

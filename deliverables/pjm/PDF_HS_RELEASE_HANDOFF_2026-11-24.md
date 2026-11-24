@@ -2,7 +2,7 @@
 
 - 项目：九更亚马逊 ERP
 - Owner：Codex → PJM；正式发送后唯一写入权归 PJM
-- 状态：v1.0 / In Review；本地统一验证完成，提交/合并/部署由 PJM 执行，未宣称已上线
+- 状态：v1.1 / Released（应用发布已由 PJM 核验；非业务验收）；下文原交接快照保留，最新状态见发布核验附录
 - 日期：2026-11-24，Asia/Shanghai
 - 审批：用户已明确授权提交远端 main 并部署；PJM 负责复核与发布结果
 
@@ -96,3 +96,24 @@
 ?? frontend/src/components/PdfContinuousDocument.test.ts
 ?? frontend/src/components/PdfContinuousDocument.vue
 ```
+
+## PJM 发布核验附录（2026-11-24）
+
+按用户授权接管唯一写入权，完整读取规则与交接、全部 diff（含新增文件）和有效门禁日志。未伪造 ERP 编号，按维护主题与 DEL-052 归档。独立复核 180 个本地文档链接及 `git diff --check` 通过；没有应用代码修正，因此复用交接有效门禁。27 项原子提交、普通 push，无共同作者 trailer 推断。
+
+| 证据 | 核验结果 |
+| --- | --- |
+| 交接基线 | `9954ef8bd15465ed82b545b98411e9cf07e2f892` |
+| 功能分支提交 | `codex/pdf-continuous-workspace` / `7dcf216a30695c7b13d3e597268a84a617beefa5` |
+| 受保护合并 | [PR #24](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/pull/24)，2026-11-24 19:10:33 +08:00，五项必需检查全部成功后合并，无强推/绕过 |
+| 应用 main | `45242af63d2d53bf4ed36bfa63f5f0c845419fdb`；包含上述功能提交 |
+| PR / main CI | [PR CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45381237422) / [main CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45381744243)，均成功 |
+| Production | [运行 45381744230](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45381744230)，精确 main SHA 重构建；后端 443 项、0 失败/错误、1 OSS 条件跳过；前端 169 文件/778 项；全套浏览器 17 项通过 |
+| 实际 deploy | SSH deploy 19:14:59–19:16:41，success 而非 skipped；19:16:12 包校验 OK，19:16:16 数据库备份完成，19:16:40 目标完整 SHA `Deployment verified` |
+| 独立入口核验 | 19:17 对既有实际线上入口读取 `/version.json` HTTP 200，revision 与应用 main 完全一致；首页 HTTP 200。生产入口标识不写入仓库，最终用户回执保留可访问链接 |
+
+证据边界：入口版本/首页 HTTP 是独立直接观察；包、备份和服务健康是 Production 日志及接收脚本的证据链。`release.py` 校验 manifest revision 和文件摘要，`receive.sh` 验证后端 loopback 健康 UP 与前端版本后才输出部署成功。未取得管理 shell，没有直接检查运行 JAR 的摘要或查询生产 DB；公网 `/actuator/health` 为 HTML，`/api/actuator/health` 为 404，不据此声称公开健康接口成功。本轮无新迁移，不把 CI H2 日志当成生产迁移证据。
+
+本地 mysql、上传文件和 `jiugeng-mvp` 保留，未重启本地服务；没有尝试绕过受限 SSH。历史 ERP-101 Caddy 管理权限未解决，本轮没有代理配置变更，也不宣称图片缓存链路已完成核验。原交接中的 Safari/实物打印/全部 EXIF 方向/极限页数与 HS 大数据量扫描限制继续保留。
+
+归档方式：本附录、状态报告和入口索引经单独受保护文档 PR 合入。文档合并将触发最终 SHA 发布，PJM 继续核验实际部署及入口版本，最终 SHA/CI/Production 回执写入同会话进度、当日记忆和最终报告，不为记录文档自身 SHA 再递归发起文档 PR。上表明确仅对应应用发布，不预先宣称未来文档发布成功。

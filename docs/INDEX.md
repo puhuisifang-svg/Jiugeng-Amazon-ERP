@@ -4,7 +4,7 @@
 
 先读 [README](../README.md) → [AGENTS](../AGENTS.md) → [项目接手指南](04-engineering/PROJECT_HANDOVER.md) → [当前状态报告](08-project-management/STATUS_REPORT.md)。界面任务同时读 [UI 规范](ui/UI_STANDARD.md)，跨会话使用 [交接模板](../templates/SESSION_HANDOFF_TEMPLATE.md)。
 
-当前授权发布交接：[DEL-052 PDF 连续工作区与 HS 历史引用](../deliverables/pjm/PDF_HS_RELEASE_HANDOFF_2026-11-24.md)。统一验证完成，正式发送后 PJM 接管提交 main / 部署；Codex 不跟踪线上。以下开发阶段记录的“待交接”以 DEL-052 为准。
+当前发布证据：[DEL-052 PDF 连续工作区与 HS 历史引用](../deliverables/pjm/PDF_HS_RELEASE_HANDOFF_2026-11-24.md)。PR #24 已受保护合并，应用精确 SHA 的 Production 实际部署与入口版本已核验；详见[状态报告](08-project-management/STATUS_REPORT.md)。归档文档 PR 的最终部署由 PJM 同会话核实，Codex 不等待。以下为开发阶段记录，不代表当前未提交状态。
 
 同迭代新增：[客户商品 HS 历史资料核对带入 / DEL-051](../deliverables/pjm/CUSTOMER_HS_HISTORY_LOCAL_2026-11-24.md)，本地已实现，完整门禁待交接。
 

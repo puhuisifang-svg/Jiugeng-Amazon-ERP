@@ -2,7 +2,7 @@
 
 - 项目：九更亚马逊 ERP
 - Owner / 写入交接：Codex 已完成本地实施与统一验证；向 PJM 发送交接后由 PJM 独占接管
-- 状态：v0.2 / Ready for PJM Review，本地统一验证完成，全部未提交
+- 状态：v0.3 / 应用生产发布已核验；精确发布证据与归档边界见末尾 PJM 实际发布结果
 - 日期：2026-11-24，Asia/Shanghai
 - 授权：用户于 2026-11-24 明确要求交接项目经理、提交远端 main 并部署；提交/合并/CI/CD/发布验证由 PJM 执行，Codex 不跟踪线上
 
@@ -350,3 +350,35 @@ PJM 已按用户明确授权接管唯一写入权，复核 81 项文件归属与
 已审查 V108/V109 的类别、资源和动作白名单及隔离迁移测试：其他业务主数据、安全审计、MATERIAL_SUPPLIERS_REPLACE 均不在删除范围。生产既有 receive.sh 在停止唯一写入服务后调用 backup.sh，完整 mysqldump 经 gzip 完整性检查和 SHA-256 留存后才切换新包并启动 Flyway；备份失败中止。备份位于同盘，不是异地灾备；本轮未取得管理通道验证恢复演练。需要恢复旧历史时应由管理员从迁移前备份在隔离库提取限定记录，核对后恢复，不能仅回退 JAR 或整库覆盖后续写入。
 
 接手时最新 Production 45383897405 仍失败，原因为 Another deployment is running；GitHub 无活动 Production。准备按受保护 main 五项检查完成本轮 PR，并核验本轮真实 deploy、入口版本及备份日志；若仍占锁则停止重试、保留证据并报告管理员通道阻断。此节不宣称已部署。当前阶段与后续精确 PR/SHA/运行证据持续记录在 `/tmp/jiugeng-pjm-release-progress.md`，最终结果补充本记录与状态报告，不为文档自身 SHA 递归归档。
+
+
+## PJM 实际发布结果（2026-11-24，北京时间）
+
+本节取代上文发布前、未提交、待部署状态；不表示业务验收。
+
+| 项目 | 已核实结果 |
+| --- | --- |
+| 原子功能提交 | `5ef6d7bfdab2fd933a2ecfa0f7c9dfe0f2075c5f`，81 项授权文件；无私有配置、备份、凭据或业务数据，无 Co-authored-by |
+| 受保护合并 | [PR #26](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/pull/26)，五项必需检查全部成功，23:12:34 正常合并，无 force/bypass |
+| 应用 main SHA | `0a58e771d9cee076f18d3d72c234bff4b90cf658` |
+| CI | [PR CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45422203080)、[main CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45422825153) 均 success |
+| Production | [运行 45422824958](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45422824958) success；实际 SSH deploy 23:18:35–23:20:19 成功，不是 skipped |
+| 包与备份 | 23:19:45 发布包校验 OK；23:19:50 `Database backup completed`，早于激活/迁移启动 |
+| 健康与服务端版本 | 23:20:19 `Deployment verified: 0a58e771d9cee076f18d3d72c234bff4b90cf658`；接收器只有后端 health=UP 与服务端 version 均通过才输出该标记 |
+| 独立实际入口 | 23:21:15 起无缓存读取，version.json HTTP200、完整 revision 与应用 main 一致；首页200，实际脚本 `/assets/index-CQ8Qicw7.js` |
+| 工作区与服务 | 应用发布核验时本地 main/origin/main 一致、工作区干净；未重启本地服务，未丢弃文件 |
+
+### 门禁、备份与迁移证据边界
+
+- 本地既有有效验证日志复核通过，未无理由重跑；初始185个文档链接、提交后186个链接检查通过。PR 与 Production 独立全量验证：后端449项，0失败/错误、1外部OSS条件跳过；前端171文件793项及lint/类型/构建通过；完整浏览器17项通过。Production另含导入契约和发布工具门禁。
+- V108/V109 使用精确提交打包，限定 BUSINESS / 对应样品或供应商资源 / 指定动作白名单；保留其他审计与业务主数据。既有接收器停止唯一写入服务后备份，mysqldump压缩文件经gzip校验并生成SHA-256后才切换运行包，备份失败即中止。本次确有备份完成标记。
+- 生产mysql启用Flyway，精确构建含V108/V109、备份后成功启动及健康通过构成间接迁移证据。**未直查生产flyway_schema_history、目标删除数量、运行JAR摘要、备份文件名/摘要或本次隔离恢复演练**；CI H2迁移日志不是生产迁移表证据。
+- 删除历史不能靠回退JAR恢复；必要时管理员应将迁移前备份恢复到隔离数据库，按两项白名单提取核对后恢复对应记录，不能整库覆盖后续业务。当前机制为同盘数据库备份，不宣称异地灾备。
+- 旧Production 45383897405的占锁失败保留为历史，本轮45422824958已通过真实部署，不再作为当前阻断；锁消失原因/旧接收进程状态未获管理通道核实。未删锁、未杀进程、未绕过受限部署账号。
+- 既有ERP-101 Caddy管理权限限制不因本轮成功自动消失；本轮未改生产代理。Safari实机、物理打印及业务验收边界保留。
+
+### 归档与后续
+
+本次仅创建一轮发布证据归档PR；该文档提交仍按五项保护合并并跟踪其自动Production，最终完整SHA/CI/Production/入口结论保存在 `/tmp/jiugeng-pjm-release-progress.md` 与会话每日记忆，不为归档文档自身SHA再递归创建PR。
+
+本地详细日志：`/tmp/erp103-pr-ci.log`、`/tmp/erp103-production.log`、`/tmp/erp103-production-status.json`、`/tmp/erp103-entry-before.json`、`/tmp/erp103-entry-after.json`。记录不包含凭据、私有配置或业务数据。

@@ -11,7 +11,7 @@
 
 ## 当前 ERP-103 报关文件入口（2026-11-24，本地）
 
-先读 [DEL-053](../../deliverables/pjm/ERP-103_CUSTOMS_FILES_LOCAL_2026-11-24.md) 确认当前 Codex 写入槽与运行包；此前 PJM 发布已结束。`CustomsDocuments` 列表返回创建时间及截图/发票标记并按创建时间倒序；`CustomsFileStatus` 统一两处标签。`CustomsAttachmentPreview` 在 `#app` 内显示鉴权图/PDF/Excel，PDF 复用连续只读文档。Excel 由 customs 内部 `CustomsSpreadsheetPreview` 提取缓存值，不调用外部预览服务；预览接口只读，现有下载接口继续保留。完整验证与发布等待本轮交接指令。
+先读 [DEL-053](../../deliverables/pjm/ERP-103_CUSTOMS_FILES_LOCAL_2026-11-24.md) 末尾 PJM 实际发布结果：本轮已受保护合并并完成应用生产发布；准确 SHA、备份/迁移证据边界与归档进展见状态报告，不沿用历史 Codex 写入槽。`CustomsDocuments` 列表返回创建时间及截图/发票标记并按创建时间倒序；`CustomsFileStatus` 统一两处标签。`CustomsAttachmentPreview` 在 `#app` 内显示鉴权图/PDF/Excel，PDF 复用连续只读文档。Excel 由 customs 内部 `CustomsSpreadsheetPreview` 提取缓存值，不调用外部预览服务；预览接口只读，现有下载接口继续保留。完整验证、应用发布及迁移证据边界见 DEL-053 末尾；下方本地实施段为历史技术记录。
 
 ## 2026-11-24 累计发布交接入口
 

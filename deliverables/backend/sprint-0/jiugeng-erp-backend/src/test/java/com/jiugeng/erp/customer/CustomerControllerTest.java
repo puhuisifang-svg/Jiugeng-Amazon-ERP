@@ -23,6 +23,36 @@ class CustomerControllerTest {
     @Autowired ObjectMapper mapper;
     @Autowired JdbcTemplate jdbc;
 
+    @Test void sameHsCustomsHistoryIsPagedExactReadOnlyAndPermissionProtected() throws Exception {
+        String token=login("ADMIN");String[] item=sku();
+        var profile=new HashMap<String,Object>(Map.of("nameZh","合成历史品名","chinaCode","6307909000","schemaCode","6307909000",
+            "elementFields",List.of(Map.of("key","brandType","label","品牌类型")),"elements",Map.of("brandType","历史品牌"),"measurementUnit","千克/个","state","DRAFT","version",0));
+        var first=quote(createCustomer(token),item,"1");first.put("customs",profile);
+        String a=body(write(token,"/products",null,first).andExpect(status().isOk())).path("id").asText();
+        var second=quote(createCustomer(token),item,"2");second.put("customs",profile);
+        String b=body(write(token,"/products",null,second).andExpect(status().isOk())).path("id").asText();
+        var other=quote(createCustomer(token),item,"3");
+        profile.put("chinaCode","5705002000");profile.put("schemaCode","5705002000");profile.put("remark","6307909000");other.put("customs",profile);
+        write(token,"/products",null,other).andExpect(status().isOk());
+        String before=jdbc.queryForObject("SELECT customs_data FROM customer_product WHERE id=?",String.class,a);
+        String url="/api/v1/customers/products/customs-history";
+        var one=body(mvc.perform(get(url).param("hsCode","6307909000").param("size","1").header("Authorization",token))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(2)).andExpect(jsonPath("$.items.length()").value(1))
+            .andExpect(jsonPath("$.items[0].customs.elements.brandType").value("历史品牌")).andExpect(jsonPath("$.items[0].supplyPrice").doesNotExist()));
+        var two=body(mvc.perform(get(url).param("hsCode","6307909000").param("size","1").param("page","1").header("Authorization",token)).andExpect(status().isOk()));
+        assertThat(one.path("items").get(0).path("id").asText()).isNotEqualTo(two.path("items").get(0).path("id").asText());
+        mvc.perform(get(url).param("hsCode","6307909000").param("excludeId",a).header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(1)).andExpect(jsonPath("$.items[0].id").value(b));
+        // Legacy pretty-printed JSON is searchable, while a deleted record is not a reusable source.
+        jdbc.update("UPDATE customer_product SET customs_data=? WHERE id=?",mapper.writerWithDefaultPrettyPrinter().writeValueAsString(mapper.readTree(before)),a);
+        jdbc.update("UPDATE customer_product SET deleted_at=CURRENT_TIMESTAMP WHERE id=?",b);
+        mvc.perform(get(url).param("hsCode","6307909000").header("Authorization",token)).andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(1)).andExpect(jsonPath("$.items[0].id").value(a));
+        assertThat(jdbc.queryForObject("SELECT version FROM customer_product WHERE id=?",Long.class,a)).isZero();
+        mvc.perform(get(url).param("hsCode","6307909000").header("Authorization",login("SELECTION"))).andExpect(status().isForbidden());
+        mvc.perform(get(url).param("hsCode","6307909000")).andExpect(status().isUnauthorized());
+        mvc.perform(get(url).param("hsCode","630790900").header("Authorization",token)).andExpect(status().isBadRequest());
+        mvc.perform(get(url).param("hsCode","6307909000").param("size","51").header("Authorization",token)).andExpect(status().isBadRequest());
+    }
+
     @Test void wechatImageCanBeUploadedAttachedReplacedAndPermissionChecked() throws Exception {
         String token=login("ADMIN"),reader=login("SELECTION");
         var buffer=new java.io.ByteArrayOutputStream();javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(2,2,java.awt.image.BufferedImage.TYPE_INT_RGB),"png",buffer);

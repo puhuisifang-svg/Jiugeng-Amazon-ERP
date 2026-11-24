@@ -51,6 +51,21 @@ class CustomerService implements CustomerProductLookup {
             " ORDER BY p.updated_at DESC,p.id LIMIT :size OFFSET :offset").params(params).query(this::product).list();
         return new Page<>(items,count,page,size);
     }
+    @Transactional(readOnly=true)
+    Page<CustomsHistoryView> customsHistory(String hsCode,String excludeId,int page,int size) {
+        if(!hsCode.matches("[0-9]{10}")) throw new CustomerException(400,"HS_CODE_INVALID","请输入10位HS编码");
+        // customs_data is the existing server-serialized JSON snapshot. Bound REGEXP supports legacy whitespace.
+        String pattern="\"chinaCode\"\\s*:\\s*\""+hsCode+"\"";
+        String from=PRODUCT_FROM+" WHERE p.deleted_at IS NULL AND p.id<>:exclude AND REGEXP_LIKE(p.customs_data,:pattern) ";
+        var params=new HashMap<String,Object>();params.put("exclude",excludeId);params.put("pattern",pattern);
+        long count=jdbc.sql("SELECT COUNT(*) "+from).params(params).query(Long.class).single();
+        params.put("size",size);params.put("offset",page*size);
+        var items=jdbc.sql("SELECT p.id,p.product_name,p.sku_code,p.status,p.version,p.updated_at,p.customs_data,c.name customer_name "+from+
+            " ORDER BY p.updated_at DESC,p.id DESC LIMIT :size OFFSET :offset").params(params).query((r,n)->new CustomsHistoryView(
+                r.getString("id"),r.getString("customer_name"),r.getString("product_name"),r.getString("sku_code"),Status.valueOf(r.getString("status")),
+                r.getTimestamp("updated_at").toInstant(),CustomsProfiles.decode(r.getString("customs_data"),r.getLong("version")))).list();
+        return new Page<>(items,count,page,size);
+    }
     private Map<String,Object> filters(String q,Status status) {
         var params=new HashMap<String,Object>(); String term=q.trim().toLowerCase(Locale.ROOT);
         params.put("q",term); params.put("term","%"+term+"%"); params.put("status",status==null?"":status.name()); return params;

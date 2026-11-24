@@ -2,13 +2,13 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { RenderTask } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { acquirePdfPreview, withPdfRenderSlot } from '@/utils/pdfPreviewPool'
-const props = withDefaults(defineProps<{ bytes: Uint8Array; page: number; thumbnail?: boolean }>(), { thumbnail: false })
+const props = withDefaults(defineProps<{ bytes: Uint8Array; page: number; thumbnail?: boolean; lazy?: boolean; size?: { width: number; height: number } | undefined }>(), { thumbnail: false, lazy: false, size: undefined })
 const emit = defineEmits<{ dimensions: [size: { width: number; height: number }] }>()
 const host = ref<HTMLElement>(), canvas = ref<HTMLCanvasElement>(), error = ref(''), loading = ref(false), retry = ref(0)
-const visible = ref(!props.thumbnail || typeof IntersectionObserver === 'undefined')
+const visible = ref(!(props.thumbnail || props.lazy) || typeof IntersectionObserver === 'undefined')
 let observer: IntersectionObserver | undefined
 onMounted(() => {
-  if (props.thumbnail && typeof IntersectionObserver !== 'undefined' && host.value) {
+  if ((props.thumbnail || props.lazy) && typeof IntersectionObserver !== 'undefined' && host.value) {
     observer = new IntersectionObserver(entries => { visible.value = entries.some(entry => entry.isIntersecting) }, { rootMargin: '100px' })
     observer.observe(host.value)
   }
@@ -20,7 +20,11 @@ watch(() => [props.bytes, props.page, props.thumbnail, visible.value, retry.valu
   let renderTask: RenderTask | undefined
   onCleanup(() => { controller.abort(); renderTask?.cancel() })
   error.value = ''; loading.value = visible.value
-  if (!visible.value) { lease?.release(); lease = undefined; leasedBytes = undefined; return }
+  if (!visible.value) {
+    lease?.release(); lease = undefined; leasedBytes = undefined
+    if (canvas.value) { canvas.value.width = 0; canvas.value.height = 0 }
+    return
+  }
   let localLease = lease
   try {
     if (leasedBytes !== props.bytes || !lease) {
@@ -60,6 +64,7 @@ onBeforeUnmount(() => { observer?.disconnect(); lease?.release() })
     class="pdf-preview"
     :class="{ 'is-pending': loading || !!error }"
     :aria-busy="loading"
+    :style="size ? { aspectRatio: `${size.width} / ${size.height}` } : undefined"
   >
     <canvas
       ref="canvas"
@@ -87,6 +92,7 @@ onBeforeUnmount(() => { observer?.disconnect(); lease?.release() })
 .pdf-preview { position:relative; width:100%; background:white; box-shadow:0 2px 14px #1e293b16; }
 .pdf-preview.is-pending { min-height:80px; }
 canvas { display:block; width:100%; height:auto; }
+.pdf-preview[style] canvas { height:100%; }
 .preview-notice { position:absolute; inset:0; display:grid; place-content:center; gap:8px; padding:8px; background:#ffffffe8; font-size:13px; color:#64748b; text-align:center; }
 .preview-notice button { justify-self:center; padding:4px 10px; color:var(--accent); background:white; border:1px solid var(--line); border-radius:4px; cursor:pointer; }
 </style>

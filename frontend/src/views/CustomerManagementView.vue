@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import CustomsFields from '@/components/CustomsFields.vue'
+import CustomerCustomsFields from '@/components/CustomerCustomsFields.vue'
 import { blankCustoms, customsInput, type CustomsProfile } from '@/api/customs'
 import { vPhone } from '@/directives/phone'
 import AddressRecognition from '@/components/AddressRecognition.vue'
@@ -926,9 +926,12 @@ watch(()=>[props.kind,route.query.editCustomer,route.query.section],async()=>{
               :key="row.sku.variant.id"
               :value="index"
             >{{ row.sku.variant.variantName }}</option></select></label>
-            <CustomsFields
+            <CustomerCustomsFields
               v-if="editingId || batchProducts.length"
+              :key="`${productForm.customerId}:${editingId || batchProducts[customsRow]?.sku.variant.id || ''}`"
               v-model="customsForm"
+              :exclude-id="editingId || ''"
+              :active="productTab === 'customs'"
               :disabled="saving || !writable"
             />
             <p

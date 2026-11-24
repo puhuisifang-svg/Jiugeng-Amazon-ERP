@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed,ref,watch,watchEffect,onBeforeUnmount } from 'vue'
 import { profileFields, hsSchemaApi, applyHsSchema, profileElements, type CustomsProfile } from '@/api/customs'
+const emit=defineEmits<{ 'hs-input': [code: string] }>()
 const model=defineModel<CustomsProfile>({required:true})
 const props=defineProps<{disabled?:boolean}>()
 const fields=computed(()=>model.value.elementFields||Object.values(profileElements(model.value)).some(Boolean)?profileFields(model.value):[])
@@ -24,6 +25,7 @@ const mismatch=computed(()=>!!model.value.elementFields&&model.value.schemaCode!
 watchEffect(()=>{hsInput.value?.setCustomValidity(loading.value?'正在查询HS申报要素，请稍候':lookupError.value|| (mismatch.value?'请先完成HS申报要素查询':''))})
 const elements=computed(()=>profileElements(model.value))
 function update(key:string,value:string){model.value={...model.value,elements:{...elements.value,[key]:value}}}
+function hsInputChanged(event: Event){enableStructured();emit('hs-input',(event.target as HTMLInputElement).value)}
 function enableStructured(){if(!model.value.elements)model.value={...model.value,elements:elements.value}}
 </script>
 <template>
@@ -44,7 +46,7 @@ function enableStructured(){if(!model.value.elements)model.value={...model.value
       placeholder="填写已确认的10位HS编码"
       :required="model.state==='REVIEWED'"
       :aria-invalid="mismatch||undefined"
-      @input="enableStructured"
+      @input="hsInputChanged"
     ></label>
     <label>品名<input
       v-model="model.nameZh"

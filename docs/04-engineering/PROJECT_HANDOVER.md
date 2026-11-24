@@ -5,9 +5,23 @@
 | 项目 | 九更亚马逊 ERP |
 | Owner | PJM（维护责任）；Codex（本次整理） |
 | 版本 / 状态 | v0.1 / In Review |
-| 更新时间 | 2026-11-23 |
+| 更新时间 | 2026-11-24 |
 | 审批人 | 待 PJM 复核；本文记录实现事实，不新增业务批准 |
 | 核实基线 | 见[当前状态报告](../08-project-management/STATUS_REPORT.md)；此指南不是实时线上状态 |
+
+## 2026-11-24 累计发布交接入口
+
+先读 [DEL-052](../../deliverables/pjm/PDF_HS_RELEASE_HANDOFF_2026-11-24.md) 和状态报告最新节：PDF 连续工作区、快捷操作/原图保真及客户商品 HS 历史引用已完成统一验证，用户授权提交 main / 部署。正式发送后 PJM 唯一写入并负责发布；Codex 不跟踪上线。下文“待交接”是开发阶段记录，不能沿用其写入锁或发布状态。
+
+HS 核对弹窗 Teleport 到 `#app`，保持统一控件主题作用域。切勿直接移到 body：会导致原生 select 未隐藏、自定义触发器样式丢失；真实页面浏览器场景在 `frontend/e2e/customs-history.smoke.ts`，验证确认后只保存当前商品。PDF 全页/复制/缩放/导出场景在 `frontend/e2e/pdf-closeout.smoke.ts`。
+
+## 客户商品 HS 历史引用入口（2026-11-24，本地）
+
+[DEL-051 实施记录](../../deliverables/pjm/CUSTOMER_HS_HISTORY_LOCAL_2026-11-24.md) 与 PDF 属同一未提交迭代。`CustomerCustomsFields` 管历史查询、防迟到响应及独立核对草稿，复用 `CustomsFields` 的字段查询和 AccessDialog；只有确认才更新客户商品表单。后端入口为 customer 模块 `/customers/products/customs-history`，只读取已保存客户商品，不查询或改写其他模块内部类型。当前本地运行包见 DEL-051；完整验证/发布仍等交接指令。
+
+## 当前 PDF 工作区入口（2026-11-24，本地未提交）
+
+先读 [连续工作区实施记录](../../deliverables/pjm/PDF_CONTINUOUS_WORKSPACE_LOCAL_2026-11-24.md) 和状态报告最新节确认分支/写入权；旧 DEL-049 的未提交描述已是历史阶段。`PdfContinuousDocument.vue` 管多页布局、缩略图导航、滚动页码及显示缩放；`PdfToolsView.vue` 持有按页标注和导出数据；`PdfPagePreview.vue` 的 lazy/size 管离屏释放与比例占位。不要把缩放值写回 PDF 坐标或恢复 12 页分组。默认拆分方式为提取合并。 图片转 PDF 默认跟随尺寸；96 DPI 只换算纸张，不代表像素重采样。`pdfImageInput.ts` 普通 JPEG/PNG 保留原字节，EXIF 方向修正使用全像素无损 PNG，界面小图不得进入导出。FBA 全页预览也复用 `PdfContinuousDocument` 的 readonly 模式，Ctrl/Command＋滚轮在画布内缩放。删除键统一在 PDF 工作区处理，必须避开可编辑输入。完整门禁和视觉验收仍待本轮交接。
 
 ## 最新交接入口：图片性能与 PDF（2026-11-23）
 

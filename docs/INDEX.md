@@ -1,8 +1,14 @@
 # 项目文档总索引
 
-## 当前接手入口（2026-11-23 更新）
+## 当前接手入口（2026-11-24 更新）
 
 先读 [README](../README.md) → [AGENTS](../AGENTS.md) → [项目接手指南](04-engineering/PROJECT_HANDOVER.md) → [当前状态报告](08-project-management/STATUS_REPORT.md)。界面任务同时读 [UI 规范](ui/UI_STANDARD.md)，跨会话使用 [交接模板](../templates/SESSION_HANDOFF_TEMPLATE.md)。
+
+当前授权发布交接：[DEL-052 PDF 连续工作区与 HS 历史引用](../deliverables/pjm/PDF_HS_RELEASE_HANDOFF_2026-11-24.md)。统一验证完成，正式发送后 PJM 接管提交 main / 部署；Codex 不跟踪线上。以下开发阶段记录的“待交接”以 DEL-052 为准。
+
+同迭代新增：[客户商品 HS 历史资料核对带入 / DEL-051](../deliverables/pjm/CUSTOMER_HS_HISTORY_LOCAL_2026-11-24.md)，本地已实现，完整门禁待交接。
+
+当前本地追加：[PDF 连续页面工作区](../deliverables/pjm/PDF_CONTINUOUS_WORKSPACE_LOCAL_2026-11-24.md)；2026-11-24，默认提取合并、全部页连续勾选、连续编辑及缩放，未提交，统一验证待交接。
 
 当前授权发布交接：[DEL-049 图片性能与 PDF](../deliverables/pjm/IMAGE_PDF_RELEASE_HANDOFF_2026-11-23.md)；统一验证完成，正式移交后由 PJM 独占写入、提交 main 和部署，Codex 不跟踪上线。下述是开发阶段记录。
 

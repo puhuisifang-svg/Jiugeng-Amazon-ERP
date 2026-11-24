@@ -34,6 +34,13 @@ class CustomerController {
         @RequestParam(defaultValue="") @Size(max=36) String customerId, @RequestParam(required=false) Status status,
         @RequestParam(defaultValue="0") @Min(0) @Max(100000) int page,
         @RequestParam(defaultValue="20") @Min(1) @Max(100) int size) { return service.products(q,customerId,status,page,size); }
+    @GetMapping("/products/customs-history") @PreAuthorize("hasAuthority('customers.read')")
+    Page<CustomsHistoryView> customsHistory(@RequestParam @Pattern(regexp="[0-9]{10}") String hsCode,
+        @RequestParam(defaultValue="") @Size(max=36) String excludeId,
+        @RequestParam(defaultValue="0") @Min(0) @Max(100000) int page,
+        @RequestParam(defaultValue="20") @Min(1) @Max(50) int size) {
+        return service.customsHistory(hsCode,excludeId,page,size);
+    }
     @PostMapping("/products") @PreAuthorize("hasAuthority('customers.write')")
     ProductView createProduct(@Valid @RequestBody ProductInput input, @AuthenticationPrincipal AuthenticatedActor actor) {
         return service.saveProduct(null,input,actor);

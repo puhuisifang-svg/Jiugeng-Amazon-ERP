@@ -11,6 +11,19 @@
 
 本报告是带日期的快照，不是实时监控。接手时重新检查 HEAD、工作区及当前任务归属；发布状态由 PJM 维护，Codex 不跟踪线上发布。[2026-10-15 原报告](archive/STATUS_REPORT_2026-10-15.md)已归档，保留原始事实及当时风险，不再作为今天的待办清单。
 
+## DEL-056 服务器恢复回执（2026-11-25，PJM接回操作槽）
+
+以下为具有原生Safari CUA通道的协助会话回执，PJM未冒称亲自执行云助手操作：
+
+- 只读复核 `t-bj0746xm0iklvr4`（23:54:52 CST）：进程链和starttime匹配，临时包21,823,488字节、两次大小/mtime不变且停滞超过20分钟，旧应用健康。
+- 定向清理 `t-bj0746xqoqxf1fk`（23:56:19，ExitCode0）：即时核对PID身份/父子关系/starttime、head stdout包及旧current；备份残包与进程证据，再观察5秒无增长，TERM已确认head及仍存的原会话。结果 `VERIFIED_SESSION_EXITED`、`LOCK_AVAILABLE`、`RECOVERY_CLEANUP_PASS`。未unlink锁、未停应用。
+- 备份根目录 `/srv/jiugeng/recovery/del056-20261125-2356/`：残包、processes-before.txt、scripts/receive.sh.previous、helper-previously-absent.txt；旧receive.sh SHA-256 `50f5ad123fd0170378f6ef17dc486bc63964e284f50e52a5409f2bca2c211943`。
+- GitHub raw首次下载发生curl35连接重置，尚未安装；改由云助手传递源码，双哈希一致后安装。最终 `t-bj0746xygtkkh6o`（23:58:44，ExitCode0）helper先、receiver后原子替换，均root:root 0755，来自提交 `2fb8852d3a8b59c61d7461d3bd57bffbd5b7ac72`。
+- 安装哈希：receive.sh `547ace3a3145a6413dc3641634c82bdc7fc5b02a314df45b52a1f9c35f82082a`；receive_stream.py `c9de4b7935b7ffc9fbdd7e57d248f378f876fb2eb3bd974abbe7902a03131f66`。bash语法、Python AST、15字节EOF和0.2秒idle探针通过，结果 `INSTALLED_HELPER_PROBES_PASS`、`SCRIPTS_INSTALLED_PASS`、`LOCK_AVAILABLE_AFTER_INSTALL`。证据 install-direct-result.txt 位于上述备份根目录。
+- 安装后jiugeng/caddy active、health UP，current仍为旧应用 `365892ccb4c5d5eb151420bd0cb7c66c739f8586`；未改Caddy、SSH/sudo、端口、业务数据、应用包或本地仓库。
+- 操作槽明确归还后，PJM核对干净分支及五项必需检查，通过 [PR #32](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/pull/32) 受保护合并，应用目标main为 `14c67cf04576215a6ae7f95b5c28a467d0ef8fd2`。[恢复Production](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45650240074) 自动启动，最终结果待核验。
+- 超时补丁避免永久接收残留，不等于解决底层跨境传输。若再次失败，应按进度字节和实际速率选择经校验的稳定产物通道，不循环重试或盲目延长时限。上述回执覆盖此前“未清理/未安装”的阶段描述。
+
 ## DEL-056 SSH接收异常诊断与恢复（2026-11-25）
 
 调查会话通过已登录Safari阿里云云助手完成只读诊断（记录 `t-bj0746w71gfhszk`，23:38:59 CST），不是新凭据缺失：23:39生产jiugeng/caddy均active、health UP、current及公网版本仍旧SHA。残留部署链为sshd 90167→sshd 90287→sudo 90290→receive.sh 90291→head 90297；head等待pipe_read，临时包21,823,488字节、mtime23:33:16，磁盘可用35G。此为调查会话报告的时点证据，不代表进程持续存在。
@@ -498,3 +511,9 @@ PJM 协调请求返回模型错误，未获新任务编号；本次用户直接�
 ## 后续更新要求
 
 状态更新必须带日期、基线完整 SHA、证据、适用环境和未核实范围。完成或取消的任务及时移入对应交接记录；替换大段历史状态时归档旧版。下一位模型应先读本报告，再按照[接手指南](../04-engineering/PROJECT_HANDOVER.md)定位代码，不能仅凭“上次已完成”继续合并或部署。
+
+## 接收启动窗口修正（2026-11-26）
+
+合并PR32后的main CI在TERM清理测试中出现5秒等待超时（PR和Production前置工具测试曾通过）。本地40次启动窗口复现出现2次相同失败：TERM早于接收子进程exec完成时可能被忽略。修复清理逻辑，在TERM后对同一个只负责临时文件接收的直接子进程补KILL并wait，不涉及应用服务；100次启动窗口测试及完整9项发布工具测试通过。此为真实修复，不靠重复运行原失败门禁放行。服务器目前仍是此前安装的2fb8852版本，新增清理修正尚未同步。
+
+PJM尝试在浏览器门禁阶段取消恢复Production，但GitHub取消接口报500/无有效返回，未确认取消；重新读取时流程已进入实际deploy。未再次中断传输、未启动并行部署。最终结果另记。

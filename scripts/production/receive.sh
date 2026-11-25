@@ -14,6 +14,11 @@ receiver_pid=
 cleanup() {
   if [[ -n $receiver_pid ]]; then
     kill -TERM "$receiver_pid" 2>/dev/null || true
+    # A signal can land before the asynchronous child finishes exec setup.
+    # This child only receives a disposable temporary file: force its exit
+    # before waiting, even when that early TERM was ignored. No service child
+    # is managed here, and the original PID remains ours until it is reaped.
+    kill -KILL "$receiver_pid" 2>/dev/null || true
     wait "$receiver_pid" 2>/dev/null || true
   fi
   rm -rf -- "$tmp"

@@ -78,3 +78,22 @@
 - 15:34 UTC 后独立读取 ERP HTTPS `/version.json`：HTTP200，仍为旧应用 `365892ccb4c5d5eb151420bd0cb7c66c739f8586`，目标 `fc8891cbbd6db4e3eccd6e74c26a6453d54a9d80` 尚未确认上线；本次不能宣称生产备份、后端健康或最终版本切换通过。官网HTTPS仍为上述摘要，未受此次ERP发布影响。
 - 当前阻断：缺少已连接的主机管理通道，无法检查实际部署接收/传输进程及锁持有者；未盲目重跑、删锁或绕过保护。恢复管理访问后，先检查实际进程、锁及当前版本，再决定安全续跑/恢复，用户发布授权持续有效。
 - 证据：GitHub run/job终态及超时注解；本地 `/tmp/del056-production-monitor-log.txt`、`/tmp/del056-production-monitor-state.json`（不提交日志或私有配置）。本归档仅记录受阻事实，不代表发布闭环。
+
+## DEL-056 服务器恢复回执（2026-11-25，PJM接回操作槽）
+
+以下为具有原生Safari CUA通道的协助会话回执，PJM未冒称亲自执行云助手操作：
+
+- 只读复核 `t-bj0746xm0iklvr4`（23:54:52 CST）：进程链和starttime匹配，临时包21,823,488字节、两次大小/mtime不变且停滞超过20分钟，旧应用健康。
+- 定向清理 `t-bj0746xqoqxf1fk`（23:56:19，ExitCode0）：即时核对PID身份/父子关系/starttime、head stdout包及旧current；备份残包与进程证据，再观察5秒无增长，TERM已确认head及仍存的原会话。结果 `VERIFIED_SESSION_EXITED`、`LOCK_AVAILABLE`、`RECOVERY_CLEANUP_PASS`。未unlink锁、未停应用。
+- 备份根目录 `/srv/jiugeng/recovery/del056-20261125-2356/`：残包、processes-before.txt、scripts/receive.sh.previous、helper-previously-absent.txt；旧receive.sh SHA-256 `50f5ad123fd0170378f6ef17dc486bc63964e284f50e52a5409f2bca2c211943`。
+- GitHub raw首次下载发生curl35连接重置，尚未安装；改由云助手传递源码，双哈希一致后安装。最终 `t-bj0746xygtkkh6o`（23:58:44，ExitCode0）helper先、receiver后原子替换，均root:root 0755，来自提交 `2fb8852d3a8b59c61d7461d3bd57bffbd5b7ac72`。
+- 安装哈希：receive.sh `547ace3a3145a6413dc3641634c82bdc7fc5b02a314df45b52a1f9c35f82082a`；receive_stream.py `c9de4b7935b7ffc9fbdd7e57d248f378f876fb2eb3bd974abbe7902a03131f66`。bash语法、Python AST、15字节EOF和0.2秒idle探针通过，结果 `INSTALLED_HELPER_PROBES_PASS`、`SCRIPTS_INSTALLED_PASS`、`LOCK_AVAILABLE_AFTER_INSTALL`。证据 install-direct-result.txt 位于上述备份根目录。
+- 安装后jiugeng/caddy active、health UP，current仍为旧应用 `365892ccb4c5d5eb151420bd0cb7c66c739f8586`；未改Caddy、SSH/sudo、端口、业务数据、应用包或本地仓库。
+- 操作槽明确归还后，PJM核对干净分支及五项必需检查，通过 [PR #32](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/pull/32) 受保护合并，应用目标main为 `14c67cf04576215a6ae7f95b5c28a467d0ef8fd2`。[恢复Production](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45650240074) 自动启动，最终结果待核验。
+- 超时补丁避免永久接收残留，不等于解决底层跨境传输。若再次失败，应按进度字节和实际速率选择经校验的稳定产物通道，不循环重试或盲目延长时限。上述回执覆盖此前“未清理/未安装”的阶段描述。
+
+## 接收启动窗口修正（2026-11-26）
+
+合并PR32后的main CI在TERM清理测试中出现5秒等待超时（PR和Production前置工具测试曾通过）。本地40次启动窗口复现出现2次相同失败：TERM早于接收子进程exec完成时可能被忽略。修复清理逻辑，在TERM后对同一个只负责临时文件接收的直接子进程补KILL并wait，不涉及应用服务；100次启动窗口测试及完整9项发布工具测试通过。此为真实修复，不靠重复运行原失败门禁放行。服务器目前仍是此前安装的2fb8852版本，新增清理修正尚未同步。
+
+PJM尝试在浏览器门禁阶段取消恢复Production，但GitHub取消接口报500/无有效返回，未确认取消；重新读取时流程已进入实际deploy。未再次中断传输、未启动并行部署。最终结果另记。

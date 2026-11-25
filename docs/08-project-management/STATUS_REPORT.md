@@ -11,6 +11,13 @@
 
 本报告是带日期的快照，不是实时监控。接手时重新检查 HEAD、工作区及当前任务归属；发布状态由 PJM 维护，Codex 不跟踪线上发布。[2026-10-15 原报告](archive/STATUS_REPORT_2026-10-15.md)已归档，保留原始事实及当时风险，不再作为今天的待办清单。
 
+
+## DEL-056 应用上线核验（2026-11-26 00:06 CST）
+
+[恢复Production 45650240074](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45650240074) 最终success，实际deploy非skipped。接收82,836,154字节，耗时66秒，15/30/45/60秒分别累计18,939,904 / 37,584,896 / 56,262,656 / 74,514,432字节，未触发接收超时。00:05:28数据库备份完成，00:05:55 `Deployment verified: 14c67cf04576215a6ae7f95b5c28a467d0ef8fd2`，部署脚本健康与内部版本验证通过。PJM独立读取ERP HTTPS `/version.json` HTTP200并匹配同SHA；官网HTTP200，内容摘要仍ae09c183535a6ecfd9e432ba87cb7c073d3e37b109c4e2846b81451cbe784d5a。无需新增迁移，未改分流。应用发布已完成，不代表底层网络故障根因已确定。
+
+仍待闭合：main CI45650240148的启动瞬间TERM清理测试失败已定位、修复并推送e0b799eaed9ce03247314ee7ebd26271dff330c6（100次启动测试及9项工具测试通过），但尚未合并或安装主机。新receive.sh SHA256 f28d124dac213958056baff493bfcd53dce0079ab49711edea91b9caaac01102，helper不变。已请求CUA协助会话在无接收进程/锁空闲后备份同步；其操作期间PJM不执行远端写入或部署。创建后续PR时GitHub GraphQL返回内部错误，REST无有效返回，尚未确认PR创建，不能绕过分支保护。官网自动服务器投递仍为独立未闭合项。
+
 ## DEL-056 服务器恢复回执（2026-11-25，PJM接回操作槽）
 
 以下为具有原生Safari CUA通道的协助会话回执，PJM未冒称亲自执行云助手操作：

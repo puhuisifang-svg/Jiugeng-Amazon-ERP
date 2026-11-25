@@ -1,5 +1,13 @@
 # 项目文档总索引
 
+## 本轮发布交接（2026-11-25）
+
+[ERP-104修复与官网需求归档 / DEL-055](../deliverables/pjm/ERP-104_RELEASE_HANDOFF_2026-11-25.md)：795项前端测试、6个相关浏览器场景通过；用户授权PJM提交main并部署。官网仅需求，页面和8081入口另待开发。
+
+## 新需求评审（2026-11-25）
+
+[九更静态官网与 ERP 域名分流 PRD / DEL-054](01-product/JIUGENG_CORPORATE_WEBSITE_PRD_v0.1_DRAFT.md)：v0.6，默认HTTP IP入口给官网，临时ERP建议用IP:8081（完整前端与API，TCP8081对所有外网放行、保留登录权限）；先验证ERP入口再切换，未部署；首期用于备案的静态企业展示，Logo/一般文案自主设计；根域/www及HTTP公网IP进入官网，erp子域进入现有ERP。IP默认80无需手填端口，ERP内部服务不动；仅需求草案，开放时机按备案类型与接入商要求。
+
 ## 当前接手入口（2026-11-24 更新）
 
 先读 [README](../README.md) → [AGENTS](../AGENTS.md) → [项目接手指南](04-engineering/PROJECT_HANDOVER.md) → [当前状态报告](08-project-management/STATUS_REPORT.md)。界面任务同时读 [UI 规范](ui/UI_STANDARD.md)，跨会话使用 [交接模板](../templates/SESSION_HANDOFF_TEMPLATE.md)。

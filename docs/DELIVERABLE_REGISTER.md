@@ -61,6 +61,10 @@
 
 | DEL-053 | 2026-11-24 | Codex / PJM | ERP-103 报关、样品、供应商、产品、采购、辅料与未保存确认累计修复 | v0.2 | Ready for PJM Review | 用户已授权提交 main/部署，PJM 接管；代码未提交 | [最终交接](../deliverables/pjm/ERP-103_CUSTOMS_FILES_LOCAL_2026-11-24.md)；前端 793 测试及修正复验/构建通过，后端 448 通过/1 外部探测跳过，E2E 9 + 窄屏组件 12 通过，V108/V109 发布前确认备份 |
 
+| DEL-054 | 2026-11-25 | Codex | 九更公司官网与 ERP 域名分流需求文档 | v0.6 | Draft | 用户授权编写需求；未授权开发或部署 | [PRD](01-product/JIUGENG_CORPORATE_WEBSITE_PRD_v0.1_DRAFT.md)；默认IP官网，临时ERP8081对所有外网放行，保留登录权限，先验证后切换，未开通；静态备案展示，Logo/一般文案自主设计；根域/www及HTTP公网IP为官网、erp子域为ERP；优先保持现有ERP，包含开放时机与IP路由验收 |
+
+| DEL-055 | 2026-11-25 | Codex → PJM | ERP-104辅料与样品UI修复、官网需求归档发布交接 | v1.0 | In Review | 用户已授权main提交与部署；PJM执行 | [交接](../deliverables/pjm/ERP-104_RELEASE_HANDOFF_2026-11-25.md)；795测试及6个浏览器场景通过，未提交；官网/8081仅方案 |
+
 ## 登记要求
 
 - 成员交付后必须登记，不得只在聊天中汇报。

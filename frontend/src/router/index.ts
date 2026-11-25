@@ -59,7 +59,7 @@ export const appRoutes: RouteRecordRaw[] = [
       { path: 'suppliers', name: 'suppliers', component: () => import('@/views/SuppliersView.vue'), meta: { title: '供应商管理', group: '产品管理', icon: '供', capabilities: ['suppliers.read'] } },
       { path: 'purchases', name: 'purchase-dashboard', redirect: '/purchases/orders', meta: { title: '采购管理', hidden: true, capabilities: ['purchases.read'] } },
       { path: 'purchases/orders', name: 'purchase-orders', component: () => import('@/views/PurchasesView.vue'), meta: { title: '采购管理', group: '产品管理', icon: '单', capabilities: ['purchases.read'] } },
-      { path: 'samples', name: 'samples', component: () => import('@/views/SamplesView.vue'), meta: { title: '样品管理', group: '产品管理', icon: '样', breadcrumbs: [{ title: '商品' }, { title: '产品管理', to: '/products' }, { title: '样品管理' }], capabilities: ['samples.read'] } },
+      { path: 'samples', name: 'samples', component: () => import('@/views/SamplesView.vue'), meta: { title: '样品管理', group: '产品管理', icon: '样', breadcrumbs: [{ title: '商品' }, { title: '样品管理' }], capabilities: ['samples.read'] } },
       { path: 'purchases/orders/:orderId', name: 'purchase-order-detail', component: () => import('@/views/PurchaseOrderDetailView.vue'), meta: { title: '采购单详情', hidden: true, parentPath: '/purchases/orders', breadcrumbs: [{ title: '商品' }, { title: '采购管理', to: '/purchases/orders' }, { title: '采购单详情' }], capabilities: ['purchases.read'] } },
       { path: 'purchases/receipts', name: 'purchase-receipts', redirect: '/purchases/orders', meta: { title: '采购管理', hidden: true, capabilities: ['purchases.read'] } },
       { path: 'inventory', redirect: '/inventory/balances', meta: { title: '辅料库存', hidden: true, capabilities: ['inventory.read'] } },

@@ -23,6 +23,8 @@ class CostControllerTest {
     @Autowired CostService service;
     @Autowired JdbcTemplate jdbc;
     @Autowired MockMvc mvc;
+    @Autowired MaterialRepository materialRepository;
+    @Autowired MaterialService materials;
     @Autowired ObjectMapper mapper;
     String product,sku;
     final AuthenticatedActor actor=new AuthenticatedActor(){public String userId(){return "cost-test";}public String loginName(){return "cost-test";}public String displayName(){return "成本测试";}};
@@ -45,11 +47,35 @@ class CostControllerTest {
         var published=service.publish(v.id(),new Publish(v.revision(),"核准"),actor);assertThat(published.status()).isEqualTo("EFFECTIVE");assertThat(published.stale()).isFalse();
         assertThat(jdbc.queryForObject("SELECT standard_quantity FROM product_auxiliary_material WHERE variant_id=? AND auxiliary_material_id=?",BigDecimal.class,sku,lines.get(6).materialId())).isEqualByComparingTo("0.02");
     }
+    @Test void priceAloneAllowsUnitCorrectionButCostVersionReferencesStillLockIt(){
+        String id=material("2");assertThat(materialRepository.unitLocked(id)).isFalse();
+        save(input(List.of(line(id,"1","1")),List.of()));
+        assertThat(materialRepository.unitLocked(id)).isTrue();
+        service.saveField(id,new CostField(null,0L),actor);
+        assertThat(materialRepository.unitLocked(id)).isTrue();
+        assertThatThrownBy(()->materials.delete(List.of(id),actor)).hasMessageContaining("成本版本引用");
+    }
     @Test void pricesRequireExplicitNetConfirmationAndOptimisticVersion(){
         String id=material(null);assertThatThrownBy(()->service.savePrice(id,new PriceInput(n("2"),"件","MANUAL",null,"原因",-1L,false),actor)).hasMessageContaining("确认");
         service.savePrice(id,new PriceInput(n("0"),"件","MANUAL",null,"免费物料",-1L,true),actor);
         assertThatThrownBy(()->service.savePrice(id,new PriceInput(n("3"),"件","MANUAL",null,"原因",-1L,true),actor)).hasMessageContaining("刷新");
         assertThatThrownBy(()->service.savePrice(id,new PriceInput(n("3"),"件","PURCHASE","missing","原因",0L,true),actor)).hasMessageContaining("有效人民币采购");
+    }
+    @Test void clearedAndRecreatedPriceRejectsStaleLegacyHttpWrites()throws Exception{
+        String id=material("2");String token=login("ADMIN");
+        jdbc.update("UPDATE material_standard_cost SET version=7 WHERE material_id=?",id);
+        service.saveField(id,new CostField(null,7L),actor);
+        assertThat(service.price(id)).isNull();
+        service.saveField(id,new CostField(n("4"),-1L),actor);
+        long recreated=service.price(id).version();assertThat(recreated).isGreaterThan(7L);
+        var stale=new PriceInput(n("9"),"件","MANUAL",null,"陈旧页面",7L,true);
+        mvc.perform(put("/api/v1/product-costs/materials/"+id+"/price").header("Authorization",token)
+            .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(stale)))
+            .andExpect(status().isConflict());
+        assertThat(new BigDecimal(service.price(id).netPrice())).isEqualByComparingTo("4");
+        service.saveField(id,new CostField(null,recreated),actor);
+        var latest=service.savePrice(id,new PriceInput(n("5"),"件","MANUAL",null,"再次填写",-1L,true),actor);
+        assertThat(latest.version()).isGreaterThan(recreated);
     }
     @Test void missingPriceBlocksPublicationAndPriceChangeKeepsSnapshot(){
         String id=material(null);var v=save(input(List.of(line(id,"1","1")),List.of()));assertThat(v.snapshot().errors()).isNotEmpty();

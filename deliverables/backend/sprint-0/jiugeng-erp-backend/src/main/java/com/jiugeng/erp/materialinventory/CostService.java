@@ -43,9 +43,44 @@ class CostService {
             var p=purchases(id).stream().filter(v->v.id().equals(input.referenceId())).findFirst().orElseThrow(()->invalid("请选择有效人民币采购明细"));
             if(!p.unit().equals(input.unit())||new BigDecimal(p.price()).compareTo(input.netPrice())!=0)throw invalid("引用采购价格或单位不一致；折算后的价格请按手工核定记录原因");
         }
-        String sql=before==null?"INSERT INTO material_standard_cost(material_id,net_price,unit,source,reference_id,reason,version,updated_by) VALUES(:id,:price,:unit,:source,:ref,:reason,0,:actor)":"UPDATE material_standard_cost SET net_price=:price,unit=:unit,source=:source,reference_id=:ref,reason=:reason,version=version+1,updated_at=CURRENT_TIMESTAMP,updated_by=:actor WHERE material_id=:id";
-        jdbc.sql(sql).param("id",id).param("price",input.netPrice()).param("unit",input.unit()).param("source",input.source()).param("ref",input.source().equals("PURCHASE")?input.referenceId():null).param("reason",input.reason()).param("actor",actor.userId()).update();
+        String sql=before==null?"INSERT INTO material_standard_cost(material_id,net_price,unit,source,reference_id,reason,version,updated_by) VALUES(:id,:price,:unit,:source,:ref,:reason,:initialVersion,:actor)":"UPDATE material_standard_cost SET net_price=:price,unit=:unit,source=:source,reference_id=:ref,reason=:reason,version=version+1,updated_at=CURRENT_TIMESTAMP,updated_by=:actor WHERE material_id=:id";
+        long initialVersion=jdbc.sql("SELECT version FROM auxiliary_material WHERE id=:id").param("id",id).query(Long.class).single();
+        jdbc.sql(sql).param("initialVersion",initialVersion).param("id",id).param("price",input.netPrice()).param("unit",input.unit()).param("source",input.source()).param("ref",input.source().equals("PURCHASE")?input.referenceId():null).param("reason",input.reason()).param("actor",actor.userId()).update();
         record(actor,"COST_MATERIAL_PRICE",id,before,price(id),input.reason());return price(id);
+    }
+    @Transactional
+    void saveField(String id,CostField input,AuthenticatedActor actor){
+        jdbc.sql("SELECT id FROM auxiliary_material WHERE id=:id FOR UPDATE").param("id",id).query(String.class).single();
+        var before=price(id);
+        if(input.version()!=(before==null?-1:before.version()))throw conflict("成本价已被修改，请刷新后重试");
+        if(input.netPrice()==null){
+            if(before==null)return;
+            // Preserve the deleted generation on the locked master to reject stale
+            // legacy price writes after recreation (ABA), without a schema change.
+            jdbc.sql("UPDATE auxiliary_material SET version=GREATEST(version,:priceVersion)+1 WHERE id=:id")
+                .param("priceVersion",before.version()).param("id",id).update();
+            jdbc.sql("DELETE FROM material_standard_cost WHERE material_id=:id").param("id",id).update();
+            record(actor,"COST_MATERIAL_PRICE",id,before,null,"清空辅料成本价");
+        }else{
+            var unit=material(id).unit();
+            if(before!=null&&new BigDecimal(before.netPrice()).compareTo(input.netPrice())==0&&before.unit().equals(unit))return;
+            savePrice(id,new PriceInput(input.netPrice(),unit,"MANUAL",null,before==null?"填写辅料成本价":"修改辅料成本价",input.version(),true),actor);
+        }
+        recordMaterialPrice(id,before,price(id),actor);
+    }
+    @Transactional
+    void alignUnit(String id,AuthenticatedActor actor){
+        var before=price(id);var unit=material(id).unit();
+        if(before==null||before.unit().equals(unit))return;
+        jdbc.sql("UPDATE material_standard_cost SET unit=:unit,source='MANUAL',reference_id=NULL,reason='修改辅料基础单位',version=version+1,updated_by=:actor,updated_at=CURRENT_TIMESTAMP WHERE material_id=:id")
+            .param("id",id).param("unit",unit).param("actor",actor.userId()).update();
+        var after=price(id);record(actor,"COST_MATERIAL_PRICE",id,before,after,"修改辅料基础单位");recordMaterialPrice(id,before,after,actor);
+    }
+    private Map<String,Object> materialPriceSnapshot(Price p){
+        return p==null?null:Map.of("costPrice",p.netPrice(),"priceUnit",p.unit());
+    }
+    private void recordMaterialPrice(String id,Price before,Price after,AuthenticatedActor actor){
+        audit.record(new AuditTrail.BusinessOperation(actor.userId(),actor.loginName(),actor.displayName(),"MATERIAL_COST_UPDATE","AUXILIARY_MATERIAL",id,true,materialPriceSnapshot(before),materialPriceSnapshot(after),"修改辅料成本价"));
     }
     List<Operation> operations(){return jdbc.sql("SELECT * FROM cost_operation ORDER BY name,id").query((r,n)->new Operation(r.getString("id"),r.getString("name"),r.getBoolean("enabled"),r.getLong("version"))).list();}
     @Transactional

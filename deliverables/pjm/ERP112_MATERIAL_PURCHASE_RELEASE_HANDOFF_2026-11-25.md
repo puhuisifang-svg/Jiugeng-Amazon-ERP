@@ -1,0 +1,66 @@
+# ERP-112 官网与辅料、采购累计迭代发布交接
+
+- 交付物：DEL-056；ERP-112 官网与用户直接授权的辅料/采购维护追加。
+- Owner：Codex 完成本地实施和统一验证，正式发送交接后由 PJM 独占写入并负责发布。
+- 状态：In Review；2026-11-25，Asia/Shanghai。
+- 用户最新原话：“与项目经理交接，把修改内容提交远端main，并部署线上”。已授权 PJM 提交、受保护合并 main、部署和发布状态闭合。
+- 用户此前明确确认官网任务已停止编辑，允许辅料改动合入本轮；官网及文档不是不明归属的脏文件。
+
+## 工作区
+
+- 仓库：`/Users/thinkperfect/.openclaw/workspace-jiugeng_pjm/jiugeng-amazon-erp`。
+- 分支：`feature/ERP-112-corporate-website`。
+- 基线完整 SHA：`c410b33a61a60aeb1700ed4501b8ecd9d5e8453f`。
+- 实施提交：**未提交**；本地修改和 website/ 新文件一并交给 PJM，Codex 未暂存、提交或推送。PJM 提交前重新检查分支、diff 和归属；不能因本记录直接覆盖后续新文件。
+- 不切换工作树、不覆盖官网现有文件；本轮无数据库迁移。当前 git status 仅已授权官网、辅料、采购与交接文档，无无关改动。
+
+## 改动内容与代码入口
+
+1. `website/`：官网独立静态源码、SVG、构建/预览脚本、两项契约测试及 Caddy 示例。官网此前已另行授权部署，当前构建摘要仍为 `ae09c183535a6ecfd9e432ba87cb7c073d3e37b109c4e2846b81451cbe784d5a`；本次只是把当前源码纳入累计提交，不据此声称 ERP 新版本已上线。
+2. 后端 materialinventory 下 `CostTypes`、`CostService`、`MaterialManagementController`、`MaterialService`、`MaterialRepository`、`MaterialController`、`MaterialImportService`：成本价按普通字段填写/修改/清空，实际变更追加历史，移除普通编辑对核定原因与确认的依赖；保持金额权限、乐观版本、幂等与原子保存。未使用辅料不再因单纯价格记录锁定单位，修改单位同步成本单位且不舍入旧金额；导入亦同步。删除未使用辅料在同事务清除当前价格、保留审计，解除旧核价外键阻断；库存、采购、产品用量及成本版本引用仍保护删除与单位。
+3. `frontend/src/components/MaterialEditor.vue`、`MaterialDetailDialog.vue`、`api/materialManagement.ts`、`utils/productHistory.ts`：简化成本价界面，两位显示且不回写未改的历史六位值；清空作为显式命令，缺省表示不改；显示中文金额变更。旧 material.costPrice 载荷及请求哈希兼容保留。simpleCostVersion 能力检查阻止新前端连旧后端时静默丢价；保存用既有 HTTP 兼容 createRequestId，修复该入口 randomUUID 报错。
+4. `MaterialsManagement.vue`、`materialManagement.css`：删除文字红色，包含 Teleport 到 body 的菜单；删除提示区分真实引用与普通成本字段。
+5. `ui/purchaseImageExport.ts`：追加采购单备注列，逐明细显示红色加粗文字，手动/自动换行、行高适配；同日不同采购单不混用备注。
+6. `PurchasesView.vue`、`DashboardPurchaseReceipts.vue`、`purchaseManagement.css`：采购新增/编辑/再次采购共用表单控件40px同高、字段对齐、数量单位成组、金额右对齐、选择按钮浅底；首页商品图片/品名/收货进度重新布局，长名称可撑高、不截断。现有业务操作与权限保留。
+7. 测试：`MaterialCloseoutTest`、`CostControllerTest`、`MaterialEditor.test.ts`、`purchaseImageExport.test.ts`，以及 operations-closeout 浏览器夹具新能力标记。
+8. 文档：PROJECT_HANDOVER、STATUS_REPORT、UI_STANDARD、DELIVERABLE_REGISTER 和本文件。状态报告历史“待交接/未授权”由本交接覆盖，保留作为阶段记录。
+
+## 统一验证（2026-11-25）
+
+| 工作目录 | 命令 | 结果 |
+| --- | --- | --- |
+| frontend | `pnpm quality` | 通过：lint、171 文件/802 测试、类型检查、构建；构建有大 chunk 提示，无错误 |
+| deliverables/backend/sprint-0/jiugeng-erp-backend | `./mvnw clean verify` | BUILD SUCCESS；456 项，455 通过、0 失败/错误、1 跳过 |
+| 仓库根 | `python3 -m unittest discover -s website/tests -v` | 2 项通过 |
+| 仓库根 | `python3 website/build.py` | 通过；摘要与已归档官网产物一致 |
+| frontend | `pnpm exec playwright test --config /tmp/jiugeng-handoff-playwright.cjs` | operations-closeout 3 场景通过：1280×800、800×600、360×800；覆盖辅料新增/编辑/库存、供应商、新建采购、收货、发货批次 |
+| frontend | `node /tmp/jiugeng-purchase-layout.cjs`（上一实现阶段结果复用） | 本地 Vite 与合成 API，1440×900；采购顶部三控件40px且同一Y，首页摘要flex且内容无溢出；截图已目视检查 |
+| 仓库根 | `git diff --check` | 通过 |
+
+发送前使用 Python 解析本轮 Markdown 相对链接：152 个本地路径全部存在，缺失0；外站和锚点未作为该检查内容。
+
+- 首次浏览器命令使用默认4188时因官网预览占用而未启动；没有停止官网，改临时4190预览，测试结束自动停止。临时配置只更改端口、测试匹配、输出目录，不改产品设置。
+- 后端唯一跳过：OssConnectivityTest，未设置 ERP_OSS_PROBE，未执行真实 OSS 联网探针；其他测试通过。导入契约文件未变更，本轮未重复独立 npm/Python 契约门禁，生产工作流仍会执行。
+- 日志和截图持久保留在 `.local/verification/handoff-20261125/`（不入 Git），包含 frontend-quality.log、backend-verify.log、browser.log、browser/ 三尺寸截图及1440截图。临时配置与局部脚本也已复制到该目录，可从 frontend 执行 `pnpm exec playwright test --config ../.local/verification/handoff-20261125/playwright.cjs` 重现同一检查。
+- 未运行整个 Playwright 仓库所有场景；本轮按受影响模块验证，Production 工作流仍运行完整浏览器套件。不是实际业务验收，不修改线上业务数据。
+
+## 发布注意事项和剩余边界
+
+- PJM 独立审阅后原子提交，走受保护 PR 合并 main、现有 Production 流程；构建最终 SHA，不复用旧本地 JAR。代码支持前后端能力检查，需同版本发布。
+- **保留现有官网/ERP 分流**：根域/www/默认IP为官网，ERP域名及IP:8081为ERP，内部8080/4173不变；不得拿旧 Caddy 模板覆盖当前配置。本轮 ERP receive.sh 发布路径只切换 ERP 应用，不需要重配 DNS/Caddy。官网已上线证据及备份路径见状态报告和 website/README.md。
+- 官网有独立产物和 website-version.json，现有 ERP main push 工作流尚无官网独立自动发布。PJM 接管后续官网 CI/CD 与路径隔离，勿把 ERP release.tar.gz 当官网包。本次混合提交确有 ERP 改动，应保留 ERP 完整门禁，不得以官网路径跳过。
+- 辅料 HTTP 随机编号只修复当前保存入口；其他页面直接 randomUUID 调用未扩展处理，不宣称全站 HTTP 兼容问题已消除。
+- 本地 tmux jiugeng-mvp 保留，MySQL 数据和配置未清理，运行 `.local/releases/backend/material-delete-price-20261125/backend.jar`；前端5173热更新。旧包与启动脚本备份保留；统一验证的新 target 产物不影响当前持久服务。
+- 若再遇部署锁，由 PJM 检查实际持锁进程和流水线，不能直接删除锁绕过运行中的部署。Codex 不轮询线上结果；PJM 负责实际 deploy 步骤、ERP目标入口 version.json 和最终发布记录，不能把提交或构建成功等同于上线。
+
+## 接棒
+
+正式交接消息被接受后，PJM 获得共享工作区唯一写入权；Codex 停止修改。PJM 接收当前未提交修改，更新最终提交 SHA、PR 与发布证据；本文件截至交接时只确认本地实现与验证完成。
+
+## PJM release review and corrections (2026-11-25)
+
+- Read-only review found an ABA regression: clearing and recreating a cost reused version 0. PJM now preserves the deleted generation in the locked master version, within the same transaction, and new costs inherit that version. No migration added. Existing price updates still increment their own version.
+- Targeted `./mvnw -q -Dtest=CostControllerTest,MaterialCloseoutTest,MaterialControllerTest test`: 31 tests passed, zero failures/errors. Includes stale legacy HTTP price writes rejected after recreation and idempotent aggregate clear retries. Log: `/tmp/del056-cost-regression-final.log`. Two initial assertions assumed version 0; corrected to use returned/current versions. Valid frontend gates remain applicable. CI still runs full gates.
+- Independent Website CI builds/tests and retains a commit-SHA artifact with provenance. ERP Production now filters application/deployment paths: website-only and documentation-only changes do not restart ERP; this mixed release still triggers full ERP deployment. Website contract/build passed again; content digest remains identical to the existing live website. All three workflows passed actionlint; 152 local Markdown paths passed.
+- Automatic website server delivery remains pending a connected management channel. Current browser tooling cannot connect to the previous cloud-console session; protected credential metadata store is empty. Restricted ERP SSH must not be reused for website delivery or arbitrary management. Access restoration was requested; CI artifacts and matching existing website content are not represented as a newly executed automatic deployment.
+- Existing Caddy, HTTPS, domain/IP separation, internal ports, persistent data and local services remain unchanged.

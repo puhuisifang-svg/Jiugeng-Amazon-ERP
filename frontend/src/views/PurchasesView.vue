@@ -706,7 +706,7 @@ watch(pageCount, value => { if (page.value > value) page.value = value })
             min="2000-01-01"
             max="9999-12-31"
           /></label>
-          <label>收货信息<EditableSelect
+          <label class="purchase-delivery-field">收货信息<EditableSelect
             :model-value="form.deliveryAddress ?? ''"
             :options="deliveryOptions"
             label="收货信息"
@@ -721,12 +721,18 @@ watch(pageCount, value => { if (page.value > value) page.value = value })
           >
             该供应商尚未关联启用的{{ form.orderType === 'PRODUCT' ? 'SKU' : '辅料' }}，请先到对应档案维护供货关系。
           </p>
-          <div class="form-wide table-scroll">
+          <div class="form-wide purchase-lines-wrap">
             <TableViewport>
               <table
                 class="data-table purchase-edit-lines"
                 :class="{'manual-purchase-lines':form.orderType==='MANUAL'}"
               >
+                <colgroup>
+                  <col class="purchase-col-image"><col class="purchase-col-item"><col class="purchase-col-quantity"><col class="purchase-col-package"><col class="purchase-col-price"><col class="purchase-col-tax"><col
+                    v-if="showTaxRate"
+                    class="purchase-col-rate"
+                  ><col class="purchase-col-amount"><col class="purchase-col-action">
+                </colgroup>
                 <thead>
                   <tr>
                     <th>
@@ -797,24 +803,29 @@ watch(pageCount, value => { if (page.value > value) page.value = value })
                       </button>
                     </td>
                     <td>
-                      <input
-                        v-model.number="line.quantity"
-                        required
-                        type="number"
-                        min="0.0001"
-                        step="0.0001"
-                        aria-label="采购数量"
-                      >
-                      <input
-                        v-if="form.orderType==='MANUAL'"
-                        v-model="line.unit"
-                        required
-                        maxlength="32"
-                        aria-label="物品单位"
-                        placeholder="个 / 包 / 箱"
-                      ><template v-else>
-                        {{ references.find(item => item.id === line.itemId)?.unit || '—' }}
-                      </template>
+                      <div class="purchase-quantity-control">
+                        <input
+                          v-model.number="line.quantity"
+                          required
+                          type="number"
+                          min="0.0001"
+                          step="0.0001"
+                          aria-label="采购数量"
+                        >
+                        <input
+                          v-if="form.orderType==='MANUAL'"
+                          v-model="line.unit"
+                          required
+                          maxlength="32"
+                          aria-label="物品单位"
+                          placeholder="个 / 包 / 箱"
+                        ><span
+                          v-else
+                          class="purchase-unit"
+                        >
+                          {{ references.find(item => item.id === line.itemId)?.unit || '—' }}
+                        </span>
+                      </div>
                     </td>
                     <td>
                       <input
@@ -862,11 +873,13 @@ watch(pageCount, value => { if (page.value > value) page.value = value })
                         :aria-label="`税率 ${index+1}`"
                       ><span v-else>—</span>
                     </td>
-                    <td>{{ (purchaseLineAmount(line)).toFixed(2) }}</td>
+                    <td class="purchase-line-amount">
+                      {{ (purchaseLineAmount(line)).toFixed(2) }}
+                    </td>
                     <td>
                       <button
                         type="button"
-                        class="secondary-button"
+                        class="purchase-line-remove"
                         :disabled="form.lines.length <= 1"
                         @click="form.lines.splice(index, 1)"
                       >
@@ -886,7 +899,7 @@ watch(pageCount, value => { if (page.value > value) page.value = value })
               @click="addLine"
             >
               增加明细
-            </button><strong>合计 {{ form.currency.toUpperCase() }} {{ formTotal }}</strong>
+            </button><span class="purchase-line-count">共 {{ form.lines.length }} 项明细</span>
           </div>
           <label class="form-wide">采购备注<textarea
             v-model="form.remark"

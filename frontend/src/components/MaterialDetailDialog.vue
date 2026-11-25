@@ -68,7 +68,7 @@ onMounted(load);onBeforeUnmount(()=>{sequence++})
         class="material-facts"
       >
         <dt>规格</dt><dd>{{ data.material.specification||'—' }}</dd><dt>基础单位</dt><dd>{{ data.material.unit }} <small>{{ data.quantityScale?'测量单位，最多四位小数':'计数单位，整数' }}</small></dd><template v-if="session.canAccess(['costs.read'])">
-          <dt>成本价</dt><dd>{{ data.price&&data.price.unit===data.material.unit?`¥ ${materialNumber(data.price.netPrice)} / ${data.material.unit}`:'未维护或需重新核定' }} <small>人民币，不含税</small></dd>
+          <dt>成本价</dt><dd>{{ data.price&&data.price.unit===data.material.unit?`¥ ${materialNumber(data.price.netPrice)} / ${data.material.unit}`:'未维护' }} <small>人民币，不含税</small></dd>
         </template><dt>备注</dt><dd>{{ data.material.remark||'—' }}</dd>
       </dl>
       <div

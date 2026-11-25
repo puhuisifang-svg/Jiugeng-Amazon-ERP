@@ -6,6 +6,8 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 
 final class CostTypes {
+    // Null amount explicitly clears the field; absent CostField leaves it unchanged.
+    record CostField(@DecimalMin("0") @Digits(integer=12,fraction=2) BigDecimal netPrice,@NotNull Long version) {}
     record PriceInput(@NotNull @DecimalMin("0") @Digits(integer=12,fraction=6) BigDecimal netPrice,
         @NotBlank @Size(max=32) String unit,@Pattern(regexp="MANUAL|PURCHASE") @NotNull String source,
         @Size(max=36) String referenceId,@NotBlank @Size(max=500) String reason,@NotNull Long version,boolean confirmedNet) {}

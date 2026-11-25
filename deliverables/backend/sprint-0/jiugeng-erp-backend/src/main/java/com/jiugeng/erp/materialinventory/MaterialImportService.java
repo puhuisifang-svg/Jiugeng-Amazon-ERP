@@ -28,8 +28,10 @@ class MaterialImportService implements MaterialImportGateway {
     private final JdbcClient jdbc;
     private final AuditTrail audit;
     private final MaterialRepository repository;
+    private final CostService costs;
 
-    MaterialImportService(JdbcClient jdbc, AuditTrail audit, MaterialRepository repository) {
+    MaterialImportService(JdbcClient jdbc, AuditTrail audit, MaterialRepository repository, CostService costs) {
+        this.costs=costs;
         this.jdbc = jdbc;
         this.audit = audit;
         this.repository=repository;
@@ -115,6 +117,7 @@ class MaterialImportService implements MaterialImportGateway {
                         .param("specification", next.specification()).param("unit", next.unit())
                         .param("imageUrl", next.imageUrl()).param("remark", next.remark())
                         .param("status", next.status()).param("actor", actor.userId()).update();
+                if(!current.unit().equals(next.unit()))costs.alignUnit(current.id(),actor);
                 audit.record(operation(actor, "MATERIAL_IMPORT_UPDATE", "AUXILIARY_MATERIAL", current.id(),
                         materialSnapshot(current), materialSnapshot(next.withCode(current.code()))));
                 updated++;

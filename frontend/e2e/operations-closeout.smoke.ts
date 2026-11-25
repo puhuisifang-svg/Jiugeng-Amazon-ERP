@@ -13,7 +13,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 800, height: 600 
     await page.route('**/api/**', route => {
       const path = new URL(route.request().url()).pathname
       if (path === '/api/v1/auth/me') return route.fulfill({ json: user })
-      if (path.endsWith('/manage/capabilities')) return route.fulfill({ json: { closeoutVersion: 1 } })
+      if (path.endsWith('/manage/capabilities')) return route.fulfill({ json: { closeoutVersion: 1, simpleCostVersion: 1 } })
       if (path === '/api/v1/materials/manage/page') return route.fulfill({ json: { items: [{ material, quantity: 8, safetyStock: 10, initialized: true, netPrice: '0.1234', priceUnit: '个' }], totalCount: 1 } })
       if (path === '/api/v1/materials/type-options') return route.fulfill({ json: ['包装'] })
       if (path === '/api/v1/materials/unit-options') return route.fulfill({ json: ['个'] })

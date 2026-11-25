@@ -82,7 +82,7 @@ class MaterialController {
     @org.springframework.transaction.annotation.Transactional
     MaterialView update(@PathVariable String materialId, @Valid @RequestBody MaterialRequest request,
             @AuthenticationPrincipal AuthenticatedActor actor) {
-        var result=service.update(materialId, request.input(), actor);
+        var result=service.update(materialId, request.input(), actor,request.costPrice()==null);
         if(request.costPrice()!=null)costs.savePrice(result.id(),request.costPrice(),actor);
         return result;
     }

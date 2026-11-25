@@ -21,8 +21,10 @@ class MaterialService {
     private final MaterialRepository repository;
     private final CatalogImageGateway images;
     private final AuditTrail auditTrail;
+    private final CostService costs;
 
-    MaterialService(MaterialRepository repository, CatalogImageGateway images, AuditTrail auditTrail) {
+    MaterialService(MaterialRepository repository, CatalogImageGateway images, AuditTrail auditTrail, CostService costs) {
+        this.costs=costs;
         this.repository = repository;
         this.images = images;
         this.auditTrail = auditTrail;
@@ -73,6 +75,10 @@ class MaterialService {
 
     @Transactional
     MaterialView update(String id, MaterialInput input, AuthenticatedActor actor) {
+        return update(id,input,actor,true);
+    }
+    @Transactional
+    MaterialView update(String id, MaterialInput input, AuthenticatedActor actor,boolean synchronizeCostUnit) {
         repository.lock(id);
         MaterialView before = material(id);
         if (before.status() == MaterialStatus.DISABLED) {
@@ -80,7 +86,7 @@ class MaterialService {
         }
         ValidatedMaterial valid = validate(input, id);
         if (!before.unit().equals(valid.unit()) && repository.unitLocked(id)) {
-            throw new MaterialException(409,"MATERIAL_UNIT_LOCKED","辅料已有库存、采购、产品用量或成本记录，不能直接修改基础单位；请按包装换算录入或新建辅料。");
+            throw new MaterialException(409,"MATERIAL_UNIT_LOCKED","辅料已有库存、采购、产品用量或成本版本引用，不能直接修改基础单位；请按包装换算录入或新建辅料。");
         }
         if (!MaterialRepository.normalize(before.materialCode()).equals(valid.normalizedCode())) {
             throw new MaterialException(409, "MATERIAL_CODE_IMMUTABLE", "已保存的辅料编码不可修改，请停用后新建");
@@ -92,7 +98,7 @@ class MaterialService {
                     "AUXILIARY_MATERIAL", id, actor);
             images.releaseReplaced(before.imageAssetId(), valid.imageAssetId(), "AUXILIARY_MATERIAL", id);
             if(!before.materialType().equals(valid.type()))repository.restoreType(valid.type());
-            if(!before.unit().equals(valid.unit()))repository.restoreUnit(valid.unit());
+            if(!before.unit().equals(valid.unit())){repository.restoreUnit(valid.unit());if(synchronizeCostUnit)costs.alignUnit(id,actor);}
             MaterialView updated = material(id);
             auditTrail.record(operation(actor, "MATERIAL_UPDATE", id, snapshot(before), snapshot(updated),
                     "更新辅料主数据"));
@@ -147,11 +153,13 @@ class MaterialService {
         for (MaterialView target : targets) {
             if (repository.isReferenced(target.id())) {
                 throw new MaterialException(409, "MATERIAL_IN_USE", target.materialCode()
-                        + " 已有库存流水、库存或产品/采购关联，不能删除；可使用停用功能。本次未删除任何辅料。");
+                        + " 已有库存流水、库存、产品/采购关联或成本版本引用，不能删除；可使用停用功能。本次未删除任何辅料。");
             }
         }
         try {
             for (MaterialView target : targets) {
+                var price=costs.price(target.id());
+                if(price!=null)costs.saveField(target.id(),new CostTypes.CostField(null,price.version()),actor);
                 repository.delete(target.id());
                 images.releaseReplaced(target.imageAssetId(), null, "AUXILIARY_MATERIAL", target.id());
                 auditTrail.record(operation(actor, "MATERIAL_DELETE", target.id(), snapshot(target), null, "删除未使用辅料"));

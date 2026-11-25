@@ -65,6 +65,8 @@
 
 | DEL-055 | 2026-11-25 | Codex → PJM | ERP-104辅料与样品UI修复、官网需求归档发布交接 | v1.0 | In Review | 用户已授权main提交与部署；PJM执行 | [交接](../deliverables/pjm/ERP-104_RELEASE_HANDOFF_2026-11-25.md)；795测试及6个浏览器场景通过，未提交；官网/8081仅方案 |
 
+| DEL-056 | 2026-11-25 | Codex → PJM | ERP-112 官网源码及辅料成本/删除、采购备注与UI累计发布交接 | v1.0 | In Review | 用户已授权提交main并部署；PJM执行 | [交接](../deliverables/pjm/ERP112_MATERIAL_PURCHASE_RELEASE_HANDOFF_2026-11-25.md)；前端802测试、后端455通过/1跳过、3个浏览器场景、官网2契约及构建通过；未提交，待PJM接棒 |
+
 ## 登记要求
 
 - 成员交付后必须登记，不得只在聊天中汇报。

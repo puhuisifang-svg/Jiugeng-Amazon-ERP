@@ -355,6 +355,7 @@ onBeforeUnmount(()=>{sequence++;saveView()})
                     {{ row.material.status==='ACTIVE'?'停用':'启用' }}
                   </button><button
                     v-if="canDelete"
+                    class="material-danger"
                     :disabled="!ready||busy"
                     @click="requestImpact([row.material],'delete')"
                   >
@@ -427,7 +428,7 @@ onBeforeUnmount(()=>{sequence++;saveView()})
             v-for="i in impacts"
             :key="i.id"
           >
-            <td>{{ i.name }}</td><td>{{ i.products }}</td><td>{{ i.purchases }}</td><td>{{ i.transactions }}</td><td>{{ materialNumber(i.quantity) }}</td><td>{{ impactMode==='status'?'保留历史资料；停用后不能新增采购或库存记账':i.canDelete?'可删除，删除后无法恢复':'已有业务或成本记录，不能删除，可使用停用' }}</td>
+            <td>{{ i.name }}</td><td>{{ i.products }}</td><td>{{ i.purchases }}</td><td>{{ i.transactions }}</td><td>{{ materialNumber(i.quantity) }}</td><td>{{ impactMode==='status'?'保留历史资料；停用后不能新增采购或库存记账':i.canDelete?'可删除，删除后无法恢复':'已有业务或成本版本引用，不能删除，可使用停用' }}</td>
           </tr>
         </tbody>
       </table>

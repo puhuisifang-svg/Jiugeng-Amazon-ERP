@@ -106,8 +106,7 @@ class MaterialRepository {
             .orElseThrow(() -> new MaterialException(404,"MATERIAL_NOT_FOUND","辅料不存在"));
     }
     boolean unitLocked(String id) {
-        return isReferenced(id) || jdbc.sql("SELECT COUNT(*) FROM inventory_balance WHERE auxiliary_material_id=:id").param("id",id).query(Long.class).single()>0
-            || jdbc.sql("SELECT COUNT(*) FROM material_standard_cost WHERE material_id=:id").param("id",id).query(Long.class).single()>0;
+        return isReferenced(id) || jdbc.sql("SELECT COUNT(*) FROM inventory_balance WHERE auxiliary_material_id=:id").param("id",id).query(Long.class).single()>0;
     }
     boolean isReferenced(String id) {
         return jdbc.sql("""
@@ -116,7 +115,8 @@ class MaterialRepository {
                      + (SELECT COUNT(*) FROM product_auxiliary_material WHERE auxiliary_material_id=:id)
                      + (SELECT COUNT(*) FROM purchase_order_line l JOIN purchase_order p ON p.id=l.order_id
                         WHERE p.order_type='MATERIAL' AND l.item_id=:id)
-                """).param("id", id).query(Long.class).single() > 0;
+                     + (SELECT COUNT(*) FROM sku_cost_version WHERE input_json LIKE :costReference)
+                """).param("id", id).param("costReference","%\"materialId\":\""+id+"\"%").query(Long.class).single() > 0;
     }
 
     void delete(String id) {

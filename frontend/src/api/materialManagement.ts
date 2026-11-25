@@ -8,14 +8,14 @@ export interface MaterialFilters { q:string;type:string;status:string;stock:stri
 export const emptyMaterialFilters=():MaterialFilters=>({q:'',type:'',status:'',stock:'',supplier:'',photo:'',price:''})
 export interface MaterialSupplier extends SupplierAssignmentDto { supplierName:string;status:string;materialEligible:boolean;contactPerson?:string;phone?:string;wechatId?:string;sourceUrl?:string }
 export interface MaterialDetail {material:MaterialRecord;price:MaterialPrice|null;suppliers:MaterialSupplier[];unitLocked:boolean;quantityScale:number}
-export interface MaterialSave {requestId:string;id:string|null;version:number|null;material:MaterialInput;suppliers?:SupplierAssignmentDto[];copyFromId?:string}
+export interface MaterialSave {requestId:string;id:string|null;version:number|null;material:MaterialInput;suppliers?:SupplierAssignmentDto[];copyFromId?:string;cost?:{netPrice:string|null;version:number}}
 export interface MaterialImpact {id:string;name:string;products:number;purchases:number;transactions:number;quantity:number;canDelete:boolean;unitLocked:boolean}
 export interface MaterialProduct {productId:string;variantId:string;productName:string;name:string;quantity:number;unit:string;lossRate:number;enabled:boolean;archived:boolean}
 const base='/v1/materials/manage'
 const body=(value:unknown)=>({method:'POST',body:JSON.stringify(value)})
 export const materialManagementApi={
  selection:(ids:string[])=>apiRequest<MaterialRow[]>(`${base}/selection`,body({ids})),
- capabilities:()=>apiRequest<{closeoutVersion:number}>(`${base}/capabilities`),
+ capabilities:()=>apiRequest<{closeoutVersion:number;simpleCostVersion?:number}>(`${base}/capabilities`),
  page:(filters:MaterialFilters,page:number,size:number)=>apiRequest<{items:MaterialRow[];totalCount:number}>(`${base}/page?${new URLSearchParams({...filters,page:String(page),size:String(size)})}`),
  detail:(id:string)=>apiRequest<MaterialDetail>(`${base}/${encodeURIComponent(id)}`),
  save:(input:MaterialSave)=>apiRequest<MaterialRecord>(`${base}/save`,body(input)),

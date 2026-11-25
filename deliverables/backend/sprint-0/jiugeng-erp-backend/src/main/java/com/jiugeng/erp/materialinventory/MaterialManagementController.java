@@ -42,7 +42,7 @@ class MaterialManagementController {
     record Detail(MaterialTypes.MaterialView material,CostService.Price price,List<SupplierAssignmentGateway.LinkedSupplier> suppliers,boolean unitLocked,int quantityScale){}
     record Save(@NotBlank @Size(max=100) String requestId,@Size(max=36) String id,Long version,
                 @NotNull @Valid MaterialController.MaterialRequest material,
-                @Size(max=50) List<@NotNull @Valid Link> suppliers,@Size(max=36) String copyFromId){}
+                @Size(max=50) List<@NotNull @Valid Link> suppliers,@Size(max=36) String copyFromId,@Valid CostTypes.CostField cost){}
     record Link(@NotBlank @Size(max=36) String supplierId,@Size(max=500) String purchaseUrl,@Size(max=500) String remark,boolean primary){}
     record Version(@NotNull @Min(0) Long version){}
     record Target(@NotBlank @Size(max=36) String id,@NotNull @Min(0) Long version){}
@@ -79,7 +79,7 @@ class MaterialManagementController {
         allowed(auth,"costs.read")&&r.getBigDecimal("net_price")!=null?r.getBigDecimal("net_price").toPlainString():null,allowed(auth,"costs.read")?r.getString("price_unit"):null);}
     private String select(){return "SELECT m.*,b.quantity,b.safety_stock,c.net_price,c.unit price_unit";}
     @GetMapping("/capabilities") @PreAuthorize("hasAuthority('materials.read')") @Transactional(readOnly=true)
-    Map<String,Integer> capabilities(){return Map.of("closeoutVersion",1);}
+    Map<String,Integer> capabilities(){return Map.of("closeoutVersion",1,"simpleCostVersion",1);}
     @GetMapping("/page") @PreAuthorize("hasAuthority('materials.read')") @Transactional(readOnly=true)
     Page page(@RequestParam(defaultValue="") String q,@RequestParam(defaultValue="") String type,@RequestParam(defaultValue="") String status,@RequestParam(defaultValue="") String stock,@RequestParam(defaultValue="") String supplier,@RequestParam(defaultValue="") String photo,@RequestParam(defaultValue="") String price,@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="20") int size,Authentication auth){
         require(page>=0&&page<=100000&&Set.of(10,20,50,100).contains(size),"分页无效");var w=where(new Query(q,type,status,stock,supplier,photo,price),auth);
@@ -91,9 +91,16 @@ class MaterialManagementController {
     @GetMapping("/{id}") @PreAuthorize("hasAuthority('materials.read')") @Transactional(readOnly=true)
     Detail detail(@PathVariable String id,Authentication auth){return new Detail(materials.material(id),allowed(auth,"costs.read")?costs.price(id):null,allowed(auth,"suppliers.read")?suppliers.materialAssignments(id):List.of(),repository.unitLocked(id),MaterialQuantity.scale(materials.material(id).unit()));}
     private void version(String id,Long version){repository.lock(id);if(version==null||materials.material(id).version()!=version)throw new MaterialException(409,"MATERIAL_VERSION_CONFLICT","辅料已被修改，请对照最新资料后重新保存");}
-    private String hash(Object value){try{return HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(json.writeValueAsBytes(value)));}catch(Exception e){throw new IllegalStateException(e);}}
-    @PostMapping("/save") @PreAuthorize("hasAuthority('materials.write') and (#in.suppliers == null or hasAuthority('suppliers.write')) and (#in.material.costPrice == null or (hasAuthority('costs.read') and hasAuthority('costs.write')))")
+    private String hash(Object value){try{
+        // Preserve the exact old record shape for pending requests created before CostField existed.
+        if(value instanceof Save in&&in.cost()==null){
+            var legacy=new LinkedHashMap<String,Object>();legacy.put("requestId",in.requestId());legacy.put("id",in.id());legacy.put("version",in.version());legacy.put("material",in.material());legacy.put("suppliers",in.suppliers());legacy.put("copyFromId",in.copyFromId());value=legacy;
+        }
+        return HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(json.writeValueAsBytes(value)));
+    }catch(Exception e){throw new IllegalStateException(e);}}
+    @PostMapping("/save") @PreAuthorize("hasAuthority('materials.write') and (#in.suppliers == null or hasAuthority('suppliers.write')) and ((#in.material.costPrice == null and #in.cost == null) or (hasAuthority('costs.read') and hasAuthority('costs.write')))")
     MaterialTypes.MaterialView save(@Valid @RequestBody Save in,@AuthenticationPrincipal AuthenticatedActor actor){
+        require(in.cost()==null||in.material().costPrice()==null,"不能同时提交两种成本价字段");
         // Serialize this user's requests, including concurrent retries of a new create.
         jdbc.sql("SELECT id FROM iam_user WHERE id=:id FOR UPDATE").param("id",actor.userId()).query(String.class).single();
         var previous=jdbc.sql("SELECT material_id,payload_hash FROM material_write_request WHERE actor_id=:actor AND request_id=:key").param("actor",actor.userId()).param("key",in.requestId()).query((r,n)->Map.of("id",r.getString(1),"hash",r.getString(2))).optional();
@@ -105,11 +112,12 @@ class MaterialManagementController {
         String copyImage=null;
         if(create&&in.copyFromId()!=null){var source=materials.material(in.copyFromId());if(Objects.equals(source.imageAssetId(),input.imageAssetId())){copyImage=source.imageAssetId();input=new MaterialTypes.MaterialInput(input.materialCode(),input.name(),input.materialType(),input.specification(),input.unit(),input.imageUrl(),null,input.remark());}}
         try {
-            var saved=create?materials.create(input,actor):materials.update(in.id(),input,actor);
+            var saved=create?materials.create(input,actor):materials.update(in.id(),input,actor,in.cost()==null&&request.costPrice()==null);
             if(copyImage!=null){String copied=images.copyForMaterial(copyImage,saved.id(),actor);jdbc.sql("UPDATE auxiliary_material SET image_asset_id=:image WHERE id=:id").param("image",copied).param("id",saved.id()).update();audit.record(new AuditTrail.BusinessOperation(actor.userId(),actor.loginName(),actor.displayName(),"MATERIAL_IMAGE_COPY","AUXILIARY_MATERIAL",saved.id(),true,null,Map.of("imageAssetId",copied),"复制来源辅料图片，独立保存"));}
             if(in.suppliers()!=null){suppliers.replaceMaterialAssignments(saved.id(),in.suppliers().stream().map(l->new SupplierAssignmentGateway.Assignment(l.supplierId(),l.purchaseUrl(),l.remark(),l.primary())).toList(),actor);
                 audit.record(new AuditTrail.BusinessOperation(actor.userId(),actor.loginName(),actor.displayName(),"MATERIAL_SUPPLIERS_UPDATE","AUXILIARY_MATERIAL",saved.id(),true,Map.of("suppliers",before),Map.of("suppliers",suppliers.materialAssignments(saved.id())),"更新关联供应商"));}
             if(request.costPrice()!=null)costs.savePrice(saved.id(),request.costPrice(),actor);
+            if(in.cost()!=null)costs.saveField(saved.id(),in.cost(),actor);
             jdbc.sql("INSERT INTO material_write_request(actor_id,request_id,operation,payload_hash,material_id) VALUES(:actor,:key,:operation,:hash,:id)").param("actor",actor.userId()).param("key",in.requestId()).param("operation",create?"CREATE":"UPDATE").param("hash",hash(in)).param("id",saved.id()).update();
             return materials.material(saved.id());
         } catch(SupplierAssignmentGateway.AssignmentException e){throw new MaterialException(e.status(),e.code(),e.getMessage());}
@@ -118,15 +126,19 @@ class MaterialManagementController {
     @GetMapping("/{id}/impact") @PreAuthorize("hasAuthority('materials.read')") @Transactional(readOnly=true)
     Impact impact(@PathVariable String id){var m=materials.material(id);long products=count("SELECT COUNT(*) FROM product_auxiliary_material WHERE auxiliary_material_id=:id",id),purchases=count("SELECT COUNT(*) FROM purchase_order_line l JOIN purchase_order p ON p.id=l.order_id WHERE p.order_type='MATERIAL' AND l.item_id=:id",id),transactions=count("SELECT COUNT(*) FROM inventory_transaction WHERE auxiliary_material_id=:id",id);
         var q=jdbc.sql("SELECT COALESCE(SUM(quantity),0) FROM inventory_balance WHERE auxiliary_material_id=:id").param("id",id).query(BigDecimal.class).single();
-        boolean costUse=count("SELECT COUNT(*) FROM material_standard_cost WHERE material_id=:id",id)>0;
-        return new Impact(id,m.name(),products,purchases,transactions,q,products+purchases+transactions==0&&q.signum()==0&&!costUse,repository.unitLocked(id));}
+        return new Impact(id,m.name(),products,purchases,transactions,q,!repository.isReferenced(id)&&q.signum()==0,repository.unitLocked(id));}
     private long count(String sql,String id){return jdbc.sql(sql).param("id",id).query(Long.class).single();}
     @PostMapping("/{id}/status") @PreAuthorize("hasAuthority('materials.write')")
     MaterialTypes.MaterialView status(@PathVariable String id,@Valid @RequestBody Version v,@AuthenticationPrincipal AuthenticatedActor actor){version(id,v.version());return materials.material(id).status()==MaterialTypes.MaterialStatus.ACTIVE?materials.disable(id,actor):materials.enable(id,actor);}
     @PostMapping("/delete") @PreAuthorize("hasAuthority('materials.delete')")
-    void delete(@Valid @RequestBody Targets targets,@AuthenticationPrincipal AuthenticatedActor actor){var ordered=targets.items().stream().sorted(Comparator.comparing(Target::id)).toList();for(var target:ordered){version(target.id(),target.version());if(!impact(target.id()).canDelete())throw new MaterialException(409,"MATERIAL_IN_USE",impact(target.id()).name()+" 已有产品、采购、库存或成本记录，本次未删除任何辅料");}materials.delete(ordered.stream().map(Target::id).toList(),actor);}
+    void delete(@Valid @RequestBody Targets targets,@AuthenticationPrincipal AuthenticatedActor actor){var ordered=targets.items().stream().sorted(Comparator.comparing(Target::id)).toList();for(var target:ordered){version(target.id(),target.version());if(!impact(target.id()).canDelete())throw new MaterialException(409,"MATERIAL_IN_USE",impact(target.id()).name()+" 已有产品、采购、库存或成本版本引用，本次未删除任何辅料");}materials.delete(ordered.stream().map(Target::id).toList(),actor);}
     @GetMapping("/{id}/history") @PreAuthorize("hasAuthority('materials.read')") @Transactional(readOnly=true)
-    AuditHistoryLookup.HistoryPage history(@PathVariable String id,@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="20") int size){materials.material(id);require(page>=0&&page<=100000&&Set.of(10,20,50,100).contains(size),"分页无效");return history.page("AUXILIARY_MATERIAL",id,page+1,size);}
+    AuditHistoryLookup.HistoryPage history(@PathVariable String id,@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="20") int size,Authentication auth){
+        materials.material(id);require(page>=0&&page<=100000&&Set.of(10,20,50,100).contains(size),"分页无效");var result=history.page("AUXILIARY_MATERIAL",id,page+1,size);
+        if(allowed(auth,"costs.read"))return result;
+        var items=result.items().stream().map(e->e.action().equals("MATERIAL_COST_UPDATE")?new AuditHistoryLookup.HistoryEvent(e.id(),e.action(),e.actorLoginName(),e.actorDisplayName(),null,null,"成本价已修改（无成本查看权限）",e.occurredAt()):e).toList();
+        return new AuditHistoryLookup.HistoryPage(items,result.total(),result.page(),result.size());
+    }
     @GetMapping("/{id}/products") @PreAuthorize("hasAuthority('materials.read') and hasAuthority('products.read')") @Transactional(readOnly=true)
     Map<String,Object> products(@PathVariable String id,@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="20") int size){require(page>=0&&page<=100000&&Set.of(10,20,50,100).contains(size),"分页无效");materials.material(id);
         String from=" FROM product_auxiliary_material r JOIN product p ON p.id=r.product_id JOIN product_variant v ON v.id=r.variant_id WHERE r.auxiliary_material_id=:id";

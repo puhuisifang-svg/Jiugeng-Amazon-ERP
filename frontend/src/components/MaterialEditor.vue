@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import '@/styles/materialManagement.css'
+import { createRequestId } from '@/utils/requestId'
 import { computed, onMounted, onBeforeUnmount, reactive, ref } from 'vue'
 import AccessDialog from './AccessDialog.vue'
 import EditableSelect from './EditableSelect.vue'
@@ -22,7 +23,7 @@ const data=ref<MaterialDetail>(),loading=ref(false),loadError=ref(''),busy=ref(f
 const types=ref<string[]>([]),units=ref<string[]>(['件','个','套','米','千克']),optionsError=ref('')
 const form=reactive({materialCode:'',name:'',materialType:'',specification:'',unit:'件',imageUrl:'',imageAssetId:'',remark:''})
 const links=ref<SupplierAssignmentDto[]>([]),names=ref<Record<string,MaterialSupplier|SupplierDto>>({}),notes=ref<string[]>([])
-const netPrice=ref(''),keepCost=ref(false),confirmedNet=ref(false),priceReason=ref('')
+const netPrice=ref('')
 const supplierQuery=ref(''),supplierPage=ref(1),supplierTotal=ref(0),supplierOptions=ref<SupplierDto[]>([]),supplierLoading=ref(false),supplierError=ref(''),supplierOpen=ref(false),viewSupplier=ref('')
 const canReadPrice=computed(()=>session.canAccess(['costs.read'])),canWritePrice=computed(()=>session.canAccess(['costs.read','costs.write','materials.write']))
 const canEditSuppliers=computed(()=>session.canAccess(['suppliers.read','suppliers.write','materials.write']))
@@ -42,14 +43,16 @@ function priceDisplay(value?: string) {
  return `${cents/100n}.${String(cents%100n).padStart(2,'0')}`
 }
 function normalizePrice(){if(/^\d{1,12}(\.\d{0,2})?$/.test(netPrice.value.trim()))netPrice.value=priceDisplay(netPrice.value.trim())}
-const priceChanged=computed(()=>canWritePrice.value&&(!props.copy||keepCost.value)&&netPrice.value!==''&&(!data.value?.price||Number(netPrice.value)!==Number(priceDisplay(data.value.price.netPrice))||props.copy||form.unit!==data.value.price.unit))
-function snapshot(){return JSON.stringify({form,links:links.value,netPrice:netPrice.value,keepCost:keepCost.value,confirmedNet:confirmedNet.value,priceReason:priceReason.value})}
+const priceChanged=computed(()=>canWritePrice.value&&(editing.value
+ ? (netPrice.value===''?!!data.value?.price:!data.value?.price||Number(netPrice.value)!==Number(priceDisplay(data.value.price.netPrice)))
+ : netPrice.value!==''))
+function snapshot(){return JSON.stringify({form,links:links.value,netPrice:netPrice.value})}
 const dirty=computed(()=>initial.value!==''&&snapshot()!==initial.value)
 function persist(){try{if(pending.value)sessionStorage.setItem(pendingKey,JSON.stringify(pending.value));else sessionStorage.removeItem(pendingKey)}catch{/* Original payload remains locked in memory. */}}
-function restore(){try{const p=JSON.parse(sessionStorage.getItem(pendingKey)??'null') as Pending|null;if(p?.input?.requestId&&p.input.material){pending.value=p;Object.assign(form,p.input.material);links.value=p.input.suppliers??[];netPrice.value=priceDisplay(p.input.material.costPrice?.netPrice);initial.value=snapshot()}}catch{/* Invalid storage ignored. */}}
+function restore(){try{const p=JSON.parse(sessionStorage.getItem(pendingKey)??'null') as Pending|null;if(p?.input?.requestId&&p.input.material){pending.value=p;Object.assign(form,p.input.material);links.value=p.input.suppliers??[];netPrice.value=priceDisplay(p.input.cost?p.input.cost.netPrice??undefined:p.input.material.costPrice?.netPrice);initial.value=snapshot()}}catch{/* Invalid storage ignored. */}}
 let alive=true,supplierSequence=0
 async function options(){optionsError.value='';try{const [t,u]=await Promise.all([materialTypesApi.list(),materialTypesApi.units()]);if(alive){types.value=t;units.value=u}}catch{if(alive)optionsError.value='类型/单位候选项读取失败，可重试或手动填写'}}
-async function load(){loading.value=true;loadError.value='';try{if(props.id){const d=await materialManagementApi.detail(props.id);if(!alive)return;data.value=d;Object.assign(form,{...d.material,specification:d.material.specification??'',remark:d.material.remark??'',imageUrl:d.material.imageUrl??'',imageAssetId:d.material.imageAssetId??'',materialCode:props.copy?'':d.material.materialCode});links.value=d.suppliers.filter(s=>!props.copy||(s.status==='ACTIVE'&&s.materialEligible)).map(s=>({supplierId:s.supplierId,purchaseUrl:s.purchaseUrl,remark:s.remark,primary:s.primary}));names.value=Object.fromEntries(d.suppliers.map(s=>[s.supplierId,s]));netPrice.value=priceDisplay(d.price?.netPrice);if(props.copy)form.name=d.material.name+'（副本）';}initial.value=snapshot()}catch(e){if(alive)loadError.value=e instanceof Error?e.message:'编辑资料加载失败'}finally{if(alive)loading.value=false}}
+async function load(){loading.value=true;loadError.value='';try{const capabilities=await materialManagementApi.capabilities();if(capabilities.simpleCostVersion!==1)throw new Error('服务版本尚未支持普通成本价保存，请更新本地服务或稍后重试');if(props.id){const d=await materialManagementApi.detail(props.id);if(!alive)return;data.value=d;Object.assign(form,{...d.material,specification:d.material.specification??'',remark:d.material.remark??'',imageUrl:d.material.imageUrl??'',imageAssetId:d.material.imageAssetId??'',materialCode:props.copy?'':d.material.materialCode});links.value=d.suppliers.filter(s=>!props.copy||(s.status==='ACTIVE'&&s.materialEligible)).map(s=>({supplierId:s.supplierId,purchaseUrl:s.purchaseUrl,remark:s.remark,primary:s.primary}));names.value=Object.fromEntries(d.suppliers.map(s=>[s.supplierId,s]));netPrice.value=priceDisplay(d.price?.netPrice);if(props.copy)form.name=d.material.name+'（副本）';}initial.value=snapshot()}catch(e){if(alive)loadError.value=e instanceof Error?e.message:'编辑资料加载失败'}finally{if(alive)loading.value=false}}
 async function removeOption(kind:'type'|'unit',name:string){if(!await confirmAction(`从候选项移除“${name}”？已有资料不受影响。`))return;try{if(kind==='type')await materialTypesApi.remove(name);else await materialTypesApi.removeUnit(name);await options()}catch(e){error.value=e instanceof Error?e.message:'候选项移除失败'}}
 async function searchSuppliers(reset=false){if(reset)supplierPage.value=1;const seq=++supplierSequence;supplierLoading.value=true;supplierError.value='';try{const r=await domainApi.suppliers({q:supplierQuery.value,status:'ACTIVE',category:'MATERIAL',page:supplierPage.value-1,size:20});if(!alive||seq!==supplierSequence)return;supplierOptions.value=r.items;supplierTotal.value=r.totalCount}catch(e){if(seq===supplierSequence)supplierError.value=e instanceof Error?e.message:'供应商搜索失败'}finally{if(seq===supplierSequence)supplierLoading.value=false}}
 function addSupplier(event:Event){const id=(event.target as HTMLSelectElement).value,item=supplierOptions.value.find(s=>s.id===id);(event.target as HTMLSelectElement).value='';if(!item||links.value.some(l=>l.supplierId===id))return;names.value[id]=item;links.value.push({supplierId:id,primary:links.value.length===0})}
@@ -65,19 +68,16 @@ async function submit(){
  if(!pending.value){
   normalizePrice()
   if(!form.name.trim()||!form.materialType.trim()||!form.unit.trim()){error.value='请填写名称、类型和基础单位';return}
-  const priceWasCleared=editing.value&&data.value?.price&&netPrice.value===''
-  if(canWritePrice.value&&priceWasCleared){error.value='已有成本价不能通过清空删除，请填写有效价格';return}
-  if(priceChanged.value&&(!/^\d{1,12}(\.\d{1,2})?$/.test(netPrice.value)||!confirmedNet.value||!priceReason.value.trim())){error.value='成本价最多两位小数，请确认人民币不含税口径并填写核定原因';return}
+   if(canWritePrice.value&&netPrice.value!==''&&!/^\d{1,12}(\.\d{1,2})?$/.test(netPrice.value)){error.value='成本价最多两位小数，请填写非负金额';return}
   const input:MaterialInput={materialCode:form.materialCode,name:form.name.trim(),materialType:form.materialType.trim(),unit:form.unit.trim(),specification:form.specification.trim(),remark:form.remark.trim(),...(form.imageAssetId?{imageAssetId:form.imageAssetId}:form.imageUrl.trim()?{imageUrl:form.imageUrl.trim()}:{})}
-  if(priceChanged.value)input.costPrice={netPrice:netPrice.value,unit:form.unit,source:'MANUAL',referenceId:null,reason:priceReason.value.trim(),confirmedNet:true,version:editing.value?data.value?.price?.version??-1:-1}
-  pending.value={input:{requestId:crypto.randomUUID(),id:editing.value?props.id??null:null,version:editing.value?data.value?.material.version??null:null,material:input,...(canEditSuppliers.value?{suppliers:links.value.map(l=>({...l}))}:{}),...(props.copy&&props.id?{copyFromId:props.id}:{})}};persist()
+   pending.value={input:{requestId:createRequestId(),id:editing.value?props.id??null:null,version:editing.value?data.value?.material.version??null:null,material:input,...(priceChanged.value?{cost:{netPrice:netPrice.value||null,version:editing.value?data.value?.price?.version??-1:-1}}:{}),...(canEditSuppliers.value?{suppliers:links.value.map(l=>({...l}))}:{}),...(props.copy&&props.id?{copyFromId:props.id}:{})}};persist()
  }
  const command=pending.value;busy.value=true
  try{const saved=await materialManagementApi.save(command.input);pending.value=undefined;persist();emit('saved',saved);emit('close')}
  catch(e){error.value=e instanceof Error?e.message:'保存失败';if(e instanceof ApiError&&e.status<500&&![401,403,408,429].includes(e.status)){pending.value=undefined;persist();if(e.code==='MATERIAL_VERSION_CONFLICT'&&command.input.id){try{conflict.value=await materialManagementApi.detail(command.input.id)}catch{error.value+='；最新资料读取失败，草稿已保留，请再次保存以重新核对版本' }}}else error.value='保存结果待确认，原请求已保留，请重试确认。'+error.value}
  finally{busy.value=false}
 }
-function acceptLatest(){const latest=conflict.value;if(!latest)return;data.value=latest;Object.assign(form,{...latest.material,specification:latest.material.specification??'',remark:latest.material.remark??'',imageUrl:latest.material.imageUrl??'',imageAssetId:latest.material.imageAssetId??''});links.value=latest.suppliers.map(s=>({supplierId:s.supplierId,purchaseUrl:s.purchaseUrl,remark:s.remark,primary:s.primary}));names.value=Object.fromEntries(latest.suppliers.map(s=>[s.supplierId,s]));netPrice.value=priceDisplay(latest.price?.netPrice);confirmedNet.value=false;conflict.value=undefined;error.value='';initial.value=snapshot()}
+function acceptLatest(){const latest=conflict.value;if(!latest)return;data.value=latest;Object.assign(form,{...latest.material,specification:latest.material.specification??'',remark:latest.material.remark??'',imageUrl:latest.material.imageUrl??'',imageAssetId:latest.material.imageAssetId??''});links.value=latest.suppliers.map(s=>({supplierId:s.supplierId,purchaseUrl:s.purchaseUrl,remark:s.remark,primary:s.primary}));names.value=Object.fromEntries(latest.suppliers.map(s=>[s.supplierId,s]));netPrice.value=priceDisplay(latest.price?.netPrice);conflict.value=undefined;error.value='';initial.value=snapshot()}
 function keepDraft(){if(!conflict.value)return;data.value=conflict.value;conflict.value=undefined;error.value='已保留草稿并采用最新版本；请核对后再次保存。'}
 function unload(e:BeforeUnloadEvent){if(dirty.value||busy.value||uploading.value||pending.value){e.preventDefault();e.returnValue=''}}
 onMounted(()=>{void options();if(props.resume){restore();if(!pending.value)void load()}else void load();window.addEventListener('beforeunload',unload)})
@@ -211,7 +211,7 @@ defineExpose({dirty,busy:computed(()=>busy.value||uploading.value),pending})
           required
           :disabled="locked||!!(editing&&data?.unitLocked)"
           @remove="removeOption('unit',$event)"
-        /><small v-if="editing&&data?.unitLocked">已有业务记录，基础单位锁定；包装可在库存操作中换算。</small></label>
+        /><small v-if="editing&&data?.unitLocked">已有库存、采购、产品用量或成本版本引用，基础单位锁定。</small></label>
         <p
           v-if="optionsError"
           class="material-full"
@@ -235,28 +235,10 @@ defineExpose({dirty,busy:computed(()=>busy.value||uploading.value),pending})
           aria-label="辅料成本价"
           inputmode="decimal"
           maxlength="15"
-          :disabled="!canWritePrice||(copy&&!keepCost)"
+          :disabled="!canWritePrice||locked"
           placeholder="未填写表示未维护，保留两位小数"
           @blur="normalizePrice"
         ></label>
-        <label
-          v-if="copy&&canWritePrice"
-          class="material-check"
-        ><input
-          v-model="keepCost"
-          type="checkbox"
-        >沿用并重新核定来源成本价</label>
-        <template v-if="priceChanged">
-          <label>核定原因<input
-            v-model="priceReason"
-            required
-            maxlength="500"
-          ></label><label class="material-check material-full"><input
-            v-model="confirmedNet"
-            type="checkbox"
-            required
-          >确认以上为人民币不含税单价</label>
-        </template>
         <label class="material-full">备注<textarea
           v-model="form.remark"
           maxlength="1000"

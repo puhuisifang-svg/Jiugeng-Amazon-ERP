@@ -11,6 +11,16 @@
 
 本报告是带日期的快照，不是实时监控。接手时重新检查 HEAD、工作区及当前任务归属；发布状态由 PJM 维护，Codex 不跟踪线上发布。[2026-10-15 原报告](archive/STATUS_REPORT_2026-10-15.md)已归档，保留原始事实及当时风险，不再作为今天的待办清单。
 
+## DEL-056 SSH接收异常诊断与恢复（2026-11-25）
+
+调查会话通过已登录Safari阿里云云助手完成只读诊断（记录 `t-bj0746w71gfhszk`，23:38:59 CST），不是新凭据缺失：23:39生产jiugeng/caddy均active、health UP、current及公网版本仍旧SHA。残留部署链为sshd 90167→sshd 90287→sudo 90290→receive.sh 90291→head 90297；head等待pipe_read，临时包21,823,488字节、mtime23:33:16，磁盘可用35G。此为调查会话报告的时点证据，不代表进程持续存在。
+
+原receive.sh在完整读入stdin后才校验、备份和停服；该证据将异常定位到SSH流接收阶段，尚不能细分网络慢/断流或EOF丢失。恢复前必须重新核对进程身份、包是否停止增长，再定向结束失联接收会话并确认flock自然释放；禁止直接unlink锁或盲目重跑。
+
+PJM已确认Safari控制台标签存在，但当前PJM进程没有屏幕录制/辅助访问权限，Apple Events JavaScript也未启用；原生CUA能力不在当前工具列表。故管理入口可用不等于本会话可执行远程操作。尚未终止任何生产进程、删除锁或重跑发布；需要恢复已有CUA操作通道，不需要提供秘密。
+
+接收层补丁：512MiB上限、180秒空闲/600秒总接收超时、15秒字节进度及TERM/HUP/INT子进程清理；9项发布工具测试通过，包含EOF、断流、持续慢流总时限、超限及TERM后接收子进程退出/临时目录清理。补丁尚未安装服务器，不能宣称远端已生效；当前应用、Caddy、端口及本地服务均未改。
+
 ## DEL-056 发布复核（2026-11-25）
 
 累计实施提交 `6a156daf2e6db4a089364d2efc74d90c3b61750e` 经 [PR #30](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/pull/30) 受保护合入应用 main `fc8891cbbd6db4e3eccd6e74c26a6453d54a9d80`。PR与main CI通过：后端457项零失败/错误、1项条件OSS跳过，前端802项，浏览器17项。[Production](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45640730028) 实际SSH部署因作业30分钟时限于15:33 UTC被取消，未见备份完成/部署验证标记。15:34 UTC后ERP HTTPS仍为旧SHA `365892ccb4c5d5eb151420bd0cb7c66c739f8586`（HTTP200），本轮目标未确认上线。当前管理通道不可用，无法检查服务器实际接收进程与锁；未盲目重跑或绕过锁。恢复管理访问后先检查再安全续跑，发布尚未闭环。

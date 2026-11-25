@@ -10,9 +10,28 @@ flock -n 9 || { echo 'Another deployment is running' >&2; exit 1; }
 [[ -f /etc/jiugeng/deploy-enabled ]] || { echo 'Deployment gate is not enabled' >&2; exit 1; }
 [[ $(df -Pk "$root" | awk 'NR==2 {print $4}') -gt 2097152 ]] || { echo 'Less than 2 GiB free'; exit 1; }
 tmp=$(mktemp -d "$root/.release.XXXXXX")
-trap 'rm -rf -- "$tmp"' EXIT
+receiver_pid=
+cleanup() {
+  if [[ -n $receiver_pid ]]; then
+    kill -TERM "$receiver_pid" 2>/dev/null || true
+    wait "$receiver_pid" 2>/dev/null || true
+  fi
+  rm -rf -- "$tmp"
+}
+trap cleanup EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
+trap 'exit 129' HUP
 # Limit stream input and unpacked size independently.
-head -c 536870913 > "$tmp/release.tar.gz"
+python3 /usr/local/lib/jiugeng/receive_stream.py "$tmp/release.tar.gz" <&0 &
+receiver_pid=$!
+if wait "$receiver_pid"; then
+  receiver_pid=
+else
+  result=$?
+  receiver_pid=
+  exit "$result"
+fi
 [[ $(stat -c %s "$tmp/release.tar.gz") -le 536870912 ]] || exit 1
 printf '%s  %s\n' "$digest" "$tmp/release.tar.gz" | sha256sum -c -
 python3 /usr/local/lib/jiugeng/release.py unpack "$tmp/release.tar.gz" "$tmp/unpacked" "$sha"

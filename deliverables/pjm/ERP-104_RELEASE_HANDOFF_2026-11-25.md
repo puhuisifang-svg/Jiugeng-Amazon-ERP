@@ -96,3 +96,15 @@
 ?? deliverables/pjm/ERP-104_RELEASE_HANDOFF_2026-11-25.md
 ?? docs/01-product/JIUGENG_CORPORATE_WEBSITE_PRD_v0.1_DRAFT.md
 ```
+
+## PJM 发布核验与下一阶段（2026-11-25）
+
+ERP-104 的15个文件原子提交为 `2cf21d9c6f9b5a19eaf1ec7376a539a2acef1e4e`，经[PR #28](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/pull/28)五项必需检查后受保护合并。应用 main 为 `365892ccb4c5d5eb151420bd0cb7c66c739f8586`。
+
+[PR CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45563211636)、[main CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45563565759)与[Production](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45563565678)成功。PR CI 后端449项零失败/错误、1项OSS条件跳过，前端171文件/795项及浏览器17项通过。未重复运行有效本地门禁。
+
+实际SSH deploy非跳过：北京时间14:56:18归档校验OK，14:56:22生产数据库备份完成，14:56:49部署接收器验证后端健康UP及完整版本。PJM独立读取真实入口`/version.json`为上述应用main，HTTP200，首页200。健康为接收器日志证据，未直查生产数据库或执行恢复演练。本轮无新迁移，未改Caddy、DNS、安全组、8081或默认IP入口；未重启本地服务。
+
+本节是已上线应用的证据归档，不声称包含本节的文档提交已部署。仅归档一次；归档PR、最终main及其Production终态由PJM在`/tmp/jiugeng-pjm-release-progress.md`和最终报告维护，不为文档自身SHA递归创建PR。下方“未提交/待执行”为历史交接快照。
+
+下一阶段分配 **ERP-112｜九更单页静态官网本地开发**（ERP-105～111已被历史Backlog占用，不复用）。以DEL-054正文v0.6为需求基线，独立`website/`目录、静态产物和文档；Logo、视觉和一般文案可自主设计，公司主体及联系方式不编造。开发与本地验证可进行，**不授权本阶段提交、推送、部署、开放端口或切换生产入口**。正式唯一写入槽以PJM收尾消息为准；从届时干净最新main创建`feature/ERP-112-corporate-website`，不沿用历史写入锁。未来上线先验证完整ERP临时8081入口，再切默认IP官网，内部8080/4173和ERP数据保持不变。

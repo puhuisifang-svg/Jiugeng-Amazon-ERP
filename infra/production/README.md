@@ -85,6 +85,29 @@ Do not enable application bootstrap defaults or leave synthetic QA accounts acti
 
 ## Deployment failure behavior
 
+### SSH stream reception and interrupted runs
+
+Install `receive_stream.py` together with the reviewed `receive.sh` in the
+root-owned `/usr/local/lib/jiugeng` directory. Updating Git or deploying an
+application archive does **not** update these host-owned scripts. Back up the
+installed scripts and verify their hashes before replacing them through the
+authorized management channel. Do not change Caddy or the restricted SSH policy.
+
+The receiver logs initial bytes, progress every 15 seconds, and the final byte
+count. It rejects more than 512 MiB, no data for 180 seconds, or total reception
+over 600 seconds. These limits run before archive verification, service stop or
+backup. TERM/HUP/INT cleanup terminates and waits for the reception child before
+exiting; the descriptor-based flock is released naturally, never unlinked.
+
+A GitHub cancellation does not prove the remote receiver exited. Before retrying,
+inspect the current receiver command/parent chain and its archive descriptor,
+compare size/mtime at two times, and confirm the original CI run ended. Recheck
+PID identity immediately before any targeted termination. Only terminate the
+verified abandoned receiver session; do not use broad pkill, stop the healthy
+application, or unlink the lock file. Then verify receiver exit, lock availability,
+application health and current revision. Never infer a lock failure merely from
+a silent upload timeout. Check immutable release existence before a same-SHA retry.
+
 The receiver takes an exclusive lock, validates the package before stopping the
 application, and backs up the database before changing the current release symlink.
 It waits up to three minutes for health and verifies the served frontend revision.

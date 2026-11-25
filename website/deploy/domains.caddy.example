@@ -1,0 +1,38 @@
+# Integrate with the existing global block; use auto_https disable_redirects
+# instead of auto_https off. These explicit redirects preserve the HTTP IP site.
+# Reconcile ERP routes/headers with the live configuration before installation.
+https://jiugengerp.cn {
+	import jiugeng_public_website
+}
+
+https://www.jiugengerp.cn {
+	redir https://jiugengerp.cn{uri} permanent
+}
+
+https://erp.jiugengerp.cn {
+	root * /srv/jiugeng/current/frontend
+	encode gzip
+	header X-Content-Type-Options nosniff
+	header X-Robots-Tag none
+	handle /api/* {
+		header Cache-Control "no-store"
+		reverse_proxy 127.0.0.1:8080
+	}
+	handle /assets/* {
+		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+	handle {
+		header Cache-Control "no-store"
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+http://jiugengerp.cn, http://www.jiugengerp.cn {
+	redir https://jiugengerp.cn{uri} permanent
+}
+
+http://erp.jiugengerp.cn {
+	redir https://erp.jiugengerp.cn{uri} permanent
+}

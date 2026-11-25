@@ -1,0 +1,5 @@
+# Replace the documentation address with the verified public IPv4 at installation.
+# Apply only after the alternate ERP entry is verified. Reconcile existing :80 rules.
+http://192.0.2.1 {
+	import jiugeng_public_website
+}

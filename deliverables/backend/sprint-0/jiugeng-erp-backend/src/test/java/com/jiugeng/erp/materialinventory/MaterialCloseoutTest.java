@@ -93,6 +93,78 @@ class MaterialCloseoutTest {
         mvc.perform(post("/api/v1/materials/manage/delete").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(targets))).andExpect(status().isConflict());
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM auxiliary_material WHERE material_code IN ('COPY-ORIGINAL','COPY-NEW')",Integer.class)).isEqualTo(2);
     }
+    @Test void legacyPriceDoesNotBlockDeletionAndAuditSurvives() throws Exception {
+        String token=admin();var master=material("LEGACY-DELETE","历史核价辅料");
+        master.put("costPrice",Map.of("netPrice","5.600000","unit","PCS","source","MANUAL","reason","历史核定","confirmedNet",true,"version",-1));
+        var created=save(token,command(master));String id=created.get("id").asText();
+        mvc.perform(get("/api/v1/materials/manage/{id}/impact",id).header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.canDelete").value(true));
+        var targets=Map.of("items",java.util.List.of(Map.of("id",id,"version",created.get("version").asLong())));
+        mvc.perform(post("/api/v1/materials/manage/delete").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(targets))).andExpect(status().isOk());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM auxiliary_material WHERE id=?",Integer.class,id)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM material_standard_cost WHERE material_id=?",Integer.class,id)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE resource_id=? AND action='COST_MATERIAL_PRICE'",Integer.class,id)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE resource_id=? AND action='MATERIAL_DELETE'",Integer.class,id)).isEqualTo(1);
+    }
+    @Test void actualStockReferenceBlocksBatchDeletionWithoutRemovingOtherPrices() throws Exception {
+        String token=admin();var first=command(material("DELETE-PRICE-FREE","未使用辅料"));first.put("cost",cost("2.00",-1));var unused=save(token,first);
+        var second=command(material("DELETE-PRICE-USED","库存引用辅料"));second.put("cost",cost("3.00",-1));var used=save(token,second);String id=used.get("id").asText();
+        mvc.perform(post("/api/v1/inventory/transactions").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("requestId",java.util.UUID.randomUUID().toString(),"materialId",id,"type","INBOUND","quantity","1","unit","PCS","reason","删除保护测试")))).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/materials/manage/{id}/impact",id).header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.canDelete").value(false));
+        var targets=Map.of("items",java.util.List.of(Map.of("id",unused.get("id").asText(),"version",unused.get("version").asLong()),Map.of("id",id,"version",used.get("version").asLong())));
+        mvc.perform(post("/api/v1/materials/manage/delete").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(targets))).andExpect(status().isConflict());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM material_standard_cost WHERE material_id IN (?,?)",Integer.class,unused.get("id").asText(),id)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM auxiliary_material WHERE id IN (?,?)",Integer.class,unused.get("id").asText(),id)).isEqualTo(2);
+    }
+    private long costVersion(String id){return jdbc.queryForObject("SELECT version FROM material_standard_cost WHERE material_id=?",Long.class,id);}
+    private Map<String,Object> cost(String amount,long version){var value=new LinkedHashMap<String,Object>();value.put("netPrice",amount);value.put("version",version);return value;}
+    @Test void plainCostCreatesUpdatesClearsAndAuditsWithoutApproval() throws Exception {
+        String token=admin();var master=material("PLAIN-COST","普通成本字段");var input=command(master);input.put("cost",cost("5.60",-1));
+        var created=save(token,input);String id=created.get("id").asText();assertThat(save(token,input).get("id").asText()).isEqualTo(id);
+        mvc.perform(get("/api/v1/materials/manage/{id}",id).header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.price.netPrice").value("5.600000")).andExpect(jsonPath("$.unitLocked").value(false));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE resource_id=? AND action='MATERIAL_COST_UPDATE'",Integer.class,id)).isEqualTo(1);
+        var edit=command(master);edit.put("id",id);edit.put("version",created.get("version").asLong());edit.put("cost",cost("6.25",costVersion(id)));var updated=save(token,edit);
+        var history=objectMapper.readTree(mvc.perform(get("/api/v1/materials/manage/{id}/history",id).header("Authorization",bearer(token))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        var change=java.util.stream.StreamSupport.stream(history.get("items").spliterator(),false).filter(e->e.get("action").asText().equals("MATERIAL_COST_UPDATE")&&e.get("beforeValue")!=null&&!e.get("beforeValue").isNull()).findFirst().orElseThrow();
+        assertThat(change.at("/beforeValue/costPrice").asText()).isEqualTo("5.600000");assertThat(change.at("/afterValue/costPrice").asText()).isEqualTo("6.250000");
+        String reader=createUserAndLogin("cost-reader-"+java.util.UUID.randomUUID().toString().substring(0,8),"SELECTION");
+        String hidden=mvc.perform(get("/api/v1/materials/manage/{id}/history",id).header("Authorization",bearer(reader))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(hidden).contains("无成本查看权限").doesNotContain("5.600000","6.250000");
+        var clear=command(master);clear.put("id",id);clear.put("version",updated.get("version").asLong());clear.put("cost",cost(null,costVersion(id)));
+        mvc.perform(post("/api/v1/materials/manage/save").header("Authorization",bearer(reader)).contentType(MediaType.APPLICATION_JSON).content(json(clear))).andExpect(status().isForbidden());
+        var cleared=save(token,clear);assertThat(save(token,clear).get("version").asLong()).isEqualTo(cleared.get("version").asLong());assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM material_standard_cost WHERE material_id=?",Integer.class,id)).isZero();
+    }
+    @Test void priceOnlyDoesNotLockUnitAndCorrectionPreservesHistoricalPrecision() throws Exception {
+        String token=admin();var master=material("PLAIN-UNIT","单位修正");var input=command(master);input.put("cost",cost("1.23",-1));var created=save(token,input);String id=created.get("id").asText();
+        long originalPriceVersion=costVersion(id);
+        jdbc.update("UPDATE material_standard_cost SET net_price=1.234567 WHERE material_id=?",id);
+        master.put("unit","米");var edit=command(master);edit.put("id",id);edit.put("version",created.get("version").asLong());var updated=save(token,edit);
+        mvc.perform(get("/api/v1/materials/manage/{id}",id).header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.price.netPrice").value("1.234567")).andExpect(jsonPath("$.price.unit").value("米")).andExpect(jsonPath("$.price.version").value(originalPriceVersion+1)).andExpect(jsonPath("$.unitLocked").value(false));
+        master.put("unit","件");var both=command(master);both.put("id",id);both.put("version",updated.get("version").asLong());both.put("cost",cost("2.50",costVersion(id)));save(token,both);
+        assertThat(jdbc.queryForObject("SELECT unit FROM material_standard_cost WHERE material_id=?",String.class,id)).isEqualTo("件");
+        assertThat(jdbc.queryForObject("SELECT net_price FROM material_standard_cost WHERE material_id=?",java.math.BigDecimal.class,id)).isEqualByComparingTo("2.50");
+    }
+    @Test void normalCostStillValidatesAmountAndStaleWritesRollbackTheWholeForm() throws Exception {
+        String token=admin();
+        for(String amount:java.util.List.of("-1","1.234")){
+            var invalid=command(material("INVALID-COST","无效金额"));invalid.put("cost",cost(amount,-1));
+            mvc.perform(post("/api/v1/materials/manage/save").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(invalid))).andExpect(status().isBadRequest());
+        }
+        var master=material("COST-CONFLICT","价格冲突前");var input=command(master);input.put("cost",cost("0.00",-1));var created=save(token,input);String id=created.get("id").asText();
+        jdbc.update("UPDATE material_standard_cost SET version=version+1 WHERE material_id=?",id);
+        master.put("name","不应保存的名称");var stale=command(master);stale.put("id",id);stale.put("version",created.get("version").asLong());stale.put("cost",cost("2.00",0));
+        mvc.perform(post("/api/v1/materials/manage/save").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(stale))).andExpect(status().isConflict());
+        assertThat(jdbc.queryForObject("SELECT name FROM auxiliary_material WHERE id=?",String.class,id)).isEqualTo("价格冲突前");
+    }
+    @Test void oldPendingPriceRequestKeepsItsPreUpgradeHashIncludingDecimalScale() throws Exception {
+        String token=admin();var master=material("LEGACY-COST-HASH","旧请求重试");
+        master.put("costPrice",Map.of("netPrice","2.00","unit","PCS","source","MANUAL","reason","原核定原因","version",-1,"confirmedNet",true));
+        var input=command(master);var created=save(token,input);String id=created.get("id").asText();
+        var legacy=new LinkedHashMap<String,Object>();legacy.put("requestId",input.get("requestId"));legacy.put("id",null);legacy.put("version",null);legacy.put("material",objectMapper.convertValue(master,MaterialController.MaterialRequest.class));legacy.put("suppliers",java.util.List.of());legacy.put("copyFromId",null);
+        String oldHash=java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(objectMapper.writeValueAsBytes(legacy)));
+        jdbc.update("UPDATE material_write_request SET payload_hash=? WHERE material_id=?",oldHash,id);
+        assertThat(save(token,input).get("id").asText()).isEqualTo(id);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM material_standard_cost WHERE material_id=?",Integer.class,id)).isEqualTo(1);
+    }
     private Map<String, Object> material(String code, String name) {
         Map<String, Object> value = new LinkedHashMap<>();
         value.put("materialCode", code);

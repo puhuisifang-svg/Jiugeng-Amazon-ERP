@@ -5,11 +5,21 @@
 | 项目 | 九更亚马逊 ERP |
 | Owner | PJM（维护责任）；Codex（本次整理） |
 | 版本 / 状态 | v0.1 / In Review |
-| 更新时间 | 2026-11-24 |
+| 更新时间 | 2026-11-25 |
 | 审批人 | 待 PJM 复核；本文记录实现事实，不新增业务批准 |
 | 核实基线 | 见[当前状态报告](../08-project-management/STATUS_REPORT.md)；此指南不是实时线上状态 |
 
-## 最新交接入口：ERP-104 与官网需求（2026-11-25）
+## 最新发布交接：ERP-112 官网及辅料/采购累计迭代（2026-11-25）
+
+用户已授权提交远端 main 并部署，先读 [DEL-056 交接](../../deliverables/pjm/ERP112_MATERIAL_PURCHASE_RELEASE_HANDOFF_2026-11-25.md)。前端完整门禁802测试、后端456项（1项OSS探针跳过）、三尺寸受影响页面浏览器检查及官网构建/契约均通过。当前仍未提交；正式交接消息接受后由 PJM 独占写入、提交/合并/发布，Codex 不跟踪线上结果。保留现有官网与域名分流，不能用旧模板覆盖当前 Caddy。下方未授权/待统一验证为历史阶段。
+
+## 最新维护入口：ERP-112 官网首次上线（2026-11-25）
+
+用户直接授权 Codex 完成首次部署与服务器配置，后续自动 CI/CD 归 PJM。官网源码与独立构建在 [website](../../website/README.md)，生产使用官网专用 `/srv/jiugeng-website/current`；默认 IP 的 HTTP 80 为官网，IP:8081 为原 ERP 完整前端/API，内部 8080/4173 不变。2026-11-25 21:54 已启用根域官网、www跳根域、erp子域ERP及三域HTTPS，原IP/8081按用户确认保留。Caddy管理证书续期，全局采用 `auto_https disable_redirects` 与显式域名HTTP跳转，避免改变IP行为。精确版本、配置备份、验证边界和当前未提交工作区见[状态报告最新节](../08-project-management/STATUS_REPORT.md)。
+
+后续维护需区分官网的 `website-version.json` 与 ERP 的 `version.json`。现有 ERP main push 流程尚未隔离官网路径，PJM 接管自动发布前需落实路径检查与独立产物发布；不要用 ERP 应用发布替代官网部署，也不要覆盖当前 Caddy 分流。下面“尚无官网代码 / 尚未实施”为历史阶段。
+
+## 最新交接入口：ERP-104 与官网需求（2026-11-25，历史阶段）
 
 先读[ERP-104发布交接](../../deliverables/pjm/ERP-104_RELEASE_HANDOFF_2026-11-25.md)和状态报告最新节。本轮辅料价格/字色/布局及样品面包屑已统一验证，用户授权PJM提交main并部署；正式交接后PJM独占写入，Codex不等待线上结果。不能沿用下方历史任务写入权。
 
@@ -227,3 +237,12 @@ V109 用户授权一次性清除 SUPPLIER_CREATE/UPDATE/DELETE/ARCHIVED_LINK_REM
 ### 未保存确认入口（2026-11-24，本地 ERP-103 追加）
 
 关闭草稿使用 `frontend/src/components/UnsavedChangesDialog.vue`（AccessDialog 已接入）。异步路由/刷新/返回保护通过 `frontend/src/state/uiConfirmation.ts` 的 `confirmAction(message, { unsaved: true, discardLabel })`，由 UiConfirmationHost 呈现同一组件；不用页面私有确认卡或自动按文本猜测类型。原表单保持挂载、Esc/继续不丢输入；结果不明的幂等 pending 请求仍按独立语义确认。本地未提交状态和局部验证见 DEL-053，完整门禁留交接。
+
+
+### 辅料成本价简化（2026-11-25，本地待发布）
+
+同迭代补充：MaterialManagementController.impact 不再因单纯价格记录禁删；MaterialService.delete 在真实业务引用检查后，通过 CostService.saveField 清除当前价格并追加审计，再删除主数据，全部同事务。历史核价数据无需迁移或手工先清价格；历史审计保留。采购图片生成位于 frontend/src/ui/purchaseImageExport.ts，备注来源为采购单 remark，随每条明细导出红色加粗文字。
+
+用户确认官网 ERP-112 已停止编辑，授权合入当前本地迭代。MaterialEditor 通过聚合接口可选 `cost: { netPrice, version }` 保存；缺省表示保持原值，金额 null 表示清空。CostService.saveField/alignUnit 同步金额与单位、追加成本审计及辅料 MATERIAL_COST_UPDATE 历史，无成本查看权限时隐藏历史金额。原 material.costPrice 和旧请求哈希格式保留用于待确认请求重试；simpleCostVersion 能力标记避免新前端连接旧后端时丢价格。
+
+基础单位锁定不再由 material_standard_cost 单独触发；库存、采购、产品用量及 sku_cost_version 引用仍保护单位。导入单位修正也同步成本单位，无新迁移。辅料保存复用 utils/requestId.ts 兼容 HTTP；其他页面直接 randomUUID 调用未在此轮扩展修复。运行包与检查见状态报告最新节。

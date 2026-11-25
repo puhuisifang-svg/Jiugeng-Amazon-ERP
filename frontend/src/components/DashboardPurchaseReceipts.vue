@@ -23,7 +23,7 @@ onMounted(reload);onBeforeUnmount(()=>seq++);defineExpose({reload})
 <template>
   <section
     v-if="visible"
-    class="purchase-ui"
+    class="purchase-ui dashboard-purchases"
     aria-label="采购待接收"
   >
     <p v-if="!canRead">
@@ -49,7 +49,8 @@ onMounted(reload);onBeforeUnmount(()=>seq++);defineExpose({reload})
       </p><p v-if="loading">
         正在读取…
       </p><TableViewport v-else>
-        <table class="data-table">
+        <table class="data-table dashboard-purchase-table">
+          <colgroup><col class="dashboard-purchase-order"><col><col class="dashboard-purchase-date"><col class="dashboard-purchase-status"><col class="dashboard-purchase-action"></colgroup>
           <thead><tr><th>采购 / 供应商</th><th>商品摘要</th><th>预计到货</th><th>状态</th><th>操作</th></tr></thead><tbody>
             <tr
               v-for="order in orders"
@@ -63,17 +64,27 @@ onMounted(reload);onBeforeUnmount(()=>seq++);defineExpose({reload})
                 <div
                   v-for="line in order.lines.slice(0,2)"
                   :key="line.id"
-                  class="purchase-list-product"
+                  class="dashboard-purchase-product"
                 >
                   <PurchaseItemImage
                     :image-asset-id="line.imageAssetId"
                     :image-url="line.imageUrl"
                     :alt="line.itemName"
-                  /><span>{{ line.itemName }}<small>已收 {{ line.receivedQuantity }} / {{ line.orderedQuantity }} {{ line.unit }}</small></span>
+                  /><div class="dashboard-purchase-product-copy">
+                    <span class="dashboard-purchase-product-name">{{ line.itemName }}</span><small>已收 <strong>{{ line.receivedQuantity }}</strong> / {{ line.orderedQuantity }} {{ line.unit }}</small>
+                  </div>
                 </div><small v-if="order.lines.length>2">共 {{ order.lines.length }} 项，进入收货查看全部</small>
-              </td><td>{{ order.expectedDeliveryDate||'未约定' }}</td><td>{{ order.status==='PARTIALLY_RECEIVED'?'部分收货':'待收货' }}</td><td>
+              </td><td class="dashboard-purchase-due">
+                {{ order.expectedDeliveryDate||'未约定' }}
+              </td><td>
+                <span
+                  class="purchase-status"
+                  :data-status="order.status"
+                >{{ order.status==='PARTIALLY_RECEIVED'?'部分收货':'待收货' }}</span>
+              </td><td>
                 <button
                   v-if="canReceive"
+                  class="dashboard-purchase-receive"
                   @click="target=order.id"
                 >
                   确认收货

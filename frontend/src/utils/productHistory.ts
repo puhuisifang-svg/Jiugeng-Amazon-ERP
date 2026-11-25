@@ -1,6 +1,7 @@
 const actions: Record<string, string> = {
  PURCHASE_ORDER_CREATE:"创建采购单",PURCHASE_ORDER_UPDATE:"修改采购单",PURCHASE_ORDER_SUBMIT:"确认下单",PURCHASE_ORDER_CANCEL:"关闭未收余量",PURCHASE_ORDER_DELETE:"删除采购单",PURCHASE_RECEIPT_CREATE:"登记收货",PURCHASE_SHIPMENT_CREATE:"登记发货批次",PURCHASE_LOGISTICS_UPDATE:"更新物流",
   SUPPLIER_CREATE:'创建供应商',SUPPLIER_UPDATE:'修改供应商',SUPPLIER_DELETE:'删除供应商',SUPPLIER_ARCHIVED_LINK_REMOVE:'解除已删除产品的历史关联',
+  MATERIAL_COST_UPDATE:'修改成本价',
   MATERIAL_IMAGE_COPY:'复制辅料图片', MATERIAL_IMPORT_CREATE:'导入辅料', MATERIAL_IMPORT_UPDATE:'导入修改辅料', MATERIAL_CREATE:'创建辅料', MATERIAL_UPDATE:'修改辅料', MATERIAL_DISABLE:'停用辅料', MATERIAL_ENABLE:'启用辅料', MATERIAL_DELETE:'删除辅料', MATERIAL_SUPPLIERS_UPDATE:'修改供应商关联',
 
   PRODUCT_SKU_CREATE: '创建子体', PRODUCT_SKU_UPDATE: '修改子体', PRODUCT_SKU_DELETE: '删除子体', PRODUCT_RESTORE: '恢复父体', PRODUCT_SKU_RESTORE: '恢复子体', PRODUCT_STOCK_INBOUND: '产品入库', PRODUCT_STOCK_OUTBOUND: '产品出库', PRODUCT_STOCK_ADJUST_IN: '产品盘盈', PRODUCT_STOCK_ADJUST_OUT: '产品盘亏',
@@ -12,7 +13,7 @@ const actions: Record<string, string> = {
 }
 export function productActionLabel(action: string) { return actions[action] ?? '其他操作' }
 
-const fieldLabels: Record<string, string> = {orderNo:"采购单号",orderType:"采购类型",supplierName:"供应商",expectedDeliveryDate:"预计到货",deliveryAddress:"收货信息",cancellationReason:"关闭原因",carrier:"物流公司",trackingNumber:"运单号",waybillImageId:"运单图片",currency:"币种",lines:"采购明细",shipmentId:"发货批次",packageCount:"包裹数",receiptId:"收货记录",lineCount:"收货项数",completed:"是否收齐", contactPerson:'联系人',phone:'电话（脱敏）',wechatId:'微信（脱敏）',sourceUrl:'采购来源',sourceHost:'采购来源域名',qrImageHost:'联系图片域名',qrImageId:'联系图片',categories:'分类', materialType:'辅料类型',specification:'规格',unit:'基础单位',remark:'备注',imageAssetId:'受控图片',imageUrl:'图片链接',suppliers:'供应商关联',materialCode:'辅料编码',productName: '产品名称', name: '名称', status: '状态', skuCount: '子体数', variantCount: '子体数', description: '描述', productType: '类型', version: '版本', variantName: '子体名称', packageWeightGrams: '包装重量（g）' }
+const fieldLabels: Record<string, string> = {costPrice:"成本价（人民币，不含税）",priceUnit:"计价单位",orderNo:"采购单号",orderType:"采购类型",supplierName:"供应商",expectedDeliveryDate:"预计到货",deliveryAddress:"收货信息",cancellationReason:"关闭原因",carrier:"物流公司",trackingNumber:"运单号",waybillImageId:"运单图片",currency:"币种",lines:"采购明细",shipmentId:"发货批次",packageCount:"包裹数",receiptId:"收货记录",lineCount:"收货项数",completed:"是否收齐", contactPerson:'联系人',phone:'电话（脱敏）',wechatId:'微信（脱敏）',sourceUrl:'采购来源',sourceHost:'采购来源域名',qrImageHost:'联系图片域名',qrImageId:'联系图片',categories:'分类', materialType:'辅料类型',specification:'规格',unit:'基础单位',remark:'备注',imageAssetId:'受控图片',imageUrl:'图片链接',suppliers:'供应商关联',materialCode:'辅料编码',productName: '产品名称', name: '名称', status: '状态', skuCount: '子体数', variantCount: '子体数', description: '描述', productType: '类型', version: '版本', variantName: '子体名称', packageWeightGrams: '包装重量（g）' }
 function historyValue(value: unknown): string {
   if (value == null || value === '') return '未填写'
   if (Array.isArray(value)) return value.map(item => item == null ? '—' : historyValue(item)).join(' × ')

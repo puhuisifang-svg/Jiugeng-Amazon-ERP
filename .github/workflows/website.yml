@@ -1,0 +1,29 @@
+name: Website CI
+on:
+  pull_request:
+    paths: ["website/**", ".github/workflows/website.yml"]
+  push:
+    branches: [main]
+    paths: ["website/**", ".github/workflows/website.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  website:
+    name: Website contract and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Test and build independent website
+        run: |
+          python3 -m unittest discover -s website/tests -v
+          python3 website/build.py
+          python3 -c 'import json, os, pathlib; pathlib.Path("website/dist/build-provenance.json").write_text(json.dumps({"revision": os.environ["GITHUB_SHA"], "run": os.environ["GITHUB_RUN_ID"]}) + "\n")'
+      - name: Preserve exact revision website artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: website-${{ github.sha }}
+          path: website/dist/
+          if-no-files-found: error
+          retention-days: 30

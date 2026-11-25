@@ -11,6 +11,111 @@
 
 本报告是带日期的快照，不是实时监控。接手时重新检查 HEAD、工作区及当前任务归属；发布状态由 PJM 维护，Codex 不跟踪线上发布。[2026-10-15 原报告](archive/STATUS_REPORT_2026-10-15.md)已归档，保留原始事实及当时风险，不再作为今天的待办清单。
 
+## 当前发布交接：官网、辅料与采购（2026-11-25）
+
+PJM接手补充：已修复成本清空重建复用版本号的并发覆盖问题，无新增迁移；相关31项后端测试通过。新增独立官网CI精确提交产物及ERP发布路径隔离，当前混合提交仍走完整ERP门禁。三个工作流actionlint通过。官网现有内容摘要与源码构建一致；自动服务器投递仍待可用管理通道，不冒充已接通，现网Caddy及域名/IP分流保持。具体证据见DEL-056末尾PJM复核节。
+
+用户已要求“与项目经理交接，把修改内容提交远端main，并部署线上”。累计范围为 ERP-112 官网、辅料成本价/单位/删除/HTTP保存、采购导出备注及表单/首页收货UI；沿用 feature/ERP-112-corporate-website、基线 c410b33a61a60aeb1700ed4501b8ecd9d5e8453f，全部未提交。发布授权覆盖本轮，不代表已合并或上线。
+
+- 完整前端 pnpm quality 通过，171文件802测试、lint/类型/构建通过；后端 ./mvnw clean verify 通过，456项中455通过，OSS联网探针1项跳过。官网2项契约及构建通过；受影响页面1280/800/360宽度的3个浏览器场景通过，局部1440采购/首页截图检查结果复用。
+- 官网预览占用4188，浏览器检查采用临时4190并已自动停止；现有本地ERP/MySQL和官网服务保持。无数据库迁移，无本轮线上操作。
+- 交接文件：[DEL-056](../../deliverables/pjm/ERP112_MATERIAL_PURCHASE_RELEASE_HANDOFF_2026-11-25.md)，包含完整命令、改动、证据位置及发布边界；统一日志/截图保留 .local/verification/handoff-20261125/。状态与文件归属已检查，无无关修改。文档路径和 git diff --check 在发送前复核。
+- 正式交接消息接受后 PJM 独占写入，负责提交、受保护合并main、部署和结果闭合。Codex 不轮询线上发布。PJM 必须保留当前官网/ERP域名及IP分流；官网独立自动发布后续由PJM接管，不能把ERP发布包当官网包。
+
+本节覆盖下方“待交接/未授权”的历史状态；ERP本轮变更尚未发布，官网此前独立上线事实保持原记录。
+
+## 采购表单与首页待接收布局（2026-11-25，同一本地迭代追加）
+
+沿用 feature/ERP-112-corporate-website、基线 c410b33a61a60aeb1700ed4501b8ecd9d5e8453f 及已授权本地迭代，全部未提交、未发布，保留之前官网与辅料改动。
+
+- PurchasesView 与 purchaseManagement.css：新建/编辑/再次采购共用表单，供应商、日期、收货信息在宽屏同排、40px 等高；中窄屏恢复两列/单列。项目选择按钮采用浅底蓝字，取消继承表格旧实心蓝样式；表格按图片/项目/数量/包裹数/价格/税/金额/操作划分列宽，数量和单位组合排列，控件统一40px，金额右对齐，移除操作红字。明细独立滚动，底栏保留合计，表内不重复显示合计。
+- DashboardPurchaseReceipts：独立商品摘要样式，以48px原有缩略图和文字横向排列，品名及收货进度上下排列；移除该摘要对固定行高的依赖，长名称自然换行。搜索区域收紧，状态改轻量标签，确认收货用紧凑绿色按钮，宽表保留横向滚动。
+- `pnpm exec eslint src/views/PurchasesView.vue src/components/DashboardPurchaseReceipts.vue --fix --max-warnings=0` 与 `pnpm exec vue-tsc --noEmit` 通过。仅做局部视觉诊断：前端目录 `node /tmp/jiugeng-purchase-layout.cjs` 使用本地 Vite、独立 Chromium 和拦截的合成接口数据，1440×900截图已检查；三项顶部控件均40px且同一Y坐标，首页摘要为flex且内容高度未溢出。截图 `/tmp/jiugeng-purchase-editor.png`、`/tmp/jiugeng-dashboard-purchases.png`；未写业务数据。
+- 本次仅前端热更新，无后端重启或迁移。完整门禁、手机与不同业务类型的统一浏览器验收仍留交接节点；当前不是完整回归结果。
+
+## 辅料删除与采购图片备注（2026-11-25，同一本地迭代追加）
+
+沿用下节分支、基线和用户授权写入槽，保留已有官网与辅料改动，全部未提交、未发布。
+
+- 辅料列表更多操作的删除文字改红色，使用 body 下的菜单样式覆盖，确保 Teleport 后仍生效。删除检查不再把单纯 material_standard_cost 行作为业务引用；删除未使用辅料时在同一事务清除当前价格并追加审计，保留历史记录，解决旧核价资料的外键阻断。真实库存、采购、产品用量及成本版本引用仍阻止删除；批量任一项失败不删除任何项。不批量清除用户业务数据，无迁移。
+- 采购图片导出追加备注列，取采购单备注并带到该单每条明细，红色 #b42318、bold 24px；保留手动换行并按列宽自动换行，行高适配备注，原名称和图片列宽保持。无备注留空，同日不同采购单的备注不混用。
+- 定向检查：后端目录 `./mvnw -q -Dtest=MaterialCloseoutTest,CostControllerTest test`：22 项通过，覆盖旧核价删除、审计保留、库存/成本版本引用阻断及批量原子性；`./mvnw -q -DskipTests package` 通过。前端 `pnpm exec vitest run src/ui/purchaseImageExport.test.ts`：3 项通过；`pnpm exec eslint src/ui/purchaseImageExport.ts src/ui/purchaseImageExport.test.ts src/views/MaterialsManagement.vue --max-warnings=0` 通过。类型检查发现测试回调 this 缺少类型，已补 HTMLCanvasElement 后重检。
+- 重检 `pnpm exec vue-tsc --noEmit` 通过；`git diff --check` 通过。本地后端新包 `.local/releases/backend/material-delete-price-20261125/backend.jar`，同目录保留 previous-run-backend.sh，上一包保留；继续 tmux jiugeng-mvp 和原 MySQL 配置，进程确认运行新包，backend.pid 已同步，`./scripts/dev/smoke-local-mysql-backend.sh` 通过。完整门禁和真实浏览器图片、菜单验收仍在用户要求交接时统一执行。
+
+## 辅料成本价简化（2026-11-25，本地实现，待统一验收）
+
+用户明确确认 ERP-112 官网已结束编辑，允许辅料修改合入当前本地迭代。沿用 feature/ERP-112-corporate-website，基线 c410b33a61a60aeb1700ed4501b8ecd9d5e8453f；保留 website/ 及已有文档改动。全部未提交，未请求发布，线上不变。
+
+- 去掉核定原因、确认及重新核定勾选；成本价直接填写、修改或清空，基本校验为非负金额、最多两位小数。自动追加辅料变更记录与原成本审计；保留权限、版本冲突及整个表单原子保存，无成本读取权限时隐藏历史金额。
+- 成本价不再单独锁定单位；库存、采购、产品用量、成本版本引用仍锁定。未使用辅料修改单位时保留原金额精度、同步计价单位，导入同样处理；未改价格不回写界面舍入值。
+- 旧待确认载荷和哈希保持兼容；新增 cost 字段缺省表示不改、null 金额表示清空，并用 simpleCostVersion 阻止旧服务静默丢金额。辅料保存改用已有 HTTP 兼容请求编号工具；其他模块直接 randomUUID 调用不在此次范围。
+- 后端目录 `./mvnw -q -Dtest=MaterialCloseoutTest,MaterialControllerTest,CostControllerTest test`：28 项通过。前端目录 `pnpm exec vitest run src/components/MaterialEditor.test.ts src/utils/requestId.test.ts src/utils/productHistory.test.ts`：3 文件 22 项通过。覆盖价格写入/清空、精度、旧哈希重试、权限、回滚、单位修正与真实引用锁定。
+- 前端 `pnpm exec eslint src/components/MaterialEditor.vue src/components/MaterialEditor.test.ts src/components/MaterialDetailDialog.vue src/api/materialManagement.ts src/utils/productHistory.ts e2e/operations-closeout.smoke.ts --max-warnings=0`、`pnpm exec vue-tsc --noEmit` 通过。后端 `./mvnw -q -DskipTests package` 通过；最后补齐删除影响预览对成本版本引用的判断，已编译，统一回归待交接。
+- 本地沿用 tmux jiugeng-mvp、原 MySQL profile 与配置；数据库 V109/success=1，本次无迁移。旧运行包保留，启动脚本备份 `.local/releases/backend/material-simple-cost-20261125/previous-run-backend.sh`；新包为同目录 backend.jar。Vite 已返回新编辑器，核定原因已移除。
+- 本地启动检查：`./scripts/dev/smoke-local-mysql-backend.sh` 通过；`curl -fsS http://127.0.0.1:8080/actuator/health` 返回 UP。进程已确认运行上述新包和 mysql profile，backend.pid 已同步；`git diff --check` 通过。工作区仅本次辅料改动及用户授权保留的官网/文档修改，无暂存或提交。
+- 待交接统一执行前端 pnpm quality、后端 ./mvnw clean verify、浏览器新增/编辑/清空/单位修正及历史显示检查；未运行完整回归，业务验收未完成。
+
+## ERP-112 域名与 HTTPS 已启用（2026-11-25 21:54，Asia/Shanghai）
+
+用户明确回复“确认，立即配置”，批准补齐解析、启用三域 HTTPS 并保留 IP/8081。当前仍为 `feature/ERP-112-corporate-website`、HEAD `c410b33a61a60aeb1700ed4501b8ecd9d5e8453f`；全部官网实现及文档未提交、未推送、未合并，无其他任务变更。本节覆盖下方待确认阶段。
+
+- DNS：阿里云新增根域 `@` 与 `erp` 的 A 记录，指向用户指定的既有服务器，TTL 10分钟；原 `www` A 记录保留。Google Public DNS HTTPS 查询三域均返回同一目标地址、TTL600。本机早期普通 DNS 查询仍见旧缓存，未据此否定控制台提交结果。
+- 路由：`https://jiugengerp.cn/` 为官网，`https://www.jiugengerp.cn/` 301到根域且保留路径/查询，`https://erp.jiugengerp.cn/` 为原ERP。三域HTTP均301到对应HTTPS；IP的HTTP官网与8081 ERP继续可用。内部8080/4173、业务包、数据库及上传文件未改动。
+- 启用：核对现用配置 SHA 与备份相同，`caddy validate --config /srv/jiugeng-website/backups/domains-20261125-182024/Caddyfile.domains --adapter caddyfile` 通过；原子替换 `/etc/caddy/Caddyfile`，`systemctl reload caddy` 与 `systemctl is-active --quiet caddy` 通过。21:52:28 云助手 ExitCode0、`DOMAINS_ENABLED_IP_PROBES_PASS`，没有重启ERP后端或修改已有安全组规则；443原已放行。
+- TLS：三域系统信任链及主机名校验通过，证书有效期至2027-02-23；Caddy已启用自动证书管理/续期，未来续期结果尚未发生。证书私钥未读取或导出。
+- 验收：21:54:14 云助手 Python `ssl.create_default_context` + `http.client` 检查三域TLS、HTTP跳转、www HTTPS路径与查询保留、官网四项资源200/未知路径及API404、ERP登录/深链接200/匿名`/api/v1/auth/me`401、IP及4173版本一致、未知HTTP Host404，输出 `ALL_DOMAIN_CHECKS_PASS`（ExitCode0）。结果保存在上述备份目录 `verification-https.txt`。
+- 外网：Safari官网与ERP登录页均显示安全连接，截图已保存本地交付目录；本机 Python `urllib.request.urlopen` 验证根域官网版本和ERP版本均200，www版本URL保留查询参数跳到根域后200。官网内容摘要仍为 `ae09c183535a6ecfd9e432ba87cb7c073d3e37b109c4e2846b81451cbe784d5a`，ERP版本仍为 `365892ccb4c5d5eb151420bd0cb7c66c739f8586`。
+- 维护：域名配置回退用上述目录 `Caddyfile.original`，校验后恢复并reload可回到原IP入口；当前DNS新增记录另由控制台管理。后续自动CI/CD仍归PJM。已登录的业务写入、附件读写和业务验收未代验；用户未提供可核实的公开备案号，本轮未编造或新增页脚编号。
+
+## ERP-112 域名配置准备（2026-11-25 18:20，历史阶段）
+
+用户告知备案通过并授权配置域名，继续当前 ERP-112 写入槽与原基线，现有未提交修改均为本任务。阿里云 DNS 控制台核对仅有 `www` A 记录，根域和 `erp` 尚无记录；目标安全组已有 IPv4 TCP443 允许规则。拟补根域/ERP 两条 A 记录，启用根域官网、www 保留路径跳根域、ERP 子域完整应用及三域 HTTP→HTTPS；保留既有 IP/8081 入口。
+
+服务器已备份到 `/srv/jiugeng-website/backups/domains-20261125-182024/`，包含 `Caddyfile.original`、`original.sha256`、`Caddyfile.domains`。云助手 `caddy validate --config <Caddyfile.domains> --adapter caddyfile` ExitCode 0，尚未替换现用配置或 reload。配置将全局 `auto_https off` 改为 `disable_redirects`，显式配置域名跳转，同时保留 IP HTTP 行为。`website/deploy/domains.caddy.example` 同步三域规则；本地 `python3 -` 拼合四个模板后运行 `caddy adapt --adapter caddyfile` 通过，`git diff --check` 通过。DNS 添加根域表单已填写但未提交。
+
+浏览器工具对网络路由变更要求提交前确认，本轮已发一次批量确认卡片，等待用户答复；未用前一轮8081的确认替代本次新域名操作。域名尚未上线、证书尚未签发。收到确认后提交两条解析、启用上述已校验配置，再检查 TLS、重定向、官网404、ERP版本/匿名鉴权与旧IP入口。用户未提供可核实的备案号，本轮未添加猜测编号。
+
+## ERP-112 首次上线与 IP 入口切换完成（2026-11-25 17:43，Asia/Shanghai）
+
+用户直接授权 Codex 负责首次部署、服务器配置，并在提交前确认“放行 8081 并完成切换”；后续自动 CI/CD 由 PJM 负责。本节覆盖下方“等待管理通道 / 暂存 / 待备案 / 尚未切换”的历史阶段描述。域名、DNS 和证书仍按用户安排留到备案通过后配置。
+
+- 工作区：`feature/ERP-112-corporate-website`，HEAD/基线 `c410b33a61a60aeb1700ed4501b8ecd9d5e8453f`，官网实现与文档仍未提交、未推送、未合并。首次上线通过用户已登录的阿里云云助手执行，不是 GitHub Production 流程。全部修改归 ERP-112，无其他任务修改。
+- 实际配置：默认公网 IP 的 HTTP 80 返回独立官网；指定 IP 的 HTTP 8081 提供原 ERP 前端和 `/api/*` 到原内部 8080 的代理。未知 Host 返回 404。原 4173 回环探针和 ERP 应用包、数据、上传文件均未改动，未重启 ERP 后端。
+- 网络：目标实例安全组已新增允许 IPv4 TCP 8081、来源 `0.0.0.0/0`；既有规则保留。主机 UFW 检查为 inactive，本轮未启停主机防火墙。此次只配置用户确认的 IPv4 入口。
+- 备份：服务器 `/srv/jiugeng-website/backups/20261125-173820/` 保留 `Caddyfile.original`、`original.sha256`、`Caddyfile.phase1`（旧入口加 ERP 8081）、`Caddyfile.phase2`（官网80加 ERP8081）。两阶段完整配置均经 `caddy validate --config <阶段文件> --adapter caddyfile` 通过，原子替换 `/etc/caddy/Caddyfile` 后执行 `systemctl reload caddy`。
+- 执行证据：17:38:21 第一阶段云助手 ExitCode 0；Safari 从公网打开 8081，显示 ERP 登录页后再切默认入口。17:42:30 第二阶段 ExitCode 0，输出 `WEBSITE_AND_ERP_CHECKS_PASS`。中途一次验收误用了不存在的 `/api/auth/me`，脚本自动恢复第一阶段；核对代码改为 `/api/v1/auth/me` 后复验通过，匿名状态为 401。
+- 生产检查：Python `urllib.request` 对回环地址携带实际 Host，官网首页含真实公司名称和已确认联系方式；CSS/JS/两项 SVG/版本文件均为200；未知路径和官网 API 路径为404；ERP `/login` 为200、`/version.json` 与原4173逐字节一致；未知 Host 在80/8081均为404。Safari 外网已目视默认 IP 的官网完整首屏、主体与联系方式，以及8081的登录页。
+- 官网内容版本：`ae09c183535a6ecfd9e432ba87cb7c073d3e37b109c4e2846b81451cbe784d5a`，生产 `website-version.json` 一致。ERP `/version.json` 保持 `365892ccb4c5d5eb151420bd0cb7c66c739f8586`。本次只更新入口，不把仓库文档基线当成 ERP 新版本。
+- 验证边界：未替用户登录或进行真实业务写入；图片/PDF/上传下载的已登录业务验收仍待使用方确认。官网已有本地四宽度 Chromium 检查与本轮 Safari 外网目视，不声称完成 Edge 或全部跨浏览器验收。未发送测试邮件或拨打电话。
+- 本轮收尾：根目录 `git diff --check` 通过；`python3 -` 内联 Markdown 路径检查通过（官网 README、接手指南、状态报告共77个本地链接）。最终仅 `website/` 与两份上述维护文档有本任务修改，无暂存或其他任务变更；未因入口配置变化重跑不受影响的 ERP 应用门禁。
+- 后续：PJM 接管自动构建、官网独立发布/回退及工作流路径隔离，合并前注意现有 main push 会触发 ERP Production。当前源码未提交；本节不代表业务验收，也不授予其他代理并行写入权。维护入口见[官网说明](../../website/README.md)。
+
+## ERP-112 双 IP 入口预演（2026-11-25，历史阶段）
+
+用户确认默认 IP 提供官网，IP:8081 提供 ERP，域名配置留到备案通过。目标 ECS 的官网 config-pending 目录已保存独立 IP 路由片段。生产机云助手单次回环预演通过：首页与官网静态产物一致，/api/test 返回官网 404；临时绑定回环 8081 的 ERP 首页、/home、/version.json 与原 4173 入口逐字节一致，匿名业务 API 返回 401 或 403。未验证已登录业务操作。预演监听已退出，公网入口尚未切换，域名未配置。[阿里云对 IP 网站的备案说明](https://help.aliyun.com/zh/icp-filing/basic-icp-service/product-overview/icp-filing-requirements-for-a-regular-website)明确涵盖中国内地 IP 对外提供服务；按接入商规则等待首次备案获批。获准公开后先验证 ERP 替代入口，再切默认 IP。
+
+## ERP-112 官网首次部署进展（2026-11-25，生产机已暂存，待备案）
+
+Codex 使用已登录的阿里云控制台，核对北京目标 ECS 与既有入口一致。云助手发送官网 ZIP 至单台实例成功，主机通过 `sha256sum -c` 和 ZIP 逐文件比对。内容版本为 `ae09c183535a6ecfd9e432ba87cb7c073d3e37b109c4e2846b81451cbe784d5a`。独立版本目录在 `/srv/jiugeng-website/releases/<内容摘要>/`，专用 `current` 指向该版本，待启用片段在 `/srv/jiugeng-website/config-pending/website-<内容摘要>.caddy`。检查 Caddy 账号可读、现用 Caddy 服务 active 及现有 ERP 回环版本探针可读。
+
+生产机预演：初次 `caddy validate --config <临时配置>` 因本机预演使用的 `persist_config off` 不受服务器版本支持而退出。移除此测试选项，使用临时 XDG 目录隔离，在同机执行校验与回环 Caddy 服务测试，云助手返回成功；首页、版本文件字节一致，/api/test 返回官网 404 页面。临时服务已随命令退出。生产 Caddy 主服务、DNS、安全组和原 ERP 公网入口未切换。
+
+同一账号「我的备案」显示进行中的首次备案订单处于管局审核，页面显示已提交 12 个工作日。按[接入商的首次备案开放规则](https://help.aliyun.com/zh/icp-filing/the-influence-of-the-record-during-the-site-visit)，待核准票据、域名及实际备案号后再更新页脚和产物，继续正式入口验证与切换。后续自动 CI/CD 仍归 PJM。以下“等待生产管理通道”为前一阶段记录。
+
+## ERP-112 官网首次部署（2026-11-25，等待生产管理通道）
+
+用户最新授权 Codex 执行首次部署和服务器配置，后续自动 CI/CD 归 PJM。沿用官网开发分支与基线，改动未提交。首次部署配置与回退步骤见[官网部署说明](../../website/README.md)。官网内容 SHA-256 为 `ae09c183535a6ecfd9e432ba87cb7c073d3e37b109c4e2846b81451cbe784d5a`，此次 ZIP 的 SHA-256 为 `a53d24102692bbc577d260c200dc465707dbbfbfb68b91e3da2de2963aee05dd`。
+
+`python3 website/build.py` 与 `python3 -m unittest discover -s website/tests -v` 通过（2 项）。`node /tmp/erp112-preview.cjs`、`node /tmp/erp112-contact-check.cjs`、`node /tmp/erp112-release-browser.cjs` 通过。Chromium 在 1280/800/360/320 四种宽度模拟 100ms 延迟、200000 字节/秒下载，首次内容绘制 320–328ms，传输 19362 字节；Safari、Edge 实机与外网体验尚待验。Caddy v2.11.7 在本机完成四个模板的组合解析和官网片段运行验证，产物逐文件读取一致，未知路径与 /api/test 均为官网 404。公网 DNS 只读查询：根域无 A/AAAA，www 有 A，ERP 子域 NXDOMAIN。尚未核实域名接入/备案放行状态。
+
+本机 SSH agent 无已加载身份，可见云控制台要求登录，项目已有 ERP 部署账号只允许应用接收命令。已请求生产管理通道。生产应用、DNS、监听和安全组尚未操作，待接入后按官网说明核查并执行。恢复任务时检查当前分支与工作区归属，并以目标入口核验作为上线依据。
+
+## ERP-112 九更官网本地开发（2026-11-25）
+
+用户授权开发，PJM 已从干净 main `c410b33a61a60aeb1700ed4501b8ecd9d5e8453f` 将唯一写入槽交给 Codex。当前分支 `feature/ERP-112-corporate-website`，本地未提交。用户确认法定全称为厦门九更网络科技有限公司，并于本轮补充授权展示合作邮箱与手机号。合作区提供邮件、拨号链接及复制反馈。本期采用 DEL-054 约定的独立展示版式。首页、原创标识及海港插画、移动导航、无效地址页面、搜索索引文件和独立构建预览见[官网开发说明](../../website/README.md)。
+
+局部验证：`python3 website/build.py` 生成独立静态产物；`python3 -m unittest discover -s website/tests -v` 两项通过；`node /tmp/erp112-preview.cjs` 通过 Chromium 1280×800 首屏渲染、320px 手机菜单/焦点/锚点/横向溢出检查及接口和未知路径返回真实 404，桌面截图已目视。联系方式追加后重新构建并复验两项契约通过；`node /tmp/erp112-contact-check.cjs` 核对本地预览的链接目标、两项复制、手动复制回退及 320px 布局通过。交接时仍需统一浏览器/视口及性能验收。发布前需确认官网与 ERP 的工作流隔离（现有 main push 会触发 ERP 流程）、公开时机及合作渠道实际可达性。此次只启动回环地址官网预览，无线上操作。
+
 ## PJM 发布核验与下一阶段（2026-11-25）
 
 ERP-104 的15个文件原子提交为 `2cf21d9c6f9b5a19eaf1ec7376a539a2acef1e4e`，经[PR #28](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/pull/28)五项必需检查后受保护合并。应用 main 为 `365892ccb4c5d5eb151420bd0cb7c66c739f8586`。

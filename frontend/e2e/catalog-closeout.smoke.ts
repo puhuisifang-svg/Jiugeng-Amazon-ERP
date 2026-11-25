@@ -43,6 +43,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 800, height: 600 
     await stock.getByRole('button', { name: '关闭', exact: true }).click()
     await expect(stock).toHaveCount(0)
     await page.goto('/samples')
+    await expect(page.getByRole('navigation', { name: '面包屑' })).toHaveText('商品/样品管理')
     const more = page.getByRole('button', { name: `${sample.skuName} 更多操作`, exact: true })
     await more.scrollIntoViewIfNeeded()
     await more.click()

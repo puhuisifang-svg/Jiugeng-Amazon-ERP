@@ -9,6 +9,12 @@
 | 审批人 | 待 PJM 复核；本文记录实现事实，不新增业务批准 |
 | 核实基线 | 见[当前状态报告](../08-project-management/STATUS_REPORT.md)；此指南不是实时线上状态 |
 
+## 最新交接入口：ERP-104 与官网需求（2026-11-25）
+
+先读[ERP-104发布交接](../../deliverables/pjm/ERP-104_RELEASE_HANDOFF_2026-11-25.md)和状态报告最新节。本轮辅料价格/字色/布局及样品面包屑已统一验证，用户授权PJM提交main并部署；正式交接后PJM独占写入，Codex不等待线上结果。不能沿用下方历史任务写入权。
+
+[官网PRD DEL-054](../01-product/JIUGENG_CORPORATE_WEBSITE_PRD_v0.1_DRAFT.md)正文v0.6为最新需求：静态展示、自主设计、默认IP官网、临时完整ERP8081对所有外网放行、内部后端不变。尚无官网代码或入口配置实施；不要执行旧版18080端口迁移建议。PJM结束本轮并释放干净工作区后，才分配官网开发。
+
 ## 当前 ERP-103 报关文件入口（2026-11-24，本地）
 
 先读 [DEL-053](../../deliverables/pjm/ERP-103_CUSTOMS_FILES_LOCAL_2026-11-24.md) 末尾 PJM 实际发布结果：本轮已受保护合并并完成应用生产发布；准确 SHA、备份/迁移证据边界与归档进展见状态报告，不沿用历史 Codex 写入槽。`CustomsDocuments` 列表返回创建时间及截图/发票标记并按创建时间倒序；`CustomsFileStatus` 统一两处标签。`CustomsAttachmentPreview` 在 `#app` 内显示鉴权图/PDF/Excel，PDF 复用连续只读文档。Excel 由 customs 内部 `CustomsSpreadsheetPreview` 提取缓存值，不调用外部预览服务；预览接口只读，现有下载接口继续保留。完整验证、应用发布及迁移证据边界见 DEL-053 末尾；下方本地实施段为历史技术记录。

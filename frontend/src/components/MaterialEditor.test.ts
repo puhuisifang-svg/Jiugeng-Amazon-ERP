@@ -10,7 +10,7 @@ const material={id:'m1',materialCode:'M1',name:'合成纸箱',materialType:'包�
 const global={stubs:{AccessDialog:{props:['title','busy','dirty'],template:'<div><slot /><slot name="footer" /></div>',methods:{requestClose(){}}},SingleFileUpload:true,MaterialSupplierDetail:true}}
 beforeEach(()=>{sessionStorage.clear();mocks.detail.mockReset().mockResolvedValue({material,suppliers:[],price:{netPrice:'0.000123',unit:'件',version:0},unitLocked:true,quantityScale:0});mocks.save.mockReset().mockResolvedValue(material)})
 describe('material aggregate editor',()=>{
- it('keeps a six-decimal price unchanged while editing another field',async()=>{const w=mount(MaterialEditor,{props:{id:'m1'},global});await flushPromises();expect(w.get('[aria-label="辅料成本价"]').element).toHaveProperty('value','0.000123');await w.get('input[maxlength="200"]').setValue('更新名称');await w.get('form').trigger('submit');await flushPromises();expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({id:'m1',version:4,suppliers:[],material:expect.not.objectContaining({costPrice:expect.anything()})}));w.unmount()})
+ it('keeps a six-decimal price unchanged while editing another field',async()=>{const w=mount(MaterialEditor,{props:{id:'m1'},global});await flushPromises();expect(w.get('[aria-label="辅料成本价"]').element).toHaveProperty('value','0.00');await w.get('input[maxlength="200"]').setValue('更新名称');await w.get('form').trigger('submit');await flushPromises();expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({id:'m1',version:4,suppliers:[],material:expect.not.objectContaining({costPrice:expect.anything()})}));w.unmount()})
  it('copies eligible suppliers while explaining omitted historical links',async()=>{mocks.detail.mockResolvedValue({material,suppliers:[{supplierId:'active',supplierName:'当前供应商',status:'ACTIVE',materialEligible:true,primary:false},{supplierId:'old',supplierName:'历史供应商',status:'ACTIVE',materialEligible:false,primary:true}],price:null,unitLocked:true,quantityScale:0});const w=mount(MaterialEditor,{props:{id:'m1',copy:true},global});await flushPromises();expect(w.text()).toContain('复制时未带入');expect(w.text()).toContain('历史供应商');await w.get('form').trigger('submit');await flushPromises();expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({id:null,copyFromId:'m1',suppliers:[expect.objectContaining({supplierId:'active'})]}));w.unmount()})
  it('blocks saving when aggregate detail fails, preserving associations',async()=>{mocks.detail.mockRejectedValue(new Error('关系不可用'));const w=mount(MaterialEditor,{props:{id:'m1'},global});await flushPromises();expect(w.text()).toContain('关系不可用');await w.get('form').trigger('submit');expect(mocks.save).not.toHaveBeenCalled();w.unmount()})
  it('persists and reuses the original save after timeout',async()=>{mocks.save.mockRejectedValueOnce(new Error('timeout')).mockResolvedValue(material);const w=mount(MaterialEditor,{props:{id:'m1'},global});await flushPromises();await w.get('form').trigger('submit');await flushPromises();const command=JSON.parse(JSON.stringify(mocks.save.mock.calls[0]![0]));expect(w.text()).toContain('保存结果待确认');await w.get('form').trigger('submit');await flushPromises();expect(mocks.save.mock.calls[1]![0]).toEqual(command);expect(sessionStorage.getItem('jiugeng.material.pending.editor-test')).toBeNull();w.unmount()})
@@ -24,4 +24,19 @@ it('confirms a legacy continue request once and closes without clearing into ano
  await w.get('form').trigger('submit');await flushPromises()
  expect(mocks.save).toHaveBeenCalledWith(input);expect(mocks.save).toHaveBeenCalledTimes(1)
  expect(w.emitted('close')).toHaveLength(1);expect(sessionStorage.getItem('jiugeng.material.pending.editor-test')).toBeNull();w.unmount()
+})
+
+it('formats cost input to cents and requires confirmation before sending a changed price',async()=>{
+ const w=mount(MaterialEditor,{props:{id:'m1'},global});await flushPromises()
+ const price=w.get('[aria-label="辅料成本价"]');await price.setValue('5.6');await price.trigger('blur')
+ expect(price.element).toHaveProperty('value','5.60')
+ await w.get('form').trigger('submit');expect(mocks.save).not.toHaveBeenCalled()
+ await w.get('input[maxlength="500"][required]').setValue('合成核定原因');await w.get('input[type="checkbox"][required]').setValue(true)
+ await w.get('form').trigger('submit');await flushPromises()
+ expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({material:expect.objectContaining({costPrice:expect.objectContaining({netPrice:'5.60'})})}));w.unmount()
+})
+it('rejects new prices with more than two decimals',async()=>{
+ const w=mount(MaterialEditor,{props:{id:'m1'},global});await flushPromises()
+ await w.get('[aria-label="辅料成本价"]').setValue('5.678');await w.get('form').trigger('submit')
+ expect(w.text()).toContain('成本价最多两位小数');expect(mocks.save).not.toHaveBeenCalled();w.unmount()
 })

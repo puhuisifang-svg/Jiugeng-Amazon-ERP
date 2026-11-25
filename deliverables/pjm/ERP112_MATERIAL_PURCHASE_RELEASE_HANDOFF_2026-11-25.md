@@ -64,3 +64,17 @@
 - Independent Website CI builds/tests and retains a commit-SHA artifact with provenance. ERP Production now filters application/deployment paths: website-only and documentation-only changes do not restart ERP; this mixed release still triggers full ERP deployment. Website contract/build passed again; content digest remains identical to the existing live website. All three workflows passed actionlint; 152 local Markdown paths passed.
 - Automatic website server delivery remains pending a connected management channel. Current browser tooling cannot connect to the previous cloud-console session; protected credential metadata store is empty. Restricted ERP SSH must not be reused for website delivery or arbitrary management. Access restoration was requested; CI artifacts and matching existing website content are not represented as a newly executed automatic deployment.
 - Existing Caddy, HTTPS, domain/IP separation, internal ports, persistent data and local services remain unchanged.
+
+## PJM 发布结果（2026-11-25：已合并，ERP部署受阻）
+
+- 累计实施提交：`6a156daf2e6db4a089364d2efc74d90c3b61750e`，46 个文件；[PR #30](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/pull/30) 按五项必需检查保护合并，未绕过保护。
+- 应用 main：`fc8891cbbd6db4e3eccd6e74c26a6453d54a9d80`。
+- [PR CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45640020675) 与 [main CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45640729491) 成功；完整后端457项、0失败/错误、1外部OSS条件跳过，前端171文件802测试，浏览器17项通过。
+- [ERP Production](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45640730028) 已完成完整门禁及精确SHA打包；实际SSH deploy于15:08:20 UTC开始、15:33:14 UTC因作业30分钟时限被取消（非人工取消）。未见备份完成或Deployment verified标记，也未见锁冲突标记，不能据此断言服务器端进程已结束。
+- [独立官网 CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45640729577) 成功，产物 provenance 对应上述应用 main。官网HTTPS的8个源码文件与该CI产物逐文件一致；website-version.json 摘要 `ae09c183535a6ecfd9e432ba87cb7c073d3e37b109c4e2846b81451cbe784d5a`。这确认当前官网内容与提交构建一致，不等同于新自动服务器投递已经执行。
+- 官网HTTPS及www重定向通过，官网API路径404、ERP匿名认证API401，保留既有分流；未改Caddy、DNS、安全组或内部端口。官网自动投递仍待恢复管理通道。
+- 本轮无迁移，未重启本地持久服务；发布归档为纯文档，不触发ERP Production，线上应用SHA可以与后续纯文档main不同。
+
+- 15:34 UTC 后独立读取 ERP HTTPS `/version.json`：HTTP200，仍为旧应用 `365892ccb4c5d5eb151420bd0cb7c66c739f8586`，目标 `fc8891cbbd6db4e3eccd6e74c26a6453d54a9d80` 尚未确认上线；本次不能宣称生产备份、后端健康或最终版本切换通过。官网HTTPS仍为上述摘要，未受此次ERP发布影响。
+- 当前阻断：缺少已连接的主机管理通道，无法检查实际部署接收/传输进程及锁持有者；未盲目重跑、删锁或绕过保护。恢复管理访问后，先检查实际进程、锁及当前版本，再决定安全续跑/恢复，用户发布授权持续有效。
+- 证据：GitHub run/job终态及超时注解；本地 `/tmp/del056-production-monitor-log.txt`、`/tmp/del056-production-monitor-state.json`（不提交日志或私有配置）。本归档仅记录受阻事实，不代表发布闭环。

@@ -1,7 +1,7 @@
 const actions: Record<string, string> = {
  PURCHASE_ORDER_CREATE:"创建采购单",PURCHASE_ORDER_UPDATE:"修改采购单",PURCHASE_ORDER_SUBMIT:"确认下单",PURCHASE_ORDER_CANCEL:"关闭未收余量",PURCHASE_ORDER_DELETE:"删除采购单",PURCHASE_RECEIPT_CREATE:"登记收货",PURCHASE_SHIPMENT_CREATE:"登记发货批次",PURCHASE_LOGISTICS_UPDATE:"更新物流",
   SUPPLIER_CREATE:'创建供应商',SUPPLIER_UPDATE:'修改供应商',SUPPLIER_DELETE:'删除供应商',SUPPLIER_ARCHIVED_LINK_REMOVE:'解除已删除产品的历史关联',
-  MATERIAL_COST_UPDATE:'修改成本价',
+  MATERIAL_COST_UPDATE:'修改成本价', INVENTORY_SAFETY_STOCK_UPDATE:'修改安全库存',
   MATERIAL_IMAGE_COPY:'复制辅料图片', MATERIAL_IMPORT_CREATE:'导入辅料', MATERIAL_IMPORT_UPDATE:'导入修改辅料', MATERIAL_CREATE:'创建辅料', MATERIAL_UPDATE:'修改辅料', MATERIAL_DISABLE:'停用辅料', MATERIAL_ENABLE:'启用辅料', MATERIAL_DELETE:'删除辅料', MATERIAL_SUPPLIERS_UPDATE:'修改供应商关联',
 
   PRODUCT_SKU_CREATE: '创建子体', PRODUCT_SKU_UPDATE: '修改子体', PRODUCT_SKU_DELETE: '删除子体', PRODUCT_RESTORE: '恢复父体', PRODUCT_SKU_RESTORE: '恢复子体', PRODUCT_STOCK_INBOUND: '产品入库', PRODUCT_STOCK_OUTBOUND: '产品出库', PRODUCT_STOCK_ADJUST_IN: '产品盘盈', PRODUCT_STOCK_ADJUST_OUT: '产品盘亏',
@@ -25,5 +25,5 @@ export function productHistoryChanges(event: { beforeValue?: Record<string, unkn
   const before = event.beforeValue ?? {}, after = event.afterValue ?? {}
   return [...new Set([...Object.keys(before), ...Object.keys(after)])]
     .filter(key => JSON.stringify(before[key]) !== JSON.stringify(after[key]))
-    .map(key => ({ key, label: fieldLabels[key] ?? key, before: historyValue(before[key]), after: historyValue(after[key]) }))
+    .map(key => ({ key, label: key === 'safetyStock' ? '安全库存' : fieldLabels[key] ?? key, before: historyValue(before[key]), after: historyValue(after[key]) }))
 }

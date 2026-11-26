@@ -4,7 +4,7 @@ import { beijingDateTime } from '@/utils/dateTime'
 import { vSingleSelect } from '@/directives/singleSelect'
 import TableViewport from "@/components/TableViewport.vue"
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import InventoryReason from '@/components/InventoryReason.vue'
 import { domainApi, type LedgerEntryDto } from '@/api/domain'
 import SyntheticNotice from '@/components/SyntheticNotice.vue'
 import ListPagination from '@/components/ListPagination.vue'
@@ -62,20 +62,6 @@ onMounted(load)
 <template>
   <section class="page-stack">
     <SyntheticNotice v-if="mockMode" />
-    <div class="page-heading ledger-page-heading">
-      <div class="ledger-page-heading__main">
-        <RouterLink
-          class="ledger-back-link"
-          to="/inventory/balances"
-        >
-          ← 返回库存余额
-        </RouterLink><div>
-          <p class="eyebrow">
-            库存审计 · 只增不改
-          </p><h1>库存流水</h1><p>流水不可编辑、不可删除；纠错通过引用原流水的冲销完成。</p>
-        </div>
-      </div>
-    </div>
     <form
       class="panel filter-panel ledger-filters"
       aria-label="库存流水筛选"
@@ -132,7 +118,12 @@ onMounted(load)
               >
                 <td class="ledger-time">
                   {{ beijingDateTime(item.occurredAt) }}
-                </td><td>{{ item.materialCode }}</td><td>{{ inventoryTransactionTypeLabel(item.type) }}</td><td>{{ item.signedQuantity ?? item.quantity }}</td><td>{{ item.balanceAfter ?? '—' }}</td><td>{{ item.reason }}</td><td>{{ item.actorLoginName ?? '—' }}</td><td v-if="writable">
+                </td><td>{{ item.materialName || item.materialCode }}</td><td>{{ inventoryTransactionTypeLabel(item.type) }}</td><td>{{ item.signedQuantity ?? item.quantity }}</td><td>{{ item.balanceAfter ?? '—' }}</td><td>
+                  <InventoryReason
+                    :entry="item"
+                    :disabled="!!busy"
+                  />
+                </td><td>{{ item.actorLoginName ?? '—' }}</td><td v-if="writable">
                   <button
                     v-if="item.type !== 'REVERSAL'"
                     :disabled="busy === item.id || isReversed(item)"
@@ -184,7 +175,7 @@ onMounted(load)
         </button><h2 id="reversal-dialog-title">
           确认冲销库存流水
         </h2><p class="form-wide reversal-summary">
-          将冲销 {{ reversalTarget.materialCode }} 的 {{ inventoryTransactionTypeLabel(reversalTarget.type) }}流水（{{ reversalTarget.id }}）。该操作会新增一条反向流水，原流水不会被删除。
+          将冲销 {{ reversalTarget.materialName || reversalTarget.materialCode }} 的 {{ inventoryTransactionTypeLabel(reversalTarget.type) }}流水（{{ reversalTarget.id }}）。该操作会新增一条反向流水，原流水不会被删除。
         </p><label class="form-wide">冲销原因<textarea
           v-model="reversalReason"
           required

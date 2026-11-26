@@ -300,6 +300,11 @@ class PurchaseService {
     private PurchaseException invalid(String message){return new PurchaseException(400,"PURCHASE_FIELD_INVALID",message);}
     private PurchaseException state(String message){return new PurchaseException(409,"PURCHASE_STATE_INVALID",message);}
     private PurchaseException versionConflict(){return new PurchaseException(409,"PURCHASE_VERSION_CONFLICT","采购单已被其他用户更新");}
+    @Transactional(readOnly = true)
+    PurchaseRepository.InventoryOrderLink inventoryOrder(String transactionId) {
+        return repository.inventoryOrder(transactionId).orElseThrow(() ->
+                new PurchaseException(404,"PURCHASE_RECEIPT_ORDER_NOT_FOUND","未找到该流水关联的采购单"));
+    }
     private PurchaseException missing(String id){return new PurchaseException(404,"PURCHASE_ORDER_NOT_FOUND","采购单不存在："+id);}
     private Integer packageCount(BigDecimal value) {
         if (value == null) return null;

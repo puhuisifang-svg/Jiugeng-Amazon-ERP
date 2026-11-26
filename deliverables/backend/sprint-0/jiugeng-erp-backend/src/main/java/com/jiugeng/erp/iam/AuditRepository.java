@@ -72,12 +72,24 @@ class AuditRepository {
                 .param("type", resourceType).param("id", resourceId).query(this::mapEvent).list();
     }
 
-    List<AuditEvent> findResourcePage(String type,String id,int page,int size) {
-        return jdbc.sql("SELECT * FROM audit_event WHERE resource_type=:type AND resource_id=:id ORDER BY occurred_at DESC,id DESC LIMIT :size OFFSET :offset")
-            .param("type",type).param("id",id).param("size",size).param("offset",(long)(page-1)*size).query(this::mapEvent).list();
+    List<AuditEvent> findResourcePage(List<AuditHistoryLookup.HistoryScope> scopes,String id,int page,int size) {
+        var query=resourceQuery(scopes,id);
+        return jdbc.sql("SELECT *"+query.sql()+" ORDER BY occurred_at DESC,id DESC LIMIT :size OFFSET :offset")
+            .params(query.parameters()).param("size",size).param("offset",(long)(page-1)*size).query(this::mapEvent).list();
     }
-    long countResource(String type,String id) {
-        return jdbc.sql("SELECT COUNT(*) FROM audit_event WHERE resource_type=:type AND resource_id=:id").param("type",type).param("id",id).query(Long.class).single();
+    long countResource(List<AuditHistoryLookup.HistoryScope> scopes,String id) {
+        var query=resourceQuery(scopes,id);
+        return jdbc.sql("SELECT COUNT(*)"+query.sql()).params(query.parameters()).query(Long.class).single();
+    }
+    private Query resourceQuery(List<AuditHistoryLookup.HistoryScope> scopes,String id) {
+        var parts=new java.util.ArrayList<String>();var params=new HashMap<String,Object>();params.put("id",id);
+        for(int i=0;i<scopes.size();i++){
+            var scope=scopes.get(i);params.put("type"+i,scope.resourceType());
+            String part="resource_type=:type"+i;
+            if(scope.action()!=null){part+=" AND action=:action"+i;params.put("action"+i,scope.action());}
+            parts.add("("+part+")");
+        }
+        return new Query(new StringBuilder(" FROM audit_event WHERE resource_id=:id AND ("+String.join(" OR ",parts)+")"),params);
     }
 
     AuditTypes.FilterOptions options(String userId) {

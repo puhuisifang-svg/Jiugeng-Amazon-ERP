@@ -13,6 +13,7 @@ export interface PurchaseOrderDetail { order: PurchaseOrder; receipts: PurchaseR
 export interface PurchaseOrderInput { orderType: PurchaseOrderType; supplierId: string; supplierName?: string; currency: string; remark?: string; version?: number; expectedDeliveryDate?: string | null; deliveryAddress?: string; lines: Array<{ packageCount?:number|null; taxIncluded?:boolean; taxRate?:number; itemId: string; quantity: number; unitPrice: number; itemName?: string; unit?: string; specification?: string; imageAssetId?: string | null }> }
 
 export const purchaseApi = {
+  inventoryOrder: (transactionId:string) => apiRequest<{orderId:string;orderNo:string}>(`/v1/purchases/inventory-transactions/${encodeURIComponent(transactionId)}/order`),
   deliveryOptions: () => apiRequest<string[]>('/v1/purchases/delivery-options'),
   removeDeliveryOption: (name:string) => apiRequest<void>('/v1/purchases/delivery-options/remove', {method:'POST',body:JSON.stringify({name})}),
   remove: (id: string, version: number) => apiRequest<void>(`/v1/purchases/orders/${id}?version=${version}`, { method: 'DELETE' }),

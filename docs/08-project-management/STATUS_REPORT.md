@@ -5,12 +5,92 @@
 | 项目 | 九更亚马逊 ERP |
 | Owner | PJM（维护责任）；Codex（本次事实整理） |
 | 版本 / 状态 | v0.2 / Active（持续维护；本次修订待 PJM 复核） |
-| 更新时间 / 时区 | 2026-11-25 / Asia/Shanghai |
-| 审批人 | 用户已授权 2026-11-24 累计迭代发布；PJM 复核并执行，不代表业务验收 |
+| 更新时间 / 时区 | 2026-11-26 / Asia/Shanghai |
+| 审批人 | 用户已授权 2026-11-26 ERP-113/114累计迭代提交main并部署；PJM执行，不代表业务验收 |
 | 证据范围 | 仓库代码、GitHub Production 记录、用户实际访问入口的公开前端版本及静态资源 |
 
 本报告是带日期的快照，不是实时监控。接手时重新检查 HEAD、工作区及当前任务归属；发布状态由 PJM 维护，Codex 不跟踪线上发布。[2026-10-15 原报告](archive/STATUS_REPORT_2026-10-15.md)已归档，保留原始事实及当时风险，不再作为今天的待办清单。
 
+
+
+## 当前发布交接：ERP-113 / ERP-114（2026-11-26）
+
+用户已要求提交远端main并部署。Codex本地统一验证完成，精确范围、分支/基线、V110迁移、文件清单和发布边界见[DEL-057交接](../../deliverables/pjm/ERP113_ERP114_RELEASE_HANDOFF_2026-11-26.md)。前端174文件/812测试及lint/类型/构建通过；后端460项（459通过、1项外部OSS探针跳过）；原有3个浏览器场景与新增3个三尺寸场景通过，采购30px居中备注导出已复核，diff/文档路径检查通过。新增浏览器用例的夹具/横向滚动断言修正已复查，应用完整门禁无需重跑。
+
+全部仍未提交，基线 `662501194946f48272fba0c7a4912668282b55d8`、分支 `fix/del056-receiver-startup-cleanup`。正式交接消息接受后PJM独占接管提交、PR合并、CI/CD与线上结果核验，Codex停止写入并不跟踪发布。本地服务和生产快照隔离配置保留，数据/凭据/备份不随提交发布。下方“未授权/待统一验证”均为实施期间历史状态；不覆盖本节最终交接。
+
+
+## ERP-114 辅料库存操作与流水（2026-11-26，本地已实现，待迭代统一验证）
+
+PJM 明确继续授予 Codex 独占写入槽，与 ERP-113 同轮，保留数据同步文档及采购备注30px改动。分支 `fix/del056-receiver-startup-cleanup`，基线 `662501194946f48272fba0c7a4912668282b55d8`；全部未提交、未推送、未部署。当前工作区改动均属已授权累计迭代。
+
+- 独立库存流水移除顶部返回/说明卡片，辅料列优先显示名称。独立流水和辅料库存弹窗共用 `InventoryReason.vue`；采购收货单号点击后按实际收货流水关联查采购单，同页跳转保留登录态；需采购读取和库存读取权限，失败可重试，不按备注猜测订单 ID。
+- 库存弹窗只提供入库/出库，移除包装换算和安全库存设置；预计结存收紧到数量右侧。旧盘盈/盘亏历史仍可读，已保存的待确认调整继续按原载荷重试。新增请求使用兼容 HTTP 环境的 `createRequestId`。
+- 操作原因复用 `EditableSelect`，可输入、选择和删除历史候选。删除仅隐藏候选，不删除/修改历史流水；再次用该原因成功创建新人工入出库会恢复候选，幂等重放不恢复；采购收货自动原因不进入候选。
+- 辅料列表库存列直接编辑安全库存，保留单位精度、权限、停用保护、失败重试和未保存离开提示；编辑期间阻止筛选/分页刷新隐藏当前编辑行。
+- 后端新增 `/api/v1/inventory/reason-options`、`/reason-options/remove` 和采购模块 `/api/v1/purchases/inventory-transactions/{id}/order`。V110 新增候选隐藏表及收货关联索引，未跨模块引用内部类型，未删除任何业务历史。
+
+针对新增持久化/跳转与原请求恢复风险执行定向检查（非完整交接门禁）：
+
+- `pnpm exec vitest run src/components/InventoryReason.test.ts src/components/MaterialInventoryDialog.test.ts src/views/MaterialsView.test.ts src/views/InventoryLedgerView.test.ts`：已有三个文件14项通过；新原因组件测试首次因测试文件缺括号未解析，补齐后 `pnpm exec vitest run src/components/InventoryReason.test.ts` 3项通过，合计17项。后续只补筛选函数的安全库存编辑保护，完整门禁待交接。
+- `pnpm exec vue-tsc --noEmit`：通过。`pnpm exec eslint src/api/inventoryOptions.ts src/api/purchases.ts src/components/InventoryReason.vue src/components/InventoryReason.test.ts src/components/MaterialInventoryDialog.vue src/components/MaterialInventoryDialog.test.ts src/views/InventoryLedgerView.vue src/views/InventoryLedgerView.test.ts src/views/MaterialsManagement.vue src/views/MaterialsView.test.ts`：通过。
+- 后端 `./mvnw -q '-Dtest=InventoryControllerTest#reasonOptionsPreserveLedgerAndRespectPermissions,PurchaseControllerTest#inventoryLinkResolvesReceiptAndRequiresPermissions' test`：2项通过，0失败/错误；涵盖删除候选保留流水、重复隐藏/幂等恢复、真实收货关联、404/权限/未登录。`./mvnw -q -DskipTests package` 产出本地运行包（未执行完整测试）。
+- 本地更新前使用容器 `mysqldump --single-transaction --quick --no-tablespaces --hex-blob --routines --triggers --set-gtid-purged=OFF` 备份运行数据库，gzip校验通过；备份和旧JAR/私有配置保留于 `.local/backups/before-erp114-20261126/`，均未入Git。新运行包 `.local/releases/backend/erp114-20261126/backend.jar`，仅替换既有启动脚本JAR路径，保留生产快照隔离配置。原本地8080进程定向停止后在 `jiugeng-mvp:0.0` 重启；health为UP，schema110成功且新表/索引存在，未登录原因接口401，前端5173为200。
+
+- `git diff --check` 通过；三份维护文档共76个本地链接路径检查通过。运行脚本与备份逐字对比确认仅JAR路径变化；`git status --short` 仅包含当前已授权累计迭代，无无关改动。
+
+待用户要求交接时合并执行前端 `pnpm quality`、后端 `./mvnw clean verify` 和受影响页面布局/交互验收，包含候选删除、采购跳转、列表安全库存、旧待确认请求及ERP-113长备注导出。本轮未做浏览器视觉验收，不把局部测试或服务健康等同于业务验收；无需跟踪线上发布。
+
+
+### ERP-114 同轮追加：辅料列表与详情（2026-11-26）
+
+PJM 再次确认 Codex 独占同轮补充写入，分支/基线不变，未提交/发布。
+
+- 表头与行勾选统一44px居中列、16px勾选框；批量删除改为浅红底、红色边框/文字及选中数量。详情基础资料使用紧凑并排字段，备注独立一行，成本价显示两位小数。
+- 辅料模式的历史展示隐藏内部ID/版本；创建和导入创建只显示已填初始值，不重复“未填写→”，受控图片用“已设置图片”代替资产ID；修改保留前后差异和清空值。其他模块的共享历史表默认展示不变。
+- 安全库存原本已记录 `INVENTORY_SAFETY_STOCK_UPDATE` 审计，遗漏原因是辅料历史只查 `AUXILIARY_MATERIAL`。通过 IAM 公共审计接口增加限定资源类型/操作的组合查询，在数据库统一排序、分页、计数；有库存读权限时加入该辅料已有安全库存记录，不重写/补造历史，也不混入其他库存动作。权限模型中 `materials.read` 本身依赖 `inventory.read`；读取不等于可修改。
+- 新增 `materialHistory` 格式化及共享历史表选择性渲染用例；`pnpm exec vitest run src/utils/materialHistory.test.ts src/components/ProductHistoryTable.test.ts` 3项通过，`pnpm exec vue-tsc --noEmit` 通过。此次变更文件定向 ESLint 修整通过。
+- 合成数据浏览器定向复核：`node .local/erp114-detail-ui.cjs`，1280×800单尺寸，勾选中心差小于1px、删除按钮字色/底色断言通过，创建记录无内部ID/多余箭头、安全库存差异保留，页面JS错误0；基础资料和历史截图已目视复核，保留于 `.local/erp114-material-basic.png`、`.local/erp114-material-history.png`。只拦截合成API，不使用或修改实际业务数据；初次脚本误拦截Vite源码路径，改为仅拦截 `/api/v1/` 后通过。
+- 后端新增定向用例覆盖历史安全库存、跨页计数/无重复、其他辅料/动作隔离、只读用户禁止修改及未登录限制。首次用例的审计操作者、创建附属事件计数和权限依赖假设不符现有契约，已修正测试数据/预期；最终运行结果和本地运行包更新见下条。
+- 最终后端 `./mvnw -q '-Dtest=MaterialCloseoutTest#materialHistoryIncludesExistingSafetyChangesWithCorrectPagingAndPermissions' package` 通过：1项、0失败/错误，产物已更新至 `.local/releases/backend/erp114-detail-20261126/backend.jar`。本次无新增迁移，schema仍110；原ERP-114运行包保留，旧启动脚本备份于 `.local/backups/before-erp114-detail-20261126/`。仅替换启动脚本JAR路径，保留存储/后台任务隔离，定向重启 `jiugeng-mvp:0.0` 后health返回UP。
+- 最终定向ESLint、`git diff --check` 和维护文档链接路径检查通过；所有未提交文件仍为已授权累计迭代。前述“未做浏览器验收”仅指首批范围，本次追加仅做上述单尺寸合成数据复核，完整门禁及累计范围验收仍待用户交接指令。
+
+
+
+### ERP-114 安全库存改为锚定浮层（2026-11-26，同轮追加）
+
+PJM 确认继续独占同轮前端写入。按用户附件，将列表行内展开替换为原生顶层 popover：输入/单位、保存和取消同排，下方小字显示当前值。表格保留原值和高度，浮层随滚动/窗口变化定位并避开视口边缘；Esc/取消关闭，有输入草稿时点击外部保留内容，既有离开确认与失败重试保留。保存后静默刷新列表并保持滚动位置，避免加载提示挤动表格。本次仅前端修改，无后端重启或迁移。
+
+- `node .local/erp114-safety-ui.cjs`：1280×800合成数据定向复核通过；浮层打开、取消、保存后三次行位置/尺寸与初始值一致，浮层未越界，页面错误0。截图 `.local/erp114-safety-popover.png` 已目视复核。
+- `pnpm exec eslint src/views/MaterialsManagement.vue src/views/MaterialsView.test.ts` 与 `pnpm exec vue-tsc --noEmit` 通过；既有安全库存用例改为表单提交，并增加浮层不在单元格内部的断言，单元测试留待迭代统一执行。`git diff --check` 通过。
+- 未提交/推送/部署，保留全部同轮改动；完整门禁仍待交接指令。
+
+
+- ERP-114 工具栏追加（2026-11-26）：库存流水入口固定靠右，移除手动刷新按钮；既有刷新失败测试改由查询提交触发，保留错误重试。仅本地前端改动，`git diff --check` 通过；按迭代约定不追加全量验证。
+
+- ERP-114 工具栏追加：勾选辅料后批量采购按钮绿色白字，悬停保持绿色；清空勾选恢复默认次要按钮。复用共享选中态，原权限和停用项校验保留；仅本地样式调整，`git diff --check` 通过，待迭代统一验证。
+
+- ERP-114 工具栏追加：按用户要求移除“清空勾选”按钮，保留表头与行勾选的取消选择交互。仅本地模板调整，`git diff --check` 通过，随本轮统一验证。
+
+- ERP-114 列表排序追加（2026-11-26）：辅料列表默认按辅料档案更新时间 `m.updated_at DESC` 排序，时间相同用 `m.id DESC` 保证分页顺序稳定；排序在服务端分页前完成。无迁移，未改历史数据。`./mvnw -q -DskipTests package` 通过，运行包更新至 `.local/releases/backend/erp114-sort-20261126/backend.jar`；原包保留，启动脚本备份于 `.local/backups/before-erp114-sort-20261126/`，仅替换JAR路径，隔离配置不变。在既有tmux定向重启后health为UP，`git diff --check` 通过。未执行测试套件，完整验证仍留待交接。
+
+## ERP-113 采购导出图片备注排版（2026-11-26，本地待统一验证）
+
+PJM 将独占写入槽交给 Codex，明确允许承接数据同步的两份未提交文档，在 `fix/del056-receiver-startup-cleanup`、基线 `662501194946f48272fba0c7a4912668282b55d8` 上继续同一待提交迭代，不切分支或为清锁提交。本次 `frontend/src/ui/purchaseImageExport.ts` 将备注由左对齐改为水平居中，保留垂直居中、红色加粗；字号24px改26px后按用户追加要求再加4px，最终30px，行距36px，换行测量与行高同步调整。UI规范已同步。仅本地实现，未提交/推送/发布；`git diff --check` 通过。按既定节奏未逐项运行完整测试；交接时统一验证短备注、多行长备注与导出图片实际排版，并运行受影响前端门禁。未修改本地服务或数据隔离配置。
+
+## 线上数据同步到本地（2026-11-26，已完成）
+
+用户明确授权用线上快照替换本地全部 ERP 业务数据。PJM 交出本地服务/数据及文档独占写入权，导出期间暂停发布。本次为用户直派数据维护，无新增 ERP 编号；分支 `fix/del056-receiver-startup-cleanup`，基线 `662501194946f48272fba0c7a4912668282b55d8`。仅修改本地数据、忽略的运行配置及本节/接手指南，未提交代码或发布。
+
+- 来源为 2026-11-26 11:02 CST 的生产事务快照，schema 109、121 张表，配套持久目录包括 catalog/dashboard 图片、货代模板和导入暂存。生产只读查询与导出，没有停服、改业务数据或配置。Safari 窗口恢复后通过既有云助手和 Workbench 文件管理下载，未放宽 SSH 权限或设置公开备份地址。
+- 下载包 510,781,440 字节，SHA256 `d0f49ee682df22ecb1110adc87e9512fe878b51bf1d2b6b1595add97f1da47de`；压缩包与内层两份文件哈希均匹配。保存在受保护且 Git 忽略的 `.local/backups/prod-sync-20261126-1102/`。先恢复到临时本地库完成检查，确认 25,012 个图片引用零缺失、12 份已有外箱标导出 content 完整，账户默认值加密 key 匹配；未输出业务记录或凭据。
+- 预备备份 `.local/backups/before-prod-sync-20261126-0045/` 保留；正式替换前停止本地后端，最终备份位于 `.local/backups/before-prod-sync-20261126-1110/`，包含数据库、图片、导入暂存、私有运行配置/密钥和模板。旧目录也移入该目录保留恢复入口；这是备份，不再参与本地业务运行。
+- 最终备份命令：容器 `mysqldump -uroot --single-transaction --quick --no-tablespaces --hex-blob --routines --triggers --set-gtid-purged=OFF jiugeng_erp` 经 gzip 保存，凭据仅从容器已有 secret 读取；四份 gzip 校验及 `shasum -a 256 -c .local/backups/before-prod-sync-20261126-1110/SHA256SUMS` 全部通过。只重建 ERP 容器的 `jiugeng_erp`，同机其他项目 MySQL/Redis 未触及。
+- 快照导入后、启动前逐表核对，121 张表记录数全部一致。仅本地清空 `iam_session`、`iam_password_reset_challenge`，原线上账号和密码哈希保留，使用时须重新登录；没有重置密码。验证临时数据库已删除。
+- 34,201 个复制文件逐个 SHA256 与下载副本匹配。运行脚本 `.local/runtime/run-backend.sh` 及环境文件改成本地存储；运行进程实际验证 `ERP_STORAGE_PROVIDER=local`、Amazon 采集/仓库同步 false、图片后台刷新 false，且无 OSS 凭据路径。导入暂存改为 `.local/runtime/import-staging`；自动清理 cron 暂停，短信/邮件找回发送入口关闭。不能在后续重启时恢复生产 OSS 或采集开关。
+- 沿用原本地 JAR 与 `jiugeng-mvp`，未借数据同步更换应用版本。`sh -n .local/runtime/run-backend.sh` 通过；`curl --noproxy '*' --max-time 5 -fsS http://127.0.0.1:8080/actuator/health` 返回 UP；本地5173登录入口200；未登录产品API401；运行库 schema109、会话和重置令牌均0。一次 Python urllib 健康请求受环境代理影响返回502，显式直连复核成功。未运行全量回归，未代用户执行业务登录/业务验收。
+
+上述为一次性快照，不会与线上自动同步。本地配置/数据/备份均未入 Git；文档 diff 检查与链接校验通过。交接后由 PJM 接回操作权；后续任务需重新确认当前所有权。
 
 ## DEL-056 应用上线核验（2026-11-26 00:06 CST）
 

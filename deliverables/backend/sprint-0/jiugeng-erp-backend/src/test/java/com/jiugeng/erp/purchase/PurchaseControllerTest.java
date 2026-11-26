@@ -88,6 +88,27 @@ class PurchaseControllerTest {
         }
     }
 
+    @Test void inventoryLinkResolvesReceiptAndRequiresPermissions() throws Exception {
+        String token=login("ledger-link-buyer","PRODUCT_MATERIAL");
+        JsonNode order=createOrder(token,"MATERIAL",materialId,"10","2.5");String id=order.get("id").asText();
+        mvc.perform(post("/api/v1/purchases/orders/{id}/submit",id).header("Authorization",bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("version",order.get("version").asLong())))).andExpect(status().isOk());
+        var receipt=Map.of("requestId","ledger-link-receipt","receivedAt","2026-10-16T08:00:00Z",
+                "lines",List.of(Map.of("orderLineId",order.at("/lines/0/id").asText(),"quantity",2)));
+        JsonNode received=objectMapper.readTree(mvc.perform(post("/api/v1/purchases/orders/{id}/receipts",id)
+                .header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(receipt)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        String transaction=received.at("/lines/0/inventoryTransactionId").asText();
+        mvc.perform(get("/api/v1/purchases/inventory-transactions/{id}/order",transaction).header("Authorization",bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.orderId").value(id)).andExpect(jsonPath("$.orderNo").value(order.get("orderNo").asText()));
+        mvc.perform(get("/api/v1/purchases/inventory-transactions/{id}/order",UUID.randomUUID()).header("Authorization",bearer(token)))
+                .andExpect(status().isNotFound());
+        String denied=login("ledger-link-no-purchase","SELECTION");
+        mvc.perform(get("/api/v1/purchases/inventory-transactions/{id}/order",transaction).header("Authorization",bearer(denied)))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/purchases/inventory-transactions/{id}/order",transaction)).andExpect(status().isUnauthorized());
+    }
+
     @Test void materialReceiptPostsInventoryInSameWorkflowAndIsIdempotent() throws Exception {
         String token=login("buyer","PRODUCT_MATERIAL");
         JsonNode order=createOrder(token,"MATERIAL",materialId,"10", "2.5"); String id=order.get("id").asText(); long version=order.get("version").asLong();

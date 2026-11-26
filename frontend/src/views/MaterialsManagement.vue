@@ -16,7 +16,8 @@ import { materialManagementApi as api, emptyMaterialFilters, type MaterialFilter
 import { materialTypesApi } from '@/api/materialTypes'
 import { session } from '@/state/session'
 import { confirmAction } from '@/state/uiConfirmation'
-import { materialNumber } from '@/ui/materialQuantity'
+import { materialNumber, validMaterialQuantity } from '@/ui/materialQuantity'
+import { apiRequest } from '@/api/client'
 const route=useRoute(),router=useRouter()
 const filters=reactive(emptyMaterialFilters()),applied=ref(emptyMaterialFilters()),advanced=ref(false)
 const rows=ref<MaterialRow[]>([]),page=ref(1),size=ref(20),total=ref(0),types=ref<string[]>([])
@@ -25,6 +26,10 @@ const selected=ref<Record<string,MaterialRecord>>({}),listHost=ref<HTMLElement>(
 const editorState=ref<{id?:string;copy?:boolean;resume?:boolean}>(),editor=ref<InstanceType<typeof MaterialEditor>>(),stockDialog=ref<InstanceType<typeof MaterialInventoryDialog>>()
 const impactTargets=ref<MaterialRecord[]>([]),impacts=ref<MaterialImpact[]>([]),impactOpen=ref(false),impactLoading=ref(false),impactError=ref(''),impactMode=ref<'delete'|'status'>('delete')
 const pendingStocks=ref<string[]>([])
+const safetyTarget=ref<MaterialRow>(),safetyDraft=ref(''),safetyError=ref('')
+const safetyPanel=ref<HTMLElement>(),safetyInput=ref<HTMLInputElement>(),safetyPosition=ref<Record<string,string>>({})
+let safetyAnchor:HTMLElement|undefined
+const safetyDirty=computed(()=>!!safetyTarget.value&&safetyDraft.value!==String(safetyTarget.value.safetyStock??0))
 const owner=session.user.value?.id??'current',stateKey=`jiugeng.material.view.${owner}`,pendingKey=`jiugeng.material.pending.${owner}`,hasPending=ref(false)
 const writable=computed(()=>session.canAccess(['materials.write'])),stockReadable=computed(()=>session.canAccess(['inventory.read'])),priceReadable=computed(()=>session.canAccess(['costs.read'])),canPurchase=computed(()=>session.canAccess(['purchases.read','purchases.write','suppliers.read']))
 const canDelete=computed(()=>session.canAccess(['materials.delete']))
@@ -35,14 +40,41 @@ const canConfirmImpact=computed(()=>!impactLoading.value&&!impactError.value&&!b
 let sequence=0,scrollTop=0
 function saveView(){scrollTop=listHost.value?.querySelector('.table-viewport')?.scrollTop??scrollTop;try{sessionStorage.setItem(stateKey,JSON.stringify({filters:applied.value,page:page.value,size:size.value,scrollTop}))}catch{/* Optional preferences. */}}
 function checkPending(){try{hasPending.value=!!sessionStorage.getItem(pendingKey);const prefix=`jiugeng.material-stock.pending.${owner}.`;pendingStocks.value=Object.keys(sessionStorage).filter(k=>k.startsWith(prefix)).map(k=>k.slice(prefix.length))}catch{hasPending.value=false}}
+function placeSafety(){
+ if(!safetyTarget.value||!safetyAnchor||!safetyPanel.value)return
+ const rect=safetyAnchor.getBoundingClientRect(),width=Math.min(352,window.innerWidth-16),height=safetyPanel.value.offsetHeight
+ safetyPosition.value={width:`${width}px`,left:`${Math.max(8,Math.min(rect.right-width,window.innerWidth-width-8))}px`,top:`${Math.max(8,Math.min(rect.bottom+height+6>window.innerHeight?rect.top-height-6:rect.bottom+6,window.innerHeight-height-8))}px`}
+}
+function closeSafety(focus=true){safetyPanel.value?.hidePopover?.();safetyTarget.value=undefined;safetyError.value='';if(focus)safetyAnchor?.focus({preventScroll:true})}
+function outsideSafety(event:PointerEvent){if(!safetyTarget.value||busy.value||safetyDirty.value||!(event.target instanceof Node)||safetyPanel.value?.contains(event.target)||safetyAnchor?.contains(event.target))return;closeSafety(false)}
+async function editSafety(row:MaterialRow,event:Event){
+ const anchor=event.currentTarget as HTMLElement
+ if(busy.value||loading.value||!session.canAccess(['inventory.write'])||row.material.status!=='ACTIVE')return
+ if(safetyDirty.value&&!await confirmAction('安全库存尚未保存，确定放弃修改吗？',{unsaved:true}))return
+ safetyAnchor=anchor
+ safetyTarget.value=row;safetyDraft.value=String(row.safetyStock??0);safetyError.value=''
+ await nextTick();safetyPanel.value?.showPopover?.();placeSafety();safetyInput.value?.focus({preventScroll:true});safetyInput.value?.select()
+}
+function cancelSafety(){if(!busy.value)closeSafety()}
+watch(safetyError,()=>{void nextTick(placeSafety)})
+async function saveSafety(){
+ const row=safetyTarget.value
+ if(!row||busy.value||loading.value||!!error.value)return
+ if(!validMaterialQuantity(safetyDraft.value,row.material.unit,true)){safetyError.value='请输入符合基础单位精度的非负安全库存';return}
+ busy.value=true;safetyError.value='';saveView()
+ try{await apiRequest(`/v1/inventory/balances/${encodeURIComponent(row.material.id)}/safety-stock`,{method:'PUT',body:JSON.stringify({safetyStock:safetyDraft.value})});closeSafety();success.value='安全库存已更新';await loadRows(false)}
+ catch(e){safetyError.value=e instanceof Error?e.message:'安全库存保存失败，请重试'}finally{busy.value=false}
+}
+function guardSafetyUnload(event:BeforeUnloadEvent){if(safetyDirty.value||busy.value){event.preventDefault();event.returnValue=''}}
 async function resumeStock(id:string){try{const d=await api.detail(id);stock(d.material)}catch(e){error.value=e instanceof Error?e.message:'待确认辅料读取失败'}}
 function closeStock(){inventory.value=undefined;checkPending()}
-async function load(){const seq=++sequence;loading.value=true;error.value='';try{const r=await api.page(applied.value,page.value-1,size.value);if(seq!==sequence)return;if(page.value>1&&!r.items.length&&r.totalCount<(page.value-1)*size.value+1){page.value=Math.max(1,Math.ceil(r.totalCount/size.value));return}rows.value=r.items;total.value=r.totalCount;await nextTick();const viewport=listHost.value?.querySelector('.table-viewport');if(viewport)viewport.scrollTop=scrollTop}catch(e){if(seq===sequence)error.value=(rows.value.length?'刷新失败，当前显示上次结果。':'')+(e instanceof Error?e.message:'辅料加载失败')}finally{if(seq===sequence)loading.value=false}}
+async function load(){return loadRows(true)}
+async function loadRows(showLoading:boolean){const seq=++sequence;if(showLoading)loading.value=true;error.value='';try{const r=await api.page(applied.value,page.value-1,size.value);if(seq!==sequence)return;if(page.value>1&&!r.items.length&&r.totalCount<(page.value-1)*size.value+1){page.value=Math.max(1,Math.ceil(r.totalCount/size.value));return}rows.value=r.items;total.value=r.totalCount;await nextTick();const viewport=listHost.value?.querySelector('.table-viewport');if(viewport)viewport.scrollTop=scrollTop}catch(e){if(seq===sequence)error.value=(rows.value.length?'刷新失败，当前显示上次结果。':'')+(e instanceof Error?e.message:'辅料加载失败')}finally{if(seq===sequence)loading.value=false}}
 async function initialize(){ready.value=false;capabilityError.value='';try{const cap=await api.capabilities();ready.value=cap.closeoutVersion>=1;if(!ready.value)throw new Error('本地后端尚未支持辅料收尾功能');await load()}catch(e){capabilityError.value=e instanceof Error?e.message:'后端能力读取失败，暂不可操作'}}
 async function loadOptions(){optionError.value='';try{types.value=await materialTypesApi.list()}catch{optionError.value='类型候选项读取失败'}}
-function search(){applied.value={...filters};selected.value={};scrollTop=0;if(page.value!==1)page.value=1;else void load();saveView()}
-function reset(){Object.assign(filters,emptyMaterialFilters());search()}
-function removeTag(key:keyof MaterialFilters){filters[key]='';applied.value={...applied.value,[key]:''};selected.value={};scrollTop=0;if(page.value!==1)page.value=1;else void load()}
+function search(){if(safetyTarget.value||busy.value)return;applied.value={...filters};selected.value={};scrollTop=0;if(page.value!==1)page.value=1;else void load();saveView()}
+function reset(){if(safetyTarget.value||busy.value)return;Object.assign(filters,emptyMaterialFilters());search()}
+function removeTag(key:keyof MaterialFilters){if(safetyTarget.value||busy.value)return;filters[key]='';applied.value={...applied.value,[key]:''};selected.value={};scrollTop=0;if(page.value!==1)page.value=1;else void load()}
 function toggle(item:MaterialRecord){if(selected.value[item.id]){const next={...selected.value};delete next[item.id];selected.value=next}else if(selection.value.length<100)selected.value={...selected.value,[item.id]:item};else error.value='一次最多勾选 100 条辅料'}
 function togglePage(){if(allSelected.value){for(const row of rows.value){const next={...selected.value};delete next[row.material.id];selected.value=next}}else for(const row of rows.value)if(!selected.value[row.material.id])toggle(row.material)}
 function edit(item?:MaterialRecord,copy=false){checkPending();if(hasPending.value){editorState.value={resume:true};return}editorState.value=item?{id:item.id,copy}:{};detailId.value=''}
@@ -62,9 +94,9 @@ async function exportRows(chosen=false){if(busy.value)return;busy.value=true;err
 async function openLinked(){const view=route.query.viewMaterial;if(typeof view==='string'&&ready.value){detailId.value=view;const query={...route.query};delete query.viewMaterial;await router.replace({query});return}const id=route.query.editMaterial;if(typeof id==='string'&&writable.value&&ready.value){editorState.value={id};const query={...route.query};delete query.editMaterial;await router.replace({query})}}
 watch([page,size],()=>{saveView();if(ready.value)void load()})
 watch(()=>[route.query.editMaterial,route.query.viewMaterial],openLinked)
-onBeforeRouteLeave(async()=>{saveView();if(editor.value?.busy||stockDialog.value?.busy||busy.value)return false;if(editor.value?.dirty||stockDialog.value?.dirty)return await confirmAction('当前填写内容未保存，确定放弃并离开吗？', { unsaved: true, discardLabel: '放弃并离开' });return true})
-onMounted(async()=>{try{const saved=JSON.parse(sessionStorage.getItem(stateKey)??'null');if(saved){for(const key of Object.keys(filters) as (keyof MaterialFilters)[])if(typeof saved.filters?.[key]==='string')filters[key]=saved.filters[key];applied.value={...filters};page.value=Math.max(1,Number(saved.page)||1);size.value=[10,20,50,100].includes(saved.size)?saved.size:20;scrollTop=Math.max(0,Number(saved.scrollTop)||0)}}catch{/* Defaults. */}checkPending();void loadOptions();await initialize();await openLinked()})
-onBeforeUnmount(()=>{sequence++;saveView()})
+onBeforeRouteLeave(async()=>{saveView();if(editor.value?.busy||stockDialog.value?.busy||busy.value)return false;if(editor.value?.dirty||stockDialog.value?.dirty||safetyDirty.value)return await confirmAction('当前填写内容未保存，确定放弃并离开吗？', { unsaved: true, discardLabel: '放弃并离开' });return true})
+onMounted(async()=>{window.addEventListener('beforeunload',guardSafetyUnload);window.addEventListener('resize',placeSafety);document.addEventListener('scroll',placeSafety,true);document.addEventListener('pointerdown',outsideSafety,true);try{const saved=JSON.parse(sessionStorage.getItem(stateKey)??'null');if(saved){for(const key of Object.keys(filters) as (keyof MaterialFilters)[])if(typeof saved.filters?.[key]==='string')filters[key]=saved.filters[key];applied.value={...filters};page.value=Math.max(1,Number(saved.page)||1);size.value=[10,20,50,100].includes(saved.size)?saved.size:20;scrollTop=Math.max(0,Number(saved.scrollTop)||0)}}catch{/* Defaults. */}checkPending();void loadOptions();await initialize();await openLinked()})
+onBeforeUnmount(()=>{sequence++;saveView();window.removeEventListener('beforeunload',guardSafetyUnload);window.removeEventListener('resize',placeSafety);document.removeEventListener('scroll',placeSafety,true);document.removeEventListener('pointerdown',outsideSafety,true);safetyPanel.value?.hidePopover?.()})
 </script>
 <template>
   <section
@@ -93,13 +125,13 @@ onBeforeUnmount(()=>{sequence++;saveView()})
         v-single-select
       ><option value="">全部库存</option><option value="LOW">低库存</option><option value="NORMAL">正常</option><option value="ZERO">零库存</option><option value="UNINITIALIZED">未建账</option></select></label><button
         type="submit"
-        :disabled="loading||!ready"
+        :disabled="loading||!ready||busy||!!safetyTarget"
       >
         查询
       </button><button
         class="filter-reset-button"
         type="button"
-        :disabled="loading"
+        :disabled="loading||busy||!!safetyTarget"
         @click="reset"
       >
         重置
@@ -155,6 +187,7 @@ onBeforeUnmount(()=>{sequence++;saveView()})
         </button><button
           v-if="canPurchase"
           class="secondary-button"
+          :class="{'is-selected':selection.length>0}"
           :disabled="!ready||busy||!selection.length||selection.some(m=>m.status!=='ACTIVE')"
           @click="purchase(selection)"
         >
@@ -174,30 +207,19 @@ onBeforeUnmount(()=>{sequence++;saveView()})
           导出勾选
         </button><button
           v-if="canDelete&&selection.length"
-          class="material-danger"
+          class="material-delete-selected"
           :disabled="busy||!ready"
           @click="requestImpact(selection,'delete')"
         >
-          删除勾选
-        </button><button
-          v-if="selection.length"
-          class="material-link"
-          @click="selected={}"
-        >
-          清空勾选
+          删除勾选（{{ selection.length }}）
         </button>
       </div><RouterLink
         v-if="stockReadable"
         to="/inventory/ledger"
+        class="material-ledger-link"
       >
         库存流水
-      </RouterLink><button
-        class="material-link"
-        :disabled="loading"
-        @click="initialize"
-      >
-        刷新
-      </button>
+      </RouterLink>
     </section>
     <p
       v-if="capabilityError"
@@ -269,7 +291,10 @@ onBeforeUnmount(()=>{sequence++;saveView()})
             :key="row.material.id"
             :class="{'material-selected':selected[row.material.id]}"
           >
-            <td v-if="canSelect">
+            <td
+              v-if="canSelect"
+              class="selection-cell"
+            >
               <input
                 type="checkbox"
                 :aria-label="`选择辅料 ${row.material.name}`"
@@ -305,7 +330,20 @@ onBeforeUnmount(()=>{sequence++;saveView()})
                 @click="stock(row.material,true)"
               >
                 {{ row.initialized?materialNumber(row.quantity):'未建账' }}
-              </button> {{ row.material.unit }}<small>安全库存 {{ row.initialized?materialNumber(row.safetyStock):'未设置' }}</small><small
+              </button> {{ row.material.unit }}
+              <small>
+                安全库存 <button
+                  v-if="session.canAccess(['inventory.write'])&&row.material.status==='ACTIVE'"
+                  type="button"
+                  class="material-link material-safety-value"
+                  :aria-label="`设置${row.material.name}安全库存`"
+                  :disabled="!ready||busy||loading||!!error"
+                  aria-haspopup="dialog"
+                  :aria-expanded="safetyTarget?.material.id===row.material.id"
+                  @click="editSafety(row,$event)"
+                >{{ row.initialized?materialNumber(row.safetyStock):'设置' }} <span aria-hidden="true">✎</span></button>
+                <template v-else>{{ row.initialized?materialNumber(row.safetyStock):'未设置' }}</template>
+              </small><small
                 v-if="row.quantity!=null&&row.safetyStock!=null&&row.quantity<row.safetyStock"
                 class="material-warning-text"
               >低于安全库存 {{ materialNumber(row.safetyStock-row.quantity) }} {{ row.material.unit }}</small>
@@ -368,11 +406,59 @@ onBeforeUnmount(()=>{sequence++;saveView()})
         </tbody>
       </table>
     </TableViewport>
+    <form
+      v-if="safetyTarget"
+      ref="safetyPanel"
+      popover="manual"
+      role="dialog"
+      aria-label="调整安全库存"
+      class="material-safety-editor"
+      :style="safetyPosition"
+      @submit.prevent="saveSafety"
+      @keydown.esc.stop.prevent="cancelSafety"
+    >
+      <div class="material-safety-entry">
+        <label class="material-safety-input"><input
+          ref="safetyInput"
+          v-model="safetyDraft"
+          data-safety-input
+          :aria-label="`${safetyTarget.material.name}安全库存`"
+          inputmode="decimal"
+          maxlength="19"
+          :disabled="busy||loading"
+        ><span>{{ safetyTarget.material.unit }}</span></label>
+        <div class="material-safety-actions">
+          <button
+            type="submit"
+            :disabled="busy||loading||!!error"
+          >
+            {{ busy?'保存中…':'保存' }}
+          </button>
+          <button
+            type="button"
+            :disabled="busy"
+            @click="cancelSafety"
+          >
+            取消
+          </button>
+        </div>
+      </div>
+      <p class="material-safety-current">
+        当前安全库存：{{ materialNumber(safetyTarget.safetyStock??0) }} {{ safetyTarget.material.unit }}
+      </p>
+      <p
+        v-if="safetyError"
+        class="material-safety-error"
+        role="alert"
+      >
+        {{ safetyError }}
+      </p>
+    </form>
     <ListPagination
       v-model:page="page"
       v-model:page-size="size"
       :total="total"
-      :disabled="loading||!ready"
+      :disabled="loading||!ready||busy||!!safetyTarget"
     >
       <template #summary>
         共 {{ total }} 条 · 已选 {{ selection.length }} 条

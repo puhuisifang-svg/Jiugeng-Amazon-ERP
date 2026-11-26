@@ -84,7 +84,7 @@ class MaterialManagementController {
     Page page(@RequestParam(defaultValue="") String q,@RequestParam(defaultValue="") String type,@RequestParam(defaultValue="") String status,@RequestParam(defaultValue="") String stock,@RequestParam(defaultValue="") String supplier,@RequestParam(defaultValue="") String photo,@RequestParam(defaultValue="") String price,@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="20") int size,Authentication auth){
         require(page>=0&&page<=100000&&Set.of(10,20,50,100).contains(size),"分页无效");var w=where(new Query(q,type,status,stock,supplier,photo,price),auth);
         long total=jdbc.sql("SELECT COUNT(*)"+w.sql()).params(w.params()).query(Long.class).single();
-        var rows=jdbc.sql(select()+w.sql()+" ORDER BY m.material_code_normalized,m.id LIMIT :size OFFSET :offset").params(w.params()).param("size",size).param("offset",(long)page*size).query(rowMapper(auth)).list();return new Page(rows,total,page,size);
+        var rows=jdbc.sql(select()+w.sql()+" ORDER BY m.updated_at DESC,m.id DESC LIMIT :size OFFSET :offset").params(w.params()).param("size",size).param("offset",(long)page*size).query(rowMapper(auth)).list();return new Page(rows,total,page,size);
     }
     @PostMapping("/selection") @PreAuthorize("hasAuthority('materials.read')") @Transactional(readOnly=true)
     List<Row> selection(@Valid @RequestBody Selection input,Authentication auth){var w=where(new Query("","","","","","",""),auth);return jdbc.sql(select()+w.sql()+" AND m.id IN (:ids) ORDER BY m.material_code_normalized,m.id").param("ids",input.ids()).query(rowMapper(auth)).list();}
@@ -134,7 +134,11 @@ class MaterialManagementController {
     void delete(@Valid @RequestBody Targets targets,@AuthenticationPrincipal AuthenticatedActor actor){var ordered=targets.items().stream().sorted(Comparator.comparing(Target::id)).toList();for(var target:ordered){version(target.id(),target.version());if(!impact(target.id()).canDelete())throw new MaterialException(409,"MATERIAL_IN_USE",impact(target.id()).name()+" 已有产品、采购、库存或成本版本引用，本次未删除任何辅料");}materials.delete(ordered.stream().map(Target::id).toList(),actor);}
     @GetMapping("/{id}/history") @PreAuthorize("hasAuthority('materials.read')") @Transactional(readOnly=true)
     AuditHistoryLookup.HistoryPage history(@PathVariable String id,@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="20") int size,Authentication auth){
-        materials.material(id);require(page>=0&&page<=100000&&Set.of(10,20,50,100).contains(size),"分页无效");var result=history.page("AUXILIARY_MATERIAL",id,page+1,size);
+        materials.material(id);require(page>=0&&page<=100000&&Set.of(10,20,50,100).contains(size),"分页无效");
+        var scopes=new ArrayList<AuditHistoryLookup.HistoryScope>();
+        scopes.add(new AuditHistoryLookup.HistoryScope("AUXILIARY_MATERIAL",null));
+        if(allowed(auth,"inventory.read"))scopes.add(new AuditHistoryLookup.HistoryScope("INVENTORY","INVENTORY_SAFETY_STOCK_UPDATE"));
+        var result=history.page(scopes,id,page+1,size);
         if(allowed(auth,"costs.read"))return result;
         var items=result.items().stream().map(e->e.action().equals("MATERIAL_COST_UPDATE")?new AuditHistoryLookup.HistoryEvent(e.id(),e.action(),e.actorLoginName(),e.actorDisplayName(),null,null,"成本价已修改（无成本查看权限）",e.occurredAt()):e).toList();
         return new AuditHistoryLookup.HistoryPage(items,result.total(),result.page(),result.size());

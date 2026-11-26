@@ -13,6 +13,20 @@
 
 
 
+## DEL-057 PJM发布执行（2026-11-26）
+
+- 38项交接指纹全部匹配，门禁日志已核实；后端只读复核未发现阻断。保留本地服务及隔离数据，不重复有效的本地全套门禁。
+- 原子提交 `abfd2f6d51d551e0cc03721d822e6cc3dbf50e5b`，经 [PR #33](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/pull/33) 五项检查受保护合入应用main `38ec537461c0ac6e13780120391bdf849f2e8449`。
+- [PR CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45846449230) 成功：后端460项、零失败/错误、1条件OSS跳过，前端174文件812测试，浏览器20项通过。
+- [Production](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45847167342) 已自动启动，实际部署结果待核验。V110新增表/索引，不删除历史数据；不包含或回灌本地生产快照、私有配置、备份或图片。
+- 官网/Caddy分流未改。最后的接收器启动窗口TERM/KILL修正已合入，但没有新主机同步回执，不宣称服务器已安装该最后版本；此前180秒空闲/600秒接收限制及进度日志已有安装证据。
+
+发布核验：上述Production最终success，实际deploy非skipped。北京时间23:21:00接收82,844,677字节完成（69秒），23:21:06数据库备份完成，23:21:35部署健康与版本验证通过。PJM独立读取ERP HTTPS `/version.json`：HTTP200，精确匹配应用main；官网HTTP200且摘要仍 `ae09c183535a6ecfd9e432ba87cb7c073d3e37b109c4e2846b81451cbe784d5a`。[应用main CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45847167358) 也已通过。
+
+V110仅有精确构建、生产备份与应用启动校验的间接证据，未直查生产Flyway表，不宣称逐条数据库核验。本次未修改官网/Caddy或本地隔离配置，应用已上线；纯文档归档不再触发ERP部署，因此最终文档main与应用入口SHA可不同。接收器最终脚本安装回执及官网自动服务器投递仍是独立未闭合项，不影响本次已验证应用部署事实。
+
+本节覆盖下方交接时“全部未提交/待部署”的阶段记录。原始运行日志保存 `/tmp/del057-production.log`，不随代码上传。
+
 ## 当前发布交接：ERP-113 / ERP-114（2026-11-26）
 
 用户已要求提交远端main并部署。Codex本地统一验证完成，精确范围、分支/基线、V110迁移、文件清单和发布边界见[DEL-057交接](../../deliverables/pjm/ERP113_ERP114_RELEASE_HANDOFF_2026-11-26.md)。前端174文件/812测试及lint/类型/构建通过；后端460项（459通过、1项外部OSS探针跳过）；原有3个浏览器场景与新增3个三尺寸场景通过，采购30px居中备注导出已复核，diff/文档路径检查通过。新增浏览器用例的夹具/横向滚动断言修正已复查，应用完整门禁无需重跑。

@@ -101,3 +101,18 @@
 2. 原子提交本轮变更并推进受保护PR合并到main；按既有CI/CD发布前后端和V110。无需再次向用户询问发布授权。
 3. PJM负责实际deploy步骤、目标站点版本及必要健康核验，并向用户报告结果；Codex不轮询或等待。当前只确认实现/本地验证/交接，不宣称已合并、已部署或业务验收。
 4. 后续发布证据由PJM更新；本次验证不要求反复生成“最终文档SHA”并为纯归档无限追加发布。保留本地持久服务与隔离数据，不清理用户本地数据。
+
+## PJM发布执行（2026-11-26）
+
+- 38项交接指纹全部匹配、门禁日志核实；后端静态复核无阻断。未重复有效的本地全套门禁，未改本地数据/服务/隔离项。
+- 原子提交 `abfd2f6d51d551e0cc03721d822e6cc3dbf50e5b`，通过 [PR #33](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/pull/33) 受保护合并；应用main `38ec537461c0ac6e13780120391bdf849f2e8449`。
+- [PR CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45846449230) 成功：后端460项、零失败/错误、1条件OSS跳过，前端174文件812测试，浏览器20项通过。
+- [Production](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45847167342) 自动启动并构建精确main；实际部署结果待核验，不提前声称备份/迁移/切换通过。
+- 既有服务器180秒空闲/600秒总接收限制及进度日志有安装证据；最后的启动窗口TERM/KILL修正已随本PR合入，但未收到主机补同步回执，不宣称最终脚本已安装。
+
+### 最终应用发布证据
+
+- 上述Production最终success，实际deploy非skipped。北京时间23:21:00接收82,844,677字节完成，耗时69秒；23:21:06数据库备份完成；23:21:35 `Deployment verified: 38ec537461c0ac6e13780120391bdf849f2e8449`，脚本后端健康和内部前端版本验证通过。
+- PJM独立读取ERP HTTPS `/version.json`：HTTP200，匹配上述应用main；官网HTTP200，摘要保持 `ae09c183535a6ecfd9e432ba87cb7c073d3e37b109c4e2846b81451cbe784d5a`。未改官网分流、本地隔离配置或服务。
+- [应用main CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45847167358) 通过。V110有精确构建、生产备份和启动校验的间接证据；没有生产Flyway逐行查询证据，不以本地schema110替代。
+- 日志 `/tmp/del057-production.log`；本归档为纯文档，不触发新ERP发布，最终文档main与应用版本可不同。此前“待核验”保留为历史阶段，由本节覆盖。

@@ -5,9 +5,25 @@
 | 项目 | 九更亚马逊 ERP |
 | Owner | PJM（维护责任）；Codex（本次整理） |
 | 版本 / 状态 | v0.1 / In Review |
-| 更新时间 | 2026-11-25 |
+| 更新时间 | 2026-11-26 |
 | 审批人 | 待 PJM 复核；本文记录实现事实，不新增业务批准 |
 | 核实基线 | 见[当前状态报告](../08-project-management/STATUS_REPORT.md)；此指南不是实时线上状态 |
+
+## 最新发布交接：ERP-113 / ERP-114（2026-11-26）
+
+用户已授权本轮提交main并部署，先读[DEL-057交接](../../deliverables/pjm/ERP113_ERP114_RELEASE_HANDOFF_2026-11-26.md)。前后端完整门禁与三尺寸受影响页面检查通过；正式交接消息接受后由PJM独占写入和发布，Codex不跟踪线上结果。当前全部未提交，文件指纹及归属见交接；保留本地运行服务和数据隔离。下段未授权/待验证是历史实施阶段，当前状态以本节及状态报告顶部为准。
+
+## 当前本地迭代入口：ERP-113 / ERP-114（2026-11-26，实施阶段记录）
+
+PJM 已将独占写入槽交给 Codex；分支、基线、未提交范围与定向检查详见[状态报告](../08-project-management/STATUS_REPORT.md)。采购图片备注30px；辅料库存原因候选、安全库存列表编辑及采购收货跳转为当前新改动，尚未授权发布。库存原因UI共用 `frontend/src/components/InventoryReason.vue`；原因候选接口在 materialinventory，真实收货关联查询在 purchase，避免反向依赖。V110已在本地应用，旧运行包/数据库备份路径见状态报告；当前本地JAR为 `.local/releases/backend/erp114-sort-20261126/backend.jar`，不要沿用下文“数据同步未换JAR”推断当前运行版本。
+
+辅料历史读取现通过 IAM `AuditHistoryLookup.HistoryScope` 合并辅料档案和指定安全库存审计，统一分页；不要通过复制审计或跨模块直查来补历史。展示层在 `materialHistory.ts` 与共享历史表的 material 模式，避免修改其他模块的创建记录规则。
+
+## 本地测试数据入口（2026-11-26）
+
+用户已授权将本地 ERP 数据替换为当天11:02 CST生产快照，详细备份、验证和恢复位置见[状态报告](../08-project-management/STATUS_REPORT.md)。使用线上账号重新登录本地，复制来的会话/找回令牌已清除。此次只同步数据，未切换本地应用 JAR，不代表本地应用版本与线上相同。
+
+后续本地启动继续使用 `.local/runtime/run-backend.sh` 与 `jiugeng-mvp`。运行脚本固定 `ERP_STORAGE_PROVIDER=local`，禁用 Amazon 采集、仓库同步与图片后台刷新，移除 OSS 凭据环境路径；导入暂存使用 `.local/runtime/import-staging`。保留这些隔离项，不能为“还原环境”重新连接生产 OSS，否则测试删除图片/附件可能影响线上。快照及旧数据备份仅在 Git 忽略的 `.local/backups/`，禁止提交、公开或输出业务内容。普通重启仍不授权再次清库。
 
 ## 最新发布交接：ERP-112 官网及辅料/采购累计迭代（2026-11-25）
 

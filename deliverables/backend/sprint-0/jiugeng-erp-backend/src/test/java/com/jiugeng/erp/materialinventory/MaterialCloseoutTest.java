@@ -29,6 +29,7 @@ class MaterialCloseoutTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper objectMapper;
     @Autowired JdbcTemplate jdbc;
+    @Autowired com.jiugeng.erp.iam.AuditTrail auditTrail;
 
     private com.fasterxml.jackson.databind.JsonNode save(String token,Map<String,Object> input) throws Exception {
         return objectMapper.readTree(mvc.perform(post("/api/v1/materials/manage/save").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input)))
@@ -63,6 +64,42 @@ class MaterialCloseoutTest {
         mvc.perform(put("/api/v1/inventory/balances/{id}/safety-stock",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("safetyStock",3)))).andExpect(status().isOk()).andExpect(jsonPath("$.quantity").value(0));
         mvc.perform(post("/api/v1/inventory/transactions").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("requestId",java.util.UUID.randomUUID().toString(),"materialId",id,"type","INBOUND","quantity","1.5","unit","PCS","reason","禁止半件")))).andExpect(status().isBadRequest());
     }
+    @Test void materialHistoryIncludesExistingSafetyChangesWithCorrectPagingAndPermissions() throws Exception {
+        String token=admin();String id=save(token,command(material("SAFETY-HISTORY","安全库存记录测试"))).get("id").asText();
+        int materialEvents=jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE resource_type='AUXILIARY_MATERIAL' AND resource_id=?",Integer.class,id);
+        for(int value=1;value<=11;value++)mvc.perform(put("/api/v1/inventory/balances/{id}/safety-stock",id)
+                .header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("safetyStock",value))))
+                .andExpect(status().isOk());
+        // Same resource ID under other inventory actions must not be mixed into material details.
+        String actor=jdbc.queryForObject("SELECT actor_user_id FROM audit_event WHERE resource_id=? AND action='MATERIAL_CREATE'",String.class,id);
+        auditTrail.record(new com.jiugeng.erp.iam.AuditTrail.BusinessOperation(actor,"test","test","INVENTORY_OTHER",
+                "INVENTORY",id,true,null,Map.of("quantity",999),"不应展示"));
+        String other=save(token,command(material("SAFETY-OTHER","其他辅料"))).get("id").asText();
+        mvc.perform(put("/api/v1/inventory/balances/{id}/safety-stock",other).header("Authorization",bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("safetyStock",99)))).andExpect(status().isOk());
+        var first=objectMapper.readTree(mvc.perform(get("/api/v1/materials/manage/{id}/history",id).param("size","10")
+                .header("Authorization",bearer(token))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        var second=objectMapper.readTree(mvc.perform(get("/api/v1/materials/manage/{id}/history",id).param("size","10").param("page","1")
+                .header("Authorization",bearer(token))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(first.get("total").asInt()).isEqualTo(materialEvents+11);
+        assertThat(first.get("items").size()).isEqualTo(10);assertThat(second.get("items").size()).isEqualTo(materialEvents+1);
+        assertThat(first.at("/items/0/action").asText()).isEqualTo("INVENTORY_SAFETY_STOCK_UPDATE");
+        assertThat(first.at("/items/0/beforeValue/safetyStock").decimalValue()).isEqualByComparingTo("10");
+        assertThat(first.at("/items/0/afterValue/safetyStock").decimalValue()).isEqualByComparingTo("11");
+        var ids=new java.util.HashSet<String>();first.get("items").forEach(e->ids.add(e.get("id").asText()));second.get("items").forEach(e->ids.add(e.get("id").asText()));
+        assertThat(ids).hasSize(materialEvents+11);
+        String role="history-"+java.util.UUID.randomUUID();
+        jdbc.update("INSERT INTO iam_role(id,name,kind,status) VALUES (?,?,'CUSTOM','ENABLED')",role,role);
+        jdbc.update("INSERT INTO iam_role_permission(role_id,permission_code) VALUES (?,'materials.read')",role);
+        String reader=createUserAndLogin("safety-reader-"+java.util.UUID.randomUUID().toString().substring(0,8),"SELECTION",role);
+        // materials.read deliberately expands to inventory.read; read-only users see history but cannot edit stock.
+        mvc.perform(get("/api/v1/materials/manage/{id}/history",id).header("Authorization",bearer(reader)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(materialEvents+11));
+        mvc.perform(put("/api/v1/inventory/balances/{id}/safety-stock",id).header("Authorization",bearer(reader))
+                .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("safetyStock",99)))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/materials/manage/{id}/history",id)).andExpect(status().isUnauthorized());
+    }
+
     @Test void pageFiltersAndExportsRespectPermissions() throws Exception {
         String token=admin();for(int i=0;i<11;i++)save(token,command(material("PAGE-"+i,"分页合成测试"+i)));
         mvc.perform(get("/api/v1/materials/manage/page").param("q","分页合成测试").param("page","1").param("size","10").header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(1)).andExpect(jsonPath("$.totalCount").value(11));
@@ -178,13 +215,16 @@ class MaterialCloseoutTest {
     }
 
     private String createUserAndLogin(String loginName, String role) throws Exception {
+        return createUserAndLogin(loginName,role,role);
+    }
+    private String createUserAndLogin(String loginName, String role, String assignedRole) throws Exception {
         String id = java.util.UUID.randomUUID().toString();
         var encoder = new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder();
         jdbc.update("""
                 INSERT INTO iam_user
                     (id, login_name, display_name, password_hash, role, status, must_change_password)
                 VALUES (?, ?, ?, ?, ?, 'ENABLED', FALSE)
-                """, id, loginName, loginName, encoder.encode(PASSWORD), role);jdbc.update("INSERT INTO iam_user_role(user_id,role_id) SELECT id,role FROM iam_user WHERE id=?",id);
+                """, id, loginName, loginName, encoder.encode(PASSWORD), role);jdbc.update("INSERT INTO iam_user_role(user_id,role_id) VALUES (?,?)",id,assignedRole);
         String body = mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("loginName", loginName, "password", PASSWORD))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();

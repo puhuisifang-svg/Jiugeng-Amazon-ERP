@@ -35,6 +35,19 @@ class InventoryController {
 
     InventoryController(InventoryService service) { this.service = service; }
 
+    @GetMapping("/reason-options")
+    @PreAuthorize("hasAuthority('inventory.read')")
+    List<String> reasonOptions() { return service.reasonOptions(); }
+
+    @PostMapping("/reason-options/remove")
+    @PreAuthorize("hasAuthority('inventory.inbound') or hasAuthority('inventory.outbound')")
+    void removeReason(@Valid @RequestBody ReasonOptionRequest request,
+            @AuthenticationPrincipal AuthenticatedActor actor) {
+        service.hideReason(request.name(), actor);
+    }
+
+    record ReasonOptionRequest(@NotBlank @Size(max = 500) String name) {}
+
     @GetMapping("/balances")
     @PreAuthorize("hasAuthority('inventory.read')")
     List<BalanceView> balances() { return service.balances(); }

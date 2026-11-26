@@ -22,8 +22,8 @@ export async function renderPurchasePage(rows:ExportRow[],progress:()=>void,sign
   const x=[0,213,531,887,1051,1348,1684],header=50
   ctx.font='24px "Microsoft YaHei", "PingFang SC", sans-serif'
   const names=rows.map(r=>wrap(ctx,r.line.itemName,294))
-  ctx.font='bold 24px "Microsoft YaHei", "PingFang SC", sans-serif'
-  const remarks=rows.map(r=>wrap(ctx,r.remark,312)),heights=names.map((n,i)=>Math.max(220,n.length*30+24,remarks[i]!.length*30+24))
+  ctx.font='bold 30px "Microsoft YaHei", "PingFang SC", sans-serif'
+  const remarks=rows.map(r=>wrap(ctx,r.remark,312)),heights=names.map((n,i)=>Math.max(220,n.length*30+24,remarks[i]!.length*36+24))
   canvas.height=header+heights.reduce((a,b)=>a+b,0)
   ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height)
   ctx.fillStyle='#216bfa';ctx.fillRect(0,0,canvas.width,header)
@@ -35,8 +35,8 @@ export async function renderPurchasePage(rows:ExportRow[],progress:()=>void,sign
     const {line,date}=rows[i]!,height=heights[i]!
     ctx.fillStyle='#111';ctx.font='24px "Microsoft YaHei", "PingFang SC", sans-serif';ctx.textAlign='left'
     names[i]!.forEach((name,n)=>ctx.fillText(name,x[1]!+10,y+(height-names[i]!.length*30)/2+n*30+15))
-    ctx.fillStyle='#b42318';ctx.font='bold 24px "Microsoft YaHei", "PingFang SC", sans-serif'
-    remarks[i]!.forEach((remark,n)=>ctx.fillText(remark,x[5]!+12,y+(height-remarks[i]!.length*30)/2+n*30+15))
+    ctx.fillStyle='#b42318';ctx.font='bold 30px "Microsoft YaHei", "PingFang SC", sans-serif';ctx.textAlign='center'
+    remarks[i]!.forEach((remark,n)=>ctx.fillText(remark,(x[5]!+x[6]!)/2,y+(height-remarks[i]!.length*36)/2+n*36+18))
     ctx.fillStyle='#111'
     ctx.textAlign='center';ctx.font='bold 28px sans-serif';ctx.fillText(String(line.orderedQuantity),(x[3]!+x[4]!)/2,y+height/2)
     ctx.font='26px "Microsoft YaHei", "PingFang SC", sans-serif';ctx.fillText(line.unit,(x[4]!+x[5]!)/2,y+height/2,270)

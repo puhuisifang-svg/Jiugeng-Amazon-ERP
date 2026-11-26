@@ -19,6 +19,24 @@ class InventoryRepository {
     private final JdbcClient jdbc;
     InventoryRepository(JdbcClient jdbc) { this.jdbc = jdbc; }
 
+    List<String> reasonOptions() {
+        return jdbc.sql("""
+                SELECT DISTINCT t.reason FROM inventory_transaction t
+                WHERE t.transaction_type IN ('INBOUND','OUTBOUND') AND t.request_id NOT LIKE 'PURCHASE:%'
+                  AND NOT EXISTS (SELECT 1 FROM inventory_reason_hidden h WHERE h.name=t.reason)
+                ORDER BY t.reason
+                """).query(String.class).list();
+    }
+
+    void hideReason(String reason) {
+        jdbc.sql("INSERT INTO inventory_reason_hidden (name) SELECT :reason WHERE NOT EXISTS (SELECT 1 FROM inventory_reason_hidden WHERE name=:reason)")
+                .param("reason", reason).update();
+    }
+
+    void restoreReason(String reason) {
+        jdbc.sql("DELETE FROM inventory_reason_hidden WHERE name=:reason").param("reason", reason).update();
+    }
+
     void lockWarehouse() {
         jdbc.sql("SELECT id FROM warehouse WHERE id=:id AND enabled=TRUE FOR UPDATE")
                 .param("id", WAREHOUSE_ID).query(String.class).single();

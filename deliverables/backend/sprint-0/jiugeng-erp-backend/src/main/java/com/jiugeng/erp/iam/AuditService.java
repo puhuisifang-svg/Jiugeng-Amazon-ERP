@@ -94,10 +94,20 @@ class AuditService implements AuditTrail, AuditHistoryLookup {
 
     @Override @Transactional(readOnly=true)
     public HistoryPage page(String resourceType,String resourceId,int page,int size) {
+        return page(java.util.List.of(new HistoryScope(resourceType, null)), resourceId, page, size);
+    }
+
+    @Override @Transactional(readOnly=true)
+    public HistoryPage page(java.util.List<HistoryScope> scopes,String resourceId,int page,int size) {
         if(page<1 || size<1 || size>100) throw new IamException(400,"PAGE_INVALID","分页参数无效");
-        var rows=repository.findResourcePage(resourceType,resourceId,page,size).stream().map(event -> new HistoryEvent(
+        if(scopes==null || scopes.isEmpty() || scopes.size()>10 || resourceId==null || resourceId.isBlank()
+                || resourceId.length()>128 || scopes.stream().anyMatch(s->s==null || s.resourceType()==null
+                || !s.resourceType().matches("[A-Z][A-Z0-9_]{0,63}")
+                || (s.action()!=null && !s.action().matches("[A-Z][A-Z0-9_]{0,99}"))))
+            throw new IllegalArgumentException("Valid audit resource scopes and id are required");
+        var rows=repository.findResourcePage(scopes,resourceId,page,size).stream().map(event -> new HistoryEvent(
             event.id(),event.action(),event.actorLoginName(),event.actorDisplayName(),event.beforeValue(),event.afterValue(),event.detail(),event.occurredAt())).toList();
-        return new HistoryPage(rows,repository.countResource(resourceType,resourceId),page,size);
+        return new HistoryPage(rows,repository.countResource(scopes,resourceId),page,size);
     }
 
     private JsonNode tree(Object value) {

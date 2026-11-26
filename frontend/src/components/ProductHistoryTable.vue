@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import type { ProductHistoryDto } from '@/api/domain'
 import { productActionLabel, productHistoryChanges } from '@/utils/productHistory'
+import { materialHistoryChanges } from '@/utils/materialHistory'
 import { beijingDateTime } from '@/utils/dateTime'
 import TableViewport from './TableViewport.vue'
 import ProductUiState from './ProductUiState.vue'
-defineProps<{ entries: ProductHistoryDto[]; loading?: boolean; error?: string }>()
+const props = defineProps<{ entries: ProductHistoryDto[]; loading?: boolean; error?: string; material?: boolean }>()
 defineEmits<{ retry: [] }>()
+function changes(event:ProductHistoryDto){return props.material?materialHistoryChanges(event):productHistoryChanges(event).map(change=>({...change,initial:false}))}
 </script>
 <template>
   <ProductUiState
@@ -38,17 +40,23 @@ defineEmits<{ retry: [] }>()
             {{ productActionLabel(event.action) }}
           </td>
           <td class="product-history-detail">
-            <p>{{ event.detail || '—' }}</p>
+            <p v-if="!material || !changes(event).length">
+              {{ event.detail || '—' }}
+            </p>
             <dl
-              v-if="productHistoryChanges(event).length"
+              v-if="changes(event).length"
               class="product-history-changes"
             >
               <template
-                v-for="change in productHistoryChanges(event)"
+                v-for="change in changes(event)"
                 :key="change.key"
               >
                 <dt>{{ change.label }}</dt><dd>
-                  <span class="product-history-before">{{ change.before }}</span><span
+                  <span
+                    v-if="!change.initial"
+                    class="product-history-before"
+                  >{{ change.before }}</span><span
+                    v-if="!change.initial"
                     class="product-history-arrow"
                     aria-label="变更为"
                   >→</span><strong>{{ change.after }}</strong>

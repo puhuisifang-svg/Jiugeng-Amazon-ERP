@@ -10,6 +10,9 @@ public interface AuditHistoryLookup {
 
     record HistoryPage(List<HistoryEvent> items,long total,int page,int size) {}
     HistoryPage page(String resourceType,String resourceId,int page,int size);
+    /** Combine authorized resource scopes before sorting and pagination; null action includes all actions. */
+    record HistoryScope(String resourceType, String action) {}
+    HistoryPage page(List<HistoryScope> scopes, String resourceId, int page, int size);
 
     record HistoryEvent(String id, String action, String actorLoginName, String actorDisplayName,
                         JsonNode beforeValue, JsonNode afterValue, String detail, Instant occurredAt) {}

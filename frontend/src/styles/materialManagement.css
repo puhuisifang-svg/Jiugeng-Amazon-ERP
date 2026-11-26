@@ -56,3 +56,57 @@ body .row-more-actions__menu button.material-danger{color:#b42318}
 .materials-ui .material-supplier-table button{color:var(--material-blue)}
 .materials-ui .material-supplier-table .material-note-toggle{color:#21834a}
 .materials-ui .material-supplier-table .material-danger{color:#b42318}
+
+/* ERP-114: compact stock entry and direct safety-stock editing in the material list. */
+.materials-ui .material-quantity-line{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;min-width:0}
+.materials-ui .material-quantity-line>label{display:grid;gap:5px;flex:0 1 180px;min-width:0}
+.materials-ui .material-stock-projection{margin:0;min-height:40px;display:flex;align-items:center;gap:5px;color:#64748b;font-size:13px;flex-wrap:wrap}
+.materials-ui .material-stock-projection strong{font-weight:600;color:#21834a;font-variant-numeric:tabular-nums}
+.materials-ui .material-stock-projection.material-decrease strong{color:#b42318}
+.materials-ui .material-reason-status{margin:0;color:#64748b;font-size:12px}
+.materials-ui .material-number .material-safety-value{font-size:12px;padding:0;color:#21834a;min-height:28px}
+.materials-ui .material-safety-value span{margin-left:3px}
+#app .materials-ui .material-safety-editor{position:fixed;inset:auto;margin:0;padding:12px;border:1px solid #dce3eb;border-radius:8px;background:#fff;box-shadow:0 6px 22px #17203324;box-sizing:border-box;max-width:calc(100vw - 16px);z-index:40}
+#app .material-safety-entry{display:flex;align-items:center;gap:10px;min-width:0}
+#app .material-safety-input{display:flex;align-items:center;gap:6px;min-width:0;flex:1;padding:0 10px;border:1px solid #cbd5e1;border-radius:5px;height:34px;box-sizing:border-box;background:#fff}
+#app .material-safety-input:focus-within{border-color:#2864c5;box-shadow:0 0 0 2px #2864c51a}
+#app .material-safety-input input{width:100%;min-width:0;height:30px;min-height:30px;padding:0;border:0;border-radius:0;outline:0;box-shadow:none;background:transparent;color:#243247;font:inherit;font-size:13px;font-variant-numeric:tabular-nums}
+#app .material-safety-input span{color:#748197;font-size:12px;white-space:nowrap}
+#app .material-safety-actions{display:flex;align-items:center;gap:8px;flex:none}
+#app .material-safety-actions button{height:34px;min-height:34px;padding:0 14px;border:0;border-radius:5px;background:#21834a;color:white;font-size:13px;white-space:nowrap;cursor:pointer}
+#app .material-safety-actions button+button{padding:0 4px;background:transparent;color:#2864c5}
+#app .material-safety-editor .material-safety-current{margin:8px 0 0;color:#748197;font-size:12px;line-height:1.5}
+#app .material-safety-editor .material-safety-error{margin:8px 0 0;font-size:12px;color:#b42318;line-height:1.5;overflow-wrap:anywhere}
+
+/* ERP-114 follow-up: consistent selection cells and compact detail/history layout. */
+#app .materials-ui .material-table :is(th,td).selection-cell{width:44px;min-width:44px;padding:6px 10px;text-align:center;vertical-align:middle;box-sizing:border-box}
+#app .materials-ui .material-table .selection-cell input[type=checkbox]{display:block;width:16px;height:16px;min-height:16px;margin:0 auto;padding:0}
+#app .materials-ui button.material-delete-selected{display:inline-flex;align-items:center;min-height:32px;padding:5px 10px;border:1px solid #f0b9b4;border-radius:4px;background:#fff7f6;color:#b42318;font-size:13px;font-weight:500;white-space:nowrap}
+#app .materials-ui button.material-delete-selected:hover:not(:disabled){background:#fee9e7;border-color:#e89e97}
+#app .materials-ui.material-detail .material-basic-facts{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr) minmax(0,1.2fr);margin:0;border:1px solid #e6eaf0;border-radius:6px;overflow:hidden;background:white}
+#app .material-basic-facts>div{padding:12px 14px;min-width:0}
+#app .material-basic-facts dt{margin:0 0 6px;color:#748197;font-size:12px;font-weight:400}
+#app .material-basic-facts dd{margin:0;color:#243247;font-size:13px;line-height:1.6;overflow-wrap:anywhere;white-space:pre-wrap}
+#app .material-basic-facts .material-fact-note{display:inline-block;margin-left:8px;color:#8491a3;font-size:12px;font-weight:400;white-space:normal}
+#app .material-basic-facts .material-fact-price{font-weight:600;font-variant-numeric:tabular-nums}
+#app .material-basic-facts .material-basic-remark{grid-column:1/-1;border-top:1px solid #eef1f5;display:grid;grid-template-columns:60px minmax(0,1fr);gap:8px;padding-block:10px}
+#app .material-basic-facts .material-basic-remark dt{margin:0;line-height:1.8}
+#app .materials-ui.material-detail .product-history-table{min-width:580px}
+#app .materials-ui.material-detail .product-history-table td{vertical-align:top;padding:10px 12px;white-space:normal}
+#app .materials-ui.material-detail .product-history-table td:first-child{width:155px;white-space:nowrap}
+#app .materials-ui.material-detail .product-history-table td:nth-child(2){width:100px;white-space:nowrap}
+#app .materials-ui.material-detail .product-history-detail>p{margin:0;color:#64748b;font-size:12px}
+#app .materials-ui.material-detail .product-history-changes{display:grid;grid-template-columns:minmax(64px,auto) minmax(0,1fr);gap:5px 12px;margin:0;font-size:12px;line-height:1.7}
+#app .materials-ui.material-detail .product-history-changes :is(dt,dd){margin:0;min-width:0;overflow-wrap:anywhere}
+#app .materials-ui.material-detail .product-history-changes dt{color:#748197}
+#app .materials-ui.material-detail .product-history-changes dd{display:flex;gap:5px 8px;flex-wrap:wrap;white-space:pre-wrap}
+#app .materials-ui.material-detail .product-history-changes strong{font-weight:500;color:#243247}
+#app .materials-ui.material-detail .product-history-before{color:#748197}
+#app .materials-ui.material-detail .product-history-arrow{color:#98a2b3}
+@media(max-width:700px){#app .materials-ui.material-detail .material-basic-facts{grid-template-columns:repeat(2,minmax(0,1fr))}#app .material-basic-facts>div{padding:10px}#app .material-basic-facts .material-fact-note{display:block;margin-left:0}}
+@media(max-width:420px){#app .materials-ui.material-detail .material-basic-facts{grid-template-columns:minmax(0,1fr)}}
+
+#app .materials-ui .material-toolbar .material-ledger-link{margin-left:auto;flex:none;white-space:nowrap;color:#2864c5;text-decoration:none;padding:5px 8px;line-height:22px}
+#app .materials-ui .material-toolbar .material-ledger-link:hover{text-decoration:underline}
+
+#main-content .materials-ui .material-toolbar .secondary-button.is-selected:hover:not(:disabled){background:#196d3c;border-color:#196d3c;color:#fff}

@@ -4,18 +4,23 @@ import AccessDialog from './AccessDialog.vue'
 import ListPagination from './ListPagination.vue'
 import TableViewport from './TableViewport.vue'
 import MaterialImage from './MaterialImage.vue'
+import EditableSelect from './EditableSelect.vue'
+import InventoryReason from './InventoryReason.vue'
+import { inventoryOptionsApi } from '@/api/inventoryOptions'
+import { confirmAction } from '@/state/uiConfirmation'
+import { createRequestId } from '@/utils/requestId'
 import { materialManagementApi, type MaterialRecord } from '@/api/materialManagement'
 import { type InventoryBalanceViewDto, type LedgerEntryDto, type InventoryCommandType } from '@/api/domain'
 import { apiRequest, ApiError } from '@/api/client'
 import { session } from '@/state/session'
-import { materialNumber, materialQuantityScale, multiplyQuantity, validMaterialQuantity } from '@/ui/materialQuantity'
+import { materialNumber, materialQuantityScale, validMaterialQuantity } from '@/ui/materialQuantity'
 import { inventoryTransactionTypeLabel } from '@/ui/inventory'
 import { beijingDateTime } from '@/utils/dateTime'
 const props=defineProps<{material:MaterialRecord;readOnly?:boolean}>(),emit=defineEmits<{close:[];changed:[]}>()
 const dialog=ref<InstanceType<typeof AccessDialog>>()
 const balance=ref<InventoryBalanceViewDto|null>(null),entries=ref<LedgerEntryDto[]>([]),total=ref(0),page=ref(1),size=ref(20)
-const loading=ref(true),busy=ref(false),loadError=ref(''),error=ref(''),notice=ref(''),quantity=ref(''),reason=ref(''),packing=ref(false),packUnit=ref('包'),factor=ref(''),safety=ref(''),editingSafety=ref(false)
-const ops=[{type:'INBOUND',label:'入库',permission:'inventory.inbound'},{type:'OUTBOUND',label:'出库',permission:'inventory.outbound'},{type:'ADJUST_IN',label:'盘盈',permission:'inventory.inbound'},{type:'ADJUST_OUT',label:'盘亏',permission:'inventory.outbound'}] as const
+const loading=ref(true),busy=ref(false),loadError=ref(''),error=ref(''),notice=ref(''),quantity=ref(''),reason=ref(''),reasonOptions=ref<string[]>([]),optionsError=ref(''),optionsLoading=ref(false)
+const ops=[{type:'INBOUND',label:'入库',permission:'inventory.inbound'},{type:'OUTBOUND',label:'出库',permission:'inventory.outbound'}] as const
 const operations=computed(()=>ops.filter(o=>session.canAccess([o.permission])))
 const type=ref<string>(operations.value[0]?.type??'INBOUND')
 interface Command {requestId:string;materialId:string;type:InventoryCommandType;quantity:string;unit:string;reason:string}
@@ -24,14 +29,14 @@ const pending=ref<Command>()
 try{const saved=JSON.parse(sessionStorage.getItem(key)??'null') as Command|null;if(saved?.materialId===props.material.id&&saved.requestId){pending.value=saved;type.value=saved.type;quantity.value=String(saved.quantity);reason.value=saved.reason}}catch{/* Corrupt recovery state is ignored. */}
 watch(pending,p=>{try{if(p)sessionStorage.setItem(key,JSON.stringify(p));else sessionStorage.removeItem(key)}catch{/* Keep the in-memory original request. */}},{flush:'sync'})
 const locked=computed(()=>busy.value||!!pending.value),canOperate=computed(()=>!props.readOnly&&props.material.status==='ACTIVE'&&operations.value.length>0)
-const baseQuantity=computed(()=>packing.value?multiplyQuantity(quantity.value,factor.value):quantity.value)
+const baseQuantity=computed(()=>quantity.value)
 const current=computed(()=>loading.value||loadError.value?undefined:balance.value?.quantity??0)
 const decreased=computed(()=>['OUTBOUND','ADJUST_OUT'].includes(type.value))
 const valid=computed(()=>validMaterialQuantity(baseQuantity.value,props.material.unit))
 const projected=computed(()=>current.value==null||!valid.value?undefined:current.value+(decreased.value?-1:1)*Number(baseQuantity.value))
-const dirty=computed(()=>!!quantity.value||!!reason.value||editingSafety.value)
+const dirty=computed(()=>!!quantity.value||!!reason.value)
 let sequence=0
-async function load(){const seq=++sequence;loading.value=true;loadError.value='';try{const r=await materialManagementApi.inventory(props.material.id,page.value-1,size.value);if(seq!==sequence)return;balance.value=r.balance;entries.value=r.ledger.items;total.value=r.ledger.totalCount;if(!editingSafety.value)safety.value=String(r.balance?.safetyStock??0)}catch(e){if(seq===sequence)loadError.value=e instanceof Error?e.message:'库存读取失败'}finally{if(seq===sequence)loading.value=false}}
+async function load(){const seq=++sequence;loading.value=true;loadError.value='';try{const r=await materialManagementApi.inventory(props.material.id,page.value-1,size.value);if(seq!==sequence)return;balance.value=r.balance;entries.value=r.ledger.items;total.value=r.ledger.totalCount}catch(e){if(seq===sequence)loadError.value=e instanceof Error?e.message:'库存读取失败'}finally{if(seq===sequence)loading.value=false}}
 async function submit(){
  if(busy.value)return
  error.value='';notice.value=''
@@ -40,18 +45,24 @@ async function submit(){
   if(!valid.value){error.value=`数量必须大于零；${props.material.unit}${materialQuantityScale(props.material.unit)?'最多四位小数':'必须为整数'}，最多 14 位整数`;return}
   if(projected.value!=null&&projected.value<0){error.value='库存不足，请核对数量';return}
   if(!reason.value.trim()){error.value='请填写本次操作原因';return}
-  if(packing.value&&(!packUnit.value.trim()||packUnit.value.trim()===props.material.unit||!validMaterialQuantity(quantity.value,'件'))){error.value='包装数须为正整数，包装单位须与基础单位不同';return}
-  pending.value={requestId:crypto.randomUUID(),materialId:props.material.id,type:type.value as InventoryCommandType,quantity:baseQuantity.value,unit:props.material.unit,reason:(packing.value?`${quantity.value}${packUnit.value} × ${factor.value}${props.material.unit}/${packUnit.value}；`:'')+reason.value.trim()}
+  pending.value={requestId:createRequestId(),materialId:props.material.id,type:type.value as InventoryCommandType,quantity:baseQuantity.value,unit:props.material.unit,reason:reason.value.trim()}
  }
  busy.value=true
- try{await apiRequest('/v1/inventory/transactions',{method:'POST',body:JSON.stringify(pending.value)});pending.value=undefined;quantity.value='';reason.value='';packing.value=false;notice.value='库存已更新';emit('changed');await load()}
+ try{await apiRequest('/v1/inventory/transactions',{method:'POST',body:JSON.stringify(pending.value)});pending.value=undefined;quantity.value='';reason.value='';notice.value='库存已更新';emit('changed');await load();void loadReasons()}
  catch(e){error.value=e instanceof Error?e.message:'网络异常';if(e instanceof ApiError&&e.status<500&&![401,403,408,429].includes(e.status))pending.value=undefined;else error.value='提交结果待确认，请使用原请求重试。'+error.value}
  finally{busy.value=false}
 }
-async function saveSafety(){if(busy.value||pending.value||loading.value||loadError.value)return;if(!validMaterialQuantity(safety.value,props.material.unit,true)){error.value='安全库存格式与基础单位不符';return}busy.value=true;error.value='';try{await apiRequest(`/v1/inventory/balances/${encodeURIComponent(props.material.id)}/safety-stock`,{method:'PUT',body:JSON.stringify({safetyStock:safety.value})});editingSafety.value=false;notice.value='安全库存已更新';emit('changed');await load()}catch(e){error.value=e instanceof Error?e.message:'安全库存保存失败'}finally{busy.value=false}}
+async function loadReasons(){optionsLoading.value=true;optionsError.value='';try{reasonOptions.value=await inventoryOptionsApi.reasons()}catch{optionsError.value='历史原因读取失败，可直接输入或重试'}finally{optionsLoading.value=false}}
+async function removeReason(name:string){
+ if(locked.value||!canOperate.value)return
+ if(!await confirmAction(`从候选项移除“${name}”？历史库存流水不受影响。`))return
+ if(locked.value||!canOperate.value)return
+ busy.value=true;optionsError.value=''
+ try{await inventoryOptionsApi.removeReason(name);await loadReasons()}catch(e){optionsError.value=e instanceof Error?e.message:'历史原因移除失败'}finally{busy.value=false}
+}
 function unload(e:BeforeUnloadEvent){if(busy.value||dirty.value||pending.value){e.preventDefault();e.returnValue=''}}
 watch([page,size],load)
-onMounted(()=>{void load();window.addEventListener('beforeunload',unload)})
+onMounted(()=>{void load();if(canOperate.value)void loadReasons();window.addEventListener('beforeunload',unload)})
 onBeforeUnmount(()=>{sequence++;window.removeEventListener('beforeunload',unload)})
 defineExpose({busy,dirty})
 </script>
@@ -109,58 +120,53 @@ defineExpose({busy,dirty})
         :disabled="locked||loading||!!loadError"
         class="material-fields"
       >
-        <label>数量（{{ packing?packUnit:material.unit }}）<input
-          v-model="quantity"
-          inputmode="decimal"
-          maxlength="19"
-          required
-        ></label>
-        <label class="material-check"><input
-          v-model="packing"
-          type="checkbox"
-        >按包装换算</label>
-        <template v-if="packing">
-          <label>包装单位<input
-            v-model="packUnit"
-            maxlength="32"
-          ></label><label>每{{ packUnit }}含多少{{ material.unit }}<input
-            v-model="factor"
+        <div class="material-quantity-line material-full">
+          <label>数量（{{ material.unit }}）<input
+            v-model="quantity"
+            aria-label="操作数量"
             inputmode="decimal"
             maxlength="19"
+            required
           ></label>
-        </template>
-        <label class="material-full">操作原因<input
+          <p
+            class="material-stock-projection"
+            aria-live="polite"
+            :class="{'material-decrease':projected!=null&&projected<0}"
+          >
+            预计结存 <strong>{{ materialNumber(projected) }}</strong> {{ material.unit }}
+          </p>
+        </div>
+        <label class="material-full">操作原因<EditableSelect
           v-model="reason"
+          :options="reasonOptions"
+          label="操作原因"
+          :disabled="locked||loading||!!loadError"
+          :max-length="500"
           required
-          maxlength="350"
-          placeholder="例如：日常领用、盘点差异"
-        ></label>
-      </fieldset>
-      <p class="material-preview">
-        {{ packing?`折算数量 ${baseQuantity||'—'} ${material.unit} · `:'' }}预计结存 <strong>{{ materialNumber(projected) }}</strong> {{ material.unit }} <small>以提交结果为准</small>
-      </p>
-    </form>
-    <div class="material-safety">
-      <span>安全库存：{{ balance?materialNumber(balance.safetyStock):'未设置' }} {{ material.unit }}</span><button
-        v-if="session.canAccess(['inventory.write'])&&material.status==='ACTIVE'&&!readOnly"
-        :disabled="locked||loading||!!loadError"
-        @click="editingSafety=!editingSafety;safety=String(balance?.safetyStock??0)"
-      >
-        {{ editingSafety?'取消设置':'设置' }}
-      </button><template v-if="editingSafety">
-        <input
-          v-model="safety"
-          aria-label="安全库存"
-          inputmode="decimal"
-          :disabled="locked"
-        ><button
-          :disabled="locked"
-          @click="saveSafety"
+          @remove="removeReason"
+        /></label>
+        <p
+          v-if="optionsLoading"
+          class="material-full material-reason-status"
         >
-          保存
-        </button>
-      </template><small v-if="material.status==='DISABLED'">停用辅料只可查看</small>
-    </div>
+          正在读取历史原因…
+        </p>
+        <p
+          v-else-if="optionsError"
+          class="material-full material-reason-status"
+          role="alert"
+        >
+          {{ optionsError }} <button
+            type="button"
+            class="material-link"
+            :disabled="locked"
+            @click="loadReasons"
+          >
+            重试
+          </button>
+        </p>
+      </fieldset>
+    </form>
     <p
       v-if="error"
       role="alert"
@@ -196,7 +202,12 @@ defineExpose({busy,dirty})
               {{ Number(entry.signedQuantity)>0?'+':'' }}{{ materialNumber(entry.signedQuantity) }} {{ entry.unit }}
             </td><td class="material-number">
               {{ materialNumber(entry.balanceAfter) }}
-            </td><td><details><summary>{{ entry.reason.length>24?entry.reason.slice(0,24)+'…':entry.reason }}</summary>{{ entry.reason }}</details></td>
+            </td><td>
+              <InventoryReason
+                :entry="entry"
+                :disabled="busy"
+              />
+            </td>
           </tr>
         </tbody>
       </table>

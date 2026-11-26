@@ -16,6 +16,17 @@ class PurchaseRepository {
     private final JdbcClient jdbc;
     PurchaseRepository(JdbcClient jdbc) { this.jdbc = jdbc; }
 
+    record InventoryOrderLink(String orderId, String orderNo) {}
+    Optional<InventoryOrderLink> inventoryOrder(String transactionId) {
+        return jdbc.sql("""
+                SELECT DISTINCT o.id,o.order_no FROM purchase_receipt_line l
+                JOIN purchase_receipt r ON r.id=l.receipt_id
+                JOIN purchase_order o ON o.id=r.order_id
+                WHERE l.inventory_transaction_id=:id AND o.order_type='MATERIAL'
+                """).param("id", transactionId)
+                .query((rs, row) -> new InventoryOrderLink(rs.getString("id"), rs.getString("order_no"))).optional();
+    }
+
     List<String> deliveryOptions() {
         return jdbc.sql("SELECT DISTINCT TRIM(delivery_address) AS name FROM purchase_order WHERE delivery_address IS NOT NULL AND TRIM(delivery_address) <> '' AND TRIM(delivery_address) NOT IN (SELECT name FROM purchase_delivery_hidden) ORDER BY name").query(String.class).list();
     }

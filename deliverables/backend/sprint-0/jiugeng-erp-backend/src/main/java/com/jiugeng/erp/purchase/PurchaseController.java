@@ -16,6 +16,9 @@ import org.springframework.web.bind.annotation.*;
 class PurchaseController {
     private final PurchaseService service;
     PurchaseController(PurchaseService service) { this.service = service; }
+    @GetMapping("/inventory-transactions/{id}/order")
+    @PreAuthorize("hasAuthority('purchases.read') and hasAuthority('inventory.read')")
+    PurchaseRepository.InventoryOrderLink inventoryOrder(@PathVariable String id) { return service.inventoryOrder(id); }
     @GetMapping("/delivery-options") @PreAuthorize("hasAuthority('purchases.read')")
     List<String> deliveryOptions(){return service.deliveryOptions();}
     @PostMapping("/delivery-options/remove") @PreAuthorize("hasAuthority('purchases.write')")

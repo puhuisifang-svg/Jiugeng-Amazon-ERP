@@ -46,19 +46,21 @@ describe('InventoryLedgerView', () => {
     await flushPromises()
 
     expect(wrapper.text()).not.toContain('ERP-013')
+    expect(wrapper.text()).not.toContain('返回库存余额')
+    expect(wrapper.text()).not.toContain('MAT-1')
     expect(wrapper.text()).not.toContain('INBOUND')
     expect(wrapper.text()).toContain('入库')
-    expect(wrapper.text()).toContain('MAT-1')
-    expect(wrapper.text()).toContain('MAT-2')
+    expect(wrapper.text()).toContain('纸箱')
+    expect(wrapper.text()).toContain('胶带')
 
     await wrapper.get('input[placeholder="辅料编码、名称、原因或操作人"]').setValue('纸箱')
-    expect(wrapper.text()).toContain('MAT-1')
-    expect(wrapper.text()).not.toContain('MAT-2')
+    expect(wrapper.text()).toContain('纸箱')
+    expect(wrapper.text()).not.toContain('胶带')
 
     await wrapper.findAll('button').find(b => b.text() === '重置')!.trigger('click')
     await wrapper.get('select').setValue('OUTBOUND')
-    expect(wrapper.text()).not.toContain('MAT-1')
-    expect(wrapper.text()).toContain('MAT-2')
+    expect(wrapper.text()).not.toContain('纸箱')
+    expect(wrapper.text()).toContain('胶带')
   })
 
   it('paginates results without losing reversal references on other pages', async () => {

@@ -36,6 +36,18 @@ class InventoryService implements InventoryOpeningService, InventoryInboundGatew
     @Transactional(readOnly = true)
     List<TransactionView> transactions(String materialId) { return repository.transactions(materialId); }
 
+    @Transactional(readOnly = true)
+    List<String> reasonOptions() { return repository.reasonOptions(); }
+
+    @Transactional
+    void hideReason(String reason, AuthenticatedActor actor) {
+        String value = required(reason, "操作原因", 500);
+        repository.lockWarehouse();
+        repository.hideReason(value);
+        auditTrail.record(operation(actor, "INVENTORY_REASON_OPTION_REMOVE", "reason-option", null,
+                Map.of("name", value), "移除库存操作原因候选项，保留历史流水"));
+    }
+
     @Transactional
     TransactionResult transact(TransactionCommand command, AuthenticatedActor actor) {
         if (command.type() == null || command.type() == TransactionType.OPENING) {
@@ -148,6 +160,8 @@ class InventoryService implements InventoryOpeningService, InventoryInboundGatew
         repository.updateBalance(materialId, after, unit);
         repository.insertTransaction(id, requestId, hash, materialId, command.type(), quantity, delta, unit, reason,
                 referenceId, after, actor.userId(), actor.loginName());
+        if (!purchaseReceipt && (command.type() == TransactionType.INBOUND || command.type() == TransactionType.OUTBOUND))
+            repository.restoreReason(reason);
         if (opening) repository.markOpening(materialId, id, openingSafety);
         TransactionView created = repository.transactionById(id).orElseThrow();
         auditTrail.record(operation(actor, "INVENTORY_" + command.type().name(), id, null, snapshot(created),

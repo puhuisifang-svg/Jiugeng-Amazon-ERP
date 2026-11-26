@@ -46,6 +46,7 @@ class InventoryControllerTest {
 
     @BeforeEach
     void reset() {
+        jdbc.update("DELETE FROM inventory_reason_hidden");
         jdbc.update("DELETE FROM inventory_transaction");
         jdbc.update("DELETE FROM inventory_balance");
         jdbc.update("DELETE FROM product_auxiliary_material");
@@ -64,6 +65,30 @@ class InventoryControllerTest {
 
     @AfterEach
     void shutdownExecutor() { executor.shutdownNow(); }
+
+    @Test
+    void reasonOptionsPreserveLedgerAndRespectPermissions() throws Exception {
+        String token=createUserAndLogin("reason-owner","PRODUCT_MATERIAL");
+        var input=command("reason-first","INBOUND",3,null);input.put("reason","日常领用");
+        transact(token,input,200);
+        service.postInbound(new InventoryInboundGateway.Command("PURCHASE:test:line",MATERIAL_ID,
+                BigDecimal.ONE,"PCS","采购收货 PO-TEST"),actor());
+        mvc.perform(get("/api/v1/inventory/reason-options").header("Authorization",bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1)).andExpect(jsonPath("$[0]").value("日常领用"));
+        String viewer=createUserAndLogin("reason-viewer","SELECTION");
+        mvc.perform(post("/api/v1/inventory/reason-options/remove").header("Authorization",bearer(viewer))
+                .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("name","日常领用")))).andExpect(status().isForbidden());
+        for(int i=0;i<2;i++) mvc.perform(post("/api/v1/inventory/reason-options/remove").header("Authorization",bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("name","日常领用")))).andExpect(status().isOk());
+        assertThat(service.reasonOptions()).isEmpty();
+        assertThat(jdbc.queryForObject("SELECT reason FROM inventory_transaction WHERE request_id='reason-first'",String.class)).isEqualTo("日常领用");
+        transact(token,input,200);assertThat(service.reasonOptions()).isEmpty();
+        input.put("requestId","reason-new");transact(token,input,200);
+        assertThat(service.reasonOptions()).containsExactly("日常领用");
+        mvc.perform(post("/api/v1/inventory/reason-options/remove").header("Authorization",bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).content(json(Map.of("name"," ")))).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/inventory/reason-options")).andExpect(status().isUnauthorized());
+    }
 
     @Test
     void writerCanPostImmutableTransactionsUpdateSafetyAndReverse() throws Exception {

@@ -42,13 +42,16 @@ watch([type,page,size,()=>props.revision],load);onMounted(load);onBeforeUnmount(
     </p><template v-else>
       <TableViewport>
         <table class="data-table">
-          <thead><tr><th>关联记录</th><th>状态 / 操作</th></tr></thead><tbody>
+          <thead><tr><th>{{ type==='PURCHASE'?'采购名称 / 单号':'关联记录' }}</th><th>状态 / 操作</th></tr></thead><tbody>
             <tr
               v-for="r in rows"
               :key="r.id"
             >
-              <td><strong>{{ r.type==='PURCHASE'?r.code:r.name }}</strong><small v-if="r.type==='PURCHASE'">{{ statusLabel(r.name) }}</small></td><td>
-                <span v-if="r.archived">已删除 · 历史关联</span><a
+              <td><strong>{{ r.type==='PURCHASE'?(r.purchaseName||r.code):r.name }}</strong><small v-if="r.type==='PURCHASE'&&r.purchaseName">{{ r.code }}</small></td><td>
+                <span
+                  v-if="r.type==='PURCHASE'"
+                  class="supplier-purchase-status"
+                >{{ statusLabel(r.name) }}</span><span v-if="r.archived">已删除 · 历史关联</span><a
                   v-else
                   :href="link(r)"
                   target="_blank"

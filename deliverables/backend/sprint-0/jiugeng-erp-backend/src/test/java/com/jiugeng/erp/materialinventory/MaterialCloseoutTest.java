@@ -37,6 +37,45 @@ class MaterialCloseoutTest {
     }
     private Map<String,Object> command(Map<String,Object> material){var value=new LinkedHashMap<String,Object>();value.put("requestId",java.util.UUID.randomUUID().toString());value.put("material",material);value.put("suppliers",java.util.List.of());return value;}
     private String admin() throws Exception{return createUserAndLogin("m-"+java.util.UUID.randomUUID().toString().substring(0,8),"ADMIN");}
+    @Test void unchangedSavePreservesVersionTimestampAndAuditWhileRealChangesRemainAudited() throws Exception {
+        String token=admin();var master=material("NOOP-SAVE","无修改保存测试");
+        master.put("remark","");
+        var input=command(master);input.put("cost",cost("5.60",-1));
+        var created=save(token,input);String id=created.get("id").asText();
+        long auditCount=jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE resource_id=?",Long.class,id);
+        var edit=command(master);edit.put("id",id);edit.put("version",created.get("version").asLong());edit.put("cost",cost("5.6",costVersion(id)));
+        var same=save(token,edit);
+        assertThat(same.get("version")).isEqualTo(created.get("version"));assertThat(same.get("updatedAt")).isEqualTo(created.get("updatedAt"));
+        assertThat(save(token,edit)).isEqualTo(same);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE resource_id=?",Long.class,id)).isEqualTo(auditCount);
+        master.put("name","实际改名");var rename=command(master);rename.put("id",id);rename.put("version",same.get("version").asLong());var renamed=save(token,rename);
+        assertThat(renamed.get("version").asLong()).isGreaterThan(same.get("version").asLong());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE resource_id=? AND action='MATERIAL_UPDATE'",Long.class,id)).isEqualTo(1L);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE resource_id=? AND action='MATERIAL_SUPPLIERS_UPDATE'",Long.class,id)).isZero();
+        var priceOnly=command(master);priceOnly.put("id",id);priceOnly.put("version",renamed.get("version").asLong());priceOnly.put("cost",cost("6.20",costVersion(id)));var priced=save(token,priceOnly);
+        assertThat(priced.get("version").asLong()).isGreaterThan(renamed.get("version").asLong());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE resource_id=? AND action='MATERIAL_UPDATE'",Long.class,id)).isEqualTo(1L);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE resource_id=? AND action='MATERIAL_COST_UPDATE'",Long.class,id)).isEqualTo(2L);
+    }
+    @Test void unchangedSupplierOrderAndBlankNotesDoNotRewriteAssociations() throws Exception {
+        String token=admin();var links=new java.util.ArrayList<Map<String,Object>>();
+        for(int i=0;i<2;i++){
+            var response=mvc.perform(post("/api/v1/suppliers").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of("name","合成供应商"+i,"sourceUrl","https://test.1688.com","categories",java.util.List.of("MATERIAL")))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            links.add(new LinkedHashMap<>(Map.of("supplierId",objectMapper.readTree(response).get("id").asText(),"primary",i==0)));
+        }
+        var master=material("NOOP-LINKS","关系无修改测试");var input=command(master);input.put("suppliers",links);var created=save(token,input);String id=created.get("id").asText();
+        long count=jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE resource_id=?",Long.class,id);
+        java.util.Collections.reverse(links);links.forEach(l->{l.put("remark","");l.put("purchaseUrl","");});
+        var edit=command(master);edit.put("id",id);edit.put("version",created.get("version").asLong());edit.put("suppliers",links);var same=save(token,edit);
+        assertThat(same.get("version")).isEqualTo(created.get("version"));assertThat(same.get("updatedAt")).isEqualTo(created.get("updatedAt"));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE resource_id=?",Long.class,id)).isEqualTo(count);
+        links.get(0).put("remark","实际备注变化");edit.put("requestId",java.util.UUID.randomUUID().toString());var updated=save(token,edit);
+        assertThat(updated.get("version").asLong()).isGreaterThan(same.get("version").asLong());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE resource_id=? AND action='MATERIAL_SUPPLIERS_UPDATE'",Long.class,id)).isEqualTo(2L);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_event WHERE resource_id=? AND action='MATERIAL_UPDATE'",Long.class,id)).isZero();
+    }
     @Test void aggregateRetryVersionAndSupplierFailureAreAtomic() throws Exception {
         String token=admin();var input=command(material("AGG-ATOMIC","原子保存测试"));
         input.put("suppliers",java.util.List.of(Map.of("supplierId",java.util.UUID.randomUUID().toString(),"primary",true)));

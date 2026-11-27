@@ -7,9 +7,9 @@ import PurchaseItemImage from './PurchaseItemImage.vue'
 import {domainApi,type SupplierDto} from '@/api/domain'
 import {purchaseManagementApi as api} from '@/api/purchaseManagement'
 import type {PurchaseReferenceItem,PurchaseOrderType} from '@/api/purchases'
-const props=defineProps<{type:PurchaseOrderType;supplierId?:string}>(),emit=defineEmits<{close:[];supplier:[SupplierDto];item:[PurchaseReferenceItem]}>()
+const props=defineProps<{type:PurchaseOrderType;supplierId?:string;filterSuppliers?:boolean}>(),emit=defineEmits<{close:[];supplier:[SupplierDto];item:[PurchaseReferenceItem]}>()
 const q=ref(''),page=ref(1),total=ref(0),suppliers=ref<SupplierDto[]>([]),items=ref<PurchaseReferenceItem[]>([]),loading=ref(false),error=ref('');let seq=0
-async function load(){const token=++seq;loading.value=true;error.value='';try{if(props.supplierId){const result=await api.references(props.type,props.supplierId,q.value,page.value-1);if(token===seq){items.value=result.items;total.value=result.total}}else{const result=await domainApi.suppliers({q:q.value,status:'ACTIVE',category:props.type==='MATERIAL'?'MATERIAL':'PRODUCT',page:page.value-1,size:20});if(token===seq){suppliers.value=result.items;total.value=result.totalCount}}}catch(e){if(token===seq)error.value=e instanceof Error?e.message:'读取失败'}finally{if(token===seq)loading.value=false}}
+async function load(){const token=++seq;loading.value=true;error.value='';try{if(props.supplierId){const result=await api.references(props.type,props.supplierId,q.value,page.value-1);if(token===seq){items.value=result.items;total.value=result.total}}else{const result=await domainApi.suppliers({q:q.value,...(props.filterSuppliers?{}:{status:'ACTIVE' as const,category:props.type==='MATERIAL'?'MATERIAL' as const:'PRODUCT' as const}),page:page.value-1,size:20});if(token===seq){suppliers.value=result.items;total.value=result.totalCount}}}catch(e){if(token===seq)error.value=e instanceof Error?e.message:'读取失败'}finally{if(token===seq)loading.value=false}}
 onMounted(load);onBeforeUnmount(()=>seq++)
 </script>
 <template>
@@ -94,7 +94,7 @@ onMounted(load);onBeforeUnmount(()=>seq++)
           </tr>
           <tr v-if="!total">
             <td :colspan="supplierId?3:2">
-              没有匹配的启用档案
+              {{ filterSuppliers ? '没有匹配的供应商' : '没有匹配的启用档案' }}
             </td>
           </tr>
         </tbody>

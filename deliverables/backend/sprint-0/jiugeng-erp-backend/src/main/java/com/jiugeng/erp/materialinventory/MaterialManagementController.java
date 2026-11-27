@@ -109,20 +109,34 @@ class MaterialManagementController {
         if(!create)version(in.id(),in.version());
         var before=!create?suppliers.materialAssignments(in.id()):List.<SupplierAssignmentGateway.LinkedSupplier>of();
         var request=in.material();var input=request.input();
+        var beforeCost=!create&&(request.costPrice()!=null||in.cost()!=null)?costs.price(in.id()):null;
         String copyImage=null;
         if(create&&in.copyFromId()!=null){var source=materials.material(in.copyFromId());if(Objects.equals(source.imageAssetId(),input.imageAssetId())){copyImage=source.imageAssetId();input=new MaterialTypes.MaterialInput(input.materialCode(),input.name(),input.materialType(),input.specification(),input.unit(),input.imageUrl(),null,input.remark());}}
         try {
             var saved=create?materials.create(input,actor):materials.update(in.id(),input,actor,in.cost()==null&&request.costPrice()==null);
             if(copyImage!=null){String copied=images.copyForMaterial(copyImage,saved.id(),actor);jdbc.sql("UPDATE auxiliary_material SET image_asset_id=:image WHERE id=:id").param("image",copied).param("id",saved.id()).update();audit.record(new AuditTrail.BusinessOperation(actor.userId(),actor.loginName(),actor.displayName(),"MATERIAL_IMAGE_COPY","AUXILIARY_MATERIAL",saved.id(),true,null,Map.of("imageAssetId",copied),"复制来源辅料图片，独立保存"));}
-            if(in.suppliers()!=null){suppliers.replaceMaterialAssignments(saved.id(),in.suppliers().stream().map(l->new SupplierAssignmentGateway.Assignment(l.supplierId(),l.purchaseUrl(),l.remark(),l.primary())).toList(),actor);
+            if(in.suppliers()!=null&&!sameAssignments(before,in.suppliers())){suppliers.replaceMaterialAssignments(saved.id(),in.suppliers().stream().map(l->new SupplierAssignmentGateway.Assignment(l.supplierId(),l.purchaseUrl(),l.remark(),l.primary())).toList(),actor);
                 audit.record(new AuditTrail.BusinessOperation(actor.userId(),actor.loginName(),actor.displayName(),"MATERIAL_SUPPLIERS_UPDATE","AUXILIARY_MATERIAL",saved.id(),true,Map.of("suppliers",before),Map.of("suppliers",suppliers.materialAssignments(saved.id())),"更新关联供应商"));}
             if(request.costPrice()!=null)costs.savePrice(saved.id(),request.costPrice(),actor);
             if(in.cost()!=null)costs.saveField(saved.id(),in.cost(),actor);
+            if(!create&&(request.costPrice()!=null||in.cost()!=null)&&!Objects.equals(beforeCost,costs.price(saved.id())))
+                jdbc.sql("UPDATE auxiliary_material SET version=version+1,updated_at=CURRENT_TIMESTAMP,updated_by=:actor WHERE id=:id")
+                    .param("actor",actor.userId()).param("id",saved.id()).update();
             jdbc.sql("INSERT INTO material_write_request(actor_id,request_id,operation,payload_hash,material_id) VALUES(:actor,:key,:operation,:hash,:id)").param("actor",actor.userId()).param("key",in.requestId()).param("operation",create?"CREATE":"UPDATE").param("hash",hash(in)).param("id",saved.id()).update();
             return materials.material(saved.id());
         } catch(SupplierAssignmentGateway.AssignmentException e){throw new MaterialException(e.status(),e.code(),e.getMessage());}
           catch(CatalogImageGateway.AttachmentException e){throw new MaterialException(e.status(),e.code(),e.getMessage());}
     }
+    private static boolean sameAssignments(List<SupplierAssignmentGateway.LinkedSupplier> before,List<Link> after){
+        var order=Comparator.comparing(SupplierAssignmentGateway.Assignment::supplierId);
+        var old=before.stream().map(l->assignment(l.supplierId(),l.purchaseUrl(),l.remark(),l.primary())).sorted(order).toList();
+        var next=after.stream().map(l->assignment(l.supplierId(),l.purchaseUrl(),l.remark(),l.primary())).sorted(order).toList();
+        return old.equals(next);
+    }
+    private static SupplierAssignmentGateway.Assignment assignment(String id,String url,String remark,boolean primary){
+        return new SupplierAssignmentGateway.Assignment(id.trim(),emptyToNull(url),emptyToNull(remark),primary);
+    }
+    private static String emptyToNull(String value){return value==null||value.isBlank()?null:value.trim();}
     @GetMapping("/{id}/impact") @PreAuthorize("hasAuthority('materials.read')") @Transactional(readOnly=true)
     Impact impact(@PathVariable String id){var m=materials.material(id);long products=count("SELECT COUNT(*) FROM product_auxiliary_material WHERE auxiliary_material_id=:id",id),purchases=count("SELECT COUNT(*) FROM purchase_order_line l JOIN purchase_order p ON p.id=l.order_id WHERE p.order_type='MATERIAL' AND l.item_id=:id",id),transactions=count("SELECT COUNT(*) FROM inventory_transaction WHERE auxiliary_material_id=:id",id);
         var q=jdbc.sql("SELECT COALESCE(SUM(quantity),0) FROM inventory_balance WHERE auxiliary_material_id=:id").param("id",id).query(BigDecimal.class).single();

@@ -11,6 +11,7 @@ import java.net.URI;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -91,6 +92,10 @@ class MaterialService {
         if (!MaterialRepository.normalize(before.materialCode()).equals(valid.normalizedCode())) {
             throw new MaterialException(409, "MATERIAL_CODE_IMMUTABLE", "已保存的辅料编码不可修改，请停用后新建");
         }
+        if (Objects.equals(before.name(),valid.name()) && Objects.equals(before.materialType(),valid.type())
+                && Objects.equals(blankToNull(before.specification()),valid.specification()) && Objects.equals(before.unit(),valid.unit())
+                && Objects.equals(blankToNull(before.imageUrl()),valid.imageUrl()) && Objects.equals(blankToNull(before.imageAssetId()),valid.imageAssetId())
+                && Objects.equals(blankToNull(before.remark()),valid.remark())) return before;
         try {
             repository.update(id, valid.name(), valid.type(), valid.specification(), valid.unit(), valid.imageUrl(),
                     valid.imageAssetId(), valid.remark(), actor.userId());

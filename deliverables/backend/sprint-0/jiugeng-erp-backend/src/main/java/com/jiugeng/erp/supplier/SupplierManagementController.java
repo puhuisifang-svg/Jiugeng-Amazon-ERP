@@ -24,7 +24,8 @@ class SupplierManagementController {
     record Save(@NotBlank @Size(max=100) String requestId,@Size(max=36) String id,@NotNull @Valid SupplierController.Request supplier,@Size(max=36) String copyFromId,boolean impactConfirmed){}
     record State(@NotNull Status status,@Min(0) long version,boolean impactConfirmed){}
     record Impact(Map<String,Long> counts,long total,long restrictedCount,Long drafts,Long pendingReceipts){}
-    record Relations(List<Dependency> items,long totalCount,int page,int size){}
+    record Relation(String type,String id,String parentId,String code,String name,boolean accessible,boolean archived,String purchaseName){}
+    record Relations(List<Relation> items,long totalCount,int page,int size){}
     record Export(@Size(max=128) String q,Status status,Category category,@Size(max=100) List<@NotBlank @Size(max=36) String> ids){}
     private static boolean allowed(Authentication a,String p){return a.getAuthorities().stream().anyMatch(v->v.getAuthority().equals(p));}
     private static String permission(String type){return switch(type){case "PRODUCT"->"products.read";case "MATERIAL"->"materials.read";default->"purchases.read";};}
@@ -36,7 +37,28 @@ class SupplierManagementController {
     Impact impact(@PathVariable String id,Authentication auth){service.get(id);Map<String,Long> all=new LinkedHashMap<>();all.put("PRODUCT",count("SELECT COUNT(*) FROM product_variant_supplier WHERE supplier_id=:id",id));all.put("MATERIAL",count("SELECT COUNT(*) FROM auxiliary_material_supplier WHERE supplier_id=:id",id));all.put("PURCHASE",count("SELECT COUNT(*) FROM purchase_order WHERE supplier_id=:id",id));Map<String,Long> visible=new LinkedHashMap<>();long restricted=0,total=0;for(var entry:all.entrySet()){total+=entry.getValue();if(allowed(auth,permission(entry.getKey())))visible.put(entry.getKey(),entry.getValue());else restricted+=entry.getValue();}return new Impact(visible,total,restricted,allowed(auth,"purchases.read")?count("SELECT COUNT(*) FROM purchase_order WHERE supplier_id=:id AND status='DRAFT'",id):null,allowed(auth,"purchases.read")?count("SELECT COUNT(*) FROM purchase_order WHERE supplier_id=:id AND status IN ('SUBMITTED','PARTIALLY_RECEIVED')",id):null);}
     private String relationFrom(String type){return switch(type){case "PRODUCT"->" FROM product_variant_supplier r JOIN product_variant v ON v.id=r.variant_id JOIN product p ON p.id=v.product_id WHERE r.supplier_id=:id";case "MATERIAL"->" FROM auxiliary_material_supplier r JOIN auxiliary_material m ON m.id=r.auxiliary_material_id WHERE r.supplier_id=:id";default->" FROM purchase_order p WHERE p.supplier_id=:id";};}
     @GetMapping("/{id}/relations") @PreAuthorize("hasAuthority('suppliers.read')") @Transactional(readOnly=true)
-    Relations relations(@PathVariable String id,@RequestParam String type,@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="20") int size,Authentication auth){service.get(id);require(Set.of("PRODUCT","MATERIAL","PURCHASE").contains(type)&&page>=0&&page<=100000&&Set.of(10,20,50,100).contains(size),"分页或关联类型无效");if(!allowed(auth,permission(type)))throw new SupplierException(403,"CAPABILITY_DENIED","无关联业务查看权限");String from=relationFrom(type);String fields=switch(type){case "PRODUCT"->"v.id,p.id parent_id,v.sku_code code,CONCAT(p.name_zh,' / ',v.variant_name) label,CASE WHEN p.deleted_at IS NOT NULL OR v.deleted_at IS NOT NULL THEN 1 ELSE 0 END archived";case "MATERIAL"->"m.id,m.id parent_id,m.material_code code,m.name label,0 archived";default->"p.id,p.id parent_id,p.order_no code,p.status label,0 archived";};var rows=jdbc.sql("SELECT "+fields+from+" ORDER BY code,id LIMIT :size OFFSET :offset").param("id",id).param("size",size).param("offset",(long)page*size).query((r,n)->new Dependency(type,r.getString("id"),r.getString("parent_id"),r.getString("code"),r.getString("label"),true,r.getBoolean("archived"))).list();return new Relations(rows,count("SELECT COUNT(*)"+from,id),page,size);}
+    Relations relations(@PathVariable String id,@RequestParam String type,@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="20") int size,Authentication auth){
+        service.get(id);
+        require(Set.of("PRODUCT","MATERIAL","PURCHASE").contains(type)&&page>=0&&page<=100000&&Set.of(10,20,50,100).contains(size),"分页或关联类型无效");
+        if(!allowed(auth,permission(type)))throw new SupplierException(403,"CAPABILITY_DENIED","无关联业务查看权限");
+        String from=relationFrom(type);
+        String fields=switch(type){
+            case "PRODUCT"->"v.id,p.id parent_id,v.sku_code code,CONCAT(p.name_zh,' / ',v.variant_name) label,CASE WHEN p.deleted_at IS NOT NULL OR v.deleted_at IS NOT NULL THEN 1 ELSE 0 END archived";
+            case "MATERIAL"->"m.id,m.id parent_id,m.material_code code,m.name label,0 archived";
+            default->"p.id,p.id parent_id,p.order_no code,p.status label,0 archived";
+        };
+        // Read the stored purchase item name, not a possibly renamed catalog item.
+        fields+="PURCHASE".equals(type)
+            ? ",COALESCE((SELECT l.item_name FROM purchase_order_line l WHERE l.order_id=p.id ORDER BY l.line_no,l.id LIMIT 1),'未命名采购') purchase_name,(SELECT COUNT(*) FROM purchase_order_line l WHERE l.order_id=p.id) item_count"
+            : ",NULL purchase_name,0 item_count";
+        var rows=jdbc.sql("SELECT "+fields+from+" ORDER BY code,id LIMIT :size OFFSET :offset")
+            .param("id",id).param("size",size).param("offset",(long)page*size).query((r,n)->{
+                String purchaseName=r.getString("purchase_name");int itemCount=r.getInt("item_count");
+                if(purchaseName!=null&&itemCount>1)purchaseName+=" 等 "+itemCount+" 项";
+                return new Relation(type,r.getString("id"),r.getString("parent_id"),r.getString("code"),r.getString("label"),true,r.getBoolean("archived"),purchaseName);
+            }).list();
+        return new Relations(rows,count("SELECT COUNT(*)"+from,id),page,size);
+    }
     @GetMapping("/{id}/history") @PreAuthorize("hasAuthority('suppliers.read')") @Transactional(readOnly=true)
     AuditHistoryLookup.HistoryPage history(@PathVariable String id,@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="20") int size){service.get(id);require(page>=0&&page<=100000&&Set.of(10,20,50,100).contains(size),"分页无效");return history.page("SUPPLIER",id,page+1,size);}
     private void version(View before,Long version){if(version==null||before.version()!=version)throw new SupplierException(409,"SUPPLIER_VERSION_CONFLICT","供应商已被修改，请对照最新资料后重新保存");}

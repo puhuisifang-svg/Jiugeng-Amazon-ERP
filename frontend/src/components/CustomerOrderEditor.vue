@@ -6,7 +6,7 @@ import CustomerProductImage from './CustomerProductImage.vue'
 import { vSingleSelect } from '@/directives/singleSelect'
 import CustomerOrderProductPicker from './CustomerOrderProductPicker.vue'
 import DatePicker from '@/components/DatePicker.vue'
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import UnsavedChangesDialog from './UnsavedChangesDialog.vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { customersApi, customerAddresses, type Customer, type CustomerProduct } from '@/api/customers'
@@ -14,6 +14,8 @@ import type { CustomerOrder, OrderInput } from '@/api/orders'
 import { invoiceAmounts } from '@/ui/invoiceAmounts'
 const props = defineProps<{ initial?: CustomerOrder | undefined; busy: boolean; error: string }>()
 const emit = defineEmits<{ save: [input: OrderInput]; close: [] }>()
+const modal=ref<HTMLDialogElement>();let returnFocus:HTMLElement|null=null
+onBeforeUnmount(()=>{modal.value?.close();returnFocus?.focus()})
 const today = beijingDate()
 const form = reactive<OrderInput>(props.initial ? { ...JSON.parse(JSON.stringify(props.initial.details)), lines: props.initial.lines.map(l => ({ ...l.details, id: l.id })), version: props.initial.version } : { customerId: '', source: 'OFFLINE', externalNumber: '', contractNumber: '', orderDate: today, deliveryDate: today, invoiceRequired: false, invoiceTitle: '', taxNumber: '', recipient: '', phone: '', address: '', remark: '', lines: [] })
 const initialSnapshot = ref(JSON.stringify(form)), discard = ref(false), localError = ref(''), selecting = ref(false)
@@ -58,6 +60,7 @@ function submit() {
 }
 onBeforeRouteLeave(() => { if (props.busy) return false; if (initialSnapshot.value !== JSON.stringify(form)) { discard.value = true; return false } return true })
 onMounted(async () => {
+  returnFocus=document.activeElement as HTMLElement;modal.value?.showModal()
   await searchCustomers()
   if (!props.initial) {
     try { const customer = await customersApi.defaultCustomer(); if (customer?.status === 'ACTIVE') { if (!customers.value.some(c => c.id === customer.id)) customers.value.push(customer); form.customerId = customer.id; await changeCustomer(); initialSnapshot.value = JSON.stringify(form) } } catch (e) { localError.value = String(e) }
@@ -70,12 +73,11 @@ onMounted(async () => {
 })
 </script>
 <template>
-  <div
-    class="operation-dialog"
-    role="dialog"
-    aria-modal="true"
+  <dialog
+    ref="modal"
+    class="business-dialog business-order-shell"
     aria-label="客户订单表单"
-    @keydown.esc.stop="close"
+    @cancel.prevent.stop="close"
   >
     <form
       class="panel operation-dialog__card order-editor"
@@ -325,7 +327,7 @@ onMounted(async () => {
       @close="pickerOpen=false"
       @confirm="addProducts"
     />
-  </div>
+  </dialog>
 </template>
 <style scoped>
 .order-line-product{display:flex;align-items:center;gap:10px;min-width:250px;white-space:normal}.order-line-product>div{min-width:0}.order-line-name{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5}.order-image-empty{flex:none;width:64px;text-align:center;color:var(--muted);font-size:12px}

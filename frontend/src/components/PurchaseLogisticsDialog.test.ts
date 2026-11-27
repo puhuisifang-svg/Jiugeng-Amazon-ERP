@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import PurchaseLogisticsDialog from './PurchaseLogisticsDialog.vue'
 import { purchaseApi, type PurchaseOrder } from '@/api/purchases'
 vi.mock('@/api/purchases', () => ({ purchaseApi: { logistics: vi.fn() } }))
-const order = { id: 'syn-order', orderNo: 'SYN-PO', supplierName: '合成供应商', version: 2, trackingNumber: 'SYN1', carrier: '合成物流' } as PurchaseOrder
+const order = { id: 'syn-order', orderNo: 'SYN-PO', supplierName: '合成供应商', version: 2, trackingNumber: 'SYN1', carrier: '合成物流', lines: [] } as unknown as PurchaseOrder
 beforeEach(() => { vi.clearAllMocks(); HTMLDialogElement.prototype.showModal = function () { this.open = true }; HTMLDialogElement.prototype.close = function () { this.open = false } })
 it('preserves failed edits and sends version with logistics data', async () => {
  const w = mount(PurchaseLogisticsDialog, { props: { order, writable: true } })

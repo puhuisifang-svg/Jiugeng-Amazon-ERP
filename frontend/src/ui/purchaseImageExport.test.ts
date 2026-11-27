@@ -33,3 +33,8 @@ describe('purchase image rows',()=>{
     expect(drawn.find(d=>d.text==='2')?.color).toBe('#111')
   })
 })
+
+it('exports each item remark while preserving historical order notes',()=>{
+ const rows=purchaseExportRows([{createdAt:'2026-11-27T01:00:00Z',remark:'整单要求',lines:[{remark:'商品甲包装'},{remark:'商品乙标签'},{}]} as PurchaseOrder])
+ expect(rows.map(r=>r.remark)).toEqual(['商品甲包装\n整单要求','商品乙标签\n整单要求','整单要求'])
+})

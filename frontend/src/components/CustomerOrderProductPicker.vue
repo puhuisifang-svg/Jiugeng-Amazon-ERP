@@ -17,7 +17,7 @@ onMounted(()=>{dialog.value?.showModal();void load()})
 <template>
   <dialog
     ref="dialog"
-    class="customer-product-picker"
+    class="customer-product-picker business-dialog"
     aria-label="选择客户商品"
     @cancel.prevent="emit('close')"
     @keydown.esc.stop

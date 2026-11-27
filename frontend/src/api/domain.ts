@@ -298,7 +298,7 @@ async function createMaterial(input: MaterialInput | { materialCode: string; nam
   }), mockData: false }
 }
 
-export interface SupplierDependency { type:'PRODUCT'|'MATERIAL'|'PURCHASE'; id:string; parentId:string; code:string; name:string; accessible:boolean; archived?:boolean }
+export interface SupplierDependency { purchaseName?:string|null; type:'PRODUCT'|'MATERIAL'|'PURCHASE'; id:string; parentId:string; code:string; name:string; accessible:boolean; archived?:boolean }
 export const domainApi = {
   products,
   skus: async (filters: { productId?: string | undefined; field?: string | undefined; q?: string | undefined; exact?: boolean | undefined; status?: VariantStatus | undefined; productStatus?: ProductStatus | undefined; hasImage?: boolean | undefined; hasSupplier?: boolean | undefined; hasMaterial?: boolean | undefined; sort?: string | undefined; direction?: string | undefined; page?: number | undefined; size?: number | undefined } = {}) => {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import '@/styles/businessWorkbench.css'
 import { vPhone } from '@/directives/phone'
 import { createRequestId } from '@/utils/requestId'
 
@@ -51,6 +52,7 @@ async function submit(){if(busy.value||previewing.value)return;error.value='';bu
 <template>
   <AccessDialog
     ref="dialog"
+    dialog-class="business-dialog business-editor"
     :title="title"
     :wide="kind==='reports'||kind==='rates'||mode==='adjust'"
     :dirty="dirty"
@@ -465,7 +467,7 @@ async function submit(){if(busy.value||previewing.value)return;error.value='';bu
         @click="dialog?.requestClose()"
       >
         取消
-      </button><span class="factory-footer-note">关闭窗口时会检查未保存内容</span><button
+      </button><button
         type="submit"
         form="factory-editor-form"
         class="factory-primary"

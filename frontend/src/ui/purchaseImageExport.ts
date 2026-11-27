@@ -5,7 +5,7 @@ export interface ExportRow { date:string; line:PurchaseLine; remark:string }
 export function purchaseExportRows(orders:PurchaseOrder[]):ExportRow[]{
   return [...orders].sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).flatMap(order=>{
     const date=beijingDate(order.createdAt)
-    return order.lines.map(line=>({date,line,remark:order.remark??''}))
+    return order.lines.map(line=>({date,line,remark:[line.remark,order.remark].filter(Boolean).join('\n')}))
   })
 }
 export function exportPages(rows:ExportRow[],size=20){return Array.from({length:Math.ceil(rows.length/size)},(_,i)=>rows.slice(i*size,(i+1)*size))}

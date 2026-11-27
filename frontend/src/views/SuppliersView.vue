@@ -23,7 +23,7 @@ const defaults=():SupplierFilters=>({q:'',status:'',category:''}),filters=reacti
 const items=ref<SupplierDto[]>([]),page=ref(1),size=ref(20),total=ref(0),loading=ref(false),busy=ref(false),ready=ref(false),error=ref(''),capabilityError=ref(''),success=ref(''),host=ref<HTMLElement>()
 const writable=computed(()=>session.canAccess(['suppliers.write'])),deletable=computed(()=>session.canAccess(['suppliers.delete']))
 const editorState=ref<{id?:string;copy?:boolean;resume?:boolean}>(),editor=ref<InstanceType<typeof SupplierEditor>>(),detailId=ref(''),deleteTarget=ref<SupplierDto>(),statusTarget=ref<SupplierDto>(),impact=ref<SupplierImpact>(),impactError=ref(''),impactLoading=ref(false)
-const selected=ref<Record<string,SupplierDto>>({}),hasPending=ref(false),expanded=ref<string[]>([]),owner=session.user.value?.id??'current',stateKey=`jiugeng.supplier.view.${owner}`,pendingKey=`jiugeng.supplier.pending.${owner}`
+const selected=ref<Record<string,SupplierDto>>({}),hasPending=ref(false),owner=session.user.value?.id??'current',stateKey=`jiugeng.supplier.view.${owner}`,pendingKey=`jiugeng.supplier.pending.${owner}`
 const selection=computed(()=>Object.values(selected.value)),allSelected=computed(()=>items.value.length>0&&items.value.every(s=>!!selected.value[s.id]))
 const tags=computed(()=>Object.entries(applied.value).filter(([,v])=>v).map(([key,value])=>({key:key as keyof SupplierFilters,label:({q:'关键词',status:'状态',category:'分类'})[key],value:({ACTIVE:'启用',DISABLED:'停用',PRODUCT:'产品',MATERIAL:'辅料'} as Record<string,string>)[value]??value})))
 let generation=0,scroll=0,impactGeneration=0
@@ -194,14 +194,10 @@ onBeforeUnmount(()=>{generation++;impactGeneration++;remember()})
                   @click="detailId=s.id"
                 >
                   {{ s.name }}
-                </button><small>{{ s.categories?.map(c=>c==='PRODUCT'?'产品':'辅料').join('、')||'待分类' }}</small><button
+                </button><small>{{ s.categories?.map(c=>c==='PRODUCT'?'产品':'辅料').join('、')||'待分类' }}</small><span
                   v-if="s.remark"
-                  class="supplier-link"
-                  :aria-expanded="expanded.includes(s.id)"
-                  @click="expanded=expanded.includes(s.id)?expanded.filter(id=>id!==s.id):[...expanded,s.id]"
-                >
-                  {{ expanded.includes(s.id)?'收起备注':'查看备注' }}
-                </button>
+                  class="supplier-inline-remark"
+                >备注：{{ s.remark }}</span>
               </td><td>
                 {{ s.contactPerson||'未填联系人' }}<small><SupplierContactValue
                   :value="s.phone"
@@ -259,13 +255,6 @@ onBeforeUnmount(()=>{generation++;impactGeneration++;remember()})
                     </button>
                   </RowMoreActions>
                 </div>
-              </td>
-            </tr><tr v-if="expanded.includes(s.id)">
-              <td
-                colspan="7"
-                class="supplier-remark"
-              >
-                {{ s.remark }}
               </td>
             </tr>
           </template>

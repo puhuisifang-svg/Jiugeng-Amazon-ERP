@@ -5,3 +5,8 @@
 
 /* RowMoreActions teleports to body, outside .supplier-ui. */
 body .row-more-actions__menu button.supplier-danger{color:#b42318}
+
+.supplier-relations td:first-child strong{white-space:normal;overflow-wrap:anywhere;font-weight:500}
+.supplier-relations .supplier-purchase-status{display:inline-block;margin-right:14px;color:#69788d;font-size:12px;white-space:nowrap}
+
+#app .supplier-ui .supplier-inline-remark{display:block;max-width:320px;margin-top:4px;color:#2864c5;font-size:13px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere;cursor:text}

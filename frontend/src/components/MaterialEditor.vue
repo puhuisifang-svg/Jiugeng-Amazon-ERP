@@ -67,6 +67,7 @@ async function submit(){
  error.value=''
  if(!pending.value){
   normalizePrice()
+  if(editing.value&&!dirty.value){emit('close');return}
   if(!form.name.trim()||!form.materialType.trim()||!form.unit.trim()){error.value='请填写名称、类型和基础单位';return}
    if(canWritePrice.value&&netPrice.value!==''&&!/^\d{1,12}(\.\d{1,2})?$/.test(netPrice.value)){error.value='成本价最多两位小数，请填写非负金额';return}
   const input:MaterialInput={materialCode:form.materialCode,name:form.name.trim(),materialType:form.materialType.trim(),unit:form.unit.trim(),specification:form.specification.trim(),remark:form.remark.trim(),...(form.imageAssetId?{imageAssetId:form.imageAssetId}:form.imageUrl.trim()?{imageUrl:form.imageUrl.trim()}:{})}
@@ -105,7 +106,7 @@ defineExpose({dirty,busy:computed(()=>busy.value||uploading.value),pending})
       </button>
     </p>
     <p
-      v-if="pending"
+      v-if="pending&&!busy"
       class="material-warning"
       role="status"
     >
@@ -414,12 +415,12 @@ defineExpose({dirty,busy:computed(()=>busy.value||uploading.value),pending})
         :disabled="busy||uploading"
         @click="dialog?.requestClose()"
       >
-        {{ pending?'稍后确认':'取消' }}
+        {{ pending&&!busy?'稍后确认':'取消' }}
       </button><button
         class="ui-button-primary"
         type="submit"
         form="material-editor-form"
-        :disabled="busy||uploading||loading||!!loadError||!!conflict"
+        :disabled="busy||uploading||loading||!!loadError||!!conflict||(editing&&!dirty&&!pending)"
       >
         {{ busy?'保存中…':pending?'确认原请求':'保存' }}
       </button>

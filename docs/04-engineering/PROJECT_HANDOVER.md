@@ -5,9 +5,32 @@
 | 项目 | 九更亚马逊 ERP |
 | Owner | PJM（维护责任）；Codex（本次整理） |
 | 版本 / 状态 | v0.1 / In Review |
-| 更新时间 | 2026-11-26 |
+| 更新时间 | 2026-11-27 |
 | 审批人 | 待 PJM 复核；本文记录实现事实，不新增业务批准 |
 | 核实基线 | 见[当前状态报告](../08-project-management/STATUS_REPORT.md)；此指南不是实时线上状态 |
+
+## ERP-115 最新交接（2026-11-27）
+
+用户已授权提交main及部署，见[ERP-115发布交接](../../deliverables/pjm/ERP115_RELEASE_HANDOFF_2026-11-27.md)。835前端测试、464后端通过/1既有跳过、6个浏览器场景及三尺寸受影响界面检查通过；修改未提交，正式交接后由PJM独占执行提交/合并/CI/CD/发布核验。Codex不跟踪线上结果。V111与运单接口要求前后端同发；保留本地服务与数据隔离。下文未授权/待验证为实施阶段历史。
+
+## 当前本地修复：ERP-115（2026-11-27）
+
+客户/订单/工厂样式入口（2026-11-27）：`frontend/src/styles/businessWorkbench.css`统一9个菜单入口及相关弹窗，显式business-workbench/business-dialog命名空间、仅屏幕样式。客户/历史发票仍用原表单但固定头尾；CustomerOrderEditor使用原生dialog；订单发票、操作、物流和安排发货复用AccessDialog。外置页脚提交按钮必须保留form关联，Esc走cancel并保留未保存保护。FactoryPicker/FactoryEditor/OrderShipmentDialog自行导入样式，保证其他入口独立使用时同样生效。含TableViewport的选择器/工厂详情采用确定高度，避免恢复自动高度反馈；不修改全局TableViewport或打印规则。客户/工厂次要动作使用RowMoreActions，注意Teleport后危险动作颜色与只读访问权限。验证范围与待办见状态报告最新追加。
+
+
+首页收货反馈路径：`DashboardPurchaseReceipts.vue`首列以createdAt对应采购日期替代单号，并展示商品备注；与采购列表同用商品独立行/订单信息rowspan，确保跨列分隔线连续；`PurchaseReceiveFlow.vue`通过updated刷新列表、completed传出成功消息。进行中反馈留在当前模态窗子树内，完成关闭后由首页或采购详情承接Toast。不要在刷新时卸载已打开弹窗，或只把成功提示放在即将销毁的组件中。
+
+最新供应商关联采购扩展：`SupplierManagementController.relations`在原关联分页上补充purchaseName（采购行留存首项名称与项数），`SupplierRelations.vue`展示名称＋单号，原code/name字段不改语义。当前本地运行包更新为`.local/releases/backend/erp115-supplier-purchase-name-20261127/backend.jar`；无新增迁移，旧运行包段落为历史。
+
+详情布局调查路径：采购详情采用`PurchasesView.vue`的`purchase-detail-dialog`专用固定高度框架，样式位于`purchaseManagement.css`；`PurchaseOrderDetailView.vue`将页签内容放入弹性滚动区。不要恢复自动高度弹窗与TableViewport动态测量互相依赖，已复现该组合造成逐帧收缩。全局TableViewport未修改。
+
+最新追加商品级备注：`PurchaseTypes.LineInput/LineView`、`PurchaseRepository`及V111维护每个采购明细的remark；`PurchaseLineRemarkEditor.vue`是草稿内的锚定备注编辑器，不会独立提交订单。`purchaseImageExport.ts`合并商品备注和历史整单备注，`purchaseHistory.ts`展示商品备注变更。`copyPurchaseLogistics.ts`统一复制公司及单号，兼容HTTP入口。当前本地JAR为`.local/releases/backend/erp115-item-remarks-20261127/backend.jar`，V111已在备份后应用；详见状态报告最新追加段。
+
+最新实现为统一运单业务：采购列表/详情只进入PurchaseShipmentsDialog；PurchaseReceiveFlow对每张运单独立分块确认，首页复用并在单块成功后刷新。PurchaseManagementController新增批量摘要、带幂等及已收下界保护的运单修改；旧单据物流有运单时禁止再写。历史图片转运单必须通过CatalogImageGateway.copyOrderWaybill复制，不能直接复用绑定ID。无结构迁移、无历史收货回填。最新本地包 `.local/releases/backend/erp115-waybills-images-20261127/backend.jar`，替代下文较早ERP-115运行包；完整检查见状态报告，仍未提交/发布。
+
+采购历史展示入口为 `frontend/src/utils/purchaseHistory.ts`，通过 `ProductHistoryTable` 的purchase模式和当前采购明细映射历史引用；不修改存量审计。`PurchaseShipmentsDialog` 负责批次列表/登记，保留purchasePending恢复逻辑，登记请求ID统一使用createRequestId。新增范围及实际检查见状态报告，本轮仍未提交/发布。
+
+PJM已交出新的独占写入槽，分支 `fix/ERP-115-material-save-idempotency`，基线及检查见[状态报告](../08-project-management/STATUS_REPORT.md)。辅料主数据/供应商无变化不重复写入审计，正常保存不再闪现待确认警告；真实未知结果保留原请求。同轮继续调整采购列表：辅料优先、集中供应商筛选、日期范围与按钮布局；`PurchasePicker` 的 `filterSuppliers` 仅用于历史查询，不放宽建单供应商规则。累计检查待用户交接时统一完成。当前本地运行包 `.local/releases/backend/erp115-20261127/backend.jar`，无迁移，数据隔离不变。仅本地修复，尚未授权本轮发布；下方ERP-113/114的未提交说法为历史，DEL-057发布事实以状态报告PJM记录为准。
 
 ## 最新发布交接：ERP-113 / ERP-114（2026-11-26）
 

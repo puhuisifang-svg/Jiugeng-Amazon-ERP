@@ -155,7 +155,7 @@ class PurchaseControllerTest {
         var input=new java.util.LinkedHashMap<String,Object>(Map.of("requestId","batch-one","version",1,"carrier","Synthetic","trackingNumber","SYN001","shippedOn","2026-10-16","packageCount",1,"lines",List.of(Map.of("orderLineId",line,"quantity",4))));
         var result=objectMapper.readTree(mvc.perform(post("/api/v1/purchases/manage/{id}/shipments",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString());String shipment=result.at("/0/id").asText();
         mvc.perform(post("/api/v1/purchases/manage/{id}/shipments",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input))).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1));
-        input.put("requestId","batch-over");input.put("version",2);input.put("lines",List.of(Map.of("orderLineId",line,"quantity",7)));
+        input.put("requestId","batch-over");input.put("trackingNumber","SYN002");input.put("version",2);input.put("lines",List.of(Map.of("orderLineId",line,"quantity",7)));
         mvc.perform(post("/api/v1/purchases/manage/{id}/shipments",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input))).andExpect(status().isBadRequest());
         var receipt=new java.util.LinkedHashMap<String,Object>(Map.of("requestId","batch-receipt","receivedAt","2026-10-16T08:00:00Z","lines",List.of(Map.of("orderLineId",line,"quantity",2))));
         mvc.perform(post("/api/v1/purchases/orders/{id}/receipts",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(receipt))).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("PURCHASE_SHIPMENT_REQUIRED"));
@@ -200,6 +200,22 @@ class PurchaseControllerTest {
                     .contentType(MediaType.APPLICATION_JSON).content("{\"requestId\":\"invalid-copy\",\"copyFromId\":\"synthetic-source\",\"order\":{\"orderType\":\"MANUAL\",\"lines\":"+lines+"}}"))
                     .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("PURCHASE_FIELD_INVALID"));
         }
+    }
+
+    @Test void itemRemarksPersistIndependentlyThroughEditCopyAuditAndExport() throws Exception {
+        String token=login("item-remark-buyer","PRODUCT_MATERIAL");
+        var input=new java.util.LinkedHashMap<String,Object>(Map.of("orderType","MANUAL","supplierName","Synthetic store","currency","CNY","remark","历史整单备注","lines",List.of(
+            Map.of("itemName","合成商品甲","unit","件","quantity",2,"unitPrice",3,"remark","  单独包装\n贴标  "),
+            Map.of("itemName","合成商品乙","unit","件","quantity",1,"unitPrice",4,"remark","无需贴标"))));
+        var order=managedSave(token,Map.of("requestId","item-note-create","order",input));String id=order.path("id").asText();
+        assertThat(order.at("/lines/0/remark").asText()).isEqualTo("单独包装\n贴标");assertThat(order.at("/lines/1/remark").asText()).isEqualTo("无需贴标");
+        input.put("version",order.path("version").asLong());input.put("lines",List.of(Map.of("itemName","合成商品甲","unit","件","quantity",2,"unitPrice",3,"remark","改为纸箱"),Map.of("itemName","合成商品乙","unit","件","quantity",1,"unitPrice",4)));
+        order=managedSave(token,Map.of("requestId","item-note-edit","id",id,"order",input));assertThat(order.at("/lines/0/remark").asText()).isEqualTo("改为纸箱");assertThat(order.at("/lines/1/remark").isNull()).isTrue();
+        input.remove("version");var copied=managedSave(token,Map.of("requestId","item-note-copy","copyFromId",id,"order",input));assertThat(copied.at("/lines/0/remark").asText()).isEqualTo("改为纸箱");
+        String history=mvc.perform(get("/api/v1/purchases/manage/{id}/history",id).header("Authorization",bearer(token))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);assertThat(history).contains("改为纸箱");
+        String csv=mvc.perform(post("/api/v1/purchases/manage/export").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("ids",List.of(id))))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);assertThat(csv).contains("商品备注,整单备注","改为纸箱","历史整单备注");
+        input.put("lines",List.of(Map.of("itemName","合成商品甲","unit","件","quantity",1,"unitPrice",1,"remark","x".repeat(1001))));
+        mvc.perform(post("/api/v1/purchases/manage/save").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("requestId","item-note-too-long","order",input)))).andExpect(status().isBadRequest());
     }
 
     private JsonNode managedSave(String token,Object value)throws Exception{return objectMapper.readTree(mvc.perform(post("/api/v1/purchases/manage/save").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(value))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString());}
@@ -344,6 +360,13 @@ class PurchaseControllerTest {
         mvc.perform(put("/api/v1/purchases/orders/{id}/logistics",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("version",1,"trackingNumber","","waybillImageId","")))).andExpect(status().isBadRequest());
         mvc.perform(put("/api/v1/purchases/orders/{id}/logistics",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("version",1,"trackingNumber","SYN-123","waybillImageId","missing")))).andExpect(status().isNotFound());
         mvc.perform(get("/api/v1/purchases/orders/{id}",id).header("Authorization",bearer(token))).andExpect(jsonPath("$.version").value(1));
+        mvc.perform(post("/api/v1/purchases/orders/{id}/submit",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("version",1)))).andExpect(status().isOk());
+        var shipmentInput=Map.of("requestId","legacy-waybill-copy","version",2,"imageId",image,"shippedOn","2026-10-16","packageCount",1,"lines",List.of(Map.of("orderLineId",order.at("/lines/0/id").asText(),"quantity",2)));
+        var converted=objectMapper.readTree(mvc.perform(post("/api/v1/purchases/manage/{id}/shipments",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(shipmentInput))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        String copy=converted.at("/0/imageId").asText();assertThat(copy).isNotBlank().isNotEqualTo(image);
+        assertThat(jdbc.queryForObject("SELECT attached_resource_type FROM catalog_image_asset WHERE id=?",String.class,image)).isEqualTo("PURCHASE_WAYBILL");
+        assertThat(jdbc.queryForObject("SELECT attached_resource_type FROM catalog_image_asset WHERE id=?",String.class,copy)).isEqualTo("PURCHASE_SHIPMENT");
+        mvc.perform(post("/api/v1/purchases/manage/{id}/shipments",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(shipmentInput))).andExpect(status().isOk()).andExpect(jsonPath("$[0].imageId").value(copy));
     }
 
     @Test void logisticsPreservesVersionAndExposesMaterialImage()throws Exception {
@@ -420,6 +443,32 @@ class PurchaseControllerTest {
         mvc.perform(get("/api/v1/purchases/references").param("orderType","MATERIAL").param("supplierId",supplierId).header("Authorization",bearer(token))).andExpect(status().isOk());
         jdbc.update("UPDATE supplier SET categories='MATERIAL,PRODUCT' WHERE id=?",supplierId);
         mvc.perform(post("/api/v1/purchases/orders/place").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input))).andExpect(status().isOk());
+    }
+
+    @Test void unifiedWaybillsBlockLegacyWritesAndPreserveReceiptQuantitiesAcrossIdempotentEdits() throws Exception {
+        String token=login("unified-waybill","PRODUCT_MATERIAL");var order=managedSave(token,Map.of("requestId","unified-order","order",managedInput("MATERIAL",materialId,10)));
+        String id=order.path("id").asText(),line=order.at("/lines/0/id").asText();
+        var input=new java.util.LinkedHashMap<String,Object>(Map.of("requestId","unified-first","version",1,"carrier","Synthetic","trackingNumber","WAY001","shippedOn","2026-10-16","packageCount",1,"lines",List.of(Map.of("orderLineId",line,"quantity",5))));
+        var first=objectMapper.readTree(mvc.perform(post("/api/v1/purchases/manage/{id}/shipments",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString());String sid=first.at("/0/id").asText();
+        input.put("requestId","duplicate-tracking");input.put("version",2);
+        mvc.perform(post("/api/v1/purchases/manage/{id}/shipments",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input))).andExpect(status().isBadRequest());
+        input.put("requestId","unified-second");input.put("trackingNumber","WAY002");
+        mvc.perform(post("/api/v1/purchases/manage/{id}/shipments",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(input))).andExpect(status().isOk());
+        mvc.perform(put("/api/v1/purchases/orders/{id}/logistics",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("version",3,"carrier","Other","trackingNumber","DETACHED")))).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("PURCHASE_UNIFIED_LOGISTICS_REQUIRED"));
+        var edit=new java.util.LinkedHashMap<String,Object>(input);edit.put("requestId","waybill-edit");edit.put("version",3);edit.put("shipmentVersion",0);edit.put("trackingNumber","WAY001-EDIT");edit.put("lines",List.of(Map.of("orderLineId",line,"quantity",6)));
+        mvc.perform(put("/api/v1/purchases/manage/{id}/shipments/{sid}",id,sid).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(edit))).andExpect(status().isBadRequest());
+        var receipt=Map.of("requestId","unified-receipt","shipmentId",sid,"receivedAt","2026-10-16T08:00:00Z","lines",List.of(Map.of("orderLineId",line,"quantity",2)));
+        for(int i=0;i<2;i++)mvc.perform(post("/api/v1/purchases/orders/{id}/receipts",id).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(receipt))).andExpect(status().isOk());
+        edit.put("version",4);edit.put("lines",List.of(Map.of("orderLineId",line,"quantity",1)));
+        mvc.perform(put("/api/v1/purchases/manage/{id}/shipments/{sid}",id,sid).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(edit))).andExpect(status().isBadRequest());
+        edit.put("lines",List.of(Map.of("orderLineId",line,"quantity",5)));
+        for(int i=0;i<2;i++)mvc.perform(put("/api/v1/purchases/manage/{id}/shipments/{sid}",id,sid).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(edit))).andExpect(status().isOk());
+        assertThat(jdbc.queryForObject("SELECT version FROM purchase_order WHERE id=?",Long.class,id)).isEqualTo(5);
+        assertThat(jdbc.queryForObject("SELECT received_quantity FROM purchase_shipment_line WHERE shipment_id=?",java.math.BigDecimal.class,sid)).isEqualByComparingTo("2");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM purchase_receipt WHERE order_id=?",Long.class,id)).isEqualTo(1);
+        edit.put("trackingNumber","altered-replay");mvc.perform(put("/api/v1/purchases/manage/{id}/shipments/{sid}",id,sid).header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(edit))).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("PURCHASE_REQUEST_CONFLICT"));
+        var summary=objectMapper.readTree(mvc.perform(post("/api/v1/purchases/manage/shipment-summaries").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(List.of(id)))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString());assertThat(summary.path(id).size()).isEqualTo(2);assertThat(summary.path(id).toString()).contains("WAY001-EDIT","WAY002");
+        String denied=login("unified-denied","SELECTION");mvc.perform(put("/api/v1/purchases/manage/{id}/shipments/{sid}",id,sid).header("Authorization",bearer(denied)).contentType(MediaType.APPLICATION_JSON).content(json(edit))).andExpect(status().isForbidden());
     }
 
     private JsonNode createOrder(String token,String type,String itemId,String quantity,String price)throws Exception{

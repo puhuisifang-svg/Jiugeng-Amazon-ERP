@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import '@/styles/businessWorkbench.css'
+import AccessDialog from './AccessDialog.vue'
 import { vPhone } from '@/directives/phone'
 import { onMounted, ref } from 'vue'
 import { ordersApi, type CustomerOrder, type ArrangementItem } from '@/api/orders'
@@ -36,18 +38,22 @@ async function submitArrange(){
 onMounted(load)
 </script>
 <template>
-  <div
+  <AccessDialog
     v-if="arranging"
-    class="operation-dialog"
-    role="dialog"
-    aria-modal="true"
-    aria-label="安排待发货"
+    title="安排待发货"
+    dialog-class="business-dialog business-shipment-dialog"
+    wide
+    :busy="saving"
+    @close="close"
   >
     <form
-      class="panel operation-form operation-dialog__card order-arrange"
+      id="business-shipment-form"
+      class="operation-form order-arrange"
       @submit.prevent="submitArrange"
     >
-      <h2>新增待发货 · {{ arranging.details.externalNumber || arranging.orderNumber }}</h2><p class="form-wide">
+      <p class="form-wide business-context">
+        {{ arranging.details.externalNumber || arranging.orderNumber }}
+      </p><p class="form-wide">
         客户：{{ arranging.customerName }}
       </p><label>收货人<input
         v-model="recipient"
@@ -147,49 +153,55 @@ onMounted(load)
         class="data-state--error"
       >
         {{ formError }}
-      </p><div class="form-footer">
-        <button
-          type="button"
-          :disabled="saving"
-          @click="close"
-        >
-          取消
-        </button><button :disabled="saving">
-          {{ saving ? '处理中…' : '确认新增待发货' }}
-        </button>
-      </div>
+      </p>
     </form>
-  </div>
-  <div
+    <template #footer>
+      <button
+        type="button"
+        :disabled="saving"
+        @click="close"
+      >
+        取消
+      </button><button
+        type="submit"
+        form="business-shipment-form"
+        class="ui-button-primary"
+        :disabled="saving"
+      >
+        {{ saving ? '处理中…' : '确认新增待发货' }}
+      </button>
+    </template>
+  </AccessDialog>
+  <AccessDialog
     v-else
-    class="operation-dialog"
-    role="dialog"
-    aria-modal="true"
-    aria-label="安排待发货"
+    title="安排待发货"
+    dialog-class="business-dialog"
+    @close="emit('close')"
   >
-    <section class="panel order-arrange">
-      <h2>新增待发货</h2><p v-if="loading">
+    <section>
+      <p v-if="loading">
         正在加载订单…
       </p><p
         v-else
         role="alert"
       >
         {{ formError }}
-      </p><div class="form-footer">
-        <button
-          type="button"
-          @click="emit('close')"
-        >
-          关闭
-        </button><button
-          v-if="!loading"
-          @click="load"
-        >
-          重新加载
-        </button>
-      </div>
+      </p>
     </section>
-  </div>
+    <template #footer>
+      <button
+        type="button"
+        @click="emit('close')"
+      >
+        关闭
+      </button><button
+        v-if="!loading"
+        @click="load"
+      >
+        重新加载
+      </button>
+    </template>
+  </AccessDialog>
 </template>
 <style scoped>
 .operation-dialog{position:fixed;inset:0;background:#0f172a66;display:flex;align-items:center;justify-content:center;padding:16px;z-index:100}

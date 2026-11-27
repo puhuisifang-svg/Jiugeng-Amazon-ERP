@@ -1,0 +1,206 @@
+/* Customer, order and factory screens share density and action semantics.
+   Keep these selectors explicit: shared controls, other menus and exports keep
+   their own behavior. Native month inputs remain the payroll-period control. */
+@media screen {
+  #app .business-workbench { min-width:0; gap:8px; font-size:13px; }
+  #app .business-workbench > .filter-panel {
+    display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px;
+    padding:8px 10px; border:1px solid var(--line); border-radius:6px; background:#fff;
+  }
+  #app .business-workbench > .filter-panel > label {
+    display:flex; align-items:center; gap:8px; flex:0 1 205px;
+    width:auto; min-width:0; margin:0; color:#64748b; font-size:13px; white-space:nowrap;
+  }
+  #app .business-workbench > .filter-panel > label:first-child { flex-basis:320px; }
+  #app .business-workbench > .filter-panel > .date-range-filter,
+  #app .business-workbench > .filter-panel > label:has(.date-picker) { flex-basis:340px; }
+  #app .business-workbench > .filter-panel > label > :is(input,.single-select-trigger,.date-picker) {
+    flex:1; width:0; min-width:0; height:32px; min-height:32px; box-sizing:border-box;
+  }
+  #app .business-workbench > .filter-panel > button:not(.filter-reset-button):not(.business-filter-toggle) {
+    min-height:32px; padding:5px 16px; border:1px solid #2864c5; border-radius:4px;
+    background:#2864c5; color:white; font:inherit; white-space:nowrap;
+  }
+  #app .business-workbench .business-toolbar {
+    display:flex; align-items:center; justify-content:flex-start; flex-wrap:wrap;
+    gap:8px 12px; padding:6px 10px; min-height:0; background:#fff;
+    border:1px solid var(--line); border-radius:6px;
+  }
+  #app .business-toolbar > :is(strong,p,span) { margin:0 0 0 auto; font-size:12px; color:#718096; font-weight:400; }
+  #app .business-toolbar > button,
+  #app .business-toolbar .factory-primary {
+    min-height:32px; padding:5px 14px; border:1px solid #21834a; border-radius:4px;
+    background:#21834a; color:white; font:inherit; white-space:nowrap;
+  }
+  #app .business-workbench .table-panel { padding:0; overflow:hidden; }
+  #app .business-workbench .data-table th { height:36px; padding:8px 10px; font-size:12px; font-weight:500; color:#69788d; white-space:nowrap; }
+  #app .business-workbench .data-table td { padding:10px; font-size:13px; line-height:1.5; vertical-align:middle; }
+  #app .business-workbench .data-table small { font-size:12px; color:#7b8799; margin-top:4px; }
+  #app .business-workbench :is(.customer-actions,.factory-actions,.expense-actions,.invoice-actions) { width:112px; min-width:112px; white-space:nowrap; }
+  #app .business-workbench :is(.customer-actions,.factory-actions,.expense-actions,.invoice-actions,.table-actions) > button,
+  #app .business-workbench .customer-action-buttons > button,
+  #app .business-workbench :is(.customer-actions,.table-actions) > a {
+    display:inline-flex; align-items:center; min-height:28px; padding:3px 6px; margin:0;
+    border:0; border-radius:4px; background:transparent; color:#2864c5; font:inherit; font-weight:400; text-decoration:none;
+  }
+  #app .business-workbench .customer-action-buttons { display:flex; align-items:center; gap:4px; }
+  #app .business-workbench .row-more-actions { vertical-align:middle; }
+  #app .business-workbench .data-table :is(.customer-price,.expense-amount,.factory-number,.order-money,.business-number) {
+    text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; font-weight:500;
+  }
+  #app .business-workbench .data-state { padding:22px 12px; text-align:center; font-size:13px; color:#7b8799; }
+  #app .business-workbench .data-state--error { padding:10px 12px; text-align:left; color:#b42318; }
+  #app .business-note { color:#2864c5; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.6; }
+  #app .business-status { display:inline-block; padding:2px 7px; border-radius:4px; font-size:12px; white-space:nowrap; background:#edf7f1; color:#21834a; }
+  #app .business-status[data-state=DISABLED] { background:#eef1f5; color:#69788d; }
+  #app .business-status[data-state=PENDING] { background:#fff5df; color:#986000; }
+  #app .business-workbench .customer-workspace-selector { padding:8px 10px; gap:8px 14px; }
+  #app .business-workbench .customer-workspace-selector label { font-weight:500; }
+  #app .business-workbench .customer-workspace-selector .single-select-trigger { height:32px; min-height:32px; }
+  #app .business-workbench .customer-default-badge { color:#21834a; font-weight:500; }
+  #app .business-workbench .factory-filter-employee { flex:0 1 210px; min-width:0; }
+  #app .business-workbench .factory-summary { gap:8px 20px; padding:8px 12px; font-size:12px; }
+  #app .business-workbench .factory-summary strong { font-size:15px; }
+
+  /* A shared dialog frame with a single scroll owner and visible actions. */
+  #app .business-dialog {
+    padding:0; border:1px solid #d8e0eb; border-radius:8px; background:white; color:var(--ink);
+    max-height:calc(100dvh - 24px); box-sizing:border-box; overflow:hidden;
+  }
+  #app .business-dialog > header,
+  #app .business-dialog .business-dialog-heading {
+    flex:none; display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:14px 18px; margin:0; border-bottom:1px solid var(--line); background:white;
+  }
+  #app .business-dialog :is(header h2,.business-dialog-heading h2) { margin:0; font-size:16px; line-height:24px; }
+  #app .business-dialog > header > button,
+  #app .business-dialog .business-dialog-heading > button {
+    position:static; display:flex; align-items:center; justify-content:center; flex:none;
+    width:30px; height:30px; min-height:30px; padding:0; border:0; border-radius:4px;
+    background:transparent; color:#64748b; font-size:24px; line-height:1;
+  }
+  #app .business-dialog > header > button:hover:not(:disabled),
+  #app .business-dialog .business-dialog-heading > button:hover:not(:disabled) { background:#f0f3f7; color:#172033; }
+  #app .business-dialog > .access-dialog-body { padding:16px 18px; min-height:0; overflow:auto; }
+  #app .business-dialog > footer,
+  #app .business-dialog .operation-form__actions {
+    flex:none; margin:0; padding:12px 18px; border-top:1px solid var(--line); background:#fafbfd;
+  }
+  #app .business-dialog > .access-dialog-pagination { padding:0; }
+  #app .business-detail,
+  #app .business-picker { height:min(760px,calc(100dvh - 24px)); }
+  #app .business-detail > .access-dialog-body,
+  #app .business-picker > .access-dialog-body { flex:1; }
+  #app .business-editor { width:min(900px,calc(100vw - 24px)); }
+  #app .business-native-form > form.operation-dialog__card {
+    position:static; display:flex; flex-direction:column; gap:0; padding:0; border:0; box-shadow:none;
+    width:100%; max-width:none; max-height:calc(100dvh - 26px); min-height:0; overflow:hidden;
+  }
+  #app .business-dialog-fields {
+    display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-content:start; align-items:start;
+    gap:14px; flex:1; min-height:0; padding:16px 18px; overflow:auto;
+  }
+  #app .business-dialog-fields > :is(.form-wide,h3),
+  #app .business-dialog-fields > p { grid-column:1/-1; }
+  #app .business-dialog-fields > h3 { margin:4px 0 0; font-size:14px; padding-bottom:8px; border-bottom:1px solid #e8edf3; }
+  #app .business-dialog :is(.factory-form,.expense-form,.customer-product-basic,.customer-export-fields,.operation-form) label,
+  #app .business-dialog-fields > label { min-width:0; align-self:start; font-size:13px; line-height:20px; font-weight:400; }
+  #app .business-dialog :is(.factory-form,.expense-form,.customer-product-basic,.customer-export-fields) label,
+  #app .business-dialog-fields > label { display:grid; gap:6px; }
+  #app .business-dialog :is(.factory-check,.customer-address-actions label),
+  #app .business-dialog label.business-checkbox { display:flex; align-items:center; gap:8px; }
+  #app .business-dialog :is(.factory-form,.expense-form,.customer-product-basic,.customer-export-fields,.business-dialog-fields) :is(.date-picker,.single-select-trigger,.factory-picker-button) { width:100%; min-width:0; min-height:40px; box-sizing:border-box; }
+  #app .business-dialog .factory-inline { min-width:0; }
+  #app .business-dialog .factory-inline > .factory-picker-button { width:0; min-width:0; flex:1; }
+  #app .business-dialog .customer-title-card { padding:12px; border-radius:5px; gap:12px; background:#fafbfd; }
+  #app .business-dialog .customer-title-card legend { padding:0 5px; font-size:13px; font-weight:500; }
+  #app .business-dialog .factory-facts,
+  #app .business-dialog .expense-facts { margin:0; padding:12px; gap:14px 10px; border:1px solid #e3e8ef; border-radius:5px; background:#fafbfd; font-size:13px; }
+  #app .business-dialog .factory-metrics { margin:0 0 14px; gap:8px; }
+  #app .business-dialog .factory-metrics > div { padding:12px; border-radius:5px; }
+  #app .business-dialog .factory-metrics span { margin-bottom:4px; }
+  #app .business-dialog .factory-metrics strong { font-size:18px; }
+  #app .business-dialog :is(.factory-tabs,.factory-editor-tabs) { margin:0 0 14px; gap:20px; }
+  #app .business-dialog .factory-picker-search { flex-wrap:wrap; align-items:center; gap:8px; }
+  #app .business-dialog .factory-picker-search > input { flex:1 1 200px; }
+  #app .business-dialog .factory-parent-filter { display:flex; align-items:center; gap:8px; flex:1 1 280px; min-width:0; }
+  #app .business-dialog .factory-parent-filter .single-select-trigger { flex:1; min-width:0; width:0; min-height:32px; height:32px; }
+  #app .business-dialog .factory-picker-search > button { flex:none; min-height:32px; padding:5px 16px; border:1px solid #2864c5; background:#2864c5; color:#fff; }
+
+  /* Explicit semantics; never infer a primary/destructive action by position. */
+  #app .business-primary:not(:disabled) { background:#21834a; border:1px solid #21834a; color:#fff; }
+  #app .business-secondary { background:white; border:1px solid #c8d8ee; color:#2864c5; }
+  #app .business-danger,
+  .row-more-actions__menu .business-danger { color:#b42318; }
+  #app .business-workbench .order-detail-toolbar > .business-danger { color:#b42318; background:#fff7f6; border:1px solid #edcbc7; }
+  .row-more-actions__menu a { display:flex; align-items:center; min-height:32px; padding:0 10px; font-size:13px; text-decoration:none; color:#2864c5; border-radius:4px; }
+  .row-more-actions__menu a:hover { background:#edf4ff; }
+  #app .business-workbench .business-toolbar button:disabled,
+  #app .business-workbench > .filter-panel > button:disabled { background:#f1f3f6; border-color:#e0e5ed; color:#9aa4b3; opacity:1; cursor:not-allowed; }
+  #app .business-workbench button:focus-visible,
+  #app .business-dialog button:focus-visible { outline:2px solid #2864c5; outline-offset:2px; }
+}
+@media screen and (max-width:700px) {
+  #app .business-workbench > .filter-panel > label,
+  #app .business-workbench > .filter-panel > label:first-child,
+  #app .business-workbench > .filter-panel > .date-range-filter,
+  #app .business-workbench > .filter-panel > label:has(.date-picker) { flex:1 1 100%; }
+  #app .business-workbench .business-toolbar > :is(p,span) { flex-basis:100%; margin:0; }
+  #app .business-dialog-fields { grid-template-columns:minmax(0,1fr); padding:12px; }
+  #app .business-dialog > .access-dialog-body { padding:12px; }
+  #app .business-dialog .customer-title-card { grid-template-columns:minmax(0,1fr); }
+  #app .business-dialog :is(.factory-facts,.expense-facts) { grid-template-columns:85px minmax(0,1fr); }
+  #app .business-dialog .factory-metrics strong { font-size:15px; }
+}
+
+@media screen {
+  #app .business-order-shell { width:min(1400px,calc(100vw - 24px)); }
+  #app .business-order-shell[open] { display:flex; flex-direction:column; }
+  #app .business-order-shell::backdrop { background:#17203366; }
+  #app .business-order-shell .order-editor { width:100%; border:0; border-radius:0; box-shadow:none; max-height:calc(100dvh - 26px); }
+  #app .business-order-shell .order-editor-heading { padding:14px 18px; align-items:center; }
+  #app .business-order-shell .order-editor-heading h2 { font-size:16px; margin:0; }
+  #app .business-order-shell .order-editor-heading p { margin:4px 0 0; }
+  #app .business-order-shell .order-editor-body { padding:16px 18px; }
+  #app .business-order-shell .order-editor > .form-footer { padding:12px 18px; background:#fafbfd; }
+  #app .business-order-shell .order-line-toolbar button { background:white; border:1px solid #c8d8ee; color:#2864c5; }
+  #app .business-invoice-dialog, #app .business-shipment-dialog { width:min(1180px,calc(100vw - 24px)); }
+  #app .business-dialog .business-invoice-form { width:100%; max-height:none; overflow:visible; }
+  #app .business-invoice-facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px 20px; margin:14px 0; padding:14px; border:1px solid #e3e8ef; border-radius:5px; background:#fafbfd; }
+  #app .business-invoice-facts > div { min-width:0; }
+  #app .business-invoice-facts dt { color:#69788d; font-size:12px; margin-bottom:4px; }
+  #app .business-invoice-facts dd { margin:0; font-size:13px; overflow-wrap:anywhere; }
+  #app .business-invoice-total { text-align:right; font-size:14px; font-weight:600; font-variant-numeric:tabular-nums; }
+  #app .business-invoice-form > fieldset { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; border:0; padding:12px 0; margin:0; }
+  #app .business-invoice-form > fieldset > label { display:grid; gap:6px; min-width:0; }
+  #app .business-invoice-form > fieldset > label.business-checkbox { grid-column:1/-1; display:flex; align-items:center; }
+  #app .business-shipment-dialog .order-arrange { width:100%; max-width:none; max-height:none; margin:0; padding:0; border:0; overflow:visible; }
+  #app .business-shipment-dialog .order-scroll { max-height:45dvh; }
+  #app .business-context { color:#64748b; font-size:13px; margin:0; }
+  #app .business-dialog .factory-form :is(.factory-secondary, .factory-primary, .factory-inline > button:not(.factory-picker-button)),
+  #app .business-dialog-fields > button.secondary-button { justify-self:start; min-height:32px; padding:5px 12px; background:#fff; border:1px solid #c8d8ee; color:#2864c5; }
+  #app .business-dialog .factory-form .danger { color:#b42318; }
+  #app .business-dialog .factory-form > .factory-editor-tabs { grid-column:1/-1; }
+}
+@media screen and (max-width:700px) {
+  #app .business-invoice-facts, #app .business-invoice-form > fieldset { grid-template-columns:minmax(0,1fr); }
+  #app .business-order-shell .order-editor-body { padding:12px; }
+  #app .business-order-shell .order-editor { padding:0; }
+}
+
+@media screen {
+  #app .business-workbench > .filter-panel > .business-filter-toggle { min-height:32px; padding:5px 12px; border:1px solid #c8d8ee; border-radius:4px; background:white; color:#2864c5; font:inherit; white-space:nowrap; }
+  #app .business-dialog .ui-dialog-actions > button.business-danger:not(:disabled) { background:#fff5f4; border-color:#f1c6c2; color:#b42318; }
+}
+
+@media screen {
+  #app .business-dialog .business-remove { justify-self:start; min-height:30px; padding:4px 10px; border:1px solid #edcbc7; border-radius:4px; background:#fff7f6; color:#b42318; font-size:12px; }
+  #app .business-dialog .customer-batch-products--empty { min-height:110px; }
+}
+
+@media screen {
+  #app .business-dialog .factory-attachments ul { list-style:none; margin:10px 0; padding:0; }
+  #app .business-dialog .factory-attachments li { display:flex; align-items:center; gap:12px; padding:8px 10px; border:1px solid #e3e8ef; border-radius:4px; background:#fafbfd; }
+  #app .business-dialog .factory-attachments li button { min-width:0; text-align:left; overflow-wrap:anywhere; }
+  #app .business-dialog .factory-attachments li small { flex:none; margin-left:auto; color:#7b8799; }
+}

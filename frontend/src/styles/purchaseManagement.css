@@ -91,3 +91,87 @@
 #app .purchase-picker-dialog .image-button{padding:0;overflow:hidden}
 #app .purchase-picker-dialog > .access-dialog-pagination{flex:none}
 @media(max-width:600px){#app .purchase-picker-dialog > .access-dialog-body{padding:10px}#app .purchase-picker-dialog .purchase-picker-image{width:56px}#app .purchase-picker-dialog .purchase-picker-action{width:72px}#app .purchase-picker-dialog .data-table th,#app .purchase-picker-dialog .data-table td{padding:8px}}
+
+/* Item remarks share the monitoring pencil + anchored editor interaction. */
+#app .purchase-editor .purchase-edit-lines{min-width:1120px}
+#app .purchase-editor .purchase-col-remark{width:150px}
+.purchase-line-remark{display:flex;align-items:center;gap:6px;min-width:0}
+.purchase-line-remark>span{white-space:pre-wrap;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;flex:1;font-size:12px;color:#2864c5}
+#app .purchase-editor .purchase-remark-edit{display:inline-flex;align-items:center;justify-content:center;flex:none;align-self:center;min-width:24px;min-height:28px;padding:2px;border:0;background:transparent;color:#21834a}
+.purchase-item-remark{white-space:pre-wrap!important;overflow-wrap:anywhere;max-width:220px;min-width:110px}
+
+/* Stable purchase detail frame: content scrolls without resizing its own boundary. */
+#app .access-dialog.purchase-detail-dialog{width:min(1180px,calc(100vw - 24px));height:min(800px,calc(100dvh - 24px));max-height:calc(100dvh - 24px);overflow:hidden}
+#app .purchase-detail-dialog>.access-dialog-body{flex:1;display:flex;min-height:0;overflow:hidden;padding:12px 14px}
+#app .purchase-detail-dialog>header>button{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;border:0;background:transparent;color:#64748b;font-size:24px}
+#app .purchase-detail-dialog>header>button:hover{background:#f1f5f9;color:#24334b}
+#app .purchase-detail-dialog .purchase-detail{display:flex;flex-direction:column;min-height:0;width:100%;overflow:hidden}
+.purchase-detail-overview{display:flex;align-items:center;gap:16px;padding:12px 14px;background:#f7f9fc;border:1px solid #e2e8f0;border-radius:6px;flex:none}
+.purchase-detail-identity{min-width:0;flex:1}
+.purchase-detail-heading{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;margin-bottom:6px}
+.purchase-detail-heading>strong{font-size:15px;letter-spacing:.2px;overflow-wrap:anywhere}
+#app .purchase-detail .purchase-detail-supplier{padding:0;min-height:24px;border:0;background:transparent;color:#64748b;font-size:12px;text-decoration:underline;text-underline-offset:3px;text-align:left;white-space:normal}
+.purchase-detail-supplier-name{color:#64748b;font-size:12px}
+.purchase-detail-total{display:grid;gap:3px;text-align:right;flex:none;font-variant-numeric:tabular-nums}
+.purchase-detail-total>span{color:#7b8799;font-size:11px}.purchase-detail-total>strong{font-size:22px;font-weight:600;color:#24334b}
+.purchase-detail-total small{font-size:12px;font-weight:400;color:#69788d;margin-right:6px}
+#app .purchase-detail .purchase-detail-reload{padding:4px 6px;background:transparent;color:#69788d;border:0;font-size:12px}
+#app .purchase-detail .purchase-summary-fields{gap:10px 24px;margin:12px 2px;flex:none}
+#app .purchase-detail .purchase-summary-fields>div{display:grid;gap:4px;align-content:start;min-width:0}
+.purchase-detail .purchase-summary-fields dt{font-size:11px}.purchase-detail .purchase-summary-fields dd{font-size:13px;line-height:1.5;max-height:72px;overflow:auto}
+.purchase-detail .purchase-detail-note{grid-column:1/-1}
+.purchase-detail-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;border-bottom:1px solid #e2e8f0;margin-bottom:10px;flex:none}
+#app .purchase-detail-toolbar .access-tabs{order:0;margin:0;border:0;padding:0;gap:20px;flex-wrap:wrap}
+#app .purchase-detail-toolbar .access-tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;padding:10px 0;background:transparent;color:#69788d;font-size:13px}
+#app .purchase-detail-toolbar .access-tabs button.active{border-bottom-color:#2864c5;color:#2864c5;font-weight:600}
+#app .purchase-detail-toolbar .purchase-detail-actions{order:1;margin:0 0 6px;gap:8px;flex-wrap:wrap}
+#app .purchase-detail-actions button{padding:5px 12px;min-height:32px;font-size:13px;line-height:20px}
+#app .purchase-detail-actions .purchase-detail-primary{background:#21834a;color:white;border-color:#21834a}
+#app .purchase-detail-actions .purchase-detail-secondary{background:white;color:#2864c5;border-color:#b8ccef}
+#app .purchase-detail-actions .purchase-detail-danger{background:#fff7f6;color:#b42318;border-color:#f0cbc7}
+.purchase-detail-content{min-width:0}
+#app .purchase-detail-dialog .purchase-detail-content{display:flex;flex-direction:column;flex:1;min-height:0;overflow:auto}
+#app .purchase-detail-dialog .purchase-detail-content>.table-viewport{flex:1;min-height:0;max-height:none!important}
+#app .purchase-detail .purchase-detail-table{table-layout:fixed;min-width:1000px}
+.purchase-detail-table .detail-col-image{width:96px}.purchase-detail-table .detail-col-product{width:auto}
+.purchase-detail-table .detail-col-count{width:80px}.purchase-detail-table .detail-col-price{width:96px}.purchase-detail-table .detail-col-tax{width:70px}.purchase-detail-table .detail-col-remark{width:140px}.purchase-detail-table .detail-col-amount{width:104px}
+#app .purchase-detail-table th{padding:9px 10px;font-size:12px;font-weight:500;white-space:nowrap;color:#69788d}
+#app .purchase-detail-table td{padding:12px 10px;vertical-align:middle;white-space:normal;overflow-wrap:anywhere;border-bottom:1px solid #edf0f5;background:white}
+#app .purchase-detail-table tr:hover td{background:#f8faff}
+#app .purchase-detail-table .detail-number{text-align:right;font-variant-numeric:tabular-nums}
+#app .purchase-detail-table .detail-received{color:#64748b}.purchase-detail-table .detail-amount{font-weight:600}
+#app .purchase-detail-table .purchase-item-remark{color:#2864c5;min-width:0}
+#app .purchase-detail-table .image-button,#app .purchase-detail-table .catalog-image{width:72px;height:72px;min-width:72px;min-height:72px;border-radius:5px;object-fit:contain;flex:none}
+#app .purchase-detail-table .image-button{padding:0;background:transparent;border:1px solid #e2e8f0}
+#app .purchase-detail-table td:first-child>small{font-size:10px;color:#8b96a6}
+#app .purchase-detail .purchase-receipt{padding:12px;border:1px solid #e2e8f0;border-radius:6px;background:white;margin-bottom:10px;flex:none;font-size:13px;line-height:1.6}
+#app .purchase-detail>.list-pagination{flex:none}
+@media(max-width:700px){.purchase-detail-overview{flex-wrap:wrap;gap:8px 12px}.purchase-detail-heading>strong{font-size:13px}.purchase-detail-total>strong{font-size:18px}.purchase-detail-toolbar{gap:4px}.purchase-detail-toolbar .purchase-detail-actions{width:100%}#app .purchase-detail .purchase-summary-fields{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.purchase-detail-overview>.purchase-detail-reload{margin-left:auto}}
+@media(max-height:600px){#app .purchase-detail-dialog>.access-dialog-body{overflow:auto}#app .purchase-detail-dialog .purchase-detail{overflow:visible}#app .purchase-detail-dialog .purchase-detail-content{flex:none;overflow:visible}#app .purchase-detail-dialog .purchase-detail-content>.table-viewport{flex:none;max-height:320px!important}}
+
+/* Dashboard receipt context: dates and item-specific remarks stay visible. */
+#app .dashboard-purchase-table{min-width:1080px}
+#app .dashboard-purchase-table .dashboard-purchase-order{width:20%}
+#app .dashboard-purchase-table .dashboard-purchase-remark{width:200px}
+#app .dashboard-purchase-order-note{white-space:pre-wrap;margin-top:8px;color:#69788d}
+
+/* Real item rows share one height and a continuous separator across product/quantity/note. */
+#app .purchase-grouped-table{border-collapse:collapse;border-spacing:0}
+#app .purchase-grouped-table>tbody>tr>td{background:#fff;border-bottom:1px solid #e3e8ef}
+#app .purchase-grouped-table>tbody>tr.purchase-group-tinted>td{background:#f3f6fc}
+#app .purchase-grouped-table .purchase-group-product{min-width:260px;padding:12px}
+#app .purchase-grouped-table .purchase-list-product{display:flex;align-items:center;gap:12px;height:auto;min-height:48px;margin:0;padding:0;border:0}
+#app .purchase-grouped-table .purchase-group-quantity{white-space:nowrap;min-width:100px;padding:12px}
+#app .purchase-grouped-table .purchase-group-note{min-width:150px;max-width:240px;padding:12px;color:#2864c5;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6}
+#app .dashboard-purchase-table{min-width:960px}
+
+/* With rowspan, a continuation row ends at its note, not the action column. */
+#app .purchase-grouped-table.ui-action-table>tbody>tr>td:last-child:not(.table-actions){position:static;right:auto;z-index:auto;box-shadow:none}
+
+/* Compact purchase list columns; keep dashboard and editor sizing independent. */
+#app .purchase-grouped-table.ui-action-table .purchase-group-product{width:220px;min-width:220px;max-width:240px;padding-inline:10px;box-sizing:border-box}
+#app .purchase-grouped-table.ui-action-table .purchase-list-product{width:auto;min-width:0;max-width:none;gap:8px}
+#app .purchase-grouped-table.ui-action-table .purchase-list-product>.image-button,#app .purchase-grouped-table.ui-action-table .purchase-list-product>.catalog-image{flex:none}
+#app .purchase-grouped-table.ui-action-table .purchase-group-note{width:110px;min-width:110px;max-width:140px;padding-inline:10px;box-sizing:border-box}
+#app .purchase-grouped-table.ui-action-table .purchase-logistics-cell{width:140px;min-width:130px;max-width:160px;white-space:normal;overflow-wrap:anywhere;box-sizing:border-box}
+#app .purchase-grouped-table.ui-action-table .purchase-logistics-summary{max-width:140px;min-width:0}

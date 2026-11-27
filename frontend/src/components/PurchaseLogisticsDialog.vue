@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import {copyPurchaseLogistics} from '@/ui/copyPurchaseLogistics'
 import SingleFileUpload from './SingleFileUpload.vue'
 import PurchaseItemImage from './PurchaseItemImage.vue'
 import { catalogApi } from '@/api/catalog'
@@ -13,7 +14,7 @@ const carrier = ref(props.order.carrier ?? ''), tracking = ref(props.order.track
 const waybill=ref(props.order.waybillImageId??null),uploading=ref(false)
 async function upload(file:File){uploading.value=true;error.value='';try{waybill.value=(await catalogApi.uploadImage('PURCHASE_WAYBILL',file)).id}catch(e){error.value=e instanceof Error?e.message:'上传失败';throw e}finally{uploading.value=false}}
 const version=ref(props.order.version),conflict=ref<PurchaseOrder>(),copied=ref(false)
-async function copy(){try{await navigator.clipboard.writeText(tracking.value);copied.value=true}catch{error.value='复制失败，请手动选择运单文字'}}
+async function copy(){try{await copyPurchaseLogistics(carrier.value,tracking.value);copied.value=true}catch{error.value='复制失败，请手动选择运单文字'}}
 function unload(e:BeforeUnloadEvent){if(dirty.value||busy.value||uploading.value){e.preventDefault();e.returnValue=''}}
 onMounted(()=>window.addEventListener('beforeunload',unload));onBeforeUnmount(()=>window.removeEventListener('beforeunload',unload))
 function keep(){if(conflict.value)version.value=conflict.value.version;conflict.value=undefined;error.value='草稿保留，请核对后再次保存'}
@@ -36,9 +37,27 @@ async function save() {
     :dirty="dirty"
     @close="emit('close')"
   >
-    <p class="access-muted">
-      {{ order.orderNo }} · {{ order.supplierName }}
-    </p>
+    <dl
+      class="purchase-logistics-context"
+      aria-label="采购商品与供应商"
+    >
+      <dt>品名</dt>
+      <dd class="purchase-logistics-products">
+        <ul v-if="order.lines.length">
+          <li
+            v-for="line in order.lines"
+            :key="line.id"
+          >
+            {{ line.itemName || '未命名商品' }}
+          </li>
+        </ul>
+        <span v-else>暂无商品信息</span>
+      </dd>
+      <dt>供应商</dt>
+      <dd class="purchase-logistics-supplier">
+        {{ order.supplierName || '未填写供应商' }}
+      </dd>
+    </dl>
     <section
       v-if="conflict"
       class="purchase-warning"
@@ -115,7 +134,7 @@ async function save() {
       type="button"
       @click="copy"
     >
-      {{ copied?'已复制':'复制运单号' }}
+      {{ copied?'已复制':'复制物流信息' }}
     </button>
     <template #footer>
       <button
@@ -137,5 +156,13 @@ async function save() {
   </AccessDialog>
 </template>
 <style scoped>
+.purchase-logistics-context{display:grid;grid-template-columns:48px minmax(0,1fr);align-items:baseline;gap:6px 12px;margin:0 0 16px;padding:12px 14px;border:1px solid #e7ebf1;border-radius:6px;background:#f8fafc;font-size:13px;line-height:20px}
+.purchase-logistics-context dt{color:#7b8799;font-size:12px;font-weight:400}
+.purchase-logistics-context dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.purchase-logistics-products{max-height:112px;overflow:auto;color:var(--ink);font-weight:500}
+.purchase-logistics-products ul{list-style:none;margin:0;padding:0}
+.purchase-logistics-products li+li{margin-top:4px}
+.purchase-logistics-supplier{color:#69788d}
+
 .purchase-tracking-state{margin-top:16px;padding:12px;background:#f6f8fb;border:1px solid var(--line);border-radius:5px;font-size:13px}.purchase-tracking-state p{color:var(--muted);line-height:1.6;margin-bottom:0}
 </style>

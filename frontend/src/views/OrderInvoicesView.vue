@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import '@/styles/businessWorkbench.css'
 import CustomerProductImage from '@/components/CustomerProductImage.vue'
 import { vSingleSelect } from '@/directives/singleSelect'
 import DatePicker from '@/components/DatePicker.vue'
@@ -12,6 +13,7 @@ import TableViewport from '@/components/TableViewport.vue'
 import SuccessToast from '@/components/SuccessToast.vue'
 import OrderDocuments from '@/components/OrderDocuments.vue'
 import ProductName from '@/components/ProductName.vue'
+import AccessDialog from '@/components/AccessDialog.vue'
 import UnsavedChangesDialog from '@/components/UnsavedChangesDialog.vue'
 const route = useRoute(), router = useRouter(), legacy = ref(false)
 const writable = computed(() => session.canAccess(['invoices.write']))
@@ -29,7 +31,7 @@ watch(() => route.query.invoiceId, openFromRoute)
 onMounted(async () => { await load(); await openFromRoute() })
 </script>
 <template>
-  <section class="domain-grid order-invoices">
+  <section class="domain-grid order-invoices business-workbench">
     <div
       class="ui-section-tabs"
       aria-label="发票台账类型"
@@ -85,7 +87,18 @@ onMounted(async () => { await load(); await openFromRoute() })
                 <RouterLink :to="`/orders/customers/${item.orderId}`">
                   {{ item.snapshot.orderNumber }}
                 </RouterLink>
-              </td><td>{{ item.snapshot.customerName }}</td><td>{{ item.snapshot.invoiceTitle.invoiceTitle }}</td><td>{{ item.snapshot.lines.length }} 项</td><td>{{ item.snapshot.netAmount }}</td><td>{{ item.snapshot.taxAmount }}</td><td>{{ item.snapshot.totalAmount }}</td><td>{{ item.invoiced ? '已开票' : '待开票' }}</td><td>{{ item.invoiceNumber || '—' }}</td><td>{{ item.invoiceDate || '—' }}</td><td>
+              </td><td>{{ item.snapshot.customerName }}</td><td>{{ item.snapshot.invoiceTitle.invoiceTitle }}</td><td>{{ item.snapshot.lines.length }} 项</td><td class="business-number">
+                {{ item.snapshot.netAmount }}
+              </td><td class="business-number">
+                {{ item.snapshot.taxAmount }}
+              </td><td class="business-number">
+                {{ item.snapshot.totalAmount }}
+              </td><td>
+                <span
+                  class="business-status"
+                  :data-state="item.invoiced?'ACTIVE':'PENDING'"
+                >{{ item.invoiced ? '已开票' : '待开票' }}</span>
+              </td><td>{{ item.invoiceNumber || '—' }}</td><td>{{ item.invoiceDate || '—' }}</td><td>
                 <button @click="open(item)">
                   详情
                 </button>
@@ -108,19 +121,21 @@ onMounted(async () => { await load(); await openFromRoute() })
         @update:page="page=$event; load()"
       />
     </template>
-    <div
+    <AccessDialog
       v-if="selected"
-      class="operation-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-label="订单发票详情"
-      @keydown.esc.stop="close"
+      title="订单发票详情"
+      dialog-class="business-dialog business-invoice-dialog"
+      wide
+      :busy="saving"
+      @close="close"
     >
+      <SuccessToast :message="success" />
       <form
-        class="panel operation-dialog__card invoice-card"
+        id="business-invoice-form"
+        class="invoice-card business-invoice-form"
         @submit.prevent="save"
       >
-        <h2>订单发票</h2><UnsavedChangesDialog
+        <UnsavedChangesDialog
           v-if="discard"
           @keep="discard=false"
           @discard="selected=undefined; discard=false"
@@ -134,7 +149,14 @@ onMounted(async () => { await load(); await openFromRoute() })
             {{ selected.snapshot.orderNumber }}
           </button> · 客户：{{ selected.snapshot.customerName }}
         </p>
-        <p>抬头：{{ selected.snapshot.invoiceTitle.invoiceTitle }} · 税号：{{ selected.snapshot.invoiceTitle.taxNumber }}</p><p>注册地址：{{ selected.snapshot.invoiceTitle.registeredAddress }} · 电话：{{ selected.snapshot.invoiceTitle.registeredPhone }}</p><p>开户银行：{{ selected.snapshot.invoiceTitle.bankName }} · 账号：{{ selected.snapshot.invoiceTitle.bankAccount }}</p>
+        <dl class="business-invoice-facts">
+          <div><dt>发票抬头</dt><dd>{{ selected.snapshot.invoiceTitle.invoiceTitle || '—' }}</dd></div>
+          <div><dt>纳税人识别号</dt><dd>{{ selected.snapshot.invoiceTitle.taxNumber || '—' }}</dd></div>
+          <div><dt>注册地址</dt><dd>{{ selected.snapshot.invoiceTitle.registeredAddress || '—' }}</dd></div>
+          <div><dt>注册电话</dt><dd>{{ selected.snapshot.invoiceTitle.registeredPhone || '—' }}</dd></div>
+          <div><dt>开户银行</dt><dd>{{ selected.snapshot.invoiceTitle.bankName || '—' }}</dd></div>
+          <div><dt>银行账号</dt><dd>{{ selected.snapshot.invoiceTitle.bankAccount || '—' }}</dd></div>
+        </dl>
         <div class="invoice-lines">
           <table class="data-table">
             <thead><tr><th>图片</th><th>品名</th><th>客户编码</th><th>规格及型号</th><th>单位</th><th>数量</th><th>不含税单价</th><th>税率%</th><th>不含税金额</th><th>税额</th><th>含税金额</th></tr></thead><tbody>
@@ -160,7 +182,9 @@ onMounted(async () => { await load(); await openFromRoute() })
             </tbody>
           </table>
         </div>
-        <p>不含税合计 ¥{{ selected.snapshot.netAmount }} · 税额 ¥{{ selected.snapshot.taxAmount }} · 含税合计 ¥{{ selected.snapshot.totalAmount }}</p>
+        <p class="business-invoice-total">
+          不含税合计 ¥{{ selected.snapshot.netAmount }} · 税额 ¥{{ selected.snapshot.taxAmount }} · 含税合计 ¥{{ selected.snapshot.totalAmount }}
+        </p>
         <fieldset
           class="operation-form"
           :disabled="saving || !writable || selected.invoiced"
@@ -176,7 +200,7 @@ onMounted(async () => { await load(); await openFromRoute() })
             v-model="form.invoiceDate"
             type="date"
             :required="form.invoiced"
-          /></label><label><input
+          /></label><label class="business-checkbox"><input
             v-model="form.refreshFromOrder"
             type="checkbox"
           >从订单更新未开票内容</label>
@@ -192,24 +216,27 @@ onMounted(async () => { await load(); await openFromRoute() })
           class="data-state--error"
         >
           {{ error }}
-        </p><footer class="ui-dialog-actions form-footer">
-          <button
-            type="button"
-            class="secondary-action"
-            :disabled="saving"
-            @click="close"
-          >
-            关闭
-          </button><button
-            v-if="writable && !selected.invoiced"
-            class="ui-button-primary"
-            :disabled="saving"
-          >
-            保存
-          </button>
-        </footer>
+        </p>
       </form>
-    </div>
+      <template #footer>
+        <button
+          type="button"
+          class="secondary-action"
+          :disabled="saving"
+          @click="close"
+        >
+          关闭
+        </button><button
+          v-if="writable && !selected.invoiced"
+          class="ui-button-primary"
+          type="submit"
+          form="business-invoice-form"
+          :disabled="saving"
+        >
+          {{ saving ? '保存中…' : '保存' }}
+        </button>
+      </template>
+    </AccessDialog>
   </section>
 </template>
 <style scoped>

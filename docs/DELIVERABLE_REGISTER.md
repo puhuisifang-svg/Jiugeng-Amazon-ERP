@@ -67,7 +67,7 @@
 
 | DEL-056 | 2026-11-25 | Codex → PJM | ERP-112 官网源码及辅料成本/删除、采购备注与UI累计发布交接 | v1.0 | In Review | 用户已授权提交main并部署；PJM执行 | [交接](../deliverables/pjm/ERP112_MATERIAL_PURCHASE_RELEASE_HANDOFF_2026-11-25.md)；前端802测试、后端455通过/1跳过、3个浏览器场景、官网2契约及构建通过；未提交，待PJM接棒 |
 | DEL-057 | 2026-11-26 | Codex → PJM | ERP-113采购导出备注及ERP-114辅料库存/流水/详情累计发布交接 | v1.0 | In Review | 用户已授权main及部署；PJM执行 | [交接](../deliverables/pjm/ERP113_ERP114_RELEASE_HANDOFF_2026-11-26.md)；前端812测试、后端459通过/1跳过、6个浏览器场景及导出图片复核通过；未提交，正式交接后PJM接棒 |
-| DEL-058 | 2026-11-27 | Codex → PJM | ERP-115辅料保存、采购运单/收货/备注、供应商及客户订单工厂UI累计发布交接 | v1.0 | In Review | 用户已授权main及部署；PJM执行 | [交接](../deliverables/pjm/ERP115_RELEASE_HANDOFF_2026-11-27.md)；前端835测试、后端464通过/1跳过、6浏览器场景与三尺寸专项通过；未提交，正式交接后PJM接棒 |
+| DEL-058 | 2026-11-27 | Codex → PJM | ERP-115累计功能发布、线上恢复与分块续传 | v1.1 | In Review | 用户授权恢复；应用已上线，工具/工作流配套待PJM提交 | [交接与恢复证据](../deliverables/pjm/ERP115_RELEASE_HANDOFF_2026-11-27.md)；应用7fed4af已核实、V111成功；主机工具安装及真实续传探针通过、18工具测试通过；CI配套未提交，非业务验收 |
 
 ## 登记要求
 

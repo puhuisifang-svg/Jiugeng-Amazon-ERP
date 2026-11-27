@@ -239,6 +239,8 @@ Vitest 测试多数与源码同目录；浏览器冒烟在 `frontend/e2e/`，使
 
 `release.py` 将完整 SHA 写入 `frontend/version.json` 并打包校验清单；`receive.sh` 检查健康和服务端前端版本。发布门禁包括仓库变量 `PRODUCTION_DEPLOY_ENABLED` 和服务器端开关；是否启用须现场核对。只读排查不授权修改门禁、重跑发布或重启线上服务。
 
+发布恢复路径（2026-11-27补充）：主机接收脚本不随应用包自动更新，必须先经授权备份/安装并校验，再启用新版workflow。`staged_upload.py`与`upload_release.py`提供分块续传，网络上传与部署锁分离；安装及实测证据见状态报告。Production在上传前留存原包、摘要与provenance；网络失败使用`retry-deployment.yml`指定原Production run和完整SHA，复用已测试产物，禁止反复重跑历史Production全流程。重试核对当前main应用源码（允许纯文档变化），最终激活在锁内校验上传前的当前版本；确认丢失不自动重发激活，先核对线上版本。旧两参数deploy保留兼容，不具备新增防倒退条件。人工管理通道与受限发布通道职责不同；SSH agent无身份不等于没有已有受限部署配置，先检查项目受控本地配置的存在性，禁止输出私钥/环境值。详细协议、磁盘配额、主机安装顺序见[生产运维说明](../../infra/production/README.md)。
+
 图片缓存案例（ERP-101 本地实现）：`utils/catalogImageCache.ts` 是会话隔离的 60 秒内存缓存，限制 32 MiB / 200 条；页面刷新清空。普通有效图片另有浏览器私有缓存，过期/刷新仍向服务端鉴权并用 ETag 校验，可返回 304；待绑定和敏感用途图片仍 no-store。应分别测量首次访问、内存命中、刷新后的 304 及来源更新；不能只看网络请求数量。`window.jiugengImageDiagnostics()` 与 `scripts/diagnostics/catalog-image-performance.js` 输出匿名耗时/大小，不输出图片地址或账号信息。
 
 ## 文档如何保持有效

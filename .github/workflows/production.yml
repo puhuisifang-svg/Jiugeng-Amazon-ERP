@@ -23,7 +23,7 @@ jobs:
     environment: production
     # Keep the browser smoke environment aligned with the frontend CI job.
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -65,7 +65,31 @@ jobs:
           npm test
           python3 validate_contract.py
       - name: Package tested revision
-        run: python3 scripts/production/release.py build . release.tar.gz "$GITHUB_SHA"
+        run: |
+          python3 scripts/production/release.py build . release.tar.gz "$GITHUB_SHA"
+          sha256sum release.tar.gz > release.tar.gz.sha256
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          Path('provenance.json').write_text(json.dumps({
+              'revision': os.environ['GITHUB_SHA'], 'buildRun': os.environ['GITHUB_RUN_ID'],
+              'buildAttempt': os.environ['GITHUB_RUN_ATTEMPT'],
+              'sha256': Path('release.tar.gz.sha256').read_text().split()[0],
+              'bytes': Path('release.tar.gz').stat().st_size,
+              'mode': 'production-tested-package'
+          }, indent=2)+'\n')
+          PY
+      - name: Retain tested release before network deployment
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: erp-release-${{ github.sha }}
+          path: |
+            release.tar.gz
+            release.tar.gz.sha256
+            provenance.json
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
       - name: Deploy through restricted SSH command
         env:
           DEPLOY_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
@@ -78,10 +102,9 @@ jobs:
           trap 'rm -f "$RUNNER_TEMP/erp-ssh/key"' EXIT
           printf '%s\n' "$DEPLOY_KEY" > "$RUNNER_TEMP/erp-ssh/key"
           printf '%s\n' "$KNOWN_HOSTS" > "$RUNNER_TEMP/erp-ssh/known_hosts"
-          digest=$(sha256sum release.tar.gz | cut -d' ' -f1)
-          ssh -T -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-            -o ConnectTimeout=15 -o ServerAliveInterval=20 \
-            -o UserKnownHostsFile="$RUNNER_TEMP/erp-ssh/known_hosts" \
-            -i "$RUNNER_TEMP/erp-ssh/key" "erp-deploy@$DEPLOY_HOST" \
-            "deploy $GITHUB_SHA $digest" < release.tar.gz
+          export DEPLOY_KEY_FILE="$RUNNER_TEMP/erp-ssh/key"
+          export DEPLOY_KNOWN_HOSTS_FILE="$RUNNER_TEMP/erp-ssh/known_hosts"
+          git fetch origin main
+          python3 scripts/production/verify_retry_source.py "$GITHUB_SHA"
+          python3 scripts/production/upload_release.py release.tar.gz "$GITHUB_SHA"
           echo "Published revision: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"

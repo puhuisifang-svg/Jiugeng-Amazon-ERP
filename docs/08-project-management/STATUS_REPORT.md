@@ -14,6 +14,13 @@
 
 
 
+## PJM 归档与 ERP-116 写入权交接（2026-11-27）
+
+- 稳定性配套已由 [PR #38](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/pull/38) 受保护合入 `c6438152c48fe57214d11dc8cd1046d4d44b90ee`；[该 SHA 的 CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/46004921654) 成功。下面“仓库配套尚未提交”为历史交接快照。
+- 本次核查 [新 Production](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/46004921599) 仍在运行，尚未核验该 SHA 实际上线；应用恢复成功证据仍见下节，不改写原失败 run 的结论。后续发布核验仍由 PJM 负责，不要求 Codex 等待。
+- 用户授权继续产品成本本地开发，分配 **ERP-116｜产品成本父子体展示与成本合计**。从上述最新 main 建立 `feature/ERP-116-product-cost-summary`，在工作区干净后将独占写入权交给 Codex；PJM 不并行编辑、测试、重启或切分支。
+- 范围：成本列表按产品管理父体/子体组织，明确成本合计及计算口径；核对单位成本与版本状态的用途并简化展示，但保留成本版本、并发及历史业务保护。本轮仅本地实现与验证，未授权提交、推送或发布。保留本地数据、持久服务及 OSS/采集隔离配置。
+
 ## ERP-115 发布恢复与传输稳定性（2026-11-27 21:02 CST）
 
 用户追加授权Codex协助恢复并提高稳定性；PJM明确释放本地/服务器独占槽并仅只读审查。本节覆盖下面早期“部署阻塞”快照，业务验收仍未执行。

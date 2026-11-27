@@ -11,7 +11,7 @@
 
 ## ERP-115 最新交接（2026-11-27）
 
-PJM后续结果：PR #35已受保护合入应用main `7fed4af671a6572afc788554e9b3d1d0fe42aca9`，CI全部通过；Production上传600秒仅接收9797632字节后超时，本轮尚未上线。线上仍为`38ec537461c0ac6e13780120391bdf849f2e8449`，V111无生产迁移成功证据。准确链接、恢复条件与边界见[当前状态报告](../08-project-management/STATUS_REPORT.md#erp-115-pjm发布结果2026-11-27部署阻塞)。不得盲目重试或删除锁；保留现有本地隔离及官网分流。
+PJM后续结果：原Production整包传输超时已保留为历史失败；应用 `7fed4af671a6572afc788554e9b3d1d0fe42aca9` 已从精确CI恢复包上线，现场确认V111成功。分块续传、原包留存及精确产物重试配套经[PR #38](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/pull/38)受保护合入 `c6438152c48fe57214d11dc8cd1046d4d44b90ee`。最新发布终态、版本及证据见[当前状态报告](../08-project-management/STATUS_REPORT.md)，不能以历史失败段落推断当前线上。保持已有本地隔离及官网分流；禁止常规重跑历史Production，使用新重试路径。
 
 用户已授权提交main及部署，见[ERP-115发布交接](../../deliverables/pjm/ERP115_RELEASE_HANDOFF_2026-11-27.md)。835前端测试、464后端通过/1既有跳过、6个浏览器场景及三尺寸受影响界面检查通过；修改未提交，正式交接后由PJM独占执行提交/合并/CI/CD/发布核验。Codex不跟踪线上结果。V111与运单接口要求前后端同发；保留本地服务与数据隔离。下文未授权/待验证为实施阶段历史。
 

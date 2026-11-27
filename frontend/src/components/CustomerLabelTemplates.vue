@@ -39,7 +39,7 @@ onBeforeUnmount(clearPreview)
 <template>
   <dialog
     ref="dialog"
-    class="label-modal"
+    class="label-modal business-dialog"
     aria-label="外箱标模板"
     @cancel.prevent="requestClose"
   >

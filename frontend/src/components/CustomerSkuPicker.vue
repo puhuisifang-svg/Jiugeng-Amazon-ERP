@@ -31,7 +31,7 @@ onMounted(load)
   <AccessDialog
     title="选择产品 SKU"
     wide
-    dialog-class="customer-sku-picker"
+    dialog-class="customer-sku-picker business-dialog business-picker"
     @close="emit('close')"
   >
     <form

@@ -39,6 +39,21 @@ class SupplierCloseoutTest {
   mvc.perform(get("/api/v1/suppliers").param("q","%_").header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(0));
   var result=mvc.perform(post("/api/v1/suppliers/manage/export").header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON).content(json(Map.of("q","供应分页合成")))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);assertThat(result).contains("供应分页合成10","合成联系人","第一行\n第二行");assertThat(SupplierManagementController.csv("=1+1\nnext")).startsWith("\"'=1+1");
  }
+ @Test void purchaseRelationsIncludeStoredItemNamesAndKeepOrderIdentity() throws Exception{
+  String token=admin();String supplier=save(token,command(master("采购名称合成供应商"))).path("id").asText();
+  for(int count=0;count<3;count++){
+   String order=UUID.randomUUID().toString(),number="SYN-"+count+"-"+order.substring(0,8);
+   jdbc.update("INSERT INTO purchase_order(id,order_no,order_type,supplier_id,status,currency,created_by,updated_by) VALUES(?,?,'MATERIAL',?,'SUBMITTED','CNY','synthetic','synthetic')",order,number,supplier);
+   for(int line=1;line<=count;line++)jdbc.update("INSERT INTO purchase_order_line(id,order_id,line_no,item_id,item_code,item_name,unit,ordered_quantity,unit_price) VALUES(?,?,?,?,?,?,'件',1,1)",UUID.randomUUID().toString(),order,line,UUID.randomUUID().toString(),"SYN-ITEM-"+line,"合成采购商品"+line);
+  }
+  mvc.perform(get("/api/v1/suppliers/manage/{id}/relations",supplier).param("type","PURCHASE").header("Authorization",bearer(token)))
+   .andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(3))
+   .andExpect(jsonPath("$.items[0].purchaseName").value("未命名采购"))
+   .andExpect(jsonPath("$.items[1].purchaseName").value("合成采购商品1"))
+   .andExpect(jsonPath("$.items[2].purchaseName").value("合成采购商品1 等 2 项"))
+   .andExpect(jsonPath("$.items[2].code").value(org.hamcrest.Matchers.startsWith("SYN-2-")))
+   .andExpect(jsonPath("$.items[2].name").value("SUBMITTED"));
+ }
  @Test void relationPagesEnforceDomainReadPermissions() throws Exception{
   String token=admin();String id=save(token,command(master("关联权限"))).get("id").asText();
   // Synthetic role deliberately grants supplier read only, without other domains or delete.
@@ -46,6 +61,7 @@ class SupplierCloseoutTest {
   String reader=createUserAndLogin("r-"+UUID.randomUUID().toString().substring(0,8),role);
   mvc.perform(get("/api/v1/suppliers/manage/{id}/impact",id).header("Authorization",bearer(reader))).andExpect(status().isOk()).andExpect(jsonPath("$.counts").isEmpty());
   mvc.perform(get("/api/v1/suppliers/manage/{id}/relations",id).param("type","PRODUCT").header("Authorization",bearer(reader))).andExpect(status().isForbidden());
+  mvc.perform(get("/api/v1/suppliers/manage/{id}/relations",id).param("type","PURCHASE").header("Authorization",bearer(reader))).andExpect(status().isForbidden());
   mvc.perform(get("/api/v1/suppliers/manage/{id}/relations",id).param("type","MATERIAL").header("Authorization",bearer(token))).andExpect(status().isOk()).andExpect(jsonPath("$.totalCount").value(0));
  }
  @Test void copiedContactImageHasIndependentStorage() throws Exception{

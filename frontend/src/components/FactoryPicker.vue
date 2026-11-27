@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import '@/styles/businessWorkbench.css'
+import { vSingleSelect } from '@/directives/singleSelect'
 import PurchaseItemImage from './PurchaseItemImage.vue'
 import {factoryProject} from '@/utils/factoryPresentation'
 import { ref,watch } from 'vue'
@@ -32,6 +34,7 @@ function choose(r:FactoryRecord){emit('select',r);open.value=false}
   <AccessDialog
     v-if="open"
     :title="label"
+    dialog-class="business-dialog business-picker factory-picker-dialog"
     wide
     @close="open=false"
   >
@@ -44,6 +47,7 @@ function choose(r:FactoryRecord){emit('select',r);open.value=false}
         class="factory-parent-filter"
       >父体<select
         v-model="parent"
+        v-single-select
         :disabled="parentsBusy"
         aria-label="父体筛选"
       ><option value="">全部父体</option><option

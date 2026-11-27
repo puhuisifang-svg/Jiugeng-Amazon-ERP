@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import RowMoreActions from '@/components/RowMoreActions.vue'
+import '@/styles/businessWorkbench.css'
 import { beijingDateTime } from '@/utils/dateTime'
 
 
@@ -55,7 +57,7 @@ async function exportLines(){if(!detail.value)return;busy.value=true;try{await f
 function print(){window.print()}
 </script>
 <template>
-  <section class="page-stack factory-ui">
+  <section class="page-stack factory-ui business-workbench">
     <SuccessToast :message="notice" />
     <form
       class="filter-panel factory-filters"
@@ -115,7 +117,7 @@ function print(){window.print()}
         重置
       </button>
     </form>
-    <div class="factory-toolbar">
+    <div class="factory-toolbar business-toolbar">
       <div>
         <button
           v-if="can('write')"
@@ -278,33 +280,38 @@ function print(){window.print()}
                 @click="open(r)"
               >
                 详情
-              </button><button
-                v-if="kind==='employees'&&can('write')"
-                class="factory-link"
-                @click="editor={mode:'save',record:r}"
+              </button><RowMoreActions
+                v-if="(kind==='employees'||kind==='rates')&&can('write')||kind==='reports'&&can('review')&&selectable(r)"
+                :label="`${r.name||r.employeeName||r.project}更多操作`"
               >
-                编辑
-              </button><button
-                v-if="kind==='employees'&&can('write')"
-                class="factory-link danger"
-                :disabled="busy"
-                @click="deleteEmployee(r)"
-              >
-                删除
-              </button><button
-                v-if="kind==='rates'&&can('write')"
-                class="factory-link"
-                @click="editor={mode:'save',record:r}"
-              >
-                调价
-              </button><button
-                v-if="kind==='reports'&&can('review')&&selectable(r)"
-                class="factory-link"
-                :disabled="busy"
-                @click="command('review',r)"
-              >
-                核对
-              </button>
+                <button
+                  v-if="kind==='employees'&&can('write')"
+                  class="factory-link"
+                  @click="editor={mode:'save',record:r}"
+                >
+                  编辑
+                </button><button
+                  v-if="kind==='employees'&&can('write')"
+                  class="business-danger"
+                  :disabled="busy"
+                  @click="deleteEmployee(r)"
+                >
+                  删除
+                </button><button
+                  v-if="kind==='rates'&&can('write')"
+                  class="factory-link"
+                  @click="editor={mode:'save',record:r}"
+                >
+                  调价
+                </button><button
+                  v-if="kind==='reports'&&can('review')&&selectable(r)"
+                  class="factory-link"
+                  :disabled="busy"
+                  @click="command('review',r)"
+                >
+                  核对
+                </button>
+              </RowMoreActions>
             </td>
           </tr><tr v-if="!rows.length">
             <td
@@ -331,6 +338,7 @@ function print(){window.print()}
     </ListPagination>
     <AccessDialog
       v-if="detail"
+      dialog-class="business-dialog business-detail"
       :title="`${title} · ${detail.name||detail.employeeName||detail.project}`"
       wide
       :busy="busy"
@@ -557,6 +565,7 @@ function print(){window.print()}
     </AccessDialog>
     <AccessDialog
       v-if="snapshot"
+      dialog-class="business-dialog business-detail"
       title="历史版本（只读）"
       wide
       @close="snapshot=undefined"

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import RowMoreActions from '@/components/RowMoreActions.vue'
+import '@/styles/businessWorkbench.css'
 import UnsavedChangesDialog from '@/components/UnsavedChangesDialog.vue'
 import CustomerCustomsFields from '@/components/CustomerCustomsFields.vue'
 import { blankCustoms, customsInput, type CustomsProfile } from '@/api/customs'
@@ -185,7 +187,7 @@ watch(()=>[props.kind,route.query.editCustomer,route.query.section],async()=>{
 </script>
 
 <template>
-  <section class="page-stack customer-management">
+  <section class="page-stack customer-management business-workbench">
     <CustomerLabelTemplates
       v-if="templateCustomer"
       :customer-id="templateCustomer.id"
@@ -235,8 +237,8 @@ watch(()=>[props.kind,route.query.editCustomer,route.query.section],async()=>{
         </button>
       </p>
     </div>
-    <div class="material-toolbar">
-      <strong>{{ isProduct && currentCustomer ? currentCustomer.name + '的商品' : title }} · 共 {{ total }} 条</strong><button
+    <div class="material-toolbar business-toolbar">
+      <button
         v-if="writable"
         type="button"
         :disabled="isProduct && (customersLoading || !!customersError || !activeCustomers.length)"
@@ -322,9 +324,14 @@ watch(()=>[props.kind,route.query.editCustomer,route.query.section],async()=>{
                   </button>
                 </td><td class="customer-long-text">
                   {{ item.address || '—' }}
-                </td><td class="customer-long-text">
+                </td><td class="customer-long-text business-note">
                   {{ item.remark || '—' }}
-                </td><td>{{ item.status === 'ACTIVE' ? '启用' : '停用' }}</td>
+                </td><td>
+                  <span
+                    class="business-status"
+                    :data-state="item.status"
+                  >{{ item.status === 'ACTIVE' ? '启用' : '停用' }}</span>
+                </td>
                 <td class="customer-actions">
                   <div class="customer-action-buttons">
                     <button
@@ -333,19 +340,30 @@ watch(()=>[props.kind,route.query.editCustomer,route.query.section],async()=>{
                       @click="open(item)"
                     >
                       编辑
-                    </button><button
+                    </button><RowMoreActions
                       v-if="writable"
-                      type="button"
-                      @click="templateCustomer = item"
+                      :label="`${item.name}更多操作`"
                     >
-                      外箱标模板
-                    </button><button
-                      v-if="writable && item.status === 'ACTIVE' && !item.defaultCustomer"
-                      type="button"
-                      @click="chooseDefault(item)"
+                      <button
+                        v-if="writable"
+                        type="button"
+                        @click="templateCustomer = item"
+                      >
+                        外箱标模板
+                      </button><button
+                        v-if="writable && item.status === 'ACTIVE' && !item.defaultCustomer"
+                        type="button"
+                        @click="chooseDefault(item)"
+                      >
+                        设为默认
+                      </button><RouterLink :to="{ path: '/customers/products', query: { customerId: item.id } }">
+                        客户商品
+                      </RouterLink>
+                    </RowMoreActions>
+                    <RouterLink
+                      v-if="!writable"
+                      :to="{ path: '/customers/products', query: { customerId: item.id } }"
                     >
-                      设为默认
-                    </button><RouterLink :to="{ path: '/customers/products', query: { customerId: item.id } }">
                       客户商品
                     </RouterLink>
                   </div>
@@ -366,9 +384,14 @@ watch(()=>[props.kind,route.query.editCustomer,route.query.section],async()=>{
                 </td>
                 <td>{{ item.productName }}<small>SKU：{{ item.skuCode || '未维护' }}</small></td><td class="customer-price">
                   {{ item.supplyPrice == null ? '未定价' : `¥${Number(item.supplyPrice).toFixed(2)}` }} / {{ item.priceUnit }}
-                </td><td>{{ item.customerProductCode || '—' }}</td><td class="customer-long-text">
+                </td><td>{{ item.customerProductCode || '—' }}</td><td class="customer-long-text business-note">
                   {{ item.requirements || '—' }}
-                </td><td>{{ item.status === 'ACTIVE' ? '启用' : '停用' }}</td><td
+                </td><td>
+                  <span
+                    class="business-status"
+                    :data-state="item.status"
+                  >{{ item.status === 'ACTIVE' ? '启用' : '停用' }}</span>
+                </td><td
                   v-if="isProduct || writable || session.canAccess(['customers.delete'])"
                   class="customer-actions"
                 >
@@ -379,27 +402,29 @@ watch(()=>[props.kind,route.query.editCustomer,route.query.section],async()=>{
                   >
                     编辑
                   </button>
-                  <button
-                    type="button"
-                    @click="showLegacyLabels = false; labelProduct = item"
-                  >
-                    商品标签
-                  </button>
-                  <button
-                    type="button"
-                    @click="openCustoms(item)"
-                  >
-                    报关资料
-                  </button>
-                  <button
-                    v-if="session.canAccess(['customers.delete'])"
-                    type="button"
-                    class="secondary-button"
-                    :disabled="deleting"
-                    @click="requestDelete(item)"
-                  >
-                    删除
-                  </button>
+                  <RowMoreActions :label="`${item.productName}更多操作`">
+                    <button
+                      type="button"
+                      @click="showLegacyLabels = false; labelProduct = item"
+                    >
+                      商品标签
+                    </button>
+                    <button
+                      type="button"
+                      @click="openCustoms(item)"
+                    >
+                      报关资料
+                    </button>
+                    <button
+                      v-if="session.canAccess(['customers.delete'])"
+                      type="button"
+                      class="business-danger"
+                      :disabled="deleting"
+                      @click="requestDelete(item)"
+                    >
+                      删除
+                    </button>
+                  </RowMoreActions>
                 </td>
               </tr>
             </tbody>
@@ -424,7 +449,7 @@ watch(()=>[props.kind,route.query.editCustomer,route.query.section],async()=>{
       v-if="labelProduct"
       :key="labelProduct.id"
       title="商品标签管理"
-      dialog-class="customer-product-label-dialog"
+      dialog-class="customer-product-label-dialog business-dialog business-detail"
       :busy="labelBusy"
       wide
       @close="labelProduct = undefined"
@@ -467,7 +492,7 @@ watch(()=>[props.kind,route.query.editCustomer,route.query.section],async()=>{
     <dialog
       v-if="opened"
       ref="dialog"
-      class="customer-dialog"
+      class="customer-dialog business-dialog business-native-form"
       :class="{'customer-dialog--batch':isProduct && !editingId}"
       :aria-label="`${editingId ? '编辑' : '新增'}${title}`"
       @cancel.prevent="escape"
@@ -477,456 +502,463 @@ watch(()=>[props.kind,route.query.editCustomer,route.query.section],async()=>{
         @submit.prevent="save"
         @invalid.capture="showInvalidProductField"
       >
-        <h2 class="form-wide">
-          {{ !writable ? '查看' : editingId ? '编辑' : '新增' }}{{ title }}
-        </h2><button
-          class="operation-dialog__close"
-          type="button"
-          aria-label="关闭表单"
-          :disabled="saving"
-          @click="requestClose"
-        >
-          ×
-        </button>
-        <template v-if="!isProduct">
-          <label class="form-wide"><span><input
-            v-model="customerForm.defaultCustomer"
-            type="checkbox"
-            :disabled="saving"
-          > 设为默认客户（新增发货自动选中）</span></label>
-          <label>客户名称 *<input
-            v-model="customerForm.name"
-            required
-            maxlength="128"
-            :disabled="saving"
-            placeholder="公司或客户名称"
-          ></label>
-          <h3 class="form-wide">
-            开票信息（可维护多个抬头）
-          </h3>
-          <fieldset
-            v-for="(entry, index) in customerForm.invoiceTitles"
-            :key="index"
-            class="form-wide customer-title-card"
-            :disabled="saving"
-          >
-            <legend>抬头 {{ index + 1 }}</legend>
-            <label
-              v-for="[key, label, max] in titleFields"
-              :key="key"
-            >{{ label }}<input
-              v-model="entry[key]"
-              v-phone="key === 'registeredPhone' ? 'contact' : false"
-              :maxlength="max"
-            ></label>
-            <button
-              type="button"
-              class="secondary-button"
-              @click="customerForm.invoiceTitles?.splice(index, 1)"
-            >
-              移除此抬头
-            </button>
-          </fieldset>
-          <button
+        <header class="business-dialog-heading">
+          <h2 class="form-wide">
+            {{ !writable ? '查看' : editingId ? '编辑' : '新增' }}{{ title }}
+          </h2><button
+            class="operation-dialog__close"
             type="button"
-            class="secondary-button form-wide"
-            :disabled="saving || (customerForm.invoiceTitles?.length ?? 0) >= 50"
-            @click="customerForm.invoiceTitles?.push(blankTitle())"
+            aria-label="关闭表单"
+            :disabled="saving"
+            @click="requestClose"
           >
-            添加发票抬头
+            ×
           </button>
-          <h3 class="form-wide">
-            联系信息
-          </h3>          <label>联系人<input
-            v-model="customerForm.contactPerson"
-            maxlength="64"
-            :disabled="saving"
-          ></label><label>手机号<input
-            v-model="customerForm.phone"
-            v-phone="'mobile'"
-            type="tel"
-            maxlength="32"
-            :disabled="saving"
-          ></label>
-          <label>微信<input
-            v-model="customerForm.wechatId"
-            maxlength="100"
-            :disabled="saving"
-          ></label><label>1688账号<input
-            v-model="customerForm.account1688"
-            maxlength="100"
-            :disabled="saving"
-            placeholder="客户的1688会员账号"
-          ></label>
-
-          <div class="form-wide customer-wechat-upload">
-            <label>微信名片</label>
-            <div
-              v-if="customerForm.wechatImageId"
-              class="customer-wechat-preview"
+        </header>
+        <div class="business-dialog-fields">
+          <template v-if="!isProduct">
+            <label class="form-wide"><span><input
+              v-model="customerForm.defaultCustomer"
+              type="checkbox"
+              :disabled="saving"
+            > 设为默认客户（新增发货自动选中）</span></label>
+            <label>客户名称 *<input
+              v-model="customerForm.name"
+              required
+              maxlength="128"
+              :disabled="saving"
+              placeholder="公司或客户名称"
+            ></label>
+            <h3 class="form-wide">
+              开票信息（可维护多个抬头）
+            </h3>
+            <fieldset
+              v-for="(entry, index) in customerForm.invoiceTitles"
+              :key="index"
+              class="form-wide customer-title-card"
+              :disabled="saving"
             >
+              <legend>抬头 {{ index + 1 }}</legend>
+              <label
+                v-for="[key, label, max] in titleFields"
+                :key="key"
+              >{{ label }}<input
+                v-model="entry[key]"
+                v-phone="key === 'registeredPhone' ? 'contact' : false"
+                :maxlength="max"
+              ></label>
               <button
                 type="button"
-                class="image-button"
-                @click="wechatPreview=customerForm.wechatImageId || undefined"
+                class="secondary-button business-remove"
+                @click="customerForm.invoiceTitles?.splice(index, 1)"
               >
-                <AuthenticatedCatalogImage
-                  :image-id="customerForm.wechatImageId"
-                  alt="微信名片"
-                />
-              </button><button
-                type="button"
-                class="ui-image-remove"
-                :disabled="saving"
-                @click="customerForm.wechatImageId=''"
-              >
-                移除图片
+                移除此抬头
               </button>
-            </div>
-            <SingleFileUpload
-              :key="editingId || 'new'"
-              title="上传微信名片"
-              hint="选择或粘贴后立即上传，保存客户后关联"
-              accept=".png,.jpg,.jpeg,.webp"
-              :max-mb="5"
-              :disabled="saving"
-              :upload="uploadWechat"
-            />
-          </div>
-          <h3 class="form-wide">
-            收货地址 <small>可维护多个地址，订单可直接选用</small>
-          </h3>
-          <fieldset
-            v-for="(entry,index) in customerForm.addresses"
-            :key="index"
-            class="form-wide customer-title-card customer-address-card"
-            :disabled="saving"
-          >
-            <legend>地址 {{ index + 1 }}</legend>
-            <AddressRecognition
-              class="form-wide"
-              :disabled="saving"
-              @recognize="Object.assign(entry,$event)"
-            />
-            <label>联系人<input
-              v-model="entry.contactPerson"
+            </fieldset>
+            <button
+              type="button"
+              class="secondary-button form-wide"
+              :disabled="saving || (customerForm.invoiceTitles?.length ?? 0) >= 50"
+              @click="customerForm.invoiceTitles?.push(blankTitle())"
+            >
+              添加发票抬头
+            </button>
+            <h3 class="form-wide">
+              联系信息
+            </h3>          <label>联系人<input
+              v-model="customerForm.contactPerson"
               maxlength="64"
-            ></label>
-            <label>联系电话<input
-              v-model="entry.phone"
-              v-phone
+              :disabled="saving"
+            ></label><label>手机号<input
+              v-model="customerForm.phone"
+              v-phone="'mobile'"
               type="tel"
               maxlength="32"
+              :disabled="saving"
             ></label>
-            <label class="form-wide">详细地址 *<input
-              v-model="entry.address"
-              required
-              maxlength="500"
+            <label>微信<input
+              v-model="customerForm.wechatId"
+              maxlength="100"
+              :disabled="saving"
+            ></label><label>1688账号<input
+              v-model="customerForm.account1688"
+              maxlength="100"
+              :disabled="saving"
+              placeholder="客户的1688会员账号"
             ></label>
-            <div class="form-wide customer-address-actions">
-              <label><input
-                type="radio"
-                name="default-address"
-                :checked="entry.defaultAddress"
-                @change="customerForm.addresses?.forEach((a,i)=>a.defaultAddress=i===index)"
-              > 默认地址</label>
-              <button
-                type="button"
-                class="danger-button"
-                @click="removeAddress(index)"
+
+            <div class="form-wide customer-wechat-upload">
+              <label>微信名片</label>
+              <div
+                v-if="customerForm.wechatImageId"
+                class="customer-wechat-preview"
               >
-                移除地址
-              </button>
-            </div>
-          </fieldset>
-          <button
-            type="button"
-            class="secondary-button form-wide"
-            :disabled="saving || (customerForm.addresses?.length ?? 0)>=50"
-            @click="customerForm.addresses?.push({contactPerson:'',phone:'',address:'',defaultAddress:!customerForm.addresses.length})"
-          >
-            添加收货地址
-          </button>
-          <section class="form-wide customer-export-section">
-            <div class="customer-export-heading">
-              <h3>境内发货人信息</h3><label class="customer-export-toggle"><span>是否境外出口</span><button
-                type="button"
-                role="switch"
-                :aria-checked="customerForm.exportEnabled"
-                aria-label="是否境外出口"
-                :class="{'is-on':customerForm.exportEnabled}"
-                :disabled="saving"
-                @click="customerForm.exportEnabled=!customerForm.exportEnabled"
-              ><span />{{ customerForm.exportEnabled?'是':'否' }}</button></label>
-            </div>
-            <div
-              v-if="customerForm.exportEnabled && customerForm.exportProfile"
-              class="customer-export-fields"
-            >
-              <label>公司名称 <span class="required">*</span><input
-                ref="exportNameInput"
-                v-model.trim="customerForm.exportProfile.name"
-                required
-                maxlength="300"
-                :disabled="saving"
-                aria-label="出口公司名称"
-              ></label>
-              <label>公司简称 <span class="required">*</span><input
-                v-model.trim="customerForm.exportProfile.prefix"
-                required
-                pattern="[A-Za-z]{1,20}"
-                maxlength="20"
-                :disabled="saving"
-                placeholder="例如 XMH，用于生成单据编号"
-              ></label>
-              <label class="form-wide">公司地址 <span class="required">*</span><input
-                v-model.trim="customerForm.exportProfile.address"
-                required
-                maxlength="1000"
-                :disabled="saving"
-              ></label>
-              <label>联系电话 <span class="required">*</span><input
-                v-model.trim="customerForm.exportProfile.phone"
-                v-phone
-                required
-                maxlength="100"
-                :disabled="saving"
-              ></label>
-              <label>传真（选填）<input
-                v-model.trim="customerForm.exportProfile.fax"
-                maxlength="100"
-                :disabled="saving"
-              ></label>
-            </div>
-          </section>
-          <label class="form-wide">备注<input
-            v-model="customerForm.remark"
-            maxlength="500"
-            :disabled="saving"
-          ></label>
-          <p class="form-wide customer-help">
-            默认客户不能直接停用，请先将其他客户设为默认。停用客户后保留既有商品记录，但不可新增或启用该客户的报价。
-          </p>
-        </template>
-        <template v-else>
-          <nav
-            class="ui-section-tabs form-wide"
-            aria-label="客户商品资料"
-          >
-            <button
-              type="button"
-              :class="{active:productTab==='basic'}"
-              :aria-pressed="productTab==='basic'"
-              @click="setProductTab('basic')"
-            >
-              基础信息
-            </button>
-            <button
-              type="button"
-              :class="{active:productTab==='customs'}"
-              :aria-pressed="productTab==='customs'"
-              @click="setProductTab('customs')"
-            >
-              报关资料
-            </button>
-          </nav>
-          <p
-            v-if="editingId"
-            class="form-wide customer-selection"
-          >
-            {{ selectionSummary }}<small>客户与关联产品不可更换；SKU 编码可在下方修改。</small>
-          </p>
-          <fieldset
-            v-show="productTab==='basic'"
-            class="customer-product-basic form-wide"
-            :disabled="saving || !writable"
-          >
-            <template v-if="!editingId">
-              <label class="form-wide">客户 *<select
-                v-model="productForm.customerId"
-                v-single-select
-                aria-label="选择客户"
-                required
-                :disabled="saving || customersLoading || batchSaved>0"
-              ><option value="">请选择启用客户</option><option
-                v-for="customer in activeCustomers"
-                :key="customer.id"
-                :value="customer.id"
-              >{{ customer.name }}{{ customer.defaultCustomer ? '（默认）' : '' }}</option></select></label>
-              <div class="form-wide customer-sku-selection">
                 <button
                   type="button"
-                  class="primary-button"
-                  :disabled="saving"
-                  @click="skuPickerOpen = true"
+                  class="image-button"
+                  @click="wechatPreview=customerForm.wechatImageId || undefined"
                 >
-                  选择产品 SKU（可多选）
+                  <AuthenticatedCatalogImage
+                    :image-id="customerForm.wechatImageId"
+                    alt="微信名片"
+                  />
+                </button><button
+                  type="button"
+                  class="ui-image-remove"
+                  :disabled="saving"
+                  @click="customerForm.wechatImageId=''"
+                >
+                  移除图片
                 </button>
               </div>
-              <div class="form-wide customer-batch-products">
-                <table class="data-table">
-                  <thead><tr><th>图片</th><th>商品 / 父体</th><th>SKU 编码</th><th>供货价（人民币）</th><th>单位 *</th><th>客户产品编码</th><th>产品特殊需求</th><th>操作</th></tr></thead><tbody>
-                    <tr
-                      v-for="(row,index) in batchProducts"
-                      :key="row.sku.variant.id"
-                    >
-                      <td>
-                        <ShipmentProductImage
-                          :product-id="row.sku.productId"
-                          :variant-id="row.sku.variant.id"
-                          :alt="row.sku.variant.variantName"
-                        />
-                      </td>
-                      <td>{{ row.sku.variant.variantName }}<small>父体：{{ row.sku.productName }}</small></td>
-                      <td>
-                        <input
-                          v-model.trim="row.form.skuCode"
-                          maxlength="64"
-                          :disabled="saving"
-                          :aria-label="`商品${index+1}SKU编码`"
-                          placeholder="该客户使用的 SKU"
-                        >
-                      </td>
-                      <td>
-                        <input
-                          v-model="row.form.supplyPrice"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          :disabled="saving"
-                          :aria-label="`商品${index+1}供货价`"
-                          placeholder="可留空"
-                        >
-                      </td>
-                      <td>
-                        <input
-                          v-model="row.form.priceUnit"
-                          required
-                          maxlength="16"
-                          :disabled="saving"
-                          :aria-label="`商品${index+1}计价单位`"
-                        >
-                      </td>
-                      <td>
-                        <input
-                          v-model="row.form.customerProductCode"
-                          maxlength="128"
-                          :disabled="saving"
-                          :aria-label="`商品${index+1}客户产品编码`"
-                        >
-                      </td>
-                      <td>
-                        <input
-                          v-model="row.form.requirements"
-                          maxlength="2000"
-                          :disabled="saving"
-                          :aria-label="`商品${index+1}特殊需求`"
-                        >
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          :disabled="saving"
-                          class="customer-batch-remove"
-                          @click="batchProducts.splice(index,1)"
-                        >
-                          移除
-                        </button>
-                      </td>
-                    </tr><tr v-if="!batchProducts.length">
-                      <td colspan="8">
-                        请选择产品 SKU，可一次添加多项
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </template>
-            <template v-if="editingId">
-              <label>供货价（人民币，可留空）<input
-                v-model="productForm.supplyPrice"
-                type="number"
-                min="0"
-                max="999999999999.99"
-                step="0.01"
+              <SingleFileUpload
+                :key="editingId || 'new'"
+                title="上传微信名片"
+                hint="选择或粘贴后立即上传，保存客户后关联"
+                accept=".png,.jpg,.jpeg,.webp"
+                :max-mb="5"
                 :disabled="saving"
-                placeholder="0.00"
-              ></label>
-              <label>计价单位 *<input
-                v-model="productForm.priceUnit"
-                required
-                maxlength="16"
+                :upload="uploadWechat"
+              />
+            </div>
+            <h3 class="form-wide">
+              收货地址 <small>可维护多个地址，订单可直接选用</small>
+            </h3>
+            <fieldset
+              v-for="(entry,index) in customerForm.addresses"
+              :key="index"
+              class="form-wide customer-title-card customer-address-card"
+              :disabled="saving"
+            >
+              <legend>地址 {{ index + 1 }}</legend>
+              <AddressRecognition
+                class="form-wide"
                 :disabled="saving"
-                placeholder="如：件、套、箱"
-              ></label>
-              <label>SKU 编码<input
-                v-model.trim="productForm.skuCode"
+                @recognize="Object.assign(entry,$event)"
+              />
+              <label>联系人<input
+                v-model="entry.contactPerson"
                 maxlength="64"
-                :disabled="saving"
-                placeholder="该客户使用的 SKU"
               ></label>
-              <label>客户产品编码<input
-                v-model="productForm.customerProductCode"
-                maxlength="128"
-                :disabled="saving"
-                placeholder="客户内部的产品编号"
+              <label>联系电话<input
+                v-model="entry.phone"
+                v-phone
+                type="tel"
+                maxlength="32"
               ></label>
-              <label>状态<select
-                v-model="productForm.status"
+              <label class="form-wide">详细地址 *<input
+                v-model="entry.address"
+                required
+                maxlength="500"
+              ></label>
+              <div class="form-wide customer-address-actions">
+                <label><input
+                  type="radio"
+                  name="default-address"
+                  :checked="entry.defaultAddress"
+                  @change="customerForm.addresses?.forEach((a,i)=>a.defaultAddress=i===index)"
+                > 默认地址</label>
+                <button
+                  type="button"
+                  class="danger-button business-remove"
+                  @click="removeAddress(index)"
+                >
+                  移除地址
+                </button>
+              </div>
+            </fieldset>
+            <button
+              type="button"
+              class="secondary-button form-wide"
+              :disabled="saving || (customerForm.addresses?.length ?? 0)>=50"
+              @click="customerForm.addresses?.push({contactPerson:'',phone:'',address:'',defaultAddress:!customerForm.addresses.length})"
+            >
+              添加收货地址
+            </button>
+            <section class="form-wide customer-export-section">
+              <div class="customer-export-heading">
+                <h3>境内发货人信息</h3><label class="customer-export-toggle"><span>是否境外出口</span><button
+                  type="button"
+                  role="switch"
+                  :aria-checked="customerForm.exportEnabled"
+                  aria-label="是否境外出口"
+                  :class="{'is-on':customerForm.exportEnabled}"
+                  :disabled="saving"
+                  @click="customerForm.exportEnabled=!customerForm.exportEnabled"
+                ><span />{{ customerForm.exportEnabled?'是':'否' }}</button></label>
+              </div>
+              <div
+                v-if="customerForm.exportEnabled && customerForm.exportProfile"
+                class="customer-export-fields"
+              >
+                <label>公司名称 <span class="required">*</span><input
+                  ref="exportNameInput"
+                  v-model.trim="customerForm.exportProfile.name"
+                  required
+                  maxlength="300"
+                  :disabled="saving"
+                  aria-label="出口公司名称"
+                ></label>
+                <label>公司简称 <span class="required">*</span><input
+                  v-model.trim="customerForm.exportProfile.prefix"
+                  required
+                  pattern="[A-Za-z]{1,20}"
+                  maxlength="20"
+                  :disabled="saving"
+                  placeholder="例如 XMH，用于生成单据编号"
+                ></label>
+                <label class="form-wide">公司地址 <span class="required">*</span><input
+                  v-model.trim="customerForm.exportProfile.address"
+                  required
+                  maxlength="1000"
+                  :disabled="saving"
+                ></label>
+                <label>联系电话 <span class="required">*</span><input
+                  v-model.trim="customerForm.exportProfile.phone"
+                  v-phone
+                  required
+                  maxlength="100"
+                  :disabled="saving"
+                ></label>
+                <label>传真（选填）<input
+                  v-model.trim="customerForm.exportProfile.fax"
+                  maxlength="100"
+                  :disabled="saving"
+                ></label>
+              </div>
+            </section>
+            <label class="form-wide">备注<input
+              v-model="customerForm.remark"
+              maxlength="500"
+              :disabled="saving"
+            ></label>
+            <p class="form-wide customer-help">
+              默认客户不能直接停用，请先将其他客户设为默认。停用客户后保留既有商品记录，但不可新增或启用该客户的报价。
+            </p>
+          </template>
+          <template v-else>
+            <nav
+              class="ui-section-tabs form-wide"
+              aria-label="客户商品资料"
+            >
+              <button
+                type="button"
+                :class="{active:productTab==='basic'}"
+                :aria-pressed="productTab==='basic'"
+                @click="setProductTab('basic')"
+              >
+                基础信息
+              </button>
+              <button
+                type="button"
+                :class="{active:productTab==='customs'}"
+                :aria-pressed="productTab==='customs'"
+                @click="setProductTab('customs')"
+              >
+                报关资料
+              </button>
+            </nav>
+            <p
+              v-if="editingId"
+              class="form-wide customer-selection"
+            >
+              {{ selectionSummary }}<small>客户与关联产品不可更换；SKU 编码可在下方修改。</small>
+            </p>
+            <fieldset
+              v-show="productTab==='basic'"
+              class="customer-product-basic form-wide"
+              :disabled="saving || !writable"
+            >
+              <template v-if="!editingId">
+                <label class="form-wide">客户 *<select
+                  v-model="productForm.customerId"
+                  v-single-select
+                  aria-label="选择客户"
+                  required
+                  :disabled="saving || customersLoading || batchSaved>0"
+                ><option value="">请选择启用客户</option><option
+                  v-for="customer in activeCustomers"
+                  :key="customer.id"
+                  :value="customer.id"
+                >{{ customer.name }}{{ customer.defaultCustomer ? '（默认）' : '' }}</option></select></label>
+                <div class="form-wide customer-sku-selection">
+                  <button
+                    type="button"
+                    class="primary-button"
+                    :disabled="saving"
+                    @click="skuPickerOpen = true"
+                  >
+                    选择产品 SKU（可多选）
+                  </button>
+                </div>
+                <div
+                  class="form-wide customer-batch-products"
+                  :class="{ 'customer-batch-products--empty': !batchProducts.length }"
+                >
+                  <table class="data-table">
+                    <thead><tr><th>图片</th><th>商品 / 父体</th><th>SKU 编码</th><th>供货价（人民币）</th><th>单位 *</th><th>客户产品编码</th><th>产品特殊需求</th><th>操作</th></tr></thead><tbody>
+                      <tr
+                        v-for="(row,index) in batchProducts"
+                        :key="row.sku.variant.id"
+                      >
+                        <td>
+                          <ShipmentProductImage
+                            :product-id="row.sku.productId"
+                            :variant-id="row.sku.variant.id"
+                            :alt="row.sku.variant.variantName"
+                          />
+                        </td>
+                        <td>{{ row.sku.variant.variantName }}<small>父体：{{ row.sku.productName }}</small></td>
+                        <td>
+                          <input
+                            v-model.trim="row.form.skuCode"
+                            maxlength="64"
+                            :disabled="saving"
+                            :aria-label="`商品${index+1}SKU编码`"
+                            placeholder="该客户使用的 SKU"
+                          >
+                        </td>
+                        <td>
+                          <input
+                            v-model="row.form.supplyPrice"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            :disabled="saving"
+                            :aria-label="`商品${index+1}供货价`"
+                            placeholder="可留空"
+                          >
+                        </td>
+                        <td>
+                          <input
+                            v-model="row.form.priceUnit"
+                            required
+                            maxlength="16"
+                            :disabled="saving"
+                            :aria-label="`商品${index+1}计价单位`"
+                          >
+                        </td>
+                        <td>
+                          <input
+                            v-model="row.form.customerProductCode"
+                            maxlength="128"
+                            :disabled="saving"
+                            :aria-label="`商品${index+1}客户产品编码`"
+                          >
+                        </td>
+                        <td>
+                          <input
+                            v-model="row.form.requirements"
+                            maxlength="2000"
+                            :disabled="saving"
+                            :aria-label="`商品${index+1}特殊需求`"
+                          >
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            :disabled="saving"
+                            class="customer-batch-remove"
+                            @click="batchProducts.splice(index,1)"
+                          >
+                            移除
+                          </button>
+                        </td>
+                      </tr><tr v-if="!batchProducts.length">
+                        <td colspan="8">
+                          请选择产品 SKU，可一次添加多项
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </template>
+              <template v-if="editingId">
+                <label>供货价（人民币，可留空）<input
+                  v-model="productForm.supplyPrice"
+                  type="number"
+                  min="0"
+                  max="999999999999.99"
+                  step="0.01"
+                  :disabled="saving"
+                  placeholder="0.00"
+                ></label>
+                <label>计价单位 *<input
+                  v-model="productForm.priceUnit"
+                  required
+                  maxlength="16"
+                  :disabled="saving"
+                  placeholder="如：件、套、箱"
+                ></label>
+                <label>SKU 编码<input
+                  v-model.trim="productForm.skuCode"
+                  maxlength="64"
+                  :disabled="saving"
+                  placeholder="该客户使用的 SKU"
+                ></label>
+                <label>客户产品编码<input
+                  v-model="productForm.customerProductCode"
+                  maxlength="128"
+                  :disabled="saving"
+                  placeholder="客户内部的产品编号"
+                ></label>
+                <label>状态<select
+                  v-model="productForm.status"
+                  v-single-select
+                  :disabled="saving"
+                ><option value="ACTIVE">启用</option><option value="DISABLED">停用</option></select></label>
+                <label class="form-wide">产品特殊需求<input
+                  v-model="productForm.requirements"
+                  maxlength="2000"
+                  :disabled="saving"
+                  placeholder="如包装、颜色、贴标、配件要求；税费及运费约定也可注明"
+                ></label>
+              </template>
+              <p class="form-wide customer-help">
+                每个客户与产品维护一条记录；不同客户可设置不同 SKU 编码和供货价。
+              </p>
+            </fieldset>
+            <section
+              v-show="productTab==='customs'"
+              class="form-wide customer-customs-pane"
+            >
+              <p class="customer-help">
+                报关资料仅属于当前客户商品，同一产品在其他客户下独立维护。
+              </p>
+              <label v-if="!editingId && batchProducts.length">当前商品<select
+                v-model="customsRow"
                 v-single-select
                 :disabled="saving"
-              ><option value="ACTIVE">启用</option><option value="DISABLED">停用</option></select></label>
-              <label class="form-wide">产品特殊需求<input
-                v-model="productForm.requirements"
-                maxlength="2000"
-                :disabled="saving"
-                placeholder="如包装、颜色、贴标、配件要求；税费及运费约定也可注明"
-              ></label>
-            </template>
-            <p class="form-wide customer-help">
-              每个客户与产品维护一条记录；不同客户可设置不同 SKU 编码和供货价。
-            </p>
-          </fieldset>
-          <section
-            v-show="productTab==='customs'"
-            class="form-wide customer-customs-pane"
+                @change="setProductTab('customs')"
+              ><option
+                v-for="(row,index) in batchProducts"
+                :key="row.sku.variant.id"
+                :value="index"
+              >{{ row.sku.variant.variantName }}</option></select></label>
+              <CustomerCustomsFields
+                v-if="editingId || batchProducts.length"
+                :key="`${productForm.customerId}:${editingId || batchProducts[customsRow]?.sku.variant.id || ''}`"
+                v-model="customsForm"
+                :exclude-id="editingId || ''"
+                :active="productTab === 'customs'"
+                :disabled="saving || !writable"
+              />
+              <p
+                v-else
+                class="data-state"
+              >
+                请先在基础信息中选择客户和产品 SKU。
+              </p>
+            </section>
+          </template>
+          <p
+            v-if="formError"
+            class="form-wide data-state data-state--error"
+            role="alert"
           >
-            <p class="customer-help">
-              报关资料仅属于当前客户商品，同一产品在其他客户下独立维护。
-            </p>
-            <label v-if="!editingId && batchProducts.length">当前商品<select
-              v-model="customsRow"
-              v-single-select
-              :disabled="saving"
-              @change="setProductTab('customs')"
-            ><option
-              v-for="(row,index) in batchProducts"
-              :key="row.sku.variant.id"
-              :value="index"
-            >{{ row.sku.variant.variantName }}</option></select></label>
-            <CustomerCustomsFields
-              v-if="editingId || batchProducts.length"
-              :key="`${productForm.customerId}:${editingId || batchProducts[customsRow]?.sku.variant.id || ''}`"
-              v-model="customsForm"
-              :exclude-id="editingId || ''"
-              :active="productTab === 'customs'"
-              :disabled="saving || !writable"
-            />
-            <p
-              v-else
-              class="data-state"
-            >
-              请先在基础信息中选择客户和产品 SKU。
-            </p>
-          </section>
-        </template>
-        <p
-          v-if="formError"
-          class="form-wide data-state data-state--error"
-          role="alert"
-        >
-          {{ formError }}
-        </p>
+            {{ formError }}
+          </p>
+        </div>
         <div class="operation-form__actions ui-dialog-actions">
           <button
             type="button"

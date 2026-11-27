@@ -7,7 +7,7 @@ import {ordersApi,type CustomerOrder} from '@/api/orders'
 import OrderShipmentDialog from './OrderShipmentDialog.vue'
 const order = { id: 'o1', orderNumber: 'SYN-ORDER', customerName: '合成客户', status: 'CONFIRMED', version: 2, details: { source: 'OFFLINE', externalNumber:'SYN-CLIENT-ORDER', recipient: '合成人', phone: 'SYN-PHONE', address: '合成地址', invoiceRequired: true, orderDate: '2026-10-26', deliveryDate: '2026-10-27', lines: [] }, lines: [{ id: 'l1', product: { customerProductCode: 'CLIENT-ORDER' }, details: { name: '合成SKU', quantity: 10.5, unit: '米', deliveryDate: '2026-10-27', remark: '' }, allocatedQuantity: 2, shippedQuantity: 3 }], invoiceTitle: { invoiceTitle: '合成抬头' }, totalAmount: '101.00' } as unknown as CustomerOrder
 
-beforeEach(()=>{vi.resetAllMocks();state.allowed=true;vi.mocked(ordersApi.get).mockResolvedValue(order);vi.mocked(ordersApi.arrange).mockResolvedValue([])})
+beforeEach(()=>{HTMLDialogElement.prototype.showModal=function(){this.open=true};HTMLDialogElement.prototype.close=function(){this.open=false};vi.resetAllMocks();state.allowed=true;vi.mocked(ordersApi.get).mockResolvedValue(order);vi.mocked(ordersApi.arrange).mockResolvedValue([])})
 it('prefills remaining quantities and recipient, then saves through the order association API',async()=>{
  const w=mount(OrderShipmentDialog,{props:{orderId:'o1'},global:{stubs:{CustomerProductImage:true}}});await flushPromises()
  expect((w.get('[aria-label="本次数量"]').element as HTMLInputElement).value).toBe('5.5')

@@ -27,7 +27,7 @@ function purchaseName(order:PurchaseOrder){return (order.lines[0]?.itemName || '
     <slot />
     <TableViewport>
       <table class="data-table receipt-confirm-table">
-        <thead><tr><th>图片</th><th>商品</th><th>采购</th><th>已收</th><th>待收</th><th>本次实收</th><th>操作</th></tr></thead>
+        <thead><tr><th>图片</th><th>商品</th><th>采购</th><th>已收</th><th>待收</th><th>备注</th><th>本次实收</th><th>操作</th></tr></thead>
         <tbody>
           <tr
             v-for="line in order.lines.filter(item => item.remainingQuantity > 0)"
@@ -40,7 +40,9 @@ function purchaseName(order:PurchaseOrder){return (order.lines[0]?.itemName || '
                 :alt="line.itemName"
               />
             </td>
-            <td>{{ line.itemName }}<small v-if="line.specification">{{ line.specification }}</small></td><td>{{ line.orderedQuantity }} {{ line.unit }}</td><td>{{ line.receivedQuantity }}</td><td>{{ line.remainingQuantity }}</td>
+            <td>{{ line.itemName }}<small v-if="line.specification">{{ line.specification }}</small></td><td>{{ line.orderedQuantity }} {{ line.unit }}</td><td>{{ line.receivedQuantity }}</td><td>{{ line.remainingQuantity }}</td><td class="receipt-item-remark">
+              {{ line.remark || '—' }}
+            </td>
             <td>
               <input
                 :value="quantities[line.id]"
@@ -103,7 +105,8 @@ function purchaseName(order:PurchaseOrder){return (order.lines[0]?.itemName || '
 <style scoped>
 .receipt-summary { display:flex; flex-wrap:wrap; gap:8px 20px; font-size:13px; }
 .receipt-hint { color:var(--muted); font-size:13px; }
-.receipt-confirm-table { min-width:660px; }
+.receipt-confirm-table { min-width:800px; }
+.receipt-confirm-table .receipt-item-remark{min-width:120px;max-width:220px;color:#2864c5;white-space:pre-wrap;overflow-wrap:anywhere;text-align:left}
 .receipt-confirm-table input { width:140px; }
 .receipt-remark { display:flex; gap:10px; align-items:center; margin-top:12px; font-size:13px; }
 .receipt-remark input { flex:1; min-width:0; height:36px;box-sizing:border-box;border:1px solid var(--line);border-radius:4px;padding:7px 10px;font:inherit;background:white;color:var(--ink); }

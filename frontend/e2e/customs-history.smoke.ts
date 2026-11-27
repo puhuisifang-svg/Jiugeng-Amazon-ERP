@@ -34,6 +34,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 800, height: 600 
     })
     await page.addInitScript(account => { localStorage.setItem('jiugeng.session.user', JSON.stringify(account)); localStorage.setItem('jiugeng.session.token', 'synthetic-ui-fixture') }, user)
     await page.goto('/customers/products')
+    await page.getByRole('button', { name: `${product.productName}更多操作`, exact: true }).click()
     await page.getByRole('button', { name: '报关资料', exact: true }).click()
     const editor = page.getByRole('dialog', { name: '编辑客户商品', exact: true }), dialog = page.getByRole('dialog', { name: '核对历史报关资料', exact: true })
     await expect(editor).toBeVisible(); expect(queries).toBe(0)

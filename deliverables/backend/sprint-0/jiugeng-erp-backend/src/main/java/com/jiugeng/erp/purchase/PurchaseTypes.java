@@ -10,12 +10,12 @@ final class PurchaseTypes {
     private PurchaseTypes() {}
     enum OrderType { PRODUCT, MATERIAL, MANUAL }
     enum Status { DRAFT, SUBMITTED, PARTIALLY_RECEIVED, COMPLETED, CANCELLED }
-    record LineInput(String itemId, BigDecimal quantity, BigDecimal unitPrice, String itemName, String unit, String specification, String imageAssetId, boolean taxIncluded, BigDecimal taxRate, BigDecimal packageCount) {}
+    record LineInput(String itemId, BigDecimal quantity, BigDecimal unitPrice, String itemName, String unit, String specification, String imageAssetId, boolean taxIncluded, BigDecimal taxRate, BigDecimal packageCount, String remark) {}
     record OrderInput(OrderType orderType, String supplierId, String currency, String remark, Long version,
                       List<LineInput> lines, LocalDate expectedDeliveryDate, String deliveryAddress, String supplierName) {}
     record LineView(String id, int lineNo, String itemId, String itemCode, String itemName, String unit,
                     BigDecimal orderedQuantity, BigDecimal receivedQuantity, BigDecimal remainingQuantity,
-                    BigDecimal unitPrice, String imageAssetId, String imageUrl, String specification, boolean taxIncluded, BigDecimal taxRate, Integer packageCount, boolean snapshotSaved) {}
+                    BigDecimal unitPrice, String imageAssetId, String imageUrl, String specification, boolean taxIncluded, BigDecimal taxRate, Integer packageCount, boolean snapshotSaved, String remark) {}
     record OrderView(String id, String orderNo, OrderType orderType, String supplierId, String supplierName,
                      Status status, String currency, String remark, long version, List<LineView> lines,
                      Instant createdAt, Instant updatedAt, LocalDate expectedDeliveryDate, String deliveryAddress,

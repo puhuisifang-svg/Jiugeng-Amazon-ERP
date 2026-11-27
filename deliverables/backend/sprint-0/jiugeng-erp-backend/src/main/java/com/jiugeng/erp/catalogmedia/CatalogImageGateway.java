@@ -21,6 +21,9 @@ public interface CatalogImageGateway {
 
     default String copyForPurchase(String imageId,String orderId,AuthenticatedActor actor) { throw new UnsupportedOperationException("Purchase copy unavailable"); }
 
+    /** Preserve the legacy order waybill while creating an independent shipment image. */
+    default String copyOrderWaybill(String imageId,String orderId,String shipmentId,AuthenticatedActor actor) { throw new UnsupportedOperationException("Waybill copy unavailable"); }
+
     void attach(String imageId, Purpose purpose, String resourceType, String resourceId,
             AuthenticatedActor actor);
 

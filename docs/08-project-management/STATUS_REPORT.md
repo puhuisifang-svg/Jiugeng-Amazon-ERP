@@ -5,12 +5,139 @@
 | 项目 | 九更亚马逊 ERP |
 | Owner | PJM（维护责任）；Codex（本次事实整理） |
 | 版本 / 状态 | v0.2 / Active（持续维护；本次修订待 PJM 复核） |
-| 更新时间 / 时区 | 2026-11-26 / Asia/Shanghai |
-| 审批人 | 用户已授权 2026-11-26 ERP-113/114累计迭代提交main并部署；PJM执行，不代表业务验收 |
+| 更新时间 / 时区 | 2026-11-27 / Asia/Shanghai |
+| 审批人 | 用户已授权 2026-11-27 ERP-115累计迭代提交main并部署；PJM执行，不代表业务验收 |
 | 证据范围 | 仓库代码、GitHub Production 记录、用户实际访问入口的公开前端版本及静态资源 |
 
 本报告是带日期的快照，不是实时监控。接手时重新检查 HEAD、工作区及当前任务归属；发布状态由 PJM 维护，Codex 不跟踪线上发布。[2026-10-15 原报告](archive/STATUS_REPORT_2026-10-15.md)已归档，保留原始事实及当时风险，不再作为今天的待办清单。
 
+
+
+
+## ERP-115 发布交接（2026-11-27）
+
+用户已明确授权本轮累计修改提交远端main并部署。详见[最终交接记录](../../deliverables/pjm/ERP115_RELEASE_HANDOFF_2026-11-27.md)。分支 `fix/ERP-115-material-save-idempotency`，基线 `45b7f5822da1fd9222ba3cda17d995860a4d17db`；所有实施修改仍未提交，正式交接发送后由PJM独占提交/合并/发布，Codex停止编辑并不跟踪发布。
+
+统一验证完成：前端`pnpm quality`176文件835测试通过、类型/构建通过；后端`./mvnw clean verify`465项中464通过、1既有OSS探针跳过；`pnpm exec playwright test e2e/operations-closeout.smoke.ts`6场景通过；客户/订单/工厂9入口及采购列表/运单收货三尺寸合成检查通过。旧测试夹具/交互断言已修正并复验，无未解决测试失败。V111为采购行新增可空备注列，前后端须一同发布，先备份；本地数据/文件不得回传生产。官网/Caddy无修改。
+
+文档路径及`git diff --check`通过，变更文件均本轮所有。日志、完整命令、边界及清单见交接。此处只记录本地验证与交接，不代表已合入、已部署或业务验收；下面“尚未授权/待统一验证”均为早期实施快照，以本节为准。
+
+## ERP-115 辅料无改动保存与确认提示（2026-11-27，本地已修复）
+
+### 最新追加：客户、订单、工厂 UI 统一（2026-11-27，本地）
+
+- 用户授权将客户信息、客户商品、发票管理（含历史台账）、客户订单，以及工厂员工、工价、报工、工资、其他开销共9个入口纳入当前ERP-115迭代；分支仍为 `fix/ERP-115-material-save-idempotency`，基线 `45b7f5822da1fd9222ba3cda17d995860a4d17db`。本次仅前端与维护文档，未提交、未发布、未重启后端或修改数据库。
+- 新增 `frontend/src/styles/businessWorkbench.css`，显式限定business-workbench/business-dialog并仅作用屏幕：筛选32px、表单40px、紧凑表格、统一状态/金额/备注；新建保存绿色，查询与链接蓝色，删除红色。客户与工厂行内次要动作收进共享“…”菜单，保留原权限（只读客户仍可直达客户商品）。订单低频筛选可展开，隐藏不清除原条件。
+- 客户/历史发票表单固定标题与操作区，正文滚动；订单编辑使用原生模态层，订单操作、物流、发票和安排待发货统一AccessDialog，保留原提交、错误及未保存保护。选择器/工厂详情采用确定高度避免TableViewport测量与自动高度相互收缩；工厂父体筛选替换遗漏的原生select。订单发票抬头以资料网格展示，工厂字段/按钮对齐，附件列表紧凑化；打印不受新样式影响。
+- 必要局部验证：`pnpm --dir frontend exec vue-tsc --noEmit`通过；涉及的13个Vue文件及2个测试文件以 `pnpm --dir frontend exec eslint src/components/CustomerLabelTemplates.vue src/components/CustomerOrderEditor.vue src/components/CustomerOrderProductPicker.vue src/components/CustomerSkuPicker.vue src/components/FactoryEditor.vue src/components/FactoryPicker.vue src/components/OrderShipmentDialog.vue src/components/OrderShipmentDialog.test.ts src/views/CustomerManagementView.vue src/views/CustomerOrdersView.vue src/views/FactoryExpensesView.vue src/views/FactoryWorkbenchView.vue src/views/InvoiceManagementView.vue src/views/OrderInvoicesView.vue src/views/OrderInvoicesView.test.ts --fix` 检查通过。`pnpm exec vitest run src/views/OrderInvoicesView.test.ts src/components/CustomerOrderEditor.test.ts src/components/OrderShipmentDialog.test.ts src/views/CustomerManagementView.test.ts` 首次27通过/4失败，3项为新原生弹窗的jsdom缺少showModal模拟，1项发现只读菜单入口变化；已补模拟并恢复只读直链。随后 `pnpm --dir frontend exec vitest run src/components/OrderShipmentDialog.test.ts src/views/CustomerManagementView.test.ts` 22/22通过，与未改动的发票/订单编辑9项合计31项通过。发票Esc测试改为原生cancel事件，验证继续填写/放弃关闭。
+- `node .local/erp115-business-ui.cjs`：1440×1000 Chromium合成数据，9入口弹窗边界、订单嵌套选择、发票未保存退出保护通过，写请求0、页面异常0；截图已局部目视复核。最终样式复核后重跑该脚本通过，`git diff --check`通过。完整前后端门禁、累计回归和视口矩阵继续留待用户要求PJM交接时统一执行；本次不是完整业务验收。
+
+
+
+采购列表列宽收紧（2026-11-27）：仅采购管理主表调整商品目标220px、备注110px、物流140px，并缩小商品图文间距；移除商品内部原280px固定宽度，保持48px缩略图、长备注/物流换行及原商品标题提示。首页及编辑表不受影响。局部`git diff --check`通过，视觉统一复核留待ERP-115交接，未提交/发布。
+
+备注列阴影修复（2026-11-27）：商品分行后，续行备注为DOM最后单元格，误命中ui-action-table通用last-child固定操作列规则。已在purchaseManagement.css限定当前分组表：末格不是table-actions时取消sticky/right/z-index/box-shadow，真实操作列仍固定。`node .local/erp115-connected-notes-ui.cjs`追加检查所有备注均static且无阴影、操作列仍sticky，通过；原连续边线检查通过、页面异常0，`git diff --check`通过。仅本地样式修复，完整验证仍并入ERP-115交接。
+
+供应商列表备注直显（2026-11-27）：名称/分类下方原“查看备注”替换为蓝色纯文本“备注：内容”，无点击交互，保留换行与长文本折行；空备注不占行，删除展开状态及额外备注行。仅前端展示，沿用ERP-115本地迭代；ESLint与`git diff --check`通过，视觉复核并入交接统一验证，未提交或发布。
+
+### 最新追加：采购列表商品备注与连续分隔线（2026-11-27，本地）
+
+- 采购管理列表在数量/单位后增加蓝色商品备注；首页首列改为采购日期/供应商，日期保留进入采购详情的链接，删除独立日期列和备注中重复的品名。
+- 两处从单元格内各自堆叠商品改为每商品一行、订单级信息rowspan合并；商品/数量/备注共享行高与连续底边，长备注换行仍能对应商品。按订单保持交替底色，保留采购列表展开/收起与首页前两项摘要、空明细占位及历史整单备注。
+- 局部样式故障检查：`node .local/erp115-connected-notes-ui.cjs`通过，合成两商品数据核对日期替换单号、6列表头、采购备注位置、相邻列底边高度及无间隙，页面异常0；两处截图已目视检查。相关Vue文件ESLint、`git diff --check`通过。更新首页现有测试断言，统一测试执行仍留待ERP-115交接；未写业务数据、未重启后端、未提交或发布。
+
+### 最新追加：首页采购日期、备注与收货反馈（2026-11-27，本地）
+
+- 首页采购待接收新增采购日期（订单创建时间按北京时间显示日期）及备注列；商品备注蓝字保留换行，与商品摘要同取前两项，多商品标注品名；历史整单备注另行保留。复用现有接口，无后端或迁移变更。
+- PurchaseReceiveFlow成功反馈明确登记项数，重放请求提示未重复入账；确定失败显示红色原因并保留数量，超时等未知结果保留原请求供安全重试。弹窗打开时Toast位于当前模态弹窗子树，关闭后由首页/采购详情承接成功消息，避免随组件销毁丢失。刷新期间保留原弹窗，禁用重复提交；最新数据读取失败明确显示重试入口。
+- 局部检查：在frontend执行`pnpm exec vitest run src/components/DashboardPurchaseReceipts.test.ts src/components/PurchaseReceiveFlow.test.ts`，13项通过；`pnpm exec vue-tsc --noEmit`通过。相关文件ESLint及`git diff --check`通过。
+- `node .local/erp115-dashboard-feedback-ui.cjs`使用合成拦截数据检查日期、商品备注、失败提示可关闭且保留输入、重试成功后首页保留绿色提示，页面异常0；两张.local截图已目视检查。浏览器检查发现放在模态窗外的Toast受inert影响，已移入当前弹窗子树后复核通过。未写真实业务数据。
+- 仍在ERP-115独占写槽，未提交/推送/发布；本地后端未重启，继续使用上一节供应商采购名称运行包。累计完整门禁与视口矩阵留待用户要求项目经理交接时执行。
+
+### 最新追加：供应商关联采购名称（2026-11-27，本地）
+
+- 继续ERP-115本地迭代，用户要求供应商详情→关联业务→采购单显示采购名称。SupplierManagementController关联分页接口新增可选purchaseName，取采购行保存的首项品名；多行显示“首项品名 等 N 项”，无明细历史单回退“未命名采购”。在当前页查询内读取名称与项数，不逐单发请求；采购查看权限检查仍在查询前。
+- SupplierRelations采购记录以名称为主、单号置于下方灰字，状态放右侧与查看操作同列；保留现有跳转。接口原code/name（单号/状态）语义不变，产品与辅料关联不增加采购名称。前端兼容旧接口无purchaseName时回退单号。
+- 局部检查：`./mvnw -q '-Dtest=SupplierCloseoutTest#purchaseRelationsIncludeStoredItemNamesAndKeepOrderIdentity+relationPagesEnforceDomainReadPermissions' package` 2项通过（空/单/多明细名称、单号状态保留与无采购权限拒绝）；初次合成单号长度超过32被约束拒绝，缩短fixture后通过。`pnpm exec eslint src/components/SupplierRelations.vue src/api/domain.ts --fix`、`pnpm exec vue-tsc --noEmit`、`git diff --check`通过。
+- 无新数据库迁移；保留此前V111、本地数据及上传文件。运行包更新至`.local/releases/backend/erp115-supplier-purchase-name-20261127/backend.jar`，旧JAR与启动脚本保留；tmux持久服务重启后`curl --noproxy '*' --max-time 2 -fsS http://127.0.0.1:8080/actuator/health`返回UP。完整回归及视觉验收仍在用户要求交接时统一执行，未提交或部署线上。
+
+收货商品备注追加（2026-11-27）：普通确认采购收货PurchaseReceiptDialog及按运单收货PurchaseReceiveFlow均在“待收”后、“本次实收”前新增只读商品备注列，显示已有line.remark，蓝字、保留换行、空值显示“—”；与底部本次收货备注分开。沿用现有接口，无数据迁移和收货行为变化。窄屏表格内部横向滚动。局部格式与`git diff --check`检查通过，视觉及完整验证留到ERP-115交接，未提交或发布。
+
+### 最新追加：采购详情排版与高度反馈修复（2026-11-27，本地）
+
+- 用户反馈详情列表缓慢收缩。合成数据浏览器复现35帧：dialog 881→815px、table 538→472px，每帧约缩小2px；原因是TableViewport按随内容变化的dialog边界测量，再反过来改变dialog高度，属于ResizeObserver布局反馈而非CSS动画。
+- 仅为采购详情增加专用固定可用高度（最大800px、视口减24px）与flex内容滚动布局；表格在剩余空间滚动，固定标题/关闭按钮与底栏，不改全局TableViewport算法。短屏回退弹窗内容滚动，保留窄屏操作按钮与表格横向滚动。
+- 概览集中订单号/状态、灰色下划线供应商及采购总额；基础资料紧凑排列，空整单备注不占行；页签与操作同排，绿色收货、白底蓝字运单、浅红关闭余量；采购/已收/待收拆列，数值右对齐，备注蓝色，图片保留72px与原预览。刷新按钮保留但降为次级文字；有已载入内容时不插入加载文字撑动布局。
+- 检查：`pnpm exec eslint src/views/PurchasesView.vue src/views/PurchaseOrderDetailView.vue --fix`、`pnpm exec vue-tsc --noEmit`、`git diff --check`通过；`pnpm exec vitest run src/views/PurchaseOrderDetailView.test.ts` 4项通过。
+- 针对布局故障执行 `node .local/erp115-detail-layout-ui.cjs`：1440×1000合成数据，35帧中dialog固定800px、table固定469.5px；历史/明细切换高度保持，历史分页可见，无页面异常；截图`.local/erp115-purchase-detail-after.png`已目视检查。历史fixture初次误用操作编码导致脚本等待，修正为实际PURCHASE_ORDER_CREATE后通过；未触碰业务数据。
+- 分支仍为ERP-115原分支，本次3个前端文件及文档均本轮所有，未提交/发布。完整门禁与视口矩阵继续留待用户要求交接时统一执行，无本地后端重启。
+
+商品备注颜色追加（2026-11-27）：新增/编辑采购单的商品备注正文改为与“选择项目”一致的蓝色 `#2864c5`；仅调整显示颜色，局部 diff 检查通过，视觉验证并入迭代交接。
+
+### 最新追加：填入数量改为按钮（2026-11-27，本地）
+
+用户要求管理运单“填入全部剩余数量”和首页待接收“填入本运单待收数量”改成白底蓝字按钮。已在PurchaseShipmentsDialog和共享PurchaseReceiveFlow统一为32px浅蓝边框次级按钮，移除原下划线，保留原填入逻辑、禁用保护、悬停与焦点状态。仍属ERP-115本地未提交迭代，仅样式变更，`git diff --check`通过；未重复运行应用测试，视觉复核并入交接统一验证。
+
+### 最新追加：商品备注与收货排版（2026-11-27，本地）
+
+继续 ERP-115 独占写槽，分支与基线不变；本轮所有修改未提交、未推送、未发布。
+
+- 用户确认按采购商品分别填写备注。V111 为 purchase_order_line 增加可空 remark（1000 字）；新增/编辑明细在金额前增加备注列，复用上新监控的铅笔与320px锚定浮窗交互，确定后写入采购草稿，整单保存时提交。详情增加商品备注列；编辑、再次采购、审计、CSV及图片导出保留商品备注。历史整单备注不回填为各商品备注，继续保留并在导出中附加，旧数据无需重写。
+- 正常保存仅显示“保存中”，pendingSave在请求未结束时不显示黄色待确认提示；真正超时仍锁定并恢复原请求，保留幂等保护。采购保存使用现有createRequestId以兼容HTTP入口。
+- 运单复制为“物流商 单号”，按钮更名“复制物流信息”；HTTP无Clipboard API时使用当前弹窗内文本复制回退，失败仍明确提示。
+- 首页和采购共用收货弹窗：数量列固定并右对齐，日期及备注控件统一40px，起止边界对齐；“填入本运单待收数量”加下划线。
+- 局部验证：后端 `./mvnw -q -Dtest=PurchaseControllerTest#itemRemarksPersistIndependentlyThroughEditCopyAuditAndExport package` 1项通过，验证独立备注、修改清空、复制、历史/导出、长度限制；前端 `pnpm exec vue-tsc --noEmit` 通过；`pnpm exec vitest run src/views/PurchasesView.test.ts src/components/PurchaseShipmentsDialog.test.ts src/ui/purchaseImageExport.test.ts` 23项通过；复制回退追加 `pnpm exec vitest run src/ui/copyPurchaseLogistics.test.ts src/components/PurchaseShipmentsDialog.test.ts` 9项通过。复制测试初次因DOM测试环境无clipboard属性失败，修正测试注入后通过。
+- 合成数据浏览器检查：`node .local/erp115-receipt-align-ui.cjs` 日期/备注均40px、顶部差0、填入链接有下划线、无页面异常；`node .local/erp115-item-remark-ui.cjs` 浮窗宽320px、确认后草稿保留、无页面异常。截图在.local，已目视复核。首轮备注脚本误用不存在的menu角色定位，改为现有菜单选择器后通过，未写业务数据。
+- 本地迁移前已备份MySQL（hex-blob转储、gzip校验）及启动脚本到 `.local/backups/before-erp115-item-remarks-20261127/`，旧JAR保留。当前持久服务为 `.local/releases/backend/erp115-item-remarks-20261127/backend.jar`，tmux `jiugeng-mvp:0.0`；数据库V111 success=1、remark列存在，8080 health返回UP。此前运单运行包记录属于历史状态。
+- 完整前后端门禁、累计跨模块回归和视口矩阵仍待用户要求交接时统一执行；本次局部检查不代表全迭代验收。
+
+### 最新追加：统一运单与按运单收货（2026-11-27，本地）
+
+最终本地运行核验：8080进程指向 `erp115-waybills-images-20261127/backend.jar`，`curl --noproxy '*' --max-time 2 -fsS http://127.0.0.1:8080/actuator/health` 返回 `{"status":"UP"}`。首次respawn时旧pane仍在退出，确认其已dead且端口空闲后重启成功；无竞争实例。
+
+PJM确认继续并入ERP-115跨前后端范围，Codex独占写槽，累计28个变更文件均本轮所有；没有新的提交/发布授权。下方“填写物流/批次独立入口”属于已被本次方案替代的实施历史。
+
+- 采购列表只保留“管理运单”，通过一次批量摘要请求展示当前页真实运单，详情入口也统一。每张运单绑定商品、发货数量及已收数量；可修改运单资料和分配数量。修改不能低于已收数量、超过扣除其他运单后的可分配数量、移除已收商品；重复单号禁止重新登记。后端保留订单行锁、订单/运单版本核对，修改请求使用既有purchase_write_request表幂等，不新增迁移。
+- 已有运单后，旧PUT单据物流接口返回409 PURCHASE_UNIFIED_LOGISTICS_REQUIRED，避免旧客户端继续写独立物流。历史单据物流保留只读；无运单时首次登记带入旧资料，由用户明确分配数量。历史图片经CatalogImageGateway.copyOrderWaybill验证原订单归属后复制独立副本，原图/原引用保留，重试不会重复复制。已有收货不回填、不重复入库。
+- PurchaseReceiveFlow取消批次下拉，所有运单直接分块；每块独立填写数量、时间、备注并确认。一次收货只提交该运单；成功后刷新进度、保留其他草稿，未完成订单继续留在弹窗。未知结果只允许重试对应原请求，其他块暂时锁定；权限、超量、单位、并发和库存事务仍由后端校验。首页通过同一组件更新待接收列表，采购详情同步刷新。无运单订单保留直接实物收货路径；已有运单但尚未分配的余量需登记对应运单后接收。
+- 后端 `./mvnw -q -Dtest=PurchaseControllerTest package`：28项通过，覆盖旧物流写入阻断、重复单号、已收下界/其他运单占用、编辑与收货幂等、摘要接口、权限、历史图片独立复制及原引用保留。旧测试将第二张运单复用同一单号的夹具改为不同单号，超量用例仍有效。
+- 前端 `pnpm exec vitest run src/components/PurchaseReceiveFlow.test.ts src/components/PurchaseShipmentsDialog.test.ts src/components/DashboardPurchaseReceipts.test.ts src/views/PurchasesView.test.ts`：27项通过；搜索测试改为触发表单submit（脱离DOM的测试挂载不自动触发默认submit），包含两运单隔离、其他草稿保留、原请求恢复/锁定、编辑已收下界等。相关10个文件ESLint及 `pnpm exec vue-tsc --noEmit`通过。
+- `node .local/erp115-waybill-unified-ui.cjs` 使用本地拦截合成数据，核对单一入口、编辑既有运单、两块收货且无下拉、分别提交2/3数量、另一草稿保留，合计收5、页面异常0；`.local/erp115-unified-manager.png`、`.local/erp115-waybill-receive.png`已目视检查。未拿真实业务单做收货测试。
+- 当前本地运行包 `.local/releases/backend/erp115-waybills-images-20261127/backend.jar`；原包与 `.local/backups/before-erp115-waybill-images-20261127/run-backend.sh`保留，启动配置只换JAR，数据隔离不变，无数据库迁移。受影响完整门禁/全宽度矩阵仍等用户交接统一执行；未提交/推送/部署。
+
+采购历史与发货批次追加（2026-11-27，本地实现）：新增 `frontend/src/utils/purchaseHistory.ts` 业务白名单格式化，采购详情通过共享历史表的purchase模式使用；隐藏ID、请求标识、版本及冗余PO编号，创建只展示非空业务资料，真实修改逐字段显示前后值，商品数量/单价独立对比，新增/删除商品、运单图片更换和收货摘要保留。批次历史里的商品引用映射到采购明细名称，找不到时显示“历史商品”，不回退到原始JSON或ID。历史数据库不变，材料/产品历史默认模式不变。
+
+`PurchaseShipmentsDialog.vue` 重排为品名/供应商摘要、批次卡片、首批空状态和登记表单；批次卡展示日期/包裹/物流/逐商品已收进度。表单支持填入未分配余量、取消登记保护和移除本次运单图，保存/待确认恢复沿用原载荷。修复此登记入口仍直接调用crypto.randomUUID的问题，改用既有createRequestId兼容工具；日期、包裹数、备注纳入未保存保护。仅本地，累计19个变更文件均本轮所有，无提交/发布。
+
+定向验证：`cd frontend && pnpm exec vitest run src/utils/purchaseHistory.test.ts src/components/PurchaseShipmentsDialog.test.ts src/components/ProductHistoryTable.test.ts`，11项通过（创建记录断言首次把不渲染的before占位也计入，现初始before为空并通过）。`pnpm exec eslint src/utils/purchaseHistory.ts src/utils/purchaseHistory.test.ts src/components/ProductHistoryTable.vue src/views/PurchaseOrderDetailView.vue src/components/PurchaseShipmentsDialog.vue src/components/PurchaseShipmentsDialog.test.ts`、`pnpm exec vue-tsc --noEmit`、`git diff --check`通过。`node .local/erp115-history-shipment-ui.cjs` 使用本地拦截合成数据检查空状态、填入余量、已有批次和业务历史，页面异常0；四张`.local/erp115-shipments-*.png`/`.local/erp115-purchase-history.png`截图已目视检查。完整门禁与宽度矩阵仍留待用户交接。
+
+物流空状态/弹窗追加修正（2026-11-27）：移除操作分隔竖线，操作栏使用不换行的内容宽度并保留列最小宽，修复“填写物流”较长时第二入口折行的问题。`PurchaseLogisticsDialog.vue` 顶部改为品名与供应商，逐项展示商品名称，多商品区域限高滚动，去掉PO编号。累计12个未提交文件，均ERP-115本轮。`cd frontend && pnpm exec eslint src/views/PurchasesView.vue src/components/PurchaseLogisticsDialog.vue --fix`通过；再次执行 `node .local/erp115-logistics-layout.cjs`：三种物流状态同排且左对齐，1000px窄视口同排检查通过，弹窗显示合成品名/供应商且无PO编号，页面异常0。列表与弹窗截图已目视检查；完整门禁待交接，无提交/发布。
+
+物流列排版修订（2026-11-27）：上版按钮偏右源于全局 `.data-table button { align-self:end }`。现改为左对齐摘要、独立横向操作栏，编辑/填写与批次入口同排，移除大按钮和箭头。`cd frontend && pnpm exec eslint src/views/PurchasesView.vue --fix`通过。针对实际样式故障执行 `node .local/erp115-logistics-layout.cjs`：1440×900下使用本地拦截的三条合成数据，运单号/空资料/图片运单三种状态均首按钮左对齐、操作同排，摘要高度72/28/51px，页面异常0。`.local/erp115-logistics-layout.png`已目视检查；未接触业务数据，完整门禁仍留待交接。
+
+用户反馈编辑未修改直接保存仍生成变更记录、正常保存出现“结果待确认”。PJM确认DEL-057编辑已结束，授予Codex独占本地修复槽；从干净且与origin/main一致的 `45b7f5822da1fd9222ba3cda17d995860a4d17db` 建立 `fix/ERP-115-material-save-idempotency`。未提交/推送/发布，本轮没有新的发布授权。
+
+- 根因1：`MaterialService.update` 无条件更新版本、时间和主数据审计；聚合保存也无条件替换供应商并追加关系审计，甚至空关系也写入。
+- 修复：编辑器无改动时保存按钮置灰，修改后启用、改回原值再次置灰；待确认原请求仍可重试。程序触发原样提交仍不发写请求；后端经验证规范化后比较主数据，相同则保留版本/时间/审计。供应商按ID排序后比较关系字段，空串/null等价，无变化不替换关系；真实主数据/关系修改仍记录。仅成本变化时保留对应成本审计并更新档案时间/版本，使列表排序与并发保护继续有效；幂等请求记录和原请求恢复机制保留。既有历史审计未修改。
+- 根因2：提交前为幂等恢复缓存原请求，UI只要存在pending就显示“保存结果待确认”，导致正常在途请求也出现警告。
+- 修复：在途请求显示“保存中”，不显示待确认警告或“稍后确认”；只在请求结果不明/恢复遗留请求且未在提交时显示。确定的校验失败清除pending并显示具体错误；真实超时保留原载荷重试，不能为去提示而取消防重复保护。未读取生产请求日志，本次不推断线上某次持续错误的具体HTTP原因。
+
+后续交互调整：无改动保存置灰已本地实现，补充按钮启用/还原断言，待本轮交接统一验证；下列通过结果属于此前修复。
+
+采购管理追加（2026-11-27）：PJM确认沿用ERP-115及独占写槽。辅料tab置首且无指定type时默认辅料，显式产品/日常物品链接保持原类型，键盘切换顺序同步。移除重复页头和列表业务说明，新建移至列表操作栏最左；移除行内供应商“筛选”和刷新，保留供应商详情入口。搜索栏增加独立供应商选择，复用PurchasePicker的分页搜索；筛选模式不限制启用状态或现有业务类别，建单模式仍只选当前类别启用供应商。选择条件后点击搜索应用，重置/移除条件保留。创建日期、预计交期分别使用DatePicker范围绑定，独立弹性容器防止全局label规则挤压；窄屏换行。搜索/新建绿色，更多筛选浅蓝，重置文字样式。
+
+采购列表同轮细化（2026-11-27）：删除“清空选择”按钮（表头及单行反选仍保留）；供应商详情入口改灰色下划线，列表隐藏PO编号，详情/导出/搜索标识保留。商品改48px原尺寸图片与名称/规格对齐、72px行单元，数量同高，多项轻分隔；取消单项数量尾注。物流列去除两行未填写占位，空资料直接填写，已有公司/单号/运单图片标记按层次显示，查看/编辑沿用权限和取消状态限制；将“批次 / 多运单”入口从更多菜单移到物流列，不变更原单据物流或批次数据。仅模板/CSS改动；`cd frontend && pnpm exec eslint src/views/PurchasesView.vue --fix`及`git diff --check`通过，视觉验证按约定留待交接，覆盖空物流/公司信息/图片运单、只读/取消订单、多商品对齐。
+
+本次新增变更文件：`PurchasesView.vue`、`PurchasesView.test.ts`、`PurchasePicker.vue`；累计11个文件均本轮所有。`cd frontend && pnpm exec eslint src/views/PurchasesView.vue src/components/PurchasePicker.vue src/views/PurchasesView.test.ts --fix`通过；`git diff --check`通过。新增默认tab/供应商筛选及日期范围绑定回归用例，更新原刷新失败用例为搜索失败；本次未运行回归或完整门禁。待用户请求交接时统一执行累计前端检查与日期展开、窄屏、供应商搜索/重置视觉验证；未提交/推送/部署。
+
+
+定向检查（实际bug修复，非完整迭代回归）：
+
+- `frontend`：`pnpm exec vitest run src/components/MaterialEditor.test.ts`，15项通过；覆盖无改动不发写、正常在途不警告、真实超时重用请求、确定失败、历史价格精度及旧请求恢复。
+- `frontend`：`pnpm exec eslint src/components/MaterialEditor.vue src/components/MaterialEditor.test.ts`、`pnpm exec vue-tsc --noEmit` 通过。
+- 后端：`./mvnw -q -Dtest=MaterialCloseoutTest package`，15项通过并产出本地运行包；覆盖不变版本/时间/审计、关系顺序与空值等价、真实修改/成本/权限/事务回滚及幂等。首次新增测试使用三位小数价格被现有两位规则拒绝，已修正为合法等值5.6后通过。
+- 无数据库迁移。旧JAR保留于原目录，旧启动脚本备份 `.local/backups/before-erp115-20261127/`；仅替换JAR路径为 `.local/releases/backend/erp115-20261127/backend.jar`，保留全部本地数据隔离项，沿用tmux定向重启。`curl --noproxy '*' --max-time 5 -fsS http://127.0.0.1:8080/actuator/health` 返回UP；`git diff --check` 与三份维护文档本地链接路径检查通过，最终工作区仅本任务8个文件。
+- 完整前端 `pnpm quality`、后端 `./mvnw clean verify` 和累计UI验收留到用户要求交接时统一执行；不跟踪线上发布。
 
 
 ## DEL-057 PJM发布执行（2026-11-26）

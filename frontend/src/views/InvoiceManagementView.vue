@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import '@/styles/businessWorkbench.css'
 import UnsavedChangesDialog from '@/components/UnsavedChangesDialog.vue'
 import { vPhone } from '@/directives/phone'
 import { vSingleSelect } from '@/directives/singleSelect'
@@ -91,20 +92,21 @@ onMounted(load)
 </script>
 
 <template>
-  <section class="domain-grid invoice-management">
+  <section class="domain-grid invoice-management business-workbench">
     <SuccessToast :message="success" />
     <SuccessToast
       :message="error"
       tone="error"
     />
-    <div class="material-toolbar">
-      <p>维护需要开票的客户商品信息；此处为台账，不执行税务开票或发货。</p><button
+    <div class="material-toolbar business-toolbar">
+      <button
         v-if="writable"
         type="button"
         @click="open()"
       >
         新增发票信息
       </button>
+      <p>历史开票台账</p>
     </div>
     <form
       class="panel operation-form filter-panel filter-bar"
@@ -200,7 +202,7 @@ onMounted(load)
     <dialog
       v-if="opened"
       ref="dialog"
-      class="invoice-dialog"
+      class="invoice-dialog business-dialog business-native-form"
       aria-label="发票信息"
       @cancel.prevent="discard ? discard = false : requestClose()"
     >
@@ -208,116 +210,120 @@ onMounted(load)
         class="panel operation-form operation-dialog__card"
         @submit.prevent="save"
       >
-        <h2 class="form-wide">
-          {{ editingId ? '编辑' : '新增' }}发票信息
-        </h2><button
-          type="button"
-          class="operation-dialog__close"
-          aria-label="关闭表单"
-          :disabled="saving"
-          @click="requestClose"
-        >
-          ×
-        </button>
-        <ShipmentCustomerPicker
-          v-if="!editingId"
-          :disabled="saving || selecting"
-          label-prefix="开票"
-          @select="selectProduct"
-        />
-        <p class="form-wide">
-          客户：{{ customerName || '请选择客户商品' }}<small v-if="editingId">客户商品不可更换；修改客户主档不会覆盖此处的开票信息。</small>
-        </p>
-        <fieldset
-          class="invoice-fields form-wide"
-          :disabled="saving || selecting"
-        >
-          <legend>开票信息</legend>
-          <label
+        <header class="business-dialog-heading">
+          <h2 class="form-wide">
+            {{ editingId ? '编辑' : '新增' }}发票信息
+          </h2><button
+            type="button"
+            class="operation-dialog__close"
+            aria-label="关闭表单"
+            :disabled="saving"
+            @click="requestClose"
+          >
+            ×
+          </button>
+        </header>
+        <div class="business-dialog-fields">
+          <ShipmentCustomerPicker
             v-if="!editingId"
-            class="form-wide"
-          >选择发票抬头 *
-            <select
-              v-model="selectedTitle"
-              v-single-select
+            :disabled="saving || selecting"
+            label-prefix="开票"
+            @select="selectProduct"
+          />
+          <p class="form-wide">
+            客户：{{ customerName || '请选择客户商品' }}<small v-if="editingId">客户商品不可更换；修改客户主档不会覆盖此处的开票信息。</small>
+          </p>
+          <fieldset
+            class="invoice-fields form-wide"
+            :disabled="saving || selecting"
+          >
+            <legend>开票信息</legend>
+            <label
+              v-if="!editingId"
+              class="form-wide"
+            >选择发票抬头 *
+              <select
+                v-model="selectedTitle"
+                v-single-select
+                required
+                :disabled="!invoiceTitles.length"
+                @change="chooseTitle"
+              >
+                <option value="">请选择发票抬头</option>
+                <option
+                  v-for="(entry, index) in invoiceTitles"
+                  :key="index"
+                  :value="String(index)"
+                >{{ entry.invoiceTitle }}{{ entry.taxNumber ? ' · ' + entry.taxNumber : '' }}</option>
+              </select>
+              <small>{{ invoiceTitles.length === 1 ? '该客户只有一个抬头，已自动带出。' : invoiceTitles.length > 1 ? '该客户有多个抬头，请选择本次开票抬头。' : '请先选择客户商品；如客户尚无抬头，请到客户信息中维护。' }}</small>
+            </label>
+            <label
+              v-for="[key, label, max] in billingFields"
+              :key="key"
+            >{{ label }}{{ key === 'invoiceTitle' ? ' *' : '' }}<input
+              v-model="form[key]"
+              v-phone="key === 'registeredPhone' ? 'contact' : false"
+              readonly
+              :required="key === 'invoiceTitle'"
+              :maxlength="max"
+            ></label>
+            <label>品名 *<input
+              v-model="form.itemName"
               required
-              :disabled="!invoiceTitles.length"
-              @change="chooseTitle"
-            >
-              <option value="">请选择发票抬头</option>
-              <option
-                v-for="(entry, index) in invoiceTitles"
-                :key="index"
-                :value="String(index)"
-              >{{ entry.invoiceTitle }}{{ entry.taxNumber ? ' · ' + entry.taxNumber : '' }}</option>
-            </select>
-            <small>{{ invoiceTitles.length === 1 ? '该客户只有一个抬头，已自动带出。' : invoiceTitles.length > 1 ? '该客户有多个抬头，请选择本次开票抬头。' : '请先选择客户商品；如客户尚无抬头，请到客户信息中维护。' }}</small>
-          </label>
-          <label
-            v-for="[key, label, max] in billingFields"
-            :key="key"
-          >{{ label }}{{ key === 'invoiceTitle' ? ' *' : '' }}<input
-            v-model="form[key]"
-            v-phone="key === 'registeredPhone' ? 'contact' : false"
-            readonly
-            :required="key === 'invoiceTitle'"
-            :maxlength="max"
-          ></label>
-          <label>品名 *<input
-            v-model="form.itemName"
-            required
-            maxlength="200"
-          ></label><label>规格及型号<input
-            v-model="form.specification"
-            maxlength="200"
-            placeholder="填写实际开票规格及型号"
-          ></label>
-          <label>单位 *<input
-            v-model="form.unit"
-            required
-            maxlength="16"
-          ></label><label>数量 *<input
-            v-model="form.quantity"
-            type="number"
-            min="0.001"
-            max="999999999.999"
-            step="0.001"
-            required
-          ></label>
-          <label>不含税单价（RMB）*<input
-            v-model="form.netUnitPrice"
-            type="number"
-            min="0"
-            max="99999999.999999"
-            step="0.000001"
-            required
-            placeholder="请确认实际不含税价格"
-          ></label><label>税率（%）*<input
-            v-model="form.taxRate"
-            type="number"
-            min="0"
-            max="100"
-            step="0.01"
-            required
-          ></label>
-          <p class="form-wide invoice-totals">
-            不含税金额：¥{{ amounts?.net ?? '—' }} 税额：¥{{ amounts?.tax ?? '—' }} <strong>总价（含税）：¥{{ amounts?.total ?? '—' }}</strong>
+              maxlength="200"
+            ></label><label>规格及型号<input
+              v-model="form.specification"
+              maxlength="200"
+              placeholder="填写实际开票规格及型号"
+            ></label>
+            <label>单位 *<input
+              v-model="form.unit"
+              required
+              maxlength="16"
+            ></label><label>数量 *<input
+              v-model="form.quantity"
+              type="number"
+              min="0.001"
+              max="999999999.999"
+              step="0.001"
+              required
+            ></label>
+            <label>不含税单价（RMB）*<input
+              v-model="form.netUnitPrice"
+              type="number"
+              min="0"
+              max="99999999.999999"
+              step="0.000001"
+              required
+              placeholder="请确认实际不含税价格"
+            ></label><label>税率（%）*<input
+              v-model="form.taxRate"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              required
+            ></label>
+            <p class="form-wide invoice-totals">
+              不含税金额：¥{{ amounts?.net ?? '—' }} 税额：¥{{ amounts?.tax ?? '—' }} <strong>总价（含税）：¥{{ amounts?.total ?? '—' }}</strong>
+            </p>
+            <p class="form-wide invoice-help">
+              金额按人民币四舍五入到分。税率默认 1%，请按本次业务确认；供货价未约定含税口径，因此不自动作为不含税单价。
+            </p>
+            <label>是否已开票<select
+              v-model="form.invoiced"
+              v-single-select
+            ><option :value="false">未开票</option><option :value="true">已开票</option></select></label>
+          </fieldset>
+          <p
+            v-if="formError"
+            class="form-wide data-state--error"
+            role="alert"
+          >
+            {{ formError }}
           </p>
-          <p class="form-wide invoice-help">
-            金额按人民币四舍五入到分。税率默认 1%，请按本次业务确认；供货价未约定含税口径，因此不自动作为不含税单价。
-          </p>
-          <label>是否已开票<select
-            v-model="form.invoiced"
-            v-single-select
-          ><option :value="false">未开票</option><option :value="true">已开票</option></select></label>
-        </fieldset>
-        <p
-          v-if="formError"
-          class="form-wide data-state--error"
-          role="alert"
-        >
-          {{ formError }}
-        </p>
+        </div>
         <div class="operation-form__actions ui-dialog-actions">
           <button
             type="button"

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import AccessDialog from '@/components/AccessDialog.vue'
+import '@/styles/businessWorkbench.css'
 import { beijingDateTime } from '@/utils/dateTime'
 
 
@@ -63,9 +65,10 @@ function arrange(order:CustomerOrder){void router.push({path:'/dashboard-mainten
 async function generate(order: CustomerOrder) { if (saving.value) return; saving.value = true; try { const invoice = await ordersApi.generateInvoice(order.id); await router.push({ path: '/customers/invoices', query: { invoiceId: invoice.id } }) } catch (e) { error.value = message(e) } finally { saving.value = false } }
 async function saveLogistics() { if (!logistics.value || saving.value) return; saving.value = true; try { await ordersApi.logistics(logistics.value.id, logistics.value.version, logisticsText.value); logistics.value = undefined; success.value = '物流信息已保存。'; await load() } catch (e) { formError.value = message(e) } finally { saving.value = false } }
 watch(() => route.params.id, load); onMounted(load)
+const showMoreFilters=ref(false)
 </script>
 <template>
-  <section class="domain-grid customer-orders">
+  <section class="domain-grid customer-orders business-workbench">
     <SuccessToast :message="success" /><SuccessToast
       :message="error"
       tone="error"
@@ -79,7 +82,7 @@ watch(() => route.params.id, load); onMounted(load)
           v-model="query.q"
           placeholder="订单编号、客户订单号或客户名称"
           maxlength="128"
-        ></label><label>来源<select
+        ></label><label v-show="showMoreFilters">来源<select
           v-model="query.source"
           v-single-select
         ><option value="">全部</option><option value="1688">1688</option><option value="OFFLINE">线下</option></select></label>
@@ -91,23 +94,29 @@ watch(() => route.params.id, load); onMounted(load)
           :key="s"
           :value="s"
         >{{ labels[s] }}</option></select></label>
-        <label class="date-range-filter">下单日期<DatePicker
+        <label
+          v-show="showMoreFilters"
+          class="date-range-filter"
+        >下单日期<DatePicker
           v-model="query.from"
           v-model:end="query.to"
           range
           type="date"
         /></label>
-        <label class="date-range-filter">交期范围<DatePicker
+        <label
+          v-show="showMoreFilters"
+          class="date-range-filter"
+        >交期范围<DatePicker
           v-model="query.deliveryFrom"
           v-model:end="query.deliveryTo"
           range
           type="date"
         /></label>
-        <label>发货进度<select
+        <label v-show="showMoreFilters">发货进度<select
           v-model="query.shipping"
           v-single-select
         ><option value="">全部</option><option value="UNSHIPPED">未发货</option><option value="PARTIAL">部分发货</option><option value="SHIPPED">全部发货</option></select></label>
-        <label>开票状态<select
+        <label v-show="showMoreFilters">开票状态<select
           v-model="query.invoiceStatus"
           v-single-select
         ><option value="">全部</option><option value="NONE">无需开票</option><option value="NOT_GENERATED">待生成</option><option value="PENDING">待开票</option><option value="INVOICED">已开票</option></select></label>
@@ -120,8 +129,16 @@ watch(() => route.params.id, load); onMounted(load)
         >
           重置
         </button>
+        <button
+          type="button"
+          class="business-filter-toggle"
+          :aria-expanded="showMoreFilters"
+          @click="showMoreFilters=!showMoreFilters"
+        >
+          {{ showMoreFilters?'收起筛选':'更多筛选' }}
+        </button>
       </form>
-      <div class="material-toolbar">
+      <div class="material-toolbar business-toolbar">
         <button
           v-if="writable"
           type="button"
@@ -210,7 +227,7 @@ watch(() => route.params.id, load); onMounted(load)
                   v-if="lineIndex === 0"
                   :rowspan="o.lines.length"
                 >
-                  {{ o.details.remark || '—' }}
+                  <span class="business-note">{{ o.details.remark || '—' }}</span>
                 </td><td
                   v-if="lineIndex === 0"
                   :rowspan="o.lines.length"
@@ -256,6 +273,7 @@ watch(() => route.params.id, load); onMounted(load)
           编辑
         </button><button
           v-if="session.canAccess(['orders.transition']) && detail.status === 'DRAFT'"
+          class="business-primary"
           @click="ask(detail,'CONFIRM')"
         >
           确认订单
@@ -277,11 +295,13 @@ watch(() => route.params.id, load); onMounted(load)
           查看发票
         </RouterLink><button
           v-if="session.canAccess(['orders.transition']) && ['DRAFT','CONFIRMED'].includes(detail.status)"
+          class="business-danger"
           @click="ask(detail,'CANCEL')"
         >
           取消订单
         </button><button
           v-if="session.canAccess(['orders.transition']) && detail.status === 'CONFIRMED'"
+          class="business-danger"
           @click="ask(detail,'CLOSE')"
         >
           关闭剩余订单
@@ -387,18 +407,19 @@ watch(() => route.params.id, load); onMounted(load)
       @save="save"
       @close="editing=false"
     />
-    <div
+    <AccessDialog
       v-if="transition"
-      class="operation-dialog"
-      role="dialog"
-      aria-modal="true"
-      :aria-label="labels[transition.action]"
+      :title="labels[transition.action] || '订单操作'"
+      dialog-class="business-dialog"
+      :busy="saving"
+      @close="transition=undefined"
     >
       <form
-        class="panel operation-form operation-dialog__card"
+        id="business-order-transition"
+        class="access-form"
         @submit.prevent="confirm"
       >
-        <h2>{{ labels[transition.action] }}</h2><p class="form-wide">
+        <p class="form-wide">
           订单：{{ transition.order.orderNumber }}。此操作会保留历史记录。
         </p><label
           v-if="['CANCEL','CLOSE'].includes(transition.action)"
@@ -413,31 +434,38 @@ watch(() => route.params.id, load); onMounted(load)
           role="alert"
         >
           {{ formError }}
-        </p><div class="form-footer">
-          <button
-            type="button"
-            :disabled="saving"
-            @click="transition=undefined"
-          >
-            返回
-          </button><button :disabled="saving">
-            确认
-          </button>
-        </div>
+        </p>
       </form>
-    </div>
-    <div
+      <template #footer>
+        <button
+          type="button"
+          :disabled="saving"
+          @click="transition=undefined"
+        >
+          返回
+        </button><button
+          type="submit"
+          form="business-order-transition"
+          :class="transition.action==='CONFIRM'?'ui-button-primary':'danger business-danger'"
+          :disabled="saving"
+        >
+          确认
+        </button>
+      </template>
+    </AccessDialog>
+    <AccessDialog
       v-if="logistics"
-      class="operation-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-label="登记物流"
+      title="登记物流"
+      dialog-class="business-dialog"
+      :busy="saving"
+      @close="logistics=undefined"
     >
       <form
-        class="panel operation-form operation-dialog__card"
+        id="business-order-logistics"
+        class="access-form"
         @submit.prevent="saveLogistics"
       >
-        <h2>登记发货批次物流</h2><label class="form-wide">物流公司 / 运单号<input
+        <label class="form-wide">物流公司 / 运单号<input
           v-model="logisticsText"
           maxlength="1000"
         ></label><p
@@ -445,20 +473,26 @@ watch(() => route.params.id, load); onMounted(load)
           role="alert"
         >
           {{ formError }}
-        </p><div class="form-footer">
-          <button
-            type="button"
-            class="secondary-action"
-            :disabled="saving"
-            @click="logistics=undefined"
-          >
-            取消
-          </button><button :disabled="saving">
-            保存
-          </button>
-        </div>
+        </p>
       </form>
-    </div>
+      <template #footer>
+        <button
+          type="button"
+          class="secondary-action"
+          :disabled="saving"
+          @click="logistics=undefined"
+        >
+          取消
+        </button><button
+          type="submit"
+          form="business-order-logistics"
+          class="ui-button-primary"
+          :disabled="saving"
+        >
+          保存
+        </button>
+      </template>
+    </AccessDialog>
   </section>
 </template>
 <style scoped>

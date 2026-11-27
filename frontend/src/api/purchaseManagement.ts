@@ -7,11 +7,13 @@ export const blankPurchaseFilters=():PurchaseFilters=>({type:'PRODUCT',status:''
 export interface PurchaseSave {requestId:string;id:string|null;order:PurchaseOrderInput;copyFromId?:string}
 export interface ShipmentLine {orderLineId:string;quantity:number;receivedQuantity:number}
 export interface PurchaseShipment {id:string;carrier:string;trackingNumber:string;imageId?:string;shippedOn:string;packageCount:number;remark:string;version:number;lines:ShipmentLine[]}
+export interface ShipmentSummary {id:string;carrier:string;trackingNumber:string;imageId?:string|null;completed:boolean}
+export interface ShipmentEdit extends ShipmentInput {shipmentVersion:number}
 export interface ShipmentInput {requestId:string;version:number;carrier:string;trackingNumber:string;imageId:string|null;shippedOn:string;packageCount:number;remark:string;lines:{orderLineId:string;quantity:number}[]}
 export interface Page<T>{items:T[];total:number;page:number;size:number}
 const base='/v1/purchases/manage',post=(body:unknown)=>({method:'POST',body:JSON.stringify(body)})
 export const purchaseManagementApi={
- capabilities:()=>apiRequest<{closeoutVersion:number}>(`${base}/capabilities`),
+ capabilities:()=>apiRequest<{closeoutVersion:number;waybillVersion?:number}>(`${base}/capabilities`),
  page:(f:PurchaseFilters,page=0,size=20)=>apiRequest<Page<PurchaseOrder>>(`${base}/orders?${new URLSearchParams({...f,page:String(page),size:String(size)})}`),
  counts:()=>apiRequest<Record<string,number>>(`${base}/counts`),
  save:(input:PurchaseSave)=>apiRequest<PurchaseOrder>(`${base}/save`,post(input)),
@@ -20,6 +22,8 @@ export const purchaseManagementApi={
  checks:(id:string)=>apiRequest<string[]>(`${base}/${id}/checks`),
  history:(id:string,page=0,size=20)=>apiRequest<Page<ProductHistoryDto>>(`${base}/${id}/history?page=${page}&size=${size}`),
  receipts:(id:string,page=0,size=20)=>apiRequest<Page<{receipt:PurchaseReceipt;shipmentId:string|null}>>(`${base}/${id}/receipts?page=${page}&size=${size}`),
+ shipmentSummaries:(ids:string[])=>apiRequest<Record<string,ShipmentSummary[]>>(`${base}/shipment-summaries`,post(ids)),
+ editShipment:(id:string,shipmentId:string,input:ShipmentEdit)=>apiRequest<PurchaseShipment[]>(`${base}/${id}/shipments/${shipmentId}`,{method:'PUT',body:JSON.stringify(input)}),
  shipments:(id:string)=>apiRequest<PurchaseShipment[]>(`${base}/${id}/shipments`),
  shipment:(id:string,input:ShipmentInput)=>apiRequest<PurchaseShipment[]>(`${base}/${id}/shipments`,post(input)),
  selection:(filters:PurchaseFilters,ids:string[])=>apiRequest<PurchaseOrder[]>(`${base}/selection`,post({filters,ids})),

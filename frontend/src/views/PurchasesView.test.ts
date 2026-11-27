@@ -3,7 +3,7 @@ import {createRouter,createMemoryHistory} from 'vue-router'
 import {beforeEach,afterEach,it,expect,vi} from 'vitest'
 import {ApiError} from '@/api/client'
 import PurchasesView from './PurchasesView.vue'
-const h=vi.hoisted(()=>({page:vi.fn(),counts:vi.fn(),capabilities:vi.fn(),save:vi.fn(),references:vi.fn(),price:vi.fn(),order:vi.fn(),supplier:vi.fn(),material:vi.fn(),materialSupplierLinks:vi.fn(),cost:vi.fn(),selection:vi.fn(),permissions:true}))
+const h=vi.hoisted(()=>({page:vi.fn(),counts:vi.fn(),capabilities:vi.fn(),save:vi.fn(),references:vi.fn(),price:vi.fn(),order:vi.fn(),supplier:vi.fn(),material:vi.fn(),materialSupplierLinks:vi.fn(),cost:vi.fn(),selection:vi.fn(),shipmentSummaries:vi.fn().mockResolvedValue({}),permissions:true}))
 vi.mock('@/api/purchaseManagement',async importOriginal=>({...await importOriginal<object>(),purchaseManagementApi:h}))
 vi.mock('@/api/purchases',()=>({purchaseApi:{order:h.order,deliveryOptions:vi.fn().mockResolvedValue([]),remove:vi.fn().mockResolvedValue(undefined)}}))
 vi.mock('@/api/domain',()=>({domainApi:{supplier:h.supplier,material:h.material,materialSupplierLinks:h.materialSupplierLinks}}))
@@ -12,13 +12,13 @@ vi.mock('@/state/session',()=>({session:{user:{value:{id:'synthetic-buyer'}},can
 vi.mock('@/state/uiConfirmation',()=>({confirmAction:vi.fn().mockResolvedValue(true)}))
 const item={id:'m1',code:'SYN',name:'合成纸箱',unit:'个',primarySupplier:true},supplier={id:'s1',name:'合成供应商',status:'ACTIVE',categories:['MATERIAL']},order={id:'o1',orderNo:'SYN-PO',orderType:'MATERIAL',supplierId:'s1',supplierName:'合成供应商',status:'SUBMITTED',currency:'CNY',version:1,createdAt:'2026-11-20',updatedAt:'2026-11-20',lines:[{id:'l1',lineNo:1,itemId:'m1',itemName:'合成纸箱',itemCode:'SYN',unit:'个',orderedQuantity:10,receivedQuantity:0,remainingQuantity:10,unitPrice:0.1234}]}
 const wrappers:ReturnType<typeof mount>[]=[]
-beforeEach(()=>{vi.clearAllMocks();sessionStorage.clear();h.permissions=true;h.capabilities.mockResolvedValue({closeoutVersion:1});h.page.mockResolvedValue({items:[order],total:31,page:0,size:20});h.counts.mockResolvedValue({MATERIAL:31});h.references.mockResolvedValue({items:[item],total:1});h.price.mockResolvedValue({});h.supplier.mockResolvedValue(supplier);h.order.mockResolvedValue(JSON.parse(JSON.stringify(order)));h.save.mockResolvedValue(order);h.cost.mockResolvedValue({netPrice:'0.1234',unit:'个'});HTMLDialogElement.prototype.showModal=function(){this.open=true};HTMLDialogElement.prototype.close=function(){this.open=false};window.scrollTo=vi.fn()})
+beforeEach(()=>{vi.clearAllMocks();sessionStorage.clear();h.permissions=true;h.shipmentSummaries.mockResolvedValue({});h.capabilities.mockResolvedValue({closeoutVersion:1});h.page.mockResolvedValue({items:[order],total:31,page:0,size:20});h.counts.mockResolvedValue({MATERIAL:31});h.references.mockResolvedValue({items:[item],total:1});h.price.mockResolvedValue({});h.supplier.mockResolvedValue(supplier);h.order.mockResolvedValue(JSON.parse(JSON.stringify(order)));h.save.mockResolvedValue(order);h.cost.mockResolvedValue({netPrice:'0.1234',unit:'个'});HTMLDialogElement.prototype.showModal=function(){this.open=true};HTMLDialogElement.prototype.close=function(){this.open=false};window.scrollTo=vi.fn()})
 afterEach(()=>wrappers.splice(0).forEach(w=>w.unmount()))
-async function setup(){const router=createRouter({history:createMemoryHistory(),routes:[{path:'/purchases/orders',component:PurchasesView}]});await router.push('/purchases/orders?type=MATERIAL');await router.isReady();const w=mount(PurchasesView,{global:{plugins:[router],stubs:{PurchaseItemImage:true,PurchaseOrderDetailView:true,PurchasePicker:{props:['supplierId'],template:`<div><button v-if="!supplierId" @click="$emit('supplier',${JSON.stringify(supplier).replace(/"/g,"'")})">选择合成供应商</button><button v-else @click="$emit('item',${JSON.stringify(item).replace(/"/g,"'")})">选择合成商品</button></div>`}}}});wrappers.push(w);await flushPromises();return w}
+async function setup(path='/purchases/orders?type=MATERIAL'){const router=createRouter({history:createMemoryHistory(),routes:[{path:'/purchases/orders',component:PurchasesView}]});await router.push(path);await router.isReady();const w=mount(PurchasesView,{global:{plugins:[router],stubs:{PurchaseItemImage:true,PurchaseOrderDetailView:true,PurchasePicker:{props:['supplierId'],template:`<div><button v-if="!supplierId" @click="$emit('supplier',${JSON.stringify(supplier).replace(/"/g,"'")})">选择合成供应商</button><button v-else @click="$emit('item',${JSON.stringify(item).replace(/"/g,"'")})">选择合成商品</button></div>`}}}});wrappers.push(w);await flushPromises();return w}
 const button=(w:ReturnType<typeof mount>,name:string)=>w.findAll('button').find(b=>b.text()===name)!
 async function editor(w:ReturnType<typeof mount>){await button(w,'编辑').trigger('click');await flushPromises()}
-it('uses server totals and paging and applies search explicitly',async()=>{const w=await setup();expect(w.text()).toContain('31');await w.get('[aria-label="搜索采购单"]').setValue('不存在');expect(h.page).toHaveBeenLastCalledWith(expect.objectContaining({q:''}),0,20);await button(w,'搜索').trigger('click');await flushPromises();expect(h.page).toHaveBeenLastCalledWith(expect.objectContaining({q:'不存在'}),0,20);const next=w.findComponent({name:'ListPagination'});next.vm.$emit('update:page',2);await flushPromises();expect(h.page).toHaveBeenLastCalledWith(expect.anything(),1,20)})
-it('retains old rows with an explicit refresh error',async()=>{const w=await setup();h.page.mockRejectedValueOnce(new Error('offline'));await button(w,'刷新').trigger('click');await flushPromises();expect(w.text()).toContain('上次读取结果');expect(w.text()).toContain('合成纸箱')})
+it('uses server totals and paging and applies search explicitly',async()=>{const w=await setup();expect(w.text()).toContain('31');await w.get('[aria-label="搜索采购单"]').setValue('不存在');expect(h.page).toHaveBeenLastCalledWith(expect.objectContaining({q:''}),0,20);await w.get('.purchase-order-filters').trigger('submit');await flushPromises();expect(h.page).toHaveBeenLastCalledWith(expect.objectContaining({q:'不存在'}),0,20);const next=w.findComponent({name:'ListPagination'});next.vm.$emit('update:page',2);await flushPromises();expect(h.page).toHaveBeenLastCalledWith(expect.anything(),1,20)})
+it('retains old rows with an explicit refresh error',async()=>{const w=await setup();h.page.mockRejectedValueOnce(new Error('offline'));await w.get('.purchase-order-filters').trigger('submit');await flushPromises();expect(w.text()).toContain('上次读取结果');expect(w.text()).toContain('合成纸箱')})
 it('blocks writes against an older backend and for a reader',async()=>{h.capabilities.mockRejectedValue(new Error('missing'));const w=await setup();expect(w.text()).not.toContain('新建辅料采购单');h.permissions=false;const reader=await setup();expect(reader.text()).not.toContain('编辑')})
 it('loads latest order before editing and keeps four decimal prices',async()=>{const w=await setup();await editor(w);expect(h.order).toHaveBeenCalledWith('o1');expect(w.get('[aria-label="采购单价"]').element).toHaveProperty('value','0.1234');await w.get('#purchase-editor-form').trigger('submit');await flushPromises();expect(h.save).toHaveBeenCalledWith(expect.objectContaining({id:'o1',order:expect.objectContaining({version:1,lines:[expect.objectContaining({unitPrice:0.1234})]})}))})
 it('preserves the exact request after timeout and across reopening',async()=>{const w=await setup();await editor(w);h.save.mockRejectedValueOnce(new Error('timeout'));await w.get('#purchase-editor-form').trigger('submit');await flushPromises();const original=JSON.parse(JSON.stringify(h.save.mock.calls[0]![0]));expect(w.text()).toContain('原请求');expect(w.get('fieldset').attributes('disabled')).toBeDefined();await w.get('#purchase-editor-form').trigger('submit');await flushPromises();expect(h.save.mock.calls[1]![0]).toEqual(original);expect(sessionStorage.getItem('jiugeng.purchase.save.synthetic-buyer.')).toBeNull()})
@@ -26,3 +26,41 @@ it('rejects fractional count units before creating a request',async()=>{const w=
 it('retains conflict draft and requires explicit choice before retry',async()=>{const w=await setup();await editor(w);h.save.mockRejectedValueOnce(new ApiError(409,'PURCHASE_VERSION_CONFLICT','版本冲突'));h.order.mockResolvedValue({...order,version:4});await w.get('#purchase-editor-form').trigger('submit');await flushPromises();expect(w.text()).toContain('我的草稿');await button(w,'保留草稿重新核对').trigger('click');await w.get('#purchase-editor-form').trigger('submit');await flushPromises();expect(h.save.mock.calls[1]![0].order.version).toBe(4)})
 it('failed latest detail read cannot submit a stale form',async()=>{const w=await setup();h.order.mockRejectedValueOnce(new Error('offline'));await editor(w);await w.get('#purchase-editor-form').trigger('submit');await flushPromises();expect(h.save).not.toHaveBeenCalled()})
 it('copy clears identity and rechecks dates while retaining editable lines',async()=>{const w=await setup();await button(w,'再次采购').trigger('click');await flushPromises();await w.get('#purchase-editor-form').trigger('submit');await flushPromises();expect(h.save).toHaveBeenCalledWith(expect.objectContaining({id:null,copyFromId:'o1',order:expect.not.objectContaining({version:1})}))})
+
+it('defaults to material purchases and filters suppliers from the search bar',async()=>{
+ const w=await setup('/purchases/orders')
+ expect(w.findAll('[role="tab"]')[0]!.text()).toContain('辅料采购')
+ expect(w.get('[aria-selected="true"]').text()).toContain('辅料采购')
+ expect(w.find('.purchase-header').exists()).toBe(false)
+ expect(button(w,'刷新')).toBeUndefined()
+ await w.get('.purchase-supplier-trigger').trigger('click');await flushPromises()
+ await button(w,'选择合成供应商').trigger('click');await flushPromises()
+ expect(h.page).toHaveBeenLastCalledWith(expect.objectContaining({supplier:''}),0,20)
+ await w.get('.purchase-order-filters').trigger('submit');await flushPromises()
+ expect(h.page).toHaveBeenLastCalledWith(expect.objectContaining({type:'MATERIAL',supplier:'s1'}),0,20)
+ await button(w,'重置').trigger('click');await flushPromises()
+ expect(h.page).toHaveBeenLastCalledWith(expect.objectContaining({supplier:''}),0,20)
+})
+it('submits both date ranges and retains explicit product links',async()=>{
+ const w=await setup('/purchases/orders?type=PRODUCT')
+ expect(w.get('[aria-selected="true"]').text()).toContain('产品采购')
+ await w.get('.purchase-more-button').trigger('click')
+ const ranges=w.findAllComponents({name:'DatePicker'})
+ expect(ranges).toHaveLength(2);expect(ranges.every(r=>r.props('range'))).toBe(true)
+ ranges[0]!.vm.$emit('update:modelValue','2026-11-01');ranges[0]!.vm.$emit('update:end','2026-11-27')
+ ranges[1]!.vm.$emit('update:modelValue','2026-12-01');ranges[1]!.vm.$emit('update:end','2026-12-31')
+ await w.get('.purchase-order-filters').trigger('submit');await flushPromises()
+ expect(h.page).toHaveBeenLastCalledWith(expect.objectContaining({type:'PRODUCT',createdFrom:'2026-11-01',createdTo:'2026-11-27',deliveryFrom:'2026-12-01',deliveryTo:'2026-12-31'}),0,20)
+})
+
+it('keeps normal saving free of unknown-result warnings and submits per-item remarks',async()=>{
+ const w=await setup();await editor(w)
+ await w.get('[aria-label="编辑第 1 项商品备注"]').trigger('click');await flushPromises()
+ await w.get('[aria-label="商品备注"]').setValue('每箱独立贴标')
+ await w.get('.purchase-remark-popover form').trigger('submit');await flushPromises()
+ let resolve!:(value:unknown)=>void;h.save.mockImplementationOnce(()=>new Promise(r=>{resolve=r}))
+ await w.get('#purchase-editor-form').trigger('submit');await flushPromises()
+ expect(w.text()).toContain('保存中');expect(w.text()).not.toContain('保存结果待确认')
+ expect(h.save).toHaveBeenCalledWith(expect.objectContaining({order:expect.objectContaining({lines:[expect.objectContaining({remark:'每箱独立贴标'})]})}))
+ resolve(order);await flushPromises()
+})

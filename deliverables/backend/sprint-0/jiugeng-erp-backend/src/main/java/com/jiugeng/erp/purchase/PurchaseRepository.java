@@ -118,11 +118,11 @@ class PurchaseRepository {
     void replaceLines(String orderId, List<ResolvedLine> lines) {
         jdbc.sql("DELETE FROM purchase_order_line WHERE order_id=:id").param("id", orderId).update();
         for (ResolvedLine line : lines) jdbc.sql("""
-                INSERT INTO purchase_order_line (id,order_id,line_no,item_id,item_code,item_name,unit,ordered_quantity,unit_price,specification,image_asset_id,tax_included,tax_rate,package_count)
-                VALUES (:id,:orderId,:lineNo,:itemId,:code,:name,:unit,:quantity,:price,:spec,:image,:taxIncluded,:taxRate,:packageCount)
+                INSERT INTO purchase_order_line (id,order_id,line_no,item_id,item_code,item_name,unit,ordered_quantity,unit_price,specification,image_asset_id,tax_included,tax_rate,package_count,remark)
+                VALUES (:id,:orderId,:lineNo,:itemId,:code,:name,:unit,:quantity,:price,:spec,:image,:taxIncluded,:taxRate,:packageCount,:remark)
                 """).param("id", line.id()).param("orderId", orderId).param("lineNo", line.lineNo())
                 .param("itemId", line.item().id()).param("code", line.item().code()).param("name", line.item().name())
-                .param("unit", line.item().unit()).param("quantity", line.quantity()).param("price", line.unitPrice()).param("spec",line.specification()).param("image",line.imageAssetId()).param("taxIncluded",line.taxIncluded()).param("taxRate",line.taxRate()).param("packageCount",line.packageCount()).update();
+                .param("unit", line.item().unit()).param("quantity", line.quantity()).param("price", line.unitPrice()).param("spec",line.specification()).param("image",line.imageAssetId()).param("taxIncluded",line.taxIncluded()).param("taxRate",line.taxRate()).param("packageCount",line.packageCount()).param("remark",line.remark()).update();
     }
 
     int updateDraft(String id, OrderInput input, String actorId, long version) {
@@ -192,7 +192,7 @@ class PurchaseRepository {
                     BigDecimal received = rs.getBigDecimal("received_quantity");
                     var line=new LineView(rs.getString("id"), rs.getInt("line_no"), rs.getString("item_id"),
                             rs.getString("item_code"), rs.getString("item_name"), rs.getString("unit"), ordered,
-                            received, ordered.subtract(received), rs.getBigDecimal("unit_price"),rs.getString("resolved_image_asset_id"),rs.getString("image_url"),rs.getString("specification"),rs.getBoolean("tax_included"),rs.getBigDecimal("tax_rate"),(Integer)rs.getObject("package_count"),rs.getBoolean("snapshot_saved"));
+                            received, ordered.subtract(received), rs.getBigDecimal("unit_price"),rs.getString("resolved_image_asset_id"),rs.getString("image_url"),rs.getString("specification"),rs.getBoolean("tax_included"),rs.getBigDecimal("tax_rate"),(Integer)rs.getObject("package_count"),rs.getBoolean("snapshot_saved"),rs.getString("remark"));
                     result.computeIfAbsent(rs.getString("order_id"),key->new java.util.ArrayList<>()).add(line);return line;
                 }).list();
         return result;
@@ -282,7 +282,7 @@ class PurchaseRepository {
 
     record SupplierRef(String id, String name) {}
     record ItemRef(String id, String code, String name, String unit) {}
-    record ResolvedLine(String id, int lineNo, ItemRef item, BigDecimal quantity, BigDecimal unitPrice, String specification, String imageAssetId, boolean taxIncluded, BigDecimal taxRate, Integer packageCount) {}
+    record ResolvedLine(String id, int lineNo, ItemRef item, BigDecimal quantity, BigDecimal unitPrice, String specification, String imageAssetId, boolean taxIncluded, BigDecimal taxRate, Integer packageCount, String remark) {}
     record ReceiptStored(String id, String orderId, String payloadHash) {}
     record ReceiptHead(String id,String orderId,String orderNo,String requestId,Instant receivedAt,String remark,
                        String actorLoginName,Instant createdAt) {}

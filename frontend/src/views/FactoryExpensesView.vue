@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import RowMoreActions from '@/components/RowMoreActions.vue'
+import '@/styles/businessWorkbench.css'
 import { beijingDateTime } from '@/utils/dateTime'
 
 
@@ -51,7 +53,7 @@ onMounted(()=>{void load();window.addEventListener('beforeunload',beforeUnload)}
 onBeforeUnmount(()=>{sequence++;window.removeEventListener('beforeunload',beforeUnload)})
 </script>
 <template>
-  <section class="page-stack factory-expenses">
+  <section class="page-stack factory-expenses business-workbench">
     <SuccessToast :message="notice" />
     <form
       class="filter-panel ui-filter-row"
@@ -62,7 +64,11 @@ onBeforeUnmount(()=>{sequence++;window.removeEventListener('beforeunload',before
         maxlength="200"
         placeholder="开销项目、付款人或备注"
       ></label>
-      <label>开始日期<DatePicker v-model="from" /></label><label>结束日期<DatePicker v-model="to" /></label>
+      <label class="date-range-filter">开销日期<DatePicker
+        v-model="from"
+        v-model:end="to"
+        range
+      /></label>
       <button
         type="submit"
         :disabled="loading"
@@ -76,7 +82,7 @@ onBeforeUnmount(()=>{sequence++;window.removeEventListener('beforeunload',before
         重置
       </button>
     </form>
-    <div class="expense-toolbar">
+    <div class="expense-toolbar business-toolbar">
       <button
         v-if="writable"
         type="button"
@@ -103,28 +109,35 @@ onBeforeUnmount(()=>{sequence++;window.removeEventListener('beforeunload',before
           >
             <td>{{ row.date }}</td><td><strong>{{ row.name }}</strong></td><td class="expense-amount">
               {{ factoryMoney(row.amount) }}
-            </td><td>{{ row.payerName||'待补充' }}</td><td>{{ row.remark||'—' }}</td><td class="expense-actions">
+            </td><td>{{ row.payerName||'待补充' }}</td><td class="business-note">
+              {{ row.remark||'—' }}
+            </td><td class="expense-actions">
               <button
                 type="button"
                 @click="show(row)"
               >
                 详情 / 凭证
-              </button><button
-                v-if="writable"
-                type="button"
-                :disabled="busy"
-                @click="edit(row)"
+              </button><RowMoreActions
+                v-if="writable||removable"
+                :label="`${row.name}更多操作`"
               >
-                编辑
-              </button><button
-                v-if="removable"
-                type="button"
-                class="danger"
-                :disabled="busy"
-                @click="remove(row)"
-              >
-                删除
-              </button>
+                <button
+                  v-if="writable"
+                  type="button"
+                  :disabled="busy"
+                  @click="edit(row)"
+                >
+                  编辑
+                </button><button
+                  v-if="removable"
+                  type="button"
+                  class="business-danger"
+                  :disabled="busy"
+                  @click="remove(row)"
+                >
+                  删除
+                </button>
+              </RowMoreActions>
             </td>
           </tr>
           <tr v-if="!rows.length">
@@ -149,6 +162,7 @@ onBeforeUnmount(()=>{sequence++;window.removeEventListener('beforeunload',before
     <AccessDialog
       v-if="editor"
       ref="editorDialog"
+      dialog-class="business-dialog"
       :title="editing?'编辑开销':'新增开销'"
       wide
       :busy="busy"
@@ -271,6 +285,7 @@ onBeforeUnmount(()=>{sequence++;window.removeEventListener('beforeunload',before
     </AccessDialog>
     <AccessDialog
       v-if="detail"
+      dialog-class="business-dialog"
       title="开销详情"
       wide
       @close="detail=undefined"

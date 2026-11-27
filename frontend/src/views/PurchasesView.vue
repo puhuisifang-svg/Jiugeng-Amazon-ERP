@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import '@/styles/purchaseManagement.css'
-import {purchaseManagementApi as management,blankPurchaseFilters,type PurchaseSave} from '@/api/purchaseManagement'
+import {purchaseManagementApi as management,blankPurchaseFilters,type PurchaseSave,type ShipmentSummary} from '@/api/purchaseManagement'
 import {readPurchasePending,writePurchasePending} from '@/ui/purchasePending'
 import {validMaterialQuantity} from '@/ui/materialQuantity'
+import PurchaseLineRemarkEditor from '@/components/PurchaseLineRemarkEditor.vue'
+import MonitoringPencil from '@/components/MonitoringPencil.vue'
+import {createRequestId} from '@/utils/requestId'
 import PurchasePicker from '@/components/PurchasePicker.vue'
 import RowMoreActions from '@/components/RowMoreActions.vue'
 import PurchaseShipmentsDialog from '@/components/PurchaseShipmentsDialog.vue'
@@ -19,7 +22,6 @@ import AccessDialog from '@/components/AccessDialog.vue'
 import SingleFileUpload from '@/components/SingleFileUpload.vue'
 import { catalogApi } from '@/api/catalog'
 import PurchaseItemImage from '@/components/PurchaseItemImage.vue'
-import PurchaseLogisticsDialog from '@/components/PurchaseLogisticsDialog.vue'
 import { vSingleSelect } from '@/directives/singleSelect'
 import EditableSelect from '@/components/EditableSelect.vue'
 import DatePicker from '@/components/DatePicker.vue'
@@ -35,14 +37,18 @@ import { session } from '@/state/session'
 
 const route = useRoute(); const router = useRouter()
 const detailId=ref(''),supplierDetailId=ref(''),shipmentId=ref(''),pickSupplier=ref(false),pickLine=ref<number>(),copyFrom=ref(''),initialForm=ref(''),conflict=ref<PurchaseOrder>(),pendingSave=ref<PurchaseSave|undefined>(readPurchasePending('save')),capable=ref(false),counts=ref<Record<string,number>>({}),rowExpanded=ref<Record<string,boolean>>({}),exportBusy=ref(false)
+const pickFilterSupplier=ref(false),filterSupplierNames=ref<Record<string,string>>({})
+function pickedFilterSupplier(value:SupplierDto){filters.supplier=value.id;filterSupplierNames.value[value.id]=value.name;pickFilterSupplier.value=false}
 const appliedFilters=ref(blankPurchaseFilters())
 const filters=reactive(blankPurchaseFilters()),totalCount=ref(0),advanced=ref(false),editingLoading=ref(false),editLoadFailed=ref(false)
+const remarkLine=ref<PurchaseOrderInput['lines'][number]>(),remarkAnchor=ref<HTMLElement>()
+function editLineRemark(line:PurchaseOrderInput['lines'][number],event:Event){remarkLine.value=line;remarkAnchor.value=event.currentTarget as HTMLElement}
 const formDialog=ref<InstanceType<typeof AccessDialog>>()
 const dirty=computed(()=>showOrderForm.value&&JSON.stringify(form)!==initialForm.value)
 const locked=computed(()=>saving.value||uploading.value||!!pendingSave.value||!!conflict.value||editingLoading.value||editLoadFailed.value)
 let listSequence=0,alive=true
 const listKey=`jiugeng.purchase.list.${session.user.value?.id??'current'}`
-function remember(){try{sessionStorage.setItem(listKey,JSON.stringify({filters:{...appliedFilters.value},page:page.value,size:size.value,scroll:window.scrollY}))}catch{/* optional */}}
+function remember(){try{sessionStorage.setItem(listKey,JSON.stringify({filters:{...appliedFilters.value},page:page.value,size:size.value,supplierNames:filterSupplierNames.value,scroll:window.scrollY}))}catch{/* optional */}}
 async function mayLeave(){return !saving.value&&!uploading.value&&(!dirty.value||!!pendingSave.value||await confirmAction('采购资料尚未保存，确定离开？', { unsaved: true, discardLabel: '放弃并离开' }))}
 onBeforeRouteLeave(mayLeave)
 function unload(e:BeforeUnloadEvent){if(dirty.value||saving.value||uploading.value){e.preventDefault();e.returnValue=''}}
@@ -78,12 +84,11 @@ function togglePage(checked:boolean){const ids=visibleOrders.value.map(o=>o.id);
 const suppliers = ref<SupplierDto[]>([]); const references = ref<PurchaseReferenceItem[]>([])
 const loading = ref(false); const referenceLoading = ref(false); const supplierLoading = ref(false); const saving = ref(false)
 const error = ref(''); const formError = ref(''); const success = ref('')
-const type = computed<PurchaseOrderType>(() => route.query.type === 'MANUAL' ? 'MANUAL' : route.query.type === 'MATERIAL' ? 'MATERIAL' : 'PRODUCT')
+const type = computed<PurchaseOrderType>(() => route.query.type === 'MANUAL' ? 'MANUAL' : route.query.type === 'PRODUCT' ? 'PRODUCT' : 'MATERIAL')
 const status = ref<PurchaseStatus | ''>(''); const keyword = ref(''); const delivery = ref(''); const page = ref(1); const size = ref(20)
 const editing = ref<PurchaseOrder>(); const showOrderForm = ref(false)
 const form = reactive<PurchaseOrderInput>({ orderType: 'PRODUCT', supplierId: '', currency: 'CNY', remark: '', lines: [] })
-const logisticsOrder = ref<PurchaseOrder>()
-function logisticsSaved() { void load(); logisticsOrder.value = undefined; success.value = '运单资料已保存。' }
+const orderShipments=ref<Record<string,ShipmentSummary[]>>({})
 const deleting = ref('')
 const removable = computed(() => capable.value&&session.canAccess(['purchases.write', 'purchases.cancel']))
 const hasReceipts = (order: PurchaseOrder) => ['PARTIALLY_RECEIVED', 'COMPLETED'].includes(order.status) || order.lines.some(line => line.receivedQuantity > 0)
@@ -103,15 +108,15 @@ async function removeOrder(order: PurchaseOrder) {
 const maintainable=computed(()=>capable.value&&session.canAccess(['purchases.write']))
 const writable = computed(() => capable.value&&session.canAccess(['purchases.write','purchases.submit']))
 const statusLabels: Record<PurchaseStatus, string> = { DRAFT: '草稿', SUBMITTED: '待收货', PARTIALLY_RECEIVED: '部分收货', COMPLETED: '已完成', CANCELLED: '已取消 / 余量关闭' }
-const typeLabels = { PRODUCT: '产品采购', MATERIAL: '辅料采购', MANUAL: '日常物品采购' }
+const typeLabels = { MATERIAL: '辅料采购', PRODUCT: '产品采购', MANUAL: '日常物品采购' }
 const uploading = ref(false), uploadTarget = ref<number>()
 async function uploadItem(file:File,index:number){uploading.value=true;try{const image=await catalogApi.uploadImage('PURCHASE_ITEM',file);if(alive&&form.lines[index])form.lines[index]!.imageAssetId=image.id;uploadTarget.value=undefined}catch(e){formError.value=message(e,'图片上传失败');throw e}finally{uploading.value=false}}
-function moveType(step:number){const types:PurchaseOrderType[]=['PRODUCT','MATERIAL','MANUAL'];void changeType(types[(types.indexOf(type.value)+step+3)%3]!)}
+function moveType(step:number){const types:PurchaseOrderType[]=['MATERIAL','PRODUCT','MANUAL'];void changeType(types[(types.indexOf(type.value)+step+3)%3]!)}
 const overdue = (order: PurchaseOrder) => ['SUBMITTED', 'PARTIALLY_RECEIVED'].includes(order.status) && !!order.expectedDeliveryDate && order.expectedDeliveryDate < beijingDate()
 const filtered = computed(() => orders.value)
 const pageCount = computed(() => Math.max(1, Math.ceil(totalCount.value / size.value)))
 const visibleOrders = computed(() => orders.value)
-function filterValue(key:string,value:string){if(key==='status')return statusLabels[value as PurchaseStatus]??value;if(key==='delivery')return value==='overdue'?'已逾期未收齐':'未填写交期';if(key==='logistics')return '未填写物流';if(key==='supplier')return orders.value.find(o=>o.supplierId===value)?.supplierName??'指定供应商';return value}
+function filterValue(key:string,value:string){if(key==='status')return statusLabels[value as PurchaseStatus]??value;if(key==='delivery')return value==='overdue'?'已逾期未收齐':'未填写交期';if(key==='logistics')return '未填写物流';if(key==='supplier')return orders.value.find(o=>o.supplierId===value)?.supplierName||filterSupplierNames.value[value]||'指定供应商';return value}
 function displayLines(order:PurchaseOrder){return rowExpanded.value[order.id]?order.lines:order.lines.slice(0,2)}
 async function applyFilters(){filters.type=type.value;filters.status=status.value;filters.q=keyword.value;filters.delivery=delivery.value;page.value=1;selectedIds.value=[];appliedFilters.value={...filters};remember();await load()}
 async function exportSelection(image=false,all=false){if(exportBusy.value)return;exportBusy.value=true;error.value='';try{if(image)exportOrders.value=await management.selection({...appliedFilters.value},all?[]:selectedIds.value);else{const blob=await management.export({...appliedFilters.value},all?[]:selectedIds.value),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='采购明细.csv';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}}catch(e){error.value=message(e,'导出失败')}finally{exportBusy.value=false}}
@@ -130,7 +135,7 @@ async function changeType(value: PurchaseOrderType) { await router.replace({quer
 function closeForm() { if (saving.value || uploading.value) return; referenceSequence++; showOrderForm.value = false; requestedMaterials.value = []; references.value = []; formError.value = '' }
 async function load() {
  const seq=++listSequence;loading.value=true;error.value='';filters.type=type.value
- try{const [result,totals]=await Promise.all([management.page({...appliedFilters.value},page.value-1,size.value),management.counts()]);if(seq!==listSequence)return;orders.value=result.items;totalCount.value=result.total;counts.value=totals;if(page.value>pageCount.value){page.value=pageCount.value;await load()}remember()}
+ try{const [result,totals]=await Promise.all([management.page({...appliedFilters.value},page.value-1,size.value),management.counts()]);const waybills=await management.shipmentSummaries(result.items.map(o=>o.id));if(seq!==listSequence)return;orderShipments.value=waybills;orders.value=result.items;totalCount.value=result.total;counts.value=totals;if(page.value>pageCount.value){page.value=pageCount.value;await load()}remember()}
  catch(e){if(seq===listSequence)error.value=message(e,'采购数据读取失败')+(orders.value.length?'；以下为上次读取结果':'')}
  finally{if(seq===listSequence)loading.value=false}
 }
@@ -235,7 +240,7 @@ async function openEdit(order: PurchaseOrder,copy=false) {
   try{order=await purchaseApi.order(order.id)}catch(e){editLoadFailed.value=true;formError.value=message(e,'单据读取失败，无法编辑');return}finally{editingLoading.value=false}
   copyFrom.value=copy?order.id:'';conflict.value=undefined
   editing.value = order; formError.value = ''; showOrderForm.value = true
-  Object.assign(form, { orderType: order.orderType, supplierId: order.supplierId, supplierName: order.supplierName, currency: order.currency, remark: order.remark ?? '', version: order.version, expectedDeliveryDate: order.expectedDeliveryDate ?? '', deliveryAddress: order.deliveryAddress ?? '', lines: order.lines.map(line => ({ itemId: line.itemId, quantity: line.orderedQuantity, packageCount:line.packageCount??null, unitPrice: line.unitPrice, taxIncluded:line.taxIncluded??false,taxRate:line.taxIncluded?(line.taxRate??1):1, itemName:line.itemName, unit:line.unit, specification:line.specification??'', imageAssetId:line.imageAssetId })) })
+  Object.assign(form, { orderType: order.orderType, supplierId: order.supplierId, supplierName: order.supplierName, currency: order.currency, remark: order.remark ?? '', version: order.version, expectedDeliveryDate: order.expectedDeliveryDate ?? '', deliveryAddress: order.deliveryAddress ?? '', lines: order.lines.map(line => ({ itemId: line.itemId, quantity: line.orderedQuantity, packageCount:line.packageCount??null, unitPrice: line.unitPrice, taxIncluded:line.taxIncluded??false,taxRate:line.taxIncluded?(line.taxRate??1):1, itemName:line.itemName, unit:line.unit, specification:line.specification??'', imageAssetId:line.imageAssetId, remark:line.remark??'' })) })
   references.value=order.lines.map(l=>({id:l.itemId,code:l.itemCode,name:l.itemName,unit:l.unit,primarySupplier:false,imageAssetId:l.imageAssetId??null,imageUrl:l.imageUrl??null}))
   if(copy){editing.value=undefined;delete form.version;form.expectedDeliveryDate=defaultDeliveryDate();form.lines.forEach(l=>{l.packageCount=null})}
   initialForm.value=JSON.stringify(form)
@@ -255,7 +260,7 @@ async function saveOrder() {
   if(form.lines.some(line => line.packageCount != null && String(line.packageCount) !== '' && (!Number.isInteger(Number(line.packageCount)) || Number(line.packageCount)<0 || Number(line.packageCount)>2147483647))){formError.value='包裹数须为 0 至 2147483647 的整数。';return}
   if(form.orderType!=='MANUAL'&&form.lines.some(l=>!validMaterialQuantity(l.quantity,form.orderType==='PRODUCT'?'套':references.value.find(v=>v.id===l.itemId)?.unit??'个'))){formError.value='产品和计数辅料须填写整数，计量辅料最多四位小数';return}
   const payload = { ...form, expectedDeliveryDate: form.expectedDeliveryDate || null, lines: form.lines.map(line => ({ ...line,packageCount:line.packageCount==null||String(line.packageCount)===''?null:Number(line.packageCount),taxIncluded:line.taxIncluded??false,taxRate:line.taxIncluded?(line.taxRate??1):0 })) }
-    pendingSave.value={requestId:crypto.randomUUID(),id:editing.value?.id??null,order:JSON.parse(JSON.stringify(payload)),...(copyFrom.value?{copyFromId:copyFrom.value}:{})};writePurchasePending('save',pendingSave.value);await sendSave()
+    pendingSave.value={requestId:createRequestId(),id:editing.value?.id??null,order:JSON.parse(JSON.stringify(payload)),...(copyFrom.value?{copyFromId:copyFrom.value}:{})};writePurchasePending('save',pendingSave.value);await sendSave()
 }
 function resumeSave(){const input=pendingSave.value;if(!input)return;editLoadFailed.value=false;conflict.value=undefined;Object.assign(form,input.order);editing.value=input.id?{id:input.id} as PurchaseOrder:undefined;copyFrom.value=input.copyFromId??'';initialForm.value=JSON.stringify(form);showOrderForm.value=true}
 async function sendSave(){if(!pendingSave.value)return;saving.value=true;const input=pendingSave.value
@@ -267,7 +272,7 @@ async function adoptLatest(){const value=conflict.value;if(!value)return;conflic
 function keepDraft(){if(!conflict.value)return;form.version=conflict.value.version;editing.value=conflict.value;conflict.value=undefined;formError.value='草稿已保留，请核对状态、数量及价格后重新保存'}
 watch(selectedIds,ids=>{if(ids.length>100){selectedIds.value=ids.slice(0,100);error.value='一次最多选择 100 张采购单'}})
 watch([page,size],()=>{if(capable.value){remember();void load()}})
-onMounted(async()=>{window.addEventListener('beforeunload',unload);window.addEventListener('scroll',remember,{passive:true});try{const saved=JSON.parse(sessionStorage.getItem(listKey)??'null');if(saved?.filters){Object.assign(filters,saved.filters,{type:type.value});appliedFilters.value={...filters};keyword.value=filters.q;status.value=filters.status as PurchaseStatus|'';delivery.value=filters.delivery;page.value=saved.page||1;size.value=saved.size||20}appliedFilters.value={...filters,type:type.value};capable.value=(await management.capabilities()).closeoutVersion>=1;await load();if(saved?.scroll){await nextTick();window.scrollTo(0,saved.scroll)}}catch(e){error.value=message(e,'采购新接口不可用，请更新本地后端后刷新；维护功能暂不可用')}})
+onMounted(async()=>{window.addEventListener('beforeunload',unload);window.addEventListener('scroll',remember,{passive:true});try{const saved=JSON.parse(sessionStorage.getItem(listKey)??'null');if(saved?.filters){filterSupplierNames.value=saved.supplierNames||{};Object.assign(filters,saved.filters,{type:type.value});appliedFilters.value={...filters};keyword.value=filters.q;status.value=filters.status as PurchaseStatus|'';delivery.value=filters.delivery;page.value=saved.page||1;size.value=saved.size||20}appliedFilters.value={...filters,type:type.value};capable.value=(await management.capabilities()).closeoutVersion>=1;await load();if(saved?.scroll){await nextTick();window.scrollTo(0,saved.scroll)}}catch(e){error.value=message(e,'采购新接口不可用，请更新本地后端后刷新；维护功能暂不可用')}})
 
 
 watch(pageCount, value => { if (page.value > value) page.value = value })
@@ -276,24 +281,6 @@ watch(pageCount, value => { if (page.value > value) page.value = value })
 
 <template>
   <section class="page-stack purchase-page purchase-ui">
-    <header class="panel purchase-header">
-      <div>
-        <p class="eyebrow">
-          PURCHASE ORDERS
-        </p><h1>采购管理</h1><p>建单并下单 → 分批收货 → 完成，采购与到货进度在一处管理。</p>
-      </div>
-      <div class="purchase-header-actions">
-        <button
-          v-if="writable"
-          class="primary-link"
-          type="button"
-          :disabled="showOrderForm"
-          @click="openCreate"
-        >
-          新建{{ typeLabels[type] }}单
-        </button>
-      </div>
-    </header>
     <div
       class="purchase-tabs"
       role="tablist"
@@ -322,19 +309,42 @@ watch(pageCount, value => { if (page.value > value) page.value = value })
       {{ error }}
     </p><SuccessToast :message="success" />
     <p
-      v-if="pendingSave"
+      v-if="pendingSave&&!saving"
       class="purchase-warning"
     >
       有一笔保存结果待确认。<button @click="resumeSave">
         恢复并确认原请求
       </button>
     </p>
-    <section class="panel filter-panel purchase-order-filters">
+    <form
+      class="panel filter-panel purchase-order-filters"
+      @submit.prevent="applyFilters"
+    >
       <label>搜索<input
         v-model="keyword"
         placeholder="采购单号 / 供应商 / SKU / 辅料"
         aria-label="搜索采购单"
       ></label>
+      <div class="purchase-supplier-filter">
+        <span id="purchase-supplier-label">供应商</span>
+        <button
+          type="button"
+          class="purchase-supplier-trigger"
+          aria-labelledby="purchase-supplier-label"
+          @click="pickFilterSupplier=true"
+        >
+          <span>{{ filters.supplier ? filterValue('supplier',filters.supplier) : '全部供应商' }}</span><span aria-hidden="true">⌄</span>
+        </button>
+        <button
+          v-if="filters.supplier"
+          type="button"
+          class="filter-reset-button"
+          aria-label="清除供应商"
+          @click="filters.supplier=''"
+        >
+          ×
+        </button>
+      </div>
       <label>状态<select
         v-model="status"
         v-single-select
@@ -347,54 +357,75 @@ watch(pageCount, value => { if (page.value > value) page.value = value })
         v-model="delivery"
         v-single-select
       ><option value="">全部交期</option><option value="overdue">已逾期未收齐</option><option value="missing">未填写交期</option></select></label>
-      <button
-        type="button"
-        @click="applyFilters"
-      >
-        搜索
-      </button><button @click="resetFilters">
-        重置
-      </button><button @click="advanced=!advanced">
-        更多筛选
-      </button><button
-        type="button"
-        :disabled="loading"
-        @click="load"
-      >
-        {{ loading ? '刷新中…' : '刷新' }}
-      </button>
+      <div class="purchase-filter-actions">
+        <button
+          type="submit"
+          class="purchase-search-button"
+          :disabled="loading"
+        >
+          搜索
+        </button>
+        <button
+          type="button"
+          class="filter-reset-button"
+          :disabled="loading"
+          @click="resetFilters"
+        >
+          重置
+        </button>
+        <button
+          type="button"
+          class="purchase-more-button"
+          :aria-expanded="advanced"
+          aria-controls="purchase-advanced-filters"
+          @click="advanced=!advanced"
+        >
+          {{ advanced ? '收起筛选' : '更多筛选' }}<span aria-hidden="true">{{ advanced ? '⌃' : '⌄' }}</span>
+        </button>
+      </div>
       <div
         v-if="advanced"
+        id="purchase-advanced-filters"
         class="purchase-advanced"
       >
-        <label>创建起始<DatePicker
-          v-model="filters.createdFrom"
-          type="date"
-        /></label><label>创建截止<DatePicker
-          v-model="filters.createdTo"
-          type="date"
-        /></label><label>交期起始<DatePicker
-          v-model="filters.deliveryFrom"
-          type="date"
-        /></label><label>交期截止<DatePicker
-          v-model="filters.deliveryTo"
-          type="date"
-        /></label><label>物流<select
+        <div class="purchase-date-filter">
+          <span>创建日期</span><DatePicker
+            v-model="filters.createdFrom"
+            v-model:end="filters.createdTo"
+            range
+            start-label="创建起始"
+            end-label="创建截止"
+          />
+        </div>
+        <div class="purchase-date-filter">
+          <span>预计交期</span><DatePicker
+            v-model="filters.deliveryFrom"
+            v-model:end="filters.deliveryTo"
+            range
+            start-label="交期起始"
+            end-label="交期截止"
+          />
+        </div>
+        <label>物流<select
           v-model="filters.logistics"
           v-single-select
-        ><option value="">全部</option><option value="missing">未填物流</option></select></label>
+        ><option value="">全部物流</option><option value="missing">未填物流</option></select></label>
       </div>
-      <div class="purchase-filter-tags">
+      <div
+        v-if="Object.entries(appliedFilters).some(([key,value])=>key!=='type'&&value)"
+        class="purchase-filter-tags"
+      >
         <span
           v-for="(value,key) in appliedFilters"
           v-show="value&&key!=='type'"
           :key="key"
         >{{ ({status:'状态',q:'关键词',supplier:'供应商',createdFrom:'创建起始',createdTo:'创建截止',deliveryFrom:'交期起始',deliveryTo:'交期截止',delivery:'交期',logistics:'物流',type:'类型'})[key] }}：{{ filterValue(key,value) }} <button
+          type="button"
           :aria-label="`移除${key}筛选`"
           @click="filters[key]='';if(key==='q')keyword='';if(key==='status')status='';if(key==='delivery')delivery='';applyFilters()"
         >×</button></span>
       </div>
-    </section>
+    </form>
     <section
       id="purchase-orders-panel"
       class="panel table-panel"
@@ -403,6 +434,15 @@ watch(pageCount, value => { if (page.value > value) page.value = value })
       :aria-busy="loading"
     >
       <div class="purchase-list-actions">
+        <button
+          v-if="writable"
+          class="ui-button-primary purchase-create-button"
+          type="button"
+          :disabled="showOrderForm"
+          @click="openCreate"
+        >
+          新建{{ typeLabels[type] }}单
+        </button>
         <button
           v-if="canReceive"
           type="button"
@@ -431,16 +471,8 @@ watch(pageCount, value => { if (page.value > value) page.value = value })
           @click="exportSelection(false,true)"
         >
           导出筛选 CSV
-        </button><button
-          v-if="selectedIds.length"
-          @click="selectedIds=[]"
-        >
-          清空选择（{{ selectedIds.length }}）
         </button>
       </div>
-      <p class="purchase-list-note">
-        {{ type === 'MANUAL' ? '直接录入未建档的日常物品，支持图片及分批收货，不计入产品或辅料库存。' : type === 'PRODUCT' ? '产品按 SKU 采购，新登记收货同步增加产品库存；历史收货不自动补账。' : '辅料按档案单位采购，登记收货后同步增加固定仓库存。' }} 收货与历史记录在采购单详情查看。
-      </p>
       <p
         v-if="loading"
         class="purchase-list-note"
@@ -452,7 +484,7 @@ watch(pageCount, value => { if (page.value > value) page.value = value })
         class="table-scroll"
       >
         <TableViewport>
-          <table class="data-table ui-action-table">
+          <table class="data-table ui-action-table purchase-grouped-table">
             <thead>
               <tr>
                 <th>
@@ -463,150 +495,204 @@ watch(pageCount, value => { if (page.value > value) page.value = value })
                     :indeterminate="!allPageSelected && visibleOrders.some(o=>selectedIds.includes(o.id))"
                     @change="togglePage(($event.target as HTMLInputElement).checked)"
                   >
-                </th><th>采购名称 / 供应商</th><th>商品</th><th>数量 / 单位</th><th>物流</th><th>采购金额</th><th>收货进度</th><th>预计到货</th><th>状态</th><th>操作</th>
+                </th><th>采购名称 / 供应商</th><th>商品</th><th>数量 / 单位</th><th>备注</th><th>物流</th><th>采购金额</th><th>收货进度</th><th>预计到货</th><th>状态</th><th>操作</th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="!filtered.length">
                 <td
-                  colspan="10"
+                  colspan="11"
                   class="muted"
                 >
                   暂无采购记录
                 </td>
               </tr>
-              <tr
-                v-for="order in visibleOrders"
+              <template
+                v-for="(order, orderIndex) in visibleOrders"
                 :key="order.id"
               >
-                <td>
-                  <input
-                    v-model="selectedIds"
-                    type="checkbox"
-                    :value="order.id"
-                    :aria-label="`选择采购单 ${purchaseName(order)}`"
+                <tr
+                  v-for="(line, lineIndex) in (displayLines(order).length ? displayLines(order) : [null])"
+                  :key="line?.id || order.id"
+                  :class="{'purchase-group-tinted':orderIndex%2===0}"
+                >
+                  <td
+                    v-if="lineIndex===0"
+                    :rowspan="Math.max(1,displayLines(order).length)"
                   >
-                </td>
-                <td>
-                  <button
-                    type="button"
-                    class="text-link purchase-name-link"
-                    :data-order-id="order.id"
-                    @click="detailId=order.id"
+                    <input
+                      v-model="selectedIds"
+                      type="checkbox"
+                      :value="order.id"
+                      :aria-label="`选择采购单 ${purchaseName(order)}`"
+                    >
+                  </td>
+                  <td
+                    v-if="lineIndex===0"
+                    :rowspan="Math.max(1,displayLines(order).length)"
                   >
-                    <strong>{{ purchaseName(order) }}</strong>
-                  </button><small><button
-                    class="text-link"
-                    :disabled="!order.supplierId"
-                    @click="supplierDetailId=order.supplierId"
-                  >{{ order.supplierName }}</button> <button
-                    v-if="order.supplierId"
-                    class="text-link"
-                    @click="filters.supplier=order.supplierId;applyFilters()"
-                  >筛选</button></small><small>{{ order.orderNo }}</small><small>{{ beijingDate(order.createdAt) }} 创建</small>
-                </td>
-                <td>
-                  <div
-                    v-for="line in displayLines(order)"
-                    :key="line.id"
-                    class="purchase-list-product"
-                  >
-                    <PurchaseItemImage
-                      :image-asset-id="line.imageAssetId"
-                      :image-url="line.imageUrl"
-                      :alt="line.itemName"
-                    />
-                    <div :title="line.itemName">
-                      <span>{{ line.itemName }}</span>
-                    </div>
-                  </div>
-                  <button
-                    v-if="order.lines.length>2"
-                    class="text-link"
-                    :aria-expanded="!!rowExpanded[order.id]"
-                    @click="rowExpanded[order.id]=!rowExpanded[order.id]"
-                  >
-                    {{ rowExpanded[order.id]?'收起':`展开全部 ${order.lines.length} 项` }}
-                  </button><small v-else>共 {{ order.lines.length }} 项</small>
-                </td>
-                <td>
-                  <div
-                    v-for="line in displayLines(order)"
-                    :key="line.id"
-                    class="purchase-list-measure"
-                  >
-                    {{ line.orderedQuantity }} {{ line.unit }}
-                  </div><small>&nbsp;</small>
-                </td>
-                <td>
-                  <span>{{ order.carrier || '未填写物流公司' }}</span><small>{{ order.trackingNumber || '未填写运单号' }}</small><button
-                    v-if="order.trackingNumber || order.waybillImageId || maintainable"
-                    type="button"
-                    class="text-link"
-                    @click="logisticsOrder = order"
-                  >
-                    {{ order.trackingNumber || order.waybillImageId ? '原物流资料' : '填写物流' }}
-                  </button>
-                </td>
-                <td>{{ order.currency }} {{ total(order) }}</td>
-                <td>{{ order.lines.filter(line => line.remainingQuantity === 0).length }} / {{ order.lines.length }} 项已收齐<small>{{ order.status === 'CANCELLED' ? '未收余量已关闭' : '分项数量见详情' }}</small></td>
-                <td :class="{ 'purchase-delivery-date': overdue(order) }">
-                  {{ order.expectedDeliveryDate || '未约定' }}<small v-if="overdue(order)">逾期未收齐</small>
-                </td>
-                <td>
-                  <span
-                    class="purchase-status"
-                    :data-status="order.status"
-                  >{{ statusLabels[order.status] }}</span>
-                </td>
-                <td class="table-actions">
-                  <button
-                    type="button"
-                    class="text-link"
-                    @click="detailId=order.id"
-                  >
-                    详情
-                  </button><button
-                    v-if="canReceive&&['SUBMITTED','PARTIALLY_RECEIVED'].includes(order.status)"
-                    @click="listAction='receive';actionQueue=[order.id]"
-                  >
-                    收货
-                  </button><RowMoreActions :label="`${order.orderNo}更多操作`">
                     <button
-                      v-if="writable"
-                      @click="openEdit(order,true)"
-                    >
-                      再次采购
-                    </button><button @click="shipmentId=order.id">
-                      发货批次 / 多运单
-                    </button><button
-                      v-if="maintainable && (order.status==='SUBMITTED'||writable&&order.status==='DRAFT')"
                       type="button"
-                      class="secondary-button"
-                      @click="openEdit(order)"
+                      class="text-link purchase-name-link"
+                      :data-order-id="order.id"
+                      @click="detailId=order.id"
                     >
-                      编辑
-                    </button><button
-                      v-if="canCancel && !['COMPLETED','CANCELLED'].includes(order.status)"
-                      type="button"
-                      class="danger-link"
-                      :disabled="!!actionQueue.length"
-                      @click="startCancel(order)"
+                      <strong>{{ purchaseName(order) }}</strong>
+                    </button><small><button
+                      class="text-link purchase-supplier-link"
+                      :disabled="!order.supplierId"
+                      @click="supplierDetailId=order.supplierId"
+                    >{{ order.supplierName }}</button></small><small>{{ beijingDate(order.createdAt) }} 创建</small>
+                  </td>
+                  <td class="purchase-group-product">
+                    <div
+                      v-if="line"
+                      class="purchase-list-product"
                     >
-                      取消
-                    </button><button
-                      v-if="removable"
-                      type="button"
-                      class="danger-link"
-                      :disabled="!!deleting || hasReceipts(order)"
-                      :title="hasReceipts(order) ? '已有收货记录，不能删除' : '删除采购单'"
-                      @click="removeOrder(order)"
+                      <PurchaseItemImage
+                        :image-asset-id="line.imageAssetId"
+                        :image-url="line.imageUrl"
+                        :alt="line.itemName"
+                      />
+                      <div class="purchase-product-copy">
+                        <span
+                          class="purchase-product-name"
+                          :title="line.itemName"
+                        >{{ line.itemName }}</span>
+                        <span
+                          v-if="line.specification && line.specification !== line.itemName"
+                          class="purchase-product-spec"
+                          :title="line.specification"
+                        >{{ line.specification }}</span>
+                      </div>
+                    </div>
+                    <button
+                      v-if="order.lines.length>2 && lineIndex===displayLines(order).length-1"
+                      class="text-link"
+                      :aria-expanded="!!rowExpanded[order.id]"
+                      @click="rowExpanded[order.id]=!rowExpanded[order.id]"
                     >
-                      {{ deleting === order.id ? '处理中…' : '删除' }}
+                      {{ rowExpanded[order.id]?'收起':`展开全部 ${order.lines.length} 项` }}
                     </button>
-                  </RowMoreActions>
-                </td>
-              </tr>
+                  </td>
+                  <td class="purchase-group-quantity">
+                    {{ line ? `${line.orderedQuantity} ${line.unit}` : '—' }}
+                  </td>
+                  <td class="purchase-group-note">
+                    {{ line?.remark || '—' }}
+                  </td>
+                  <td
+                    v-if="lineIndex===0"
+                    :rowspan="Math.max(1,displayLines(order).length)"
+                    class="purchase-logistics-cell"
+                  >
+                    <div class="purchase-logistics-summary">
+                      <div
+                        v-for="waybill in (orderShipments[order.id]||[]).slice(0,2)"
+                        :key="waybill.id"
+                        class="purchase-waybill-row"
+                      >
+                        <span>{{ waybill.carrier || '运单' }} <small>{{ waybill.completed?'已收齐':'待收货' }}</small></span>
+                        <span class="purchase-tracking-number">{{ waybill.trackingNumber || '图片运单' }}</span>
+                      </div>
+                      <span
+                        v-if="(orderShipments[order.id]?.length||0)>2"
+                        class="purchase-logistics-empty"
+                      >共 {{ orderShipments[order.id]?.length }} 张运单</span>
+                      <span
+                        v-if="!orderShipments[order.id]?.length"
+                        class="purchase-logistics-empty"
+                      >{{ order.trackingNumber||order.waybillImageId?'有历史物流资料':'尚未登记运单' }}</span>
+                      <div class="purchase-logistics-actions">
+                        <button
+                          type="button"
+                          class="text-link purchase-logistics-link"
+                          @click="shipmentId=order.id"
+                        >
+                          {{ maintainable?'管理运单':'查看运单' }}
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                  <td
+                    v-if="lineIndex===0"
+                    :rowspan="Math.max(1,displayLines(order).length)"
+                  >
+                    {{ order.currency }} {{ total(order) }}
+                  </td>
+                  <td
+                    v-if="lineIndex===0"
+                    :rowspan="Math.max(1,displayLines(order).length)"
+                  >
+                    {{ order.lines.filter(line => line.remainingQuantity === 0).length }} / {{ order.lines.length }} 项已收齐<small>{{ order.status === 'CANCELLED' ? '未收余量已关闭' : '分项数量见详情' }}</small>
+                  </td>
+                  <td
+                    v-if="lineIndex===0"
+                    :rowspan="Math.max(1,displayLines(order).length)"
+                    :class="{ 'purchase-delivery-date': overdue(order) }"
+                  >
+                    {{ order.expectedDeliveryDate || '未约定' }}<small v-if="overdue(order)">逾期未收齐</small>
+                  </td>
+                  <td
+                    v-if="lineIndex===0"
+                    :rowspan="Math.max(1,displayLines(order).length)"
+                  >
+                    <span
+                      class="purchase-status"
+                      :data-status="order.status"
+                    >{{ statusLabels[order.status] }}</span>
+                  </td>
+                  <td
+                    v-if="lineIndex===0"
+                    :rowspan="Math.max(1,displayLines(order).length)"
+                    class="table-actions"
+                  >
+                    <button
+                      type="button"
+                      class="text-link"
+                      @click="detailId=order.id"
+                    >
+                      详情
+                    </button><button
+                      v-if="canReceive&&['SUBMITTED','PARTIALLY_RECEIVED'].includes(order.status)"
+                      @click="listAction='receive';actionQueue=[order.id]"
+                    >
+                      收货
+                    </button><RowMoreActions :label="`${order.orderNo}更多操作`">
+                      <button
+                        v-if="writable"
+                        @click="openEdit(order,true)"
+                      >
+                        再次采购
+                      </button><button
+                        v-if="maintainable && (order.status==='SUBMITTED'||writable&&order.status==='DRAFT')"
+                        type="button"
+                        class="secondary-button"
+                        @click="openEdit(order)"
+                      >
+                        编辑
+                      </button><button
+                        v-if="canCancel && !['COMPLETED','CANCELLED'].includes(order.status)"
+                        type="button"
+                        class="danger-link"
+                        :disabled="!!actionQueue.length"
+                        @click="startCancel(order)"
+                      >
+                        取消
+                      </button><button
+                        v-if="removable"
+                        type="button"
+                        class="danger-link"
+                        :disabled="!!deleting || hasReceipts(order)"
+                        :title="hasReceipts(order) ? '已有收货记录，不能删除' : '删除采购单'"
+                        @click="removeOrder(order)"
+                      >
+                        {{ deleting === order.id ? '处理中…' : '删除' }}
+                      </button>
+                    </RowMoreActions>
+                  </td>
+                </tr>
+              </template>
             </tbody>
           </table>
         </TableViewport>
@@ -633,7 +719,7 @@ watch(pageCount, value => { if (page.value > value) page.value = value })
       <p v-if="editingLoading">
         正在读取最新单据…
       </p><p
-        v-if="pendingSave"
+        v-if="pendingSave&&!saving"
         class="purchase-warning"
       >
         保存结果待确认，草稿已锁定，请使用原请求核对。
@@ -731,7 +817,7 @@ watch(pageCount, value => { if (page.value > value) page.value = value })
                   <col class="purchase-col-image"><col class="purchase-col-item"><col class="purchase-col-quantity"><col class="purchase-col-package"><col class="purchase-col-price"><col class="purchase-col-tax"><col
                     v-if="showTaxRate"
                     class="purchase-col-rate"
-                  ><col class="purchase-col-amount"><col class="purchase-col-action">
+                  ><col class="purchase-col-remark"><col class="purchase-col-amount"><col class="purchase-col-action">
                 </colgroup>
                 <thead>
                   <tr>
@@ -739,7 +825,7 @@ watch(pageCount, value => { if (page.value > value) page.value = value })
                       图片
                     </th><th>采购项目</th><th>数量 / 单位</th><th>包裹数</th><th>不含税单价</th><th>是否含税</th><th v-if="showTaxRate">
                       税率（%）
-                    </th><th>金额</th><th>操作</th>
+                    </th><th>备注</th><th>金额</th><th>操作</th>
                   </tr>
                 </thead><tbody>
                   <tr
@@ -873,6 +959,19 @@ watch(pageCount, value => { if (page.value > value) page.value = value })
                         :aria-label="`税率 ${index+1}`"
                       ><span v-else>—</span>
                     </td>
+                    <td>
+                      <div class="purchase-line-remark">
+                        <span :title="line.remark">{{ line.remark || '—' }}</span><button
+                          type="button"
+                          class="purchase-remark-edit"
+                          :aria-label="`编辑第 ${index+1} 项商品备注`"
+                          :disabled="locked"
+                          @click="editLineRemark(line,$event)"
+                        >
+                          <MonitoringPencil />
+                        </button>
+                      </div>
+                    </td>
                     <td class="purchase-line-amount">
                       {{ (purchaseLineAmount(line)).toFixed(2) }}
                     </td>
@@ -901,7 +1000,10 @@ watch(pageCount, value => { if (page.value > value) page.value = value })
               增加明细
             </button><span class="purchase-line-count">共 {{ form.lines.length }} 项明细</span>
           </div>
-          <label class="form-wide">采购备注<textarea
+          <label
+            v-if="form.remark"
+            class="form-wide"
+          >历史整单备注<textarea
             v-model="form.remark"
             maxlength="500"
             placeholder="包装要求、供货约定等，可换行"
@@ -924,6 +1026,13 @@ watch(pageCount, value => { if (page.value > value) page.value = value })
         </button>
       </template>
     </AccessDialog>
+    <PurchasePicker
+      v-if="pickFilterSupplier"
+      :type="type"
+      filter-suppliers
+      @close="pickFilterSupplier=false"
+      @supplier="pickedFilterSupplier"
+    />
     <PurchasePicker
       v-if="pickSupplier"
       :type="form.orderType"
@@ -971,6 +1080,7 @@ watch(pageCount, value => { if (page.value > value) page.value = value })
   <AccessDialog
     v-if="detailId"
     title="采购单详情"
+    dialog-class="purchase-detail-dialog"
     wide
     @close="closeDetail"
   >
@@ -997,16 +1107,44 @@ watch(pageCount, value => { if (page.value > value) page.value = value })
     @completed="actionCompleted"
     @close="closeAction"
   />
-  <PurchaseLogisticsDialog
-    v-if="logisticsOrder"
-    :order="logisticsOrder"
-    :writable="maintainable && logisticsOrder.status !== 'CANCELLED'"
-    @close="logisticsOrder = undefined"
-    @saved="logisticsSaved"
+  <PurchaseLineRemarkEditor
+    v-if="remarkLine"
+    :value="remarkLine.remark??''"
+    :anchor="remarkAnchor"
+    @save="remarkLine.remark=$event;remarkLine=undefined"
+    @close="remarkLine=undefined"
   />
 </template>
 
 <style scoped>
+/* Keep range fields out of legacy flex labels so their values cannot collapse. */
+.purchase-ui .purchase-order-filters{align-items:center;gap:8px;padding:6px 10px}
+.purchase-ui .purchase-order-filters>label{flex:0 1 190px;min-width:180px}
+.purchase-ui .purchase-order-filters>label:first-child{flex:1 1 280px;min-width:min(280px,100%)}
+.purchase-ui .purchase-supplier-filter{display:flex;align-items:center;gap:8px;flex:0 1 260px;min-width:0}
+.purchase-supplier-filter>span,.purchase-date-filter>span{flex:none;color:var(--muted);font-size:12px;font-weight:700;white-space:nowrap}
+.purchase-ui .purchase-order-filters .purchase-supplier-trigger{display:flex;align-items:center;justify-content:space-between;gap:8px;flex:1;min-width:0;padding:0 10px;background:white;border:1px solid var(--line);color:var(--ink);font-weight:400}
+.purchase-supplier-trigger>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.purchase-filter-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.purchase-ui .purchase-filter-actions .purchase-search-button,.purchase-ui .purchase-create-button{background:#21834a;color:white;border:1px solid #21834a;min-height:32px;border-radius:4px;padding:0 14px;font-weight:600;cursor:pointer}
+.purchase-ui .purchase-filter-actions .purchase-search-button:hover:not(:disabled),.purchase-ui .purchase-create-button:hover:not(:disabled){background:#196c3b;border-color:#196c3b}
+.purchase-ui .purchase-filter-actions .purchase-more-button{display:flex;align-items:center;gap:8px;background:#edf4ff;color:#2864c5;border:1px solid #d7e5fa;border-radius:4px}
+.purchase-ui .purchase-filter-actions .purchase-more-button:hover,.purchase-ui .purchase-filter-actions .purchase-more-button[aria-expanded=true]{background:#dfeaff;border-color:#b7cff4}
+.purchase-ui .purchase-advanced{display:flex;align-items:center;flex-wrap:wrap;gap:8px 16px;width:100%;min-width:0;padding-top:8px;border-top:1px solid var(--line)}
+.purchase-ui .purchase-date-filter{display:flex;align-items:center;gap:8px;flex:0 1 380px;min-width:0;max-width:100%}
+.purchase-date-filter :deep(.date-picker){flex:1;min-width:260px;width:auto}
+.purchase-ui .purchase-advanced>label{flex:0 1 180px;min-width:160px}
+.purchase-ui .purchase-list-actions{padding:6px 10px}
+.purchase-ui .purchase-tabs{gap:20px;padding:0 10px;overflow-x:auto;flex-shrink:0}
+.purchase-ui .purchase-tabs button{padding:8px 2px;white-space:nowrap;font-size:13px}
+.purchase-filter-actions button:focus-visible,.purchase-supplier-trigger:focus-visible,.purchase-create-button:focus-visible{outline:2px solid #2864c5;outline-offset:2px}
+@media(max-width:1000px){
+ .purchase-ui .purchase-order-filters>label{flex:1 1 180px}
+ .purchase-ui .purchase-supplier-filter{flex:1 1 240px}
+ .purchase-ui .purchase-date-filter{display:grid;grid-template-columns:minmax(0,1fr);flex:1 1 300px;gap:4px}
+ .purchase-date-filter :deep(.date-picker){width:100%;min-width:0;box-sizing:border-box}
+}
+
 .purchase-list-actions{display:flex;align-items:center;gap:8px;padding:8px 16px;flex-wrap:wrap}
 .purchase-list-actions .purchase-batch-action{min-height:32px;padding:5px 14px;border-radius:4px;border:1px solid #b7dbc5;background:#edf7f1;color:#21834a;font-size:13px;cursor:pointer}
 .purchase-list-actions .purchase-batch-action:disabled{background:#f1f2f4;border-color:#e0e3e8;color:#98a2b3;cursor:not-allowed;opacity:1}
@@ -1014,5 +1152,29 @@ watch(pageCount, value => { if (page.value > value) page.value = value })
 .purchase-name-link{color:#2864c5!important;border:0;background:transparent!important;padding:0;text-align:left;cursor:pointer;}
 .purchase-delivery-date { color: #dc2626; }
 .manual-image-cell { min-width:110px; max-width:130px; white-space:normal; }.manual-image-cell > button { display:block; margin:5px 0; }.manual-purchase-lines { min-width:850px; }.manual-purchase-lines td:nth-child(2) { min-width:230px; }.manual-purchase-lines td:nth-child(2) input { display:block; width:100%; max-width:none; }.manual-purchase-lines td:nth-child(4) input { width:70px; }.purchase-edit-lines td input + input { margin-top:6px; }
-.purchase-header-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.purchase-list-measure{height:84px;display:flex;align-items:center;margin-bottom:8px;white-space:nowrap}.purchase-list-product{height:84px;display:flex;align-items:center;gap:10px;min-width:240px;max-width:420px;white-space:normal;margin-bottom:8px}.purchase-list-product>div{min-width:0;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.purchase-list-product>:first-child{flex:none}
+
+.purchase-ui button.purchase-supplier-link{color:#6b778a;text-decoration:underline;text-decoration-color:#b9c1ce;text-underline-offset:3px;font-size:12px;font-weight:400}
+.purchase-ui button.purchase-supplier-link:hover:not(:disabled){color:#526075;text-decoration-color:currentColor}
+.purchase-ui .purchase-list-product{display:grid;grid-template-columns:48px minmax(0,1fr);align-items:center;gap:12px;width:280px;min-width:240px;max-width:360px;height:72px;margin:0;padding:8px 0;box-sizing:border-box}
+.purchase-list-product+.purchase-list-product{border-top:1px solid #e7ebf1}
+.purchase-product-copy{display:flex;flex-direction:column;gap:4px;min-width:0}
+.purchase-product-name{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;font-size:13px;font-weight:500;line-height:18px;color:var(--ink)}
+.purchase-product-spec{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:12px;line-height:16px}
+.purchase-ui .purchase-list-measure{display:flex;align-items:center;height:72px;margin:0;white-space:nowrap;font-variant-numeric:tabular-nums}
+.purchase-ui .purchase-measure-spacer{min-height:24px;margin:0}
+.purchase-logistics-cell{min-width:180px;max-width:240px}
+.purchase-logistics-summary{display:grid;justify-items:start;align-content:center;gap:3px;padding:2px 0;max-width:220px;text-align:left}
+.purchase-waybill-row{display:grid;gap:2px;padding:3px 0}
+.purchase-ui .purchase-waybill-row small{display:inline;margin-left:6px;font-size:11px;color:#7b8799}
+.purchase-logistics-heading{display:flex;align-items:center;flex-wrap:wrap;gap:6px;line-height:20px;font-size:13px;font-weight:500;overflow-wrap:anywhere}
+.purchase-waybill-tag{font-size:11px;line-height:18px;padding:0 5px;border-radius:3px;background:#f0f3f7;color:#69788d;font-weight:400;white-space:nowrap}
+.purchase-tracking-number{font-size:12px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:#69788d;line-height:18px;overflow-wrap:anywhere;user-select:text}
+.purchase-logistics-actions{display:inline-flex;align-items:center;justify-content:flex-start;flex-wrap:nowrap;gap:14px;min-height:24px;width:max-content;max-width:none}
+.purchase-ui .purchase-logistics-actions>button{display:inline-flex;align-items:center;justify-content:flex-start;align-self:center;flex:0 0 auto;width:auto;min-height:24px;margin:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;font-size:12px;font-weight:400;line-height:20px;text-align:left;white-space:nowrap}
+.purchase-ui .purchase-logistics-actions>.purchase-logistics-link{color:#2864c5}
+.purchase-ui .purchase-logistics-actions>.purchase-batches-link{color:#6b778a}
+.purchase-ui .purchase-logistics-actions>button:hover{background:transparent;text-decoration:underline;text-underline-offset:3px}
+.purchase-logistics-actions>button:focus-visible{outline:2px solid #2864c5;outline-offset:2px}
+.purchase-logistics-empty{color:#8b96a7;font-size:12px}
+
 </style>

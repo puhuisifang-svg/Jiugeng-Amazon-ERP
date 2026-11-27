@@ -110,6 +110,22 @@ class CatalogImageService implements CatalogImageGateway {
         } catch(IOException e) { throw new CatalogImageGateway.AttachmentException(503,"PURCHASE_IMAGE_COPY_FAILED","图片复制失败，请使用原请求重试"); }
     }
     @Override @Transactional
+    public String copyOrderWaybill(String imageId,String orderId,String shipmentId,AuthenticatedActor actor) {
+        CatalogImageRepository.Asset source;
+        try { source=asset(imageId); } catch(CatalogImageException e){throw new CatalogImageGateway.AttachmentException(e.status(),e.code(),e.getMessage());}
+        if(!"ACTIVE".equals(source.status())||source.purpose()!=Purpose.PURCHASE_WAYBILL||!"PURCHASE_WAYBILL".equals(source.resourceType())||!orderId.equals(source.resourceId()))
+            throw new CatalogImageGateway.AttachmentException(409,"PURCHASE_WAYBILL_UNAVAILABLE","历史运单图片不属于当前采购单，请重新读取");
+        try {
+            String copy=upload(Purpose.PURCHASE_WAYBILL,source.fileName(),store.read(source.originalKey()),actor).id();
+            var copied=asset(copy);
+            if(org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive())
+                org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization(){
+                    @Override public void afterCompletion(int status){if(status==STATUS_ROLLED_BACK){delete(copied.originalKey());delete(copied.thumbnailKey());}}
+                });
+            attach(copy,Purpose.PURCHASE_WAYBILL,"PURCHASE_SHIPMENT",shipmentId,actor);return copy;
+        } catch(IOException e) { throw new CatalogImageGateway.AttachmentException(503,"PURCHASE_WAYBILL_COPY_FAILED","运单图片复制失败，请使用原请求重试"); }
+    }
+    @Override @Transactional
     public void attach(String imageId,Purpose purpose,String type,String resourceId,AuthenticatedActor actor){if(imageId==null)return;try{var image=asset(imageId);
         if(image.purpose()!=purpose)throw new CatalogImageException(400,"CATALOG_IMAGE_PURPOSE_INVALID","图片用途与资源不匹配");
         if("ACTIVE".equals(image.status())){if(type.equals(image.resourceType())&&resourceId.equals(image.resourceId()))return;throw new CatalogImageException(409,"CATALOG_IMAGE_ALREADY_ATTACHED","图片已被其他资源引用");}

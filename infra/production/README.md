@@ -117,6 +117,53 @@ silently restores an older database. Inspect the journal and backup before recov
 An already existing release directory is intentionally rejected: repeated deployments
 of one SHA require an operator inspection, not an overwrite of immutable releases.
 
+## Resumable transport (2026-11-27)
+
+Install the reviewed `staged_upload.py`, `receive_stream.py`, `receive.sh` and
+`ssh-entry.sh` together in the existing root-owned tools directory **before**
+merging the workflow change. Back up the installed files, verify known old hashes,
+validate new syntax and hashes, and acquire the deployment lock during installation.
+Keep the existing forced-command key, sudoers, deployment gate and Caddy unchanged.
+Application archives do not install these tools.
+
+`upload_release.py` uses the existing restricted SSH identity, configured through
+`DEPLOY_HOST`, `DEPLOY_KEY_FILE` and `DEPLOY_KNOWN_HOSTS_FILE`; never copy key values
+into logs or handovers. New commands are strictly allowlisted: `stage-current`,
+`stage-status SHA DIGEST SIZE`, `stage-chunk SHA DIGEST SIZE OFFSET LENGTH CHUNK_DIGEST`,
+and `stage-activate SHA DIGEST SIZE EXPECTED_CURRENT_SHA`. No shell or arbitrary
+file path is accepted. The old `deploy SHA DIGEST` is retained only for explicitly
+reviewed legacy recovery; it has no expected-current check.
+
+Chunks are at most 1 MiB, with 60-second idle/180-second total limits. A chunk is
+appended only after its length/hash pass; the committed offset is read again after
+connection failure, including a lost acknowledgement. Each chunk is fsynced. Five
+consecutive transport failures stop the client, retaining progress for the next run.
+The upload holds a separate staging lock, not the application deployment lock.
+
+Root-only `/srv/jiugeng/uploads` allows at most four pending archives, each no more
+than 512 MiB, and reserves 2 GiB free disk space. If quota is reached, an operator
+must inspect and archive obsolete staging files while holding its `.lock`; do not
+remove active uploads or unlink either lock. Successful activation removes only its
+verified staging cache. Failed activation keeps the package for investigation.
+
+Activation rechecks the full hash and invokes the existing receiver from the local
+file. Under the deployment lock, the receiver rejects a current revision different
+from the value observed before upload. Backups, safe extraction, migration handling,
+health checks and version verification remain unchanged. Activation itself is never
+automatically retried after a lost acknowledgement: inspect `/version.json`, the
+release directory and deployment log first.
+
+Production retains the tested package, SHA256 and provenance for 30 days before
+attempting transmission. `Retry tested deployment` accepts a completed failed or
+cancelled **Production** run and its exact SHA, validates repository/workflow/source,
+verifies provenance and archive contents, and resumes without rebuilding or repeating
+application gates. It rejects packages superseded by current main application source
+(frontend/backend/import templates), but allows documentation-only advancement.
+Both workflows share the production concurrency group and deployment environment.
+Use this workflow rather than rerunning historical Production jobs. Legacy failed
+runs without retained packages require the separate `Recovery artifact` workflow
+and reviewed operator recovery; never substitute a local runtime JAR.
+
 ## Backups and limits
 
 Install `jiugeng-backup.service` and `.timer`; the timer runs daily at 03:30 server

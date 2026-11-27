@@ -14,7 +14,20 @@
 
 
 
-## ERP-115 PJM发布结果（2026-11-27，部署阻塞）
+## ERP-115 发布恢复与传输稳定性（2026-11-27 21:02 CST）
+
+用户追加授权Codex协助恢复并提高稳定性；PJM明确释放本地/服务器独占槽并仅只读审查。本节覆盖下面早期“部署阻塞”快照，业务验收仍未执行。
+
+- **应用已恢复上线**：恢复包来自[Recovery artifact 45998170831](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45998170831)，源码为已通过CI的 `7fed4af671a6572afc788554e9b3d1d0fe42aca9`；这是精确源码重建包，不是失败run原包。82,872,307字节，SHA256 `c015082ec6daafb7c30176fda2d0c8e3a7ea963f3e470fb64a12ccf1db2421e0`。
+- 通过既有受限SSH身份从本地投递，294秒完整接收并校验，随后 `Database backup completed`；服务器记录 `2026-11-27T12:54:25Z ...7fed4af...`，接收器输出完整 `Deployment verified` SHA，exit 0。原失败Production仍是失败，未改写工作流结论。
+- ERP域名HTTPS与IP的8081入口 `/version.json` 均200且等于上述SHA；客户信息/客户订单CSS与恢复包manifest哈希一致。服务器 `jiugeng`、`caddy` active，健康UP；Flyway111 success=1，采购行remark为可空varchar(1000)。官网域名及IP80内容摘要仍为 `ae09c183535a6ecfd9e432ba87cb7c073d3e37b109c4e2846b81451cbe784d5a`；Caddy、官网、生产业务数据与本地服务未另行调整。
+- 失败主因已确认在整包传输：旧路径600秒仅收到9,797,632字节，尚未停服；本地路径同一恢复包约294秒传完。底层慢链路成因未定，不笼统归咎缓存或部署锁。
+- 稳定性修复：1MiB分块校验/持久偏移/自动续传；网络上传不持有部署锁；原备份、迁移、完整包校验及健康保护继续执行。新入口在部署锁内核对上传前服务器版本；重试工作流拒绝应用源码已被main替代的旧包，允许纯文档推进。
+- 新主机脚本已备份安装到原root目录，备份目录 `/srv/jiugeng/recovery/erp115-transport-20261127-205942`；无新增SSH身份或sudo权限。真实受限SSH合成1,440,000字节探针验证：截断分块拒绝、1,048,576偏移保留、续传完成、错误expected-current拒绝且线上版本不变。探针已移到备份目录归档，staging剩余0包。
+- 仓库配套尚未提交：分支 `fix/ERP-115-release-reliability`，基线 `b1eac83c52d9b73be65e3153b8d8e7c3fcb9d1f6`。Production留存30天原包/哈希/来源记录；新增 `retry-deployment.yml` 只重试已测试原包，无需重建/重跑应用门禁。PJM两轮只读审查后无安装阻断；**须由PJM提交/合入工作流后，未来CI才使用新传输**。旧二参deploy入口仅保留兼容，不能宣称全部历史入口都有防倒退检查。
+- 定向验证：`python3 -m unittest discover -s scripts/production -p 'test_*.py'` 18项通过；Shell语法、两工作流YAML及内嵌脚本语法、`git diff --check`通过。未改应用源码，复用原CI，不重复完整前后端门禁。详见[交接追加记录](../../deliverables/pjm/ERP115_RELEASE_HANDOFF_2026-11-27.md)。
+
+## ERP-115 PJM发布结果（2026-11-27，历史部署阻塞）
 
 恢复准备追加：新增独立手动`recovery-artifact.yml`，仅在main运行，核验精确源码SHA属于main且同仓库该SHA的push CI成功后，仅重建/安全解包验证并留存私有Actions产物（包、SHA256、provenance，30天）。不使用生产凭据、不部署、不重跑已有效应用测试。该workflow路径不触发Production，未修改原发布工作流。目标应用SHA仍为`7fed4af671a6572afc788554e9b3d1d0fe42aca9`，原CI证据45985818018；新的重建包不冒充失败run原包。服务器进程/锁及稳定投递仍需可用管理通道，不得据产物准备完成宣称上线。
 

@@ -1,0 +1,79 @@
+name: Retry tested deployment
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: Exact full SHA of the retained Production artifact
+        required: true
+        type: string
+      source_run:
+        description: Completed failed/cancelled Production run that retained the tested package
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main' && vars.PRODUCTION_DEPLOY_ENABLED == 'true'
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      REVISION: ${{ inputs.revision }}
+      SOURCE_RUN: ${{ inputs.source_run }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - name: Verify source and download the exact tested package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$REVISION" =~ ^[0-9a-f]{40}$ && "$SOURCE_RUN" =~ ^[0-9]+$ ]]
+          python3 scripts/production/verify_retry_source.py "$REVISION"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" > "$RUNNER_TEMP/source-run.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          run = json.loads((Path(os.environ['RUNNER_TEMP'])/'source-run.json').read_text())
+          assert run['head_sha'] == os.environ['REVISION']
+          assert run['head_branch'] == 'main' and run['event'] in ('push', 'workflow_dispatch')
+          assert run['path'] == '.github/workflows/production.yml'
+          assert run['repository']['full_name'] == os.environ['GITHUB_REPOSITORY']
+          assert run['status'] == 'completed' and run['conclusion'] in ('failure', 'cancelled', 'timed_out')
+          PY
+          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name "erp-release-$REVISION" --dir retained-release
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root = Path('retained-release')
+          proof = json.loads((root/'provenance.json').read_text())
+          assert proof['revision'] == os.environ['REVISION']
+          assert proof['buildRun'] == os.environ['SOURCE_RUN']
+          assert proof['mode'] == 'production-tested-package'
+          assert proof['bytes'] == (root/'release.tar.gz').stat().st_size
+          assert proof['sha256'] == hashlib.sha256((root/'release.tar.gz').read_bytes()).hexdigest()
+          PY
+          python3 scripts/production/release.py unpack retained-release/release.tar.gz "$RUNNER_TEMP/verified-release" "$REVISION"
+      - name: Resume transfer and activate verified release
+        env:
+          DEPLOY_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
+          DEPLOY_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.PRODUCTION_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/erp-ssh"
+          trap 'rm -f "$RUNNER_TEMP/erp-ssh/key"' EXIT
+          printf '%s\n' "$DEPLOY_KEY" > "$RUNNER_TEMP/erp-ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$RUNNER_TEMP/erp-ssh/known_hosts"
+          export DEPLOY_KEY_FILE="$RUNNER_TEMP/erp-ssh/key"
+          export DEPLOY_KNOWN_HOSTS_FILE="$RUNNER_TEMP/erp-ssh/known_hosts"
+          python3 scripts/production/upload_release.py retained-release/release.tar.gz "$REVISION"
+          echo "Recovered tested revision: $REVISION from run $SOURCE_RUN" >> "$GITHUB_STEP_SUMMARY"

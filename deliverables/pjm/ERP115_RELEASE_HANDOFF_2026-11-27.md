@@ -1,13 +1,52 @@
 # ERP-115 累计迭代发布交接
 
 - 项目：九更亚马逊 ERP
-- 交接：Codex → PJM；状态：In Review（本地统一验证完成，未合并/未部署）
+- 交接：Codex → PJM；状态：In Review（应用已恢复上线；发布稳定性配套待PJM提交）
 - 日期：2026-11-27，Asia/Shanghai
 - 用户授权：明确要求“与项目经理交接，把修改内容提交远端main，并部署线上”。提交、受保护PR合并、CI/CD及发布核验由PJM独占执行；Codex不跟踪线上发布。
 
 ## 工作区与写入权
 
-### PJM最终执行记录（2026-11-27，应用已合并、部署阻塞）
+### 恢复追加交接（2026-11-27 21:02 CST，Codex → PJM）
+
+**授权与归属**：用户追加“协助处理、搞稳定”，PJM明确暂停仓库/服务器写入并把独占槽交给Codex。此处覆盖下方历史阻塞快照。正式交接消息接收后PJM接管，Codex停止修改，不再跟踪后续发布。
+
+**工作区**：`fix/ERP-115-release-reliability`，基线完整SHA `b1eac83c52d9b73be65e3153b8d8e7c3fcb9d1f6`；本次工具/工作流/文档改动未提交，无无关修改。没有修改应用源码、业务数据、本地运行包或官网配置。下次接手须重查分支/status，不沿用历史写槽。
+
+**应用恢复证据**：使用[45998170831恢复包](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45998170831)（精确源码重建，非原失败run原包），目标 `7fed4af671a6572afc788554e9b3d1d0fe42aca9`，82,872,307字节，SHA256 `c015082ec6daafb7c30176fda2d0c8e3a7ea963f3e470fb64a12ccf1db2421e0`。经既有受限SSH从本地完整传输294秒；`Database backup completed`、`Deployment verified: 7fed4af671a6572afc788554e9b3d1d0fe42aca9`、exit 0，服务器部署日志时间 **2026-11-27T12:54:25Z**。原Production 45985818016仍失败，不冒称其成功。
+
+**现场与外部核实**：ERP域名HTTPS及IP8081版本相同；客户信息/客户订单CSS哈希匹配包manifest。`systemctl is-active jiugeng caddy`均active，`curl -fsS --max-time 5 http://127.0.0.1:8080/actuator/health`为UP；只读SQL确认Flyway111 success=1及purchase_order_line.remark varchar(1000)可空。官网HTTPS及IP80的内容摘要不变，Caddy文件哈希不变。未执行真实业务写入验收。
+
+**主机工具**：原脚本先保存至 `/srv/jiugeng/recovery/erp115-transport-20261127-205942`，在部署锁内安装并核对哈希；没有新增SSH密钥/账号/sudo权限。当前已安装哈希：
+
+| 文件 | SHA256 |
+| --- | --- |
+| staged_upload.py | `607581d2a0ba75ca0e59fd8a95755a1e85c09d02b956ee3249da29a17aefc617` |
+| receive_stream.py | `c9de4b7935b7ffc9fbdd7e57d248f378f876fb2eb3bd974abbe7902a03131f66` |
+| receive.sh | `5f0afe570dbfc24472d6a165117d49bb12803f52c2d03394e5d621bcc09ab285` |
+| ssh-entry.sh | `d00ae9d4fbcba32dbb2cf2de2ad1220f095759acd06d4d683267316b2ab415b0` |
+
+**改动清单**：
+
+- `scripts/production/staged_upload.py`、`upload_release.py`：1MiB分块长度/哈希校验、持久偏移、fsync、断点续传、独立staging锁和磁盘配额。完整包校验后才走原receive激活，不盲目重试激活。
+- `scripts/production/receive.sh`、`ssh-entry.sh`：新增严格命令白名单，在全局部署锁内校验上传前expected-current；同步已有TERM子进程清理补丁。旧两参数入口保留兼容，不声称历史入口也有防倒退保护。
+- `scripts/production/verify_retry_source.py`、`test_staged_upload.py`：拒绝被main新应用源码取代的旧包，允许纯文档更新；覆盖重试、防倒退、并发、损坏、截断、磁盘配额、命令注入拒绝。
+- `.github/workflows/production.yml`：测试后、传输前留存原包/摘要/provenance 30天；使用续传客户端，传输前核对main应用源码。
+- `.github/workflows/retry-deployment.yml`：验证同仓库main Production run/精确SHA/来源/原包，单独重试发布，不重建、不重复应用门禁；沿用production环境与并发组。
+- `infra/production/README.md`、`docs/04-engineering/PROJECT_HANDOVER.md`、`docs/08-project-management/STATUS_REPORT.md`、本文件、`docs/DELIVERABLE_REGISTER.md`：同步故障原因、恢复结果、安装顺序及重试边界。
+
+**验证命令与结果**（仓库根目录，2026-11-27）：
+
+- `python3 -m unittest discover -s scripts/production -p 'test_*.py'`：18项通过。首次发现本机Python不支持file_digest，已改为流式哈希；新增测试的macOS /private路径断言已规范化，复验通过。
+- `bash -n scripts/production/receive.sh scripts/production/ssh-entry.sh`：通过。
+- `ruby -ryaml -e 'ARGV.each { |p| YAML.load_file(p); puts "YAML parsed: #{p}" }' .github/workflows/production.yml .github/workflows/retry-deployment.yml`：通过；并逐项检查两工作流run块Bash语法、内嵌Python编译。
+- `git diff --check`、修改文档链接/路径及最终diff/status检查：通过。
+- 真实受限SSH仅写合成传输缓存1,440,000字节：先提交1,048,576字节，故意截断下一块后返回拒绝、偏移保持；补齐续传成功；错误expected-current在停服前拒绝，线上版本不变。探针已移到上述备份目录 `transport-probe.verified`；staging剩余0包、锁自然释放。没有部署合成包或写业务数据。
+- 原应用CI结果继续有效；本次未改应用源码，不重跑前后端完整门禁。PJM两轮只读审查（含防旧包覆盖新版阻断的修复复核）无新增安装阻断。
+
+**证据与后续**：忽略目录保留 `.local/recovery/del058-45998170831/`、`.local/recovery-erp115-install.sh`、`.local/recovery-erp115-probe.json`、`.local/recovery-erp115-public-verification.json`。核心证据已同步本记录，不只存在聊天或临时日志。PJM须提交/PR合入工作流配套，未来CI才会使用新通道；不要手动重跑历史Production，网络问题优先使用新Retry tested deployment。旧无artifact运行走Recovery artifact+受控恢复。底层慢链路根因尚未精确定位，新机制解决中断重来及无原包可重试的问题，不承诺网络永不失败。独占槽正式交回后，后续提交、CI/CD与状态归档由PJM负责。
+
+### PJM历史执行记录（2026-11-27，应用已合并、当时部署阻塞）
 
 - 68项交接指纹一致，原子提交`ee468528f9cacc33aeac8dae78b3000045b29c0e`；后续仅修正HS用例入口，提交`3f0cc408dbfc9d7744e57da30ec887f7f8879841`。
 - [PR #35](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/pull/35)保护合并，应用main `7fed4af671a6572afc788554e9b3d1d0fe42aca9`。[最终PR CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45985366939)465后端（1跳过）、835前端、20浏览器通过。

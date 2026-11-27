@@ -2,10 +2,18 @@
 # Root-owned, sudo permitted only for the dedicated deployment account.
 set -Eeuo pipefail
 umask 022
-[[ $EUID == 0 && $# == 2 && $1 =~ ^[0-9a-f]{40}$ && $2 =~ ^[0-9a-f]{64}$ ]] || exit 2
+if [[ $EUID == 0 && ${1:-} == stage-* ]]; then
+ exec python3 /usr/local/lib/jiugeng/staged_upload.py "$@"
+fi
+[[ $EUID == 0 && ( $# == 2 || $# == 3 ) && $1 =~ ^[0-9a-f]{40}$ && $2 =~ ^[0-9a-f]{64}$ ]] || exit 2
+[[ $# == 2 || $3 =~ ^[0-9a-f]{40}$ ]] || exit 2
 sha=$1 digest=$2 root=/srv/jiugeng
 exec 9>/run/lock/jiugeng-deploy.lock
 flock -n 9 || { echo 'Another deployment is running' >&2; exit 1; }
+if [[ $# == 3 && $(basename "$(readlink -f "$root/current")") != "$3" ]]; then
+ echo 'Current revision changed during upload; inspect before activation' >&2
+ exit 1
+fi
 # This marker is deliberately absent until initial migration has been accepted.
 [[ -f /etc/jiugeng/deploy-enabled ]] || { echo 'Deployment gate is not enabled' >&2; exit 1; }
 [[ $(df -Pk "$root" | awk 'NR==2 {print $4}') -gt 2097152 ]] || { echo 'Less than 2 GiB free'; exit 1; }

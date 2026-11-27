@@ -7,6 +7,14 @@
 
 ## 工作区与写入权
 
+### PJM最终执行记录（2026-11-27，应用已合并、部署阻塞）
+
+- 68项交接指纹一致，原子提交`ee468528f9cacc33aeac8dae78b3000045b29c0e`；后续仅修正HS用例入口，提交`3f0cc408dbfc9d7744e57da30ec887f7f8879841`。
+- [PR #35](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/pull/35)保护合并，应用main `7fed4af671a6572afc788554e9b3d1d0fe42aca9`。[最终PR CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45985366939)465后端（1跳过）、835前端、20浏览器通过。
+- [Production](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45985818016)实际deploy失败：19:08:10 CST接收600秒9797632字节触发总超时，19:08:18返回exit 1。无归档校验、备份或服务切换成功标记。V111没有生产迁移成功证据。
+- 独立ERP HTTPS入口仍为`38ec537461c0ac6e13780120391bdf849f2e8449`，官网版本未变。本地服务、隔离配置与数据未动。未盲目重试或绕过锁。
+- 当前无法通过管理通道检查锁与进程；待可用管理通道和经校验稳定CI产物投递路径恢复。详细证据和边界已写[状态报告](../../docs/08-project-management/STATUS_REPORT.md)。下面的未提交/待接棒描述保留为历史交接快照，不代表本节之后状态。
+
 - 仓库：`/Users/thinkperfect/.openclaw/workspace-jiugeng_pjm/jiugeng-amazon-erp`
 - 分支：`fix/ERP-115-material-save-idempotency`
 - HEAD/基线：`45b7f5822da1fd9222ba3cda17d995860a4d17db`

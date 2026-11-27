@@ -14,7 +14,17 @@
 
 
 
-## ERP-115 发布交接（2026-11-27）
+## ERP-115 PJM发布结果（2026-11-27，部署阻塞）
+
+- 原子提交 `ee468528f9cacc33aeac8dae78b3000045b29c0e`，68项文件与交接清单逐一吻合。HS浏览器旧操作入口修正提交 `3f0cc408dbfc9d7744e57da30ec887f7f8879841`，只改用例及交接说明。
+- [PR #35](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/pull/35) 五项保护检查通过并合入应用main `7fed4af671a6572afc788554e9b3d1d0fe42aca9`。[PR CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45985366939)后端465项（1条件跳过）、前端835项、完整浏览器20项通过；[main CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45985818018)成功。
+- [Production](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45985818016)应用、浏览器、导入契约及精确SHA打包通过，但实际deploy失败（非skipped）：2026-11-27 19:08:10 CST记录`Upload total timeout: bytes=9797632`，接收600秒约9.34MiB，平均约16KiB/s；19:08:18返回exit 1。没有出现归档校验、生产备份或部署验证成功标记。按接收器顺序，失败发生在停服/备份/激活之前；V111无生产应用成功证据。
+- 失败后独立HTTPS入口仍返回 `38ec537461c0ac6e13780120391bdf849f2e8449`；官网版本摘要仍为 `ae09c183535a6ecfd9e432ba87cb7c073d3e37b109c4e2846b81451cbe784d5a`。没有修改官网/Caddy分流、本地tmux或数据隔离，没有回传本地数据库或文件。不能称本轮已上线，未进行生产业务验收。
+- 当前无活动Production；本机SSH agent无身份、保护凭据库为空，本轮工具没有可操作的Safari原生CUA；无法直接确认服务器锁/进程和健康。超时返回不等于已现场确认锁释放。未盲目重跑、删锁或延长时限。
+- 恢复条件：通过可用的已授权服务器管理通道检查接收进程、锁及当前版本；准备由CI精确SHA构建且校验过的发布包，经稳定路径投递，再沿用备份/迁移/健康/版本保护。该run仅保留扫描报告，未上传release包artifact；不能以本地运行JAR替代。传输慢已证实，底层网络原因未确定。
+- 证据本地保留：`/tmp/erp115-ci-failure.log`、`/tmp/erp115-pr-ci.log`、`/tmp/erp115-production-failed.log`。后续PJM继续负责恢复，Codex不等待发布。
+
+## ERP-115 发布交接（2026-11-27，历史交接节点）
 
 用户已明确授权本轮累计修改提交远端main并部署。详见[最终交接记录](../../deliverables/pjm/ERP115_RELEASE_HANDOFF_2026-11-27.md)。分支 `fix/ERP-115-material-save-idempotency`，基线 `45b7f5822da1fd9222ba3cda17d995860a4d17db`；所有实施修改仍未提交，正式交接发送后由PJM独占提交/合并/发布，Codex停止编辑并不跟踪发布。
 

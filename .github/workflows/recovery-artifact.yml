@@ -1,0 +1,88 @@
+name: Recovery artifact
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: Full main commit SHA with successful CI
+        required: true
+        type: string
+      ci_run:
+        description: Successful push CI run for that exact SHA
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+jobs:
+  package:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      REVISION: ${{ inputs.revision }}
+      CI_RUN: ${{ inputs.ci_run }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - name: Require exact main revision and successful CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$REVISION" =~ ^[0-9a-f]{40}$ && "$CI_RUN" =~ ^[0-9]+$ ]]
+          git merge-base --is-ancestor "$REVISION" origin/main
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CI_RUN" > "$RUNNER_TEMP/source-ci.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          run = json.loads((Path(os.environ['RUNNER_TEMP'])/'source-ci.json').read_text())
+          assert run['head_sha'] == os.environ['REVISION']
+          assert run['event'] == 'push' and run['head_branch'] == 'main'
+          assert run['path'] == '.github/workflows/ci.yml'
+          assert run['status'] == 'completed' and run['conclusion'] == 'success'
+          assert run['repository']['full_name'] == os.environ['GITHUB_REPOSITORY']
+          PY
+          git checkout --detach "$REVISION"
+          test "$(git rev-parse HEAD)" = "$REVISION"
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 12.4.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Build previously tested exact revision without repeating tests
+        run: |
+          set -euo pipefail
+          (cd deliverables/backend/sprint-0/jiugeng-erp-backend && ./mvnw --batch-mode --no-transfer-progress -DskipTests clean package)
+          (cd frontend && pnpm install --frozen-lockfile && pnpm run build)
+          mkdir -p recovery-artifact
+          python3 scripts/production/release.py build . recovery-artifact/release.tar.gz "$REVISION"
+          python3 scripts/production/release.py unpack recovery-artifact/release.tar.gz "$RUNNER_TEMP/recovery-verified" "$REVISION"
+          (cd recovery-artifact && sha256sum release.tar.gz > release.tar.gz.sha256)
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          source = json.loads((Path(os.environ['RUNNER_TEMP'])/'source-ci.json').read_text())
+          root = Path('recovery-artifact')
+          (root/'provenance.json').write_text(json.dumps({
+              'revision': os.environ['REVISION'], 'sourceCi': source['html_url'],
+              'buildRun': os.environ['GITHUB_RUN_ID'], 'buildAttempt': os.environ['GITHUB_RUN_ATTEMPT'],
+              'workflowRevision': os.environ['GITHUB_SHA'],
+              'sha256': (root/'release.tar.gz.sha256').read_text().split()[0],
+              'bytes': (root/'release.tar.gz').stat().st_size,
+              'mode': 'rebuild-tested-revision-no-deploy'
+          }, indent=2)+'\n')
+          PY
+      - name: Retain verified recovery bundle (no deployment)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: erp-recovery-${{ inputs.revision }}
+          path: recovery-artifact/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

@@ -16,6 +16,8 @@
 
 ## ERP-115 PJM发布结果（2026-11-27，部署阻塞）
 
+恢复准备追加：新增独立手动`recovery-artifact.yml`，仅在main运行，核验精确源码SHA属于main且同仓库该SHA的push CI成功后，仅重建/安全解包验证并留存私有Actions产物（包、SHA256、provenance，30天）。不使用生产凭据、不部署、不重跑已有效应用测试。该workflow路径不触发Production，未修改原发布工作流。目标应用SHA仍为`7fed4af671a6572afc788554e9b3d1d0fe42aca9`，原CI证据45985818018；新的重建包不冒充失败run原包。服务器进程/锁及稳定投递仍需可用管理通道，不得据产物准备完成宣称上线。
+
 - 原子提交 `ee468528f9cacc33aeac8dae78b3000045b29c0e`，68项文件与交接清单逐一吻合。HS浏览器旧操作入口修正提交 `3f0cc408dbfc9d7744e57da30ec887f7f8879841`，只改用例及交接说明。
 - [PR #35](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/pull/35) 五项保护检查通过并合入应用main `7fed4af671a6572afc788554e9b3d1d0fe42aca9`。[PR CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45985366939)后端465项（1条件跳过）、前端835项、完整浏览器20项通过；[main CI](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45985818018)成功。
 - [Production](https://github.com/puhuisifang-svg/Jiugeng-Amazon-ERP/actions/runs/45985818016)应用、浏览器、导入契约及精确SHA打包通过，但实际deploy失败（非skipped）：2026-11-27 19:08:10 CST记录`Upload total timeout: bytes=9797632`，接收600秒约9.34MiB，平均约16KiB/s；19:08:18返回exit 1。没有出现归档校验、生产备份或部署验证成功标记。按接收器顺序，失败发生在停服/备份/激活之前；V111无生产应用成功证据。

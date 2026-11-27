@@ -125,6 +125,12 @@
 
 ## PJM接棒步骤
 
+### PJM CI 修正（2026-11-27）
+
+- 首轮 PR CI 45984519219 的后端与前端质量门禁通过，完整浏览器套件17通过、3失败：HS历史用例仍直接定位已收进“更多操作”的报关资料按钮。
+- 仅更新 `frontend/e2e/customs-history.smoke.ts`，先打开当前商品的更多操作，再进入报关资料；历史核对、仅写目标商品及错误重试断言全部保留，未修改应用代码。
+- 在frontend执行 `pnpm exec eslint e2e/customs-history.smoke.ts`、`pnpm exec playwright test e2e/customs-history.smoke.ts`，三尺寸3项通过（4.4秒），临时preview自动退出。本地持久服务与数据未动；后续以新提交CI为准。
+
 1. 复核当前分支、基线、status及文件指纹；接棒后PJM独占写入。确认未包含.local、数据库、上传文件或凭据。
 2. 按Conventional Commit整理原子提交，推送受保护PR并合入远端main；若有新改动使门禁失效，针对影响重新验证。
 3. 按现有CI/CD执行前后端发布、迁移前备份和V111应用；独立核对实际deploy与用户入口version.json，并向用户报告发布结果。Codex不轮询发布。
